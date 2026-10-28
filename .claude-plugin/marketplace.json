@@ -1,0 +1,5 @@
+{
+  "name": "direction-local",
+  "owner": {"name": "Direction"},
+  "plugins": [{"name": "direction", "source": "./plugins/direction", "description": "Agent-native video editing for Mac", "version": "0.2.0"}]
+}

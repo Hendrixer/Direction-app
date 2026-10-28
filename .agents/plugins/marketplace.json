@@ -1,0 +1,10 @@
+{
+  "name": "direction-local",
+  "interface": {"displayName": "Direction"},
+  "plugins": [{
+    "name": "direction",
+    "source": {"source": "local", "path": "./plugins/direction"},
+    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+    "category": "Productivity"
+  }]
+}

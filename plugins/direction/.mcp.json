@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "direction": {
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "if [ -n \"${DIRECTION_CLI:-}\" ]; then exec \"$DIRECTION_CLI\" mcp; fi\nfor direction_cli in \"$HOME/.local/bin/direction\" \"$HOME/Applications/Direction.app/Contents/Helpers/direction\" \"/Applications/Direction.app/Contents/Helpers/direction\"; do\n  if [ -x \"$direction_cli\" ]; then exec \"$direction_cli\" mcp; fi\ndone\nif command -v direction >/dev/null 2>&1; then exec direction mcp; fi\nprintf '%s\\n' 'Direction is not installed. Run scripts/install-local.sh from the Direction checkout, or set DIRECTION_CLI to its CLI executable.' >&2\nexit 127"
+      ]
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "direction",
+  "version": "0.2.0",
+  "description": "Edit local video and respond to director feedback in Direction for Mac.",
+  "author": {"name": "Direction"},
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "requires_local_executor": true,
+  "interface": {
+    "displayName": "Direction",
+    "shortDescription": "Native video editing, directed by you",
+    "longDescription": "Create local projects, edit supplied footage, mix audio, grade color, and review timestamped comments with frames, audio, and transcript context.",
+    "developerName": "Direction",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Start a Direction project with my footage", "Review my Direction comments and revise the edit"],
+    "brandColor": "#000000"
+  }
+}
