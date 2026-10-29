@@ -175,8 +175,8 @@ struct EditorPill: View {
     }
     private var foreground: Color {
         switch state {
-        case .asks, .readBackReady: Gate.Voice.agent
-        case .cutReady: Gate.Text.primary
+        case .asks: Gate.Voice.agent
+        case .cutReady, .readBackReady: Gate.Text.primary
         case .cant, .stopped, .needsFootage: Gate.State.alert
         case .working, .assembling, .readingBack: Gate.Text.primary
         case .offline, .paused: Gate.Text.tertiary

@@ -82,7 +82,7 @@ struct NotesComposer: View {
                 Text(anchorLabel)
                 if let chip = anchorChip { Chip(chip, style: .director) }
                 Spacer(minLength: 0)
-                GateSelect(options: anchorOptions, selection: anchorBinding)
+                GateSelect(options: anchorOptions, selection: anchorBinding, muted: true)
                     .help("What the note is anchored to")
                     .accessibilityLabel("Anchor")
             }

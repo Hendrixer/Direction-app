@@ -129,6 +129,9 @@ struct Chip: View {
             if let fill = colors.1 {
                 RoundedRectangle(cornerRadius: Gate.Radius.chip).fill(fill)
                     .overlay { if style == .plain { RoundedRectangle(cornerRadius: Gate.Radius.chip).strokeBorder(Gate.Line.subtle, lineWidth: 1) } }
+            } else {
+                // Label chips (.chip.k): no fill, the hairline only.
+                RoundedRectangle(cornerRadius: Gate.Radius.chip).strokeBorder(Gate.Line.subtle, lineWidth: 1)
             }
         }
     }
@@ -291,6 +294,8 @@ struct KindPicker: View {
 struct GateSelect<Value: Hashable>: View {
     let options: [(Value, String)]
     @Binding var selection: Value
+    /// Text-3 label, for selects inside a quiet row (the composer's anchor).
+    var muted = false
     var body: some View {
         Menu {
             ForEach(options.indices, id: \.self) { i in Button(options[i].1) { selection = options[i].0 } }
@@ -299,7 +304,7 @@ struct GateSelect<Value: Hashable>: View {
                 Text(options.first { $0.0 == selection }?.1 ?? "").font(.system(size: 12.5))
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Gate.Text.tertiary)
             }
-            .foregroundStyle(Gate.Text.primary).padding(.leading, 10).padding(.trailing, 8).frame(height: Gate.Size.control)
+            .foregroundStyle(muted ? Gate.Text.tertiary : Gate.Text.primary).padding(.leading, 10).padding(.trailing, 8).frame(height: Gate.Size.control)
             .background(RoundedRectangle(cornerRadius: Gate.Radius.control).fill(Gate.Surface.raised).overlay(RoundedRectangle(cornerRadius: Gate.Radius.control).strokeBorder(Gate.Line.subtle, lineWidth: 1)))
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()

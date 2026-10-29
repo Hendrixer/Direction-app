@@ -375,7 +375,8 @@ final class FilmModel {
     }
     func badge(for room: Room) -> (String, Bool)? {
         switch room {
-        case .notes: let n = draftNotes.count + readyNotes.count; return n > 0 ? (String(n), true) : nil
+        // What waits on the director in Notes: marks to write up and outside notes to decide.
+        case .notes: let n = draftNotes.count + inbox.count; return n > 0 ? (String(n), true) : nil
         case .changes: let n = unreviewedAnswers.count; return n > 0 ? (String(n), false) : nil
         default: return nil
         }

@@ -138,7 +138,8 @@ struct NoteContextMenu: View {
 
     @MainActor static func entries(model: FilmModel, note: ReviewComment) -> [GateMenuEntry] {
         let editable = [.draft, .written, .reopened].contains(note.lifecycle) && !note.inInbox
-        let droppable = ![.answered, .accepted, .dropped].contains(note.lifecycle)
+        // A turned-over note belongs to the editor until it's answered; take the turnover back first.
+        let droppable = ![.answered, .accepted, .dropped, .turnedOver].contains(note.lifecycle)
         let kinds: [GateMenuEntry] = NoteKind.allCases.map { k in
             .item(k.label, icon: nil, checked: note.kind == k) { model.editNote(note.id, kind: .some(k)) }
         } + [.item("None", icon: nil, checked: note.kind == nil) { model.editNote(note.id, kind: .some(nil)) }]
@@ -159,6 +160,7 @@ struct NoteContextMenu: View {
             .item("Change Anchor\u{2026}", icon: "arrow.left.and.line.vertical.and.arrow.right", disabled: true) {},
             .submenu("Kind", icon: "slider.horizontal.3", key: note.kind?.label, disabled: !editable, kinds),
             .separator,
+            .item("Copy Timecode", icon: "clock", disabled: model.noteTime(note) == nil) { SystemSupport.copy(model.anchorText(note)) },
             .item(number.isEmpty ? "Copy Link to Note" : "Copy Link to Note \(number)", icon: "link", disabled: note.number == nil) {
                 SystemSupport.copy("direction://film/\(model.project?.id ?? "film")/note/\(number)")
             },

@@ -20,7 +20,7 @@ struct FilmModelTests {
         #expect(m.sheetNotes.compactMap(\.number) == [1, 2, 3, 4])
         #expect(m.readyNotes.compactMap(\.number) == [1, 2])
         #expect(m.draftNotes.compactMap(\.number) == [3, 4])
-        #expect(m.badge(for: .notes)?.0 == "4")
+        #expect(m.badge(for: .notes)?.0 == "2")
     }
 
     @Test func pillTellsTheTruthAboutTheEditor() {
