@@ -73,6 +73,8 @@ struct CutList: View {
             case "Unlocked a scene": out.append(.init(id: "event-\(e.id)", kind: .event("Scene unlocked"), time: e.createdAt))
             // The director's look applies to every cut, so it's an event, not a cut (looks.md › 63).
             case let s where e.kind == "look.updated": out.append(.init(id: "event-\(e.id)", kind: .event(s), time: e.createdAt))
+            // A graphic's words, fixed by the director without a new cut (graphics.md › 64).
+            case let s where e.kind == "graphic.words": out.append(.init(id: "event-\(e.id)", kind: .event(s), time: e.createdAt))
             default: break
             }
         }
@@ -140,7 +142,7 @@ struct CutList: View {
 
     private func eventRow(_ text: String, time: Double) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: text.hasPrefix("Changed the look") ? "camera.filters" : text.contains("unlocked") ? "lock.open" : "lock.fill").font(.system(size: 10, weight: .medium)).foregroundStyle(Gate.Text.tertiary).frame(width: 22)
+            Image(systemName: text.hasPrefix("Changed the look") ? "camera.filters" : text.contains("the words of") ? "character.cursor.ibeam" : text.contains("unlocked") ? "lock.open" : "lock.fill").font(.system(size: 10, weight: .medium)).foregroundStyle(Gate.Text.tertiary).frame(width: 22)
             Text(text).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary)
             Spacer(minLength: 6)
             Text(ChangesFormat.when(time)).font(.system(size: 11, design: .monospaced)).foregroundStyle(Gate.Text.disabled)

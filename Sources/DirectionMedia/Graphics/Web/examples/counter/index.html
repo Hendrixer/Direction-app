@@ -1,0 +1,67 @@
+<!doctype html>
+<!--
+  Counter. A number that counts up to its value and lands, with a caption under it.
+  Uses anime.js (bundled as direction:lib/anime.js) the way every library works here: build the
+  animation paused, then seek it to t in render. Never let a library run its own clock.
+
+  - The value is a word, so the director can correct it. Whatever they type that isn't a number
+    is shown as typed.
+  - The counting number isn't literally in `words` while it counts, so its element carries
+    data-word="value" to tell the check which word it shows.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<script src="direction:lib/anime.js"></script>
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  .counter { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-family: 'Archivo', sans-serif; color: #fff;
+             text-shadow: 0 calc(2 * var(--u)) calc(18 * var(--u)) rgb(0 0 0 / 0.4); }
+  #value { font-weight: 800; font-size: calc(150 * var(--u)); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  #caption { margin-top: calc(18 * var(--u)); font-weight: 500; font-size: calc(34 * var(--u)); color: rgb(255 255 255 / 0.8); }
+</style>
+</head>
+<body>
+<div class="counter">
+  <div id="value" data-word="value"></div>
+  <div id="caption"></div>
+</div>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const { ease, clamp } = direction;
+  const duration = 5;
+
+  // The count, as a plain object anime.js animates. Rebuilt when the director changes the value.
+  const count = { value: 0 };
+  let target = null, counting = null;
+  const build = (value) => {
+    count.value = 0;
+    counting = anime.animate(count, { value, duration: 2200, delay: 300, ease: 'outExpo', autoplay: false });
+  };
+
+  direction.graphic({
+    duration,
+    words: {
+      value: { label: 'Number', text: '1,204', max: 12 },
+      caption: { label: 'Caption', text: 'days to build it', max: 40 },
+    },
+    render(t, words) {
+      const number = Number(words.value.replace(/[^0-9.]/g, ''));
+      if (words.value.trim() && Number.isFinite(number)) {
+        if (number !== target) { target = number; build(number); }
+        counting.seek(t * 1000);
+        // Count in whole numbers with the same separators the director typed.
+        value.textContent = Math.round(count.value).toLocaleString('en-US', { useGrouping: words.value.includes(',') });
+      } else {
+        value.textContent = words.value;
+      }
+      caption.textContent = words.caption;
+      const gone = ease.inOut(clamp((t - (duration - 0.8)) / 0.6));
+      value.style.opacity = ease.out(clamp(t / 0.4)) * (1 - gone);
+      caption.style.opacity = ease.out(clamp((t - 0.9) / 0.7)) * (1 - gone);
+    },
+  });
+</script>
+</body>
+</html>

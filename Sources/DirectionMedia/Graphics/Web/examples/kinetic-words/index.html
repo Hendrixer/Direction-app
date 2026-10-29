@@ -1,0 +1,51 @@
+<!doctype html>
+<!--
+  Kinetic words. A sentence that arrives one word at a time, each one rising a little and
+  settling, then leaving together.
+
+  - The sentence is one word field; the layout splits it into words, so the director can rewrite
+    it freely. Every word on screen is part of `line`, which is how the check knows it's a word.
+  - Words are spans rebuilt only when the text changes, so render stays cheap.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  #line { position: absolute; left: calc(192 * var(--u)); right: calc(192 * var(--u)); top: 50%; transform: translateY(-50%); margin: 0; text-align: center;
+          font: 700 calc(84 * var(--u)) / 1.12 'Archivo', sans-serif; letter-spacing: -0.012em; color: #fff; text-shadow: 0 calc(2 * var(--u)) calc(18 * var(--u)) rgb(0 0 0 / 0.4); }
+  #line span { display: inline-block; white-space: pre; }
+</style>
+</head>
+<body>
+<h1 id="line"></h1>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const u = innerHeight / 1080;
+  const { ease, clamp } = direction;
+  const duration = 4, step = 0.2;
+  let shown = null, spans = [];
+
+  direction.graphic({
+    duration,
+    words: {
+      line: { label: 'Line', text: 'Start with the edit.', max: 60 },
+    },
+    render(t, words) {
+      if (shown !== words.line) {
+        shown = words.line;
+        line.replaceChildren(...shown.split(/(\s+)/).map((part) => { const s = document.createElement('span'); s.textContent = part; return s; }));
+        spans = [...line.children].filter((s) => s.textContent.trim());
+      }
+      const gone = ease.inOut(clamp((t - (duration - 0.7)) / 0.5));
+      spans.forEach((span, i) => {
+        const p = ease.spring(clamp((t - 0.2 - i * step) / 0.7));
+        span.style.opacity = clamp(p * 1.4) * (1 - gone);
+        span.style.transform = `translateY(${(1 - p) * 26 * u}px)`;
+      });
+    },
+  });
+</script>
+</body>
+</html>

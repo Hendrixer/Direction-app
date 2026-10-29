@@ -1,0 +1,76 @@
+<!doctype html>
+<!--
+  Map line. A route drawn between two places on a quiet globe outline, with both names.
+  Uses d3 (direction:lib/d3.js) for the projection and the great-circle path. The outline is
+  d3's graticule, made in code, because nothing can be downloaded: bring coastlines as a
+  GeoJSON file in the graphic's folder if a note asks for them.
+
+  - The place names are words. The coordinates are the editor's data: if the director renames a
+    place, the line doesn't move, so put the new coordinates in when a note asks.
+  - The route draws by its length (stroke-dashoffset), a pure function of t.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<script src="direction:lib/d3.js"></script>
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  svg { position: absolute; inset: 0; }
+  .grid { fill: none; stroke: rgb(255 255 255 / 0.16); }
+  .sphere { fill: rgb(8 9 11 / 0.55); stroke: rgb(255 255 255 / 0.28); }
+  .route { fill: none; stroke: #fff; stroke-linecap: round; }
+  .place { fill: #fff; }
+  .name { font-family: 'Archivo', sans-serif; font-weight: 600; fill: #fff; paint-order: stroke; stroke: rgb(0 0 0 / 0.45); }
+</style>
+</head>
+<body>
+<svg id="map"></svg>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const u = innerHeight / 1080, W = innerWidth, H = innerHeight;
+  const { ease, clamp } = direction;
+  const duration = 6;
+
+  // [longitude, latitude]
+  const places = { from: [-9.14, 38.72], to: [-74.01, 40.71] };
+  const route = { type: 'LineString', coordinates: [places.from, places.to] };
+
+  const svg = d3.select('#map').attr('viewBox', `0 0 ${W} ${H}`);
+  const projection = d3.geoOrthographic().rotate([40, -30]).fitExtent([[W * 0.25, H * 0.12], [W * 0.75, H * 0.88]], { type: 'Sphere' });
+  const path = d3.geoPath(projection);
+  svg.append('path').attr('class', 'sphere').attr('d', path({ type: 'Sphere' })).attr('stroke-width', 1.5 * u);
+  svg.append('path').attr('class', 'grid').attr('d', path(d3.geoGraticule10())).attr('stroke-width', 1 * u);
+  const line = svg.append('path').attr('class', 'route').attr('d', path(route)).attr('stroke-width', 4 * u);
+  const length = line.node().getTotalLength();
+  line.attr('stroke-dasharray', `${length} ${length}`);
+  const dots = Object.entries(places).map(([key, at]) => {
+    const [x, y] = projection(at);
+    const dot = svg.append('circle').attr('class', 'place').attr('cx', x).attr('cy', y).attr('r', 9 * u);
+    // Labels sit away from the line: the first to the right, the second to the left.
+    const label = svg.append('text').attr('class', 'name').attr('data-word', key).attr('x', x + (key === 'from' ? 22 : -22) * u).attr('y', y + 10 * u)
+      .attr('text-anchor', key === 'from' ? 'start' : 'end').attr('font-size', 34 * u).attr('stroke-width', 6 * u);
+    return { key, dot, label };
+  });
+
+  direction.graphic({
+    duration,
+    words: {
+      from: { label: 'From', text: 'Lisbon', max: 24 },
+      to: { label: 'To', text: 'New York', max: 24 },
+    },
+    render(t, words) {
+      const gone = ease.inOut(clamp((t - (duration - 0.8)) / 0.6));
+      svg.style('opacity', ease.out(clamp(t / 0.6)) * (1 - gone));
+      const drawn = ease.inOut(clamp((t - 0.8) / 2.4));
+      line.attr('stroke-dashoffset', length * (1 - drawn));
+      for (const { key, dot, label } of dots) {
+        const at = key === 'from' ? ease.out(clamp((t - 0.5) / 0.5)) : ease.out(clamp((t - 3.0) / 0.5));
+        dot.attr('opacity', at);
+        label.text(words[key]).attr('opacity', at);
+      }
+    },
+  });
+</script>
+</body>
+</html>

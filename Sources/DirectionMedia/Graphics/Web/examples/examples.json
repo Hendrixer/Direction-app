@@ -1,0 +1,14 @@
+[
+  { "name": "title-card", "title": "Title card", "summary": "One line centered low that fades up, holds and goes. A film's title, a time card, a place." },
+  { "name": "lower-third", "title": "Lower third", "summary": "A name and a role at the lower left, revealed from a mask and held." },
+  { "name": "chapter-card", "title": "Chapter card", "summary": "A small number over a chapter title, centered, on a quiet dark wash." },
+  { "name": "end-card", "title": "End card", "summary": "The last card: a title, a line under it and a small credit, on black." },
+  { "name": "quote", "title": "Quote", "summary": "A quotation set large with its attribution, line by line." },
+  { "name": "kinetic-words", "title": "Kinetic words", "summary": "A sentence that arrives one word at a time." },
+  { "name": "counter", "title": "Counter", "summary": "A number that counts up to its value, with a caption.", "libraries": ["anime"] },
+  { "name": "map-line", "title": "Map line", "summary": "A route drawn between two places on a simple outline, with both names.", "libraries": ["d3"] },
+  { "name": "simple-chart", "title": "Simple chart", "summary": "A few bars that grow to their values, labeled, with a title.", "libraries": ["d3"] },
+  { "name": "logo-sting", "title": "Logo sting", "summary": "A mark and a name: a ring draws, the name settles under it. Optional three.js glow.", "libraries": ["three"] },
+  { "name": "credits-roll", "title": "Credits roll", "summary": "Roles and names rolling up at an even speed inside title safe." },
+  { "name": "captions-style", "title": "Captions style", "summary": "Captions on a soft backing, one line at a time, timed from words." }
+]

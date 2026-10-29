@@ -1,0 +1,53 @@
+<!doctype html>
+<!--
+  Chapter card. A small number over the chapter's title, centered on a quiet dark wash that
+  dims the picture under it.
+
+  - The number and the title are both words; the number is short text, not a counter.
+  - The wash is part of the graphic, so the card reads the same over any shot. Keep it below
+    about 60% so the picture still shows through.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  #wash { position: absolute; inset: 0; background: rgb(8 9 11); }
+  .card { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-family: 'Archivo', sans-serif; color: #fff; }
+  #number { font-weight: 600; font-size: calc(28 * var(--u)); letter-spacing: 0.24em; color: rgb(255 255 255 / 0.72); margin-bottom: calc(22 * var(--u)); }
+  #title { font-weight: 700; font-size: calc(72 * var(--u)); line-height: 1.05; letter-spacing: -0.01em; margin: 0 auto; max-width: calc(1400 * var(--u)); }
+</style>
+</head>
+<body>
+<div id="wash"></div>
+<div class="card">
+  <div id="number"></div>
+  <h1 id="title"></h1>
+</div>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const u = innerHeight / 1080;
+  const { ease, clamp } = direction;
+  const duration = 4;
+
+  direction.graphic({
+    duration,
+    words: {
+      number: { label: 'Number', text: '3', max: 4 },
+      title: { label: 'Chapter', text: 'The ridge', max: 32 },
+    },
+    render(t, words) {
+      number.textContent = words.number;
+      title.textContent = words.title;
+      const gone = ease.inOut(clamp((t - (duration - 0.9)) / 0.7));
+      wash.style.opacity = 0.55 * ease.inOut(clamp(t / 0.6)) * (1 - gone);
+      const n = ease.out(clamp((t - 0.3) / 0.7)), h = ease.out(clamp((t - 0.5) / 0.8));
+      number.style.opacity = n * (1 - gone);
+      title.style.opacity = h * (1 - gone);
+      title.style.transform = `translateY(${(1 - h) * 14 * u}px)`;
+    },
+  });
+</script>
+</body>
+</html>

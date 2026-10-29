@@ -90,12 +90,12 @@ struct Titlebar: View {
                 HStack(spacing: 6) {
                     if let icon = p.icon { Image(systemName: icon) }
                     Text(p.title)
-                    if let count = p.count { CountTag(count, onSteel: model.sheet == nil) }
+                    if let count = p.count { CountTag(count, onSteel: !model.primaryIsInert) }
                     if let key = p.key { KeyHint(key) }
                 }
             }
-            .buttonStyle(.gate(model.sheet == nil ? .steel : .normal))
-            .disabled(!p.enabled || model.sheet != nil)
+            .buttonStyle(.gate(model.primaryIsInert ? .normal : .steel))
+            .disabled(!p.enabled || model.primaryIsInert)
             .help(p.help ?? "\(p.title) (⌘↩)")
             .keyboardShortcut(.return, modifiers: .command)
         }

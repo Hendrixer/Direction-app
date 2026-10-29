@@ -1,0 +1,60 @@
+<!doctype html>
+<!--
+  Credits roll. Roles and names rolling up at one even speed, inside title safe, on black.
+
+  - The credits are one word field, written the way a person would: a role on a line, its names on
+    the lines under it, and a blank line between credits. The director can add a name or fix a
+    spelling without touching code.
+  - The window is title safe with soft edges; lines outside it are hidden, so only what shows is
+    checked. The speed comes from the length: everything passes in `duration` seconds.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+  #window { position: absolute; left: 5%; right: 5%; top: 5%; bottom: 5%; overflow: hidden;
+            -webkit-mask-image: linear-gradient(transparent, #000 8%, #000 92%, transparent); }
+  #roll { position: absolute; left: 0; right: 0; top: 0; text-align: center; font-family: 'Archivo', sans-serif; color: #fff; }
+  .credit { margin-bottom: calc(64 * var(--u)); }
+  .role { font-weight: 500; font-size: calc(26 * var(--u)); letter-spacing: 0.08em; text-transform: uppercase; color: rgb(255 255 255 / 0.64); margin-bottom: calc(10 * var(--u)); }
+  .person { font-weight: 600; font-size: calc(40 * var(--u)); line-height: 1.3; }
+</style>
+</head>
+<body>
+<div id="window"><div id="roll"></div></div>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  let shown = null, height = 0;
+  const windowHeight = () => document.getElementById('window').clientHeight;
+
+  // "Role\nName\nName\n\nRole\nName" → blocks of a role and its names.
+  const layout = (text) => {
+    roll.replaceChildren(...text.split(/\n\s*\n/).map((block) => {
+      const [role, ...people] = block.split('\n').map((s) => s.trim()).filter(Boolean);
+      const credit = document.createElement('div');
+      credit.className = 'credit';
+      credit.innerHTML = `<div class="role" data-word="credits"></div>${people.map(() => '<div class="person" data-word="credits"></div>').join('')}`;
+      credit.children[0].textContent = role ?? '';
+      people.forEach((p, i) => { credit.children[i + 1].textContent = p; });
+      return credit;
+    }));
+    height = roll.offsetHeight;
+  };
+
+  direction.graphic({
+    duration: 14,
+    words: {
+      credits: { label: 'Credits', text: 'Featuring\nMaya Chen\n\nProducer\nPriya Shah\n\nCamera\nSam Ortiz\n\nThanks\nThe Northwind team', max: 2000 },
+    },
+    render(t, words) {
+      if (shown !== words.credits) { shown = words.credits; layout(shown); }
+      // From just below the window to just above it, at one speed.
+      const travel = windowHeight() + height;
+      roll.style.transform = `translateY(${windowHeight() - (t / 14) * travel}px)`;
+    },
+  });
+</script>
+</body>
+</html>

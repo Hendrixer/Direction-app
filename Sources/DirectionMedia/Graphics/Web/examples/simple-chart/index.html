@@ -1,0 +1,77 @@
+<!doctype html>
+<!--
+  Simple chart. A handful of bars that grow to their values in turn, each with its label and
+  value, under a title. Uses d3 (direction:lib/d3.js) for scales only; render draws every bar.
+
+  - The title and the bar labels are words: the labels are one field, separated by commas,
+    so the director can rename a month. The values are the editor's data.
+  - Keep it to about six bars. Numbers need no words entry; labels do.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<script src="direction:lib/d3.js"></script>
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  #panel { position: absolute; left: calc(240 * var(--u)); right: calc(240 * var(--u)); top: calc(150 * var(--u)); bottom: calc(150 * var(--u));
+           background: rgb(10 11 13 / 0.8); border-radius: calc(6 * var(--u)); font-family: 'Archivo', sans-serif; color: #fff; }
+  #title { position: absolute; left: calc(64 * var(--u)); top: calc(52 * var(--u)); margin: 0; font-weight: 700; font-size: calc(44 * var(--u)); letter-spacing: -0.005em; }
+  svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .bar { fill: rgb(255 255 255 / 0.9); }
+  .label { fill: rgb(255 255 255 / 0.75); font-weight: 500; }
+  .value { fill: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .base { stroke: rgb(255 255 255 / 0.3); }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1 id="title"></h1>
+  <svg id="chart"></svg>
+</div>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const u = innerHeight / 1080;
+  const { ease, clamp } = direction;
+  const duration = 6;
+
+  // The editor's data, in the order of the labels.
+  const values = [12, 19, 31, 46];
+
+  const panel = document.getElementById('panel').getBoundingClientRect();
+  // Margins inside the panel. (Not `top`: that's a window property scripts can't redeclare.)
+  const W = panel.width, H = panel.height, left = 64 * u, right = 64 * u, above = 170 * u, below = 96 * u;
+  const svg = d3.select('#chart').attr('viewBox', `0 0 ${W} ${H}`);
+  const x = d3.scaleBand().domain(d3.range(values.length)).range([left, W - right]).paddingInner(0.32);
+  const y = d3.scaleLinear().domain([0, d3.max(values)]).range([H - below, above]);
+  svg.append('line').attr('class', 'base').attr('x1', left).attr('x2', W - right).attr('y1', y(0)).attr('y2', y(0)).attr('stroke-width', 1.5 * u);
+  const bars = values.map((v, i) => ({
+    v,
+    rect: svg.append('rect').attr('class', 'bar').attr('x', x(i)).attr('width', x.bandwidth()).attr('rx', 3 * u),
+    value: svg.append('text').attr('class', 'value').attr('x', x(i) + x.bandwidth() / 2).attr('text-anchor', 'middle').attr('font-size', 30 * u),
+    label: svg.append('text').attr('class', 'label').attr('data-word', 'labels').attr('x', x(i) + x.bandwidth() / 2).attr('y', H - below + 48 * u).attr('text-anchor', 'middle').attr('font-size', 28 * u),
+  }));
+
+  direction.graphic({
+    duration,
+    words: {
+      title: { label: 'Title', text: 'Hours spent editing, by month', max: 40 },
+      labels: { label: 'Bar labels', text: 'June, July, August, September', max: 80 },
+    },
+    render(t, words) {
+      title.textContent = words.title;
+      const labels = words.labels.split(',').map((s) => s.trim());
+      const gone = ease.inOut(clamp((t - (duration - 0.8)) / 0.6));
+      document.getElementById('panel').style.opacity = ease.out(clamp(t / 0.5)) * (1 - gone);
+      bars.forEach((b, i) => {
+        const grown = ease.out(clamp((t - 0.6 - i * 0.25) / 1.1));
+        const barTop = y(b.v * grown);
+        b.rect.attr('y', barTop).attr('height', y(0) - barTop);
+        b.value.attr('y', barTop - 16 * u).text(grown > 0 ? Math.round(b.v * grown) : '').attr('opacity', clamp(grown * 3));
+        b.label.text(labels[i] ?? '');
+      });
+    },
+  });
+</script>
+</body>
+</html>
