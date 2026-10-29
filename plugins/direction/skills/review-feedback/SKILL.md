@@ -3,6 +3,8 @@ name: review-feedback
 description: Read director comments with their original frames, audio, transcript, and source anchors, then revise a Direction edit and report which notes were addressed.
 ---
 
+Notes reach you through turnovers: when the director has turned notes over, follow the take-turnover skill instead of this one. Use this skill for feedback added outside a turnover (for example through `direction_add_comment`).
+
 Comments do not wake an agent. Read them when the user next asks you to revise or check feedback. Resolve the intended project and pass `projectPath` on every call.
 
 Read `direction_feedback`, paginating by its cursor when necessary. Fetch `direction_feedback_context` for actionable comments. It returns the original edit revision, moment/range, source anchors, audio-track context, captured transcript, and sampled PNG/WAV content. Inspect the media when available; do not infer the note's meaning from timestamps alone.

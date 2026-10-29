@@ -15,4 +15,6 @@ Use `direction_edit` for the requested sequence format and initial assembly. The
 
 Inspect exact revision and tool schemas before editing. Use `baseEditRevision` and a distinct `idempotencyKey` for each intended mutation, retaining that key for identical retries. If another edit changed the revision, inspect again and revise the batch. Originals remain linked, so tell the user where their `.direction` project is stored and keep source files available.
 
+Log the footage for the director's Dailies with `direction_log_dailies`: scenes (number, title, setups), and for each take its scene, setup, take code, a one-line caption, flags (flubbed line, soft focus, no audio) and, when you'd recommend it, a `suggestion` with the reason. Put takes you can't place in no scene with a `guessSceneNumber`. You can suggest; only the director circles. If the director has written a brief (`direction_brief`), read it first.
+
 Use `direction_transcribe` with the chosen asset/audio track when dialogue editing is useful. Speech runs locally; first use may download Apple's model. Poll the returned job while the MCP process stays alive. Finally sample actual edited frames/audio, save a review cut, and open the project for the director. Report what is ready and any missing media or unsupported format.

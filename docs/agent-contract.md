@@ -161,6 +161,24 @@ Transcription/export/preview return job records with ID, owner PID, revision, st
 
 `direction_events` reads up to 500 ordered events after a cursor. Continue from the last returned ID to drain more. The UI uses these events to notice external changes. Events do not wake an external agent.
 
+## Directing: brief, dailies, turnovers
+
+The director's app adds a working relationship on top of editing. Notes are private until the director turns them over; the editor answers every note it was given.
+
+| Tool | Purpose |
+|---|---|
+| `direction_brief` | The director's brief, default latitude, picture lock and pause state. |
+| `direction_dailies` / `direction_log_dailies` | Scenes, setups and takes. The editor logs, captions, flags and suggests; only the director circles. |
+| `direction_turnovers` | Open turnovers with their notes, latitude, `waitForOK`, the director's corrections and flipped conflicts. `mayStartCutting` says whether the read-back was approved. |
+| `direction_turnover_update` | Post a read-back, then report `state` (cutting, blocked, failed), per-note `progress`, `phase` and `message`. Cutting before an approved read-back is refused with `readback_not_approved`. |
+| `direction_ask` / `direction_questions` | Ask a question (2–4 choices) or report a note you can't do (`kind: cant`); read the director's answers. |
+| `direction_turnover_complete` | Deliver the cut: it's named automatically (Assembly, Cut 2…) and each answer is attached to its note with a summary, delta, the changed range in the new cut and optional A/B options. |
+| `direction_finishing` | After picture lock, read or update the finishing checklist. |
+| `direction_add_outside_note` | Bring in a note from someone else; it waits in the director's Outside inbox and stays invisible to the editor until accepted. |
+| `direction_editor_status` | A one-line status for the app's editor pill. |
+
+Locks are enforced on every edit. A change to any clip from a locked scene fails with `scene_locked`; after picture lock any timing change fails with `picture_locked`, while color and audio still work. `direction_feedback` omits drafts, dropped notes and outside notes the director hasn't accepted. Notes carry `number` (permanent, never reused), `kind` (feeling, story, pace, picture, sound; earlier kinds win conflicts), `scriptAction` for notes made in the Script room, and `answers`.
+
 ## Verification
 
 `./scripts/test.sh` includes native output checks and real external CLI, JSON API, and MCP sessions. The MCP smoke test performs initialization, lists schemas, receives inline PNG/WAV content, rejects stale revisions and mistyped flags, and polls an actual preview render to completion. See `verification.md`.
