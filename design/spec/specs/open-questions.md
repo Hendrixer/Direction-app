@@ -15,7 +15,7 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 9. **Account name** in frame 48 is sample data ("Dana Moreau"). The director is never named elsewhere; the UI says "you".
 10. **Class names `.agent` and `.side`** in `gate.css` are reserved for the titlebar pill and the sidebar. Don't reuse them inside other components.
 
-11. **No timeline for the director.** The editor's timeline is OpenTimelineIO with Direction's fields (`agent-timeline.md`). The director sees scenes, answers and choices only.
+11. **No timeline for the director, and no raw timeline for the editor.** The editor reads the cut as OpenTimelineIO and changes it only through Direction's edit functions (`direction_edit`): named operations that Direction carries out exactly (`agent-timeline.md`). The director sees scenes, answers and choices only.
 12. **No hand-off to other editing apps.** Direction renders everything: effects, graphics, made clips, looks. No FCPXML, OTIO or EDL export for finishing elsewhere. (OTIO is the editor's format, not an export.)
 13. **The look is the director's.** The editor balances shots and may propose looks; it never applies one.
 14. **Graphic words are the director's to fix** directly, without a turnover. Everything else about a graphic goes through notes.

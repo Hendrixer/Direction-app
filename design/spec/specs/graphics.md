@@ -53,7 +53,7 @@ direction.graphic({
 |---|---|---|
 | `direction_graphic_examples` | `name?` | The list of examples, or one example's full source |
 | `direction_graphic` | `name`, `note`, `check?` | Checks and renders the graphic in `Editor/Graphics/<name>/`. Returns stills at 0, 25, 50, 75 and 100%, console errors, render time per frame, and problems: words that overflow their box, anything outside title safe (90%), text under 24 px at 1080p, contrast under 4.5:1 against the picture behind it. |
-| `direction_timeline_apply` | — | Place it as a clip with a `GeneratorReference` (`direction.graphic`, `graphicID`) on V2 or above |
+| `direction_edit` | `placeGraphic` | Places it on V2 or above (shown in the timeline as a `GeneratorReference`, `direction.graphic`) |
 
 The editor's `make-graphic` skill says: start from the closest example, keep every visible word in `words`, run `direction_graphic` and look at the stills before placing it, and fix every problem it reports.
 
@@ -84,4 +84,4 @@ The Changes room on Cut 4 with note 8 selected. Note 8 (Story, on Scene 1): "Put
 - [ ] Two renders of the same graphic and words are byte-identical.
 - [ ] A graphic that requests the internet fails its check with "Graphics can't use the internet" and the URL.
 - [ ] Words longer than `max` can't be typed.
-- [ ] After the director changes words, `direction_timeline_apply` refuses to change them unless the apply lists a note that names the graphic.
+- [ ] After the director changes words, `direction_edit` refuses to change them (`words_are_yours`) unless the batch lists a note that names the graphic.

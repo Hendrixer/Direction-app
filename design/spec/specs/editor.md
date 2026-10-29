@@ -47,7 +47,7 @@ Settings › Editor › "Editor runs on" has three segments: Claude Code, Codex,
 | `direction_frame` with assetID, `direction_contact_sheet` | Looking at | the take, `3B T2` | — |
 | `direction_transcribe`, `direction_audio` reads | Listening to | the take, `2A T5` | — |
 | `direction_search_footage` | Searching footage for | the words, "Maya laughing" | — |
-| `direction_timeline_apply`, `direction_edit` | Cutting | the scene(s) touched, `scene 2` | the first changed time |
+| `direction_edit` | The first operation's verb: Trimming, Rolling, Swapping takes, Reframing, Ducking … | the scene(s) touched, `scene 2` | the first changed time |
 | `direction_make` | Making | "music for note 4" | — |
 | `direction_graphic` | Drawing | the graphic, "the title for note 8" | its start |
 | `direction_make_look` | Making a look | for note n | — |
@@ -57,6 +57,19 @@ Settings › Editor › "Editor runs on" has three segments: Claude Code, Codex,
 | Anything else (reading the brief, notes, files) | Reading | "the notes" / "the brief" | — |
 
 Consecutive calls with the same verb and object merge into one row with the latest time.
+
+## Skills
+
+A skill is a short playbook in Markdown (`plugins/direction/skills/<name>/SKILL.md`) that Claude Code and Codex load by name. It doesn't run anything. It tells the editor how to do one kind of job well: which Direction tools to call, in what order, and the rules (read back before cutting, footage first, watch what you changed). Direction ships them with the app and names the skill in each job, so the editor follows the same playbook whether Direction started it or you did.
+
+| Skill | Job | What it teaches |
+|---|---|---|
+| `start-project` | Log footage | Read the index, name people, sort takes into scenes and setups, flag problems, suggest takes |
+| `assemble` | Assemble | Build the first cut from circles in script order, using `insert`, `roll` and `splitEdit` |
+| `take-turnover` | Turnover | Read back, cut with edit functions, ask when unsure, watch every change, answer every note |
+| `make-graphic` | Graphics for a note | Start from an example, keep words in `words`, check with `direction_graphic`, place with `placeGraphic` |
+| `propose-look` | A look note | Make two or three looks with `direction_make_look`, offer them as Options or a question, never apply one |
+| `finish` | After picture lock | Balance and match shots, mix to the loudness target, captions, deliveries |
 
 ## Jobs
 

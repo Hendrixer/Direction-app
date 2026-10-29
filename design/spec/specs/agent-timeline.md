@@ -2,101 +2,162 @@
 
 No frames. This is the contract between the editor and Direction's renderer. Read `product-model.md` first.
 
-The director never sees a timeline: they see scenes on a strip, answers and choices. The editor sees everything: every layer, every effect, every keyframe, every graphic and made clip. Direction doesn't hand off to another editing app; it renders everything itself. Where data isn't enough, the editor writes code: graphics in JavaScript (`graphics.md`), effects as Metal shaders (below), and scripts that transform the timeline.
+The director never sees a timeline: they see scenes on a strip, answers and choices. The editor sees everything: every layer, effect, keyframe, graphic and made clip. Direction doesn't hand off to another editing app; it renders everything itself.
+
+**The editor reads the timeline as data and changes it only through Direction's edit functions.** It never writes the timeline itself. Each function is one editorial act ("trim", "swap the take", "duck the music"), carried out by Direction's own code: the frame math, keeping picture and sound in sync, locks, and which note the change answers. The editor decides what to do; Direction does it exactly.
+
+Why functions and not a writable document:
+- **Intent survives.** Changes can say "Trimmed scene 1, −4.2 s, for note 1" because the call said so, rather than guessing from a diff.
+- **Nothing gets lost by accident.** Rewriting a whole document can drop or shift things the editor never meant to touch. A function touches only what it names.
+- **Direction does the exact work.** Agents are poor at frame-accurate time arithmetic and sync. Functions take plain inputs ("this edit point, 12 frames later") and Direction computes the rest.
+- **Checked one act at a time.** Each operation is checked against locks, media and the catalog, and errors point at the operation that failed.
+- **Readable activity.** The pill and History show verbs, because every change is a verb.
+
+Where data isn't enough, the editor still writes code, but code that **makes things**, not code that edits the timeline: graphics in JavaScript (`graphics.md`) and effects as Metal shaders (below). Placing them is an edit function like any other.
 
 ---
 
-## Format: OpenTimelineIO, with Direction's fields
+## Reading: OpenTimelineIO, read-only
 
-The editor reads and writes the timeline as **OpenTimelineIO** JSON (OTIO, the Academy Software Foundation's open timeline format). Agents and their tools already know it, and the `opentimelineio` Python library can read and write it in a script. OTIO describes the edit but not how effects render, so Direction fills that part in under `metadata.direction`.
-
-| OTIO | Direction meaning |
-|---|---|
-| `Timeline` | One cut. `metadata.direction`: `cut`, `editRevision`, `width`, `height`, `rate`, `look` (the director's, read-only) |
-| `Stack` → `Track` (kind `Video`) | Video layers, bottom first: V1 is the story track (footage), V2+ are overlays (graphics, picture-in-picture, made shots). |
-| `Track` (kind `Audio`) | A1 dialogue, A2 music, A3 sound effects, A4+ more. Names are fixed; extra tracks are named by the editor. |
-| `Clip` + `ExternalReference` | A take or a made clip. `metadata.direction.id` is the clip's stable id; `assetID` names the footage. `source_range` is the trim. |
-| `Clip` + `GeneratorReference` | Something Direction draws: `generator_kind` `direction.graphic` (`parameters.graphicID`), `direction.solid` (`parameters.color`) |
-| `Gap` | Empty time on a track |
-| `Transition` | `transition_type` from the catalog below; `in_offset`, `out_offset` |
-| `Effect` on a clip or track | `effect_name` from the catalog; parameters in `metadata.direction.params`; keyframes in `metadata.direction.keys` |
-| `LinearTimeWarp`, `FreezeFrame` | Speed and holds, as OTIO defines them |
-| `Marker` on the timeline | Scenes (`metadata.direction.scene: {number, title, locked}`) and notes (`metadata.direction.note: {number, kind}`). Read-only; changing them is an error. |
-
-Keyframes are `{"param": [[seconds, value, "linear" | "ease" | "hold"], …]}` in the clip's own time. A parameter with keys ignores its static value.
-
-```json
-{ "OTIO_SCHEMA": "Clip.2", "name": "3B T2",
-  "source_range": { "OTIO_SCHEMA": "TimeRange.1",
-    "start_time": { "OTIO_SCHEMA": "RationalTime.1", "rate": 23.976, "value": 1022 },
-    "duration":   { "OTIO_SCHEMA": "RationalTime.1", "rate": 23.976, "value": 96 } },
-  "media_references": { "DEFAULT_MEDIA": { "OTIO_SCHEMA": "ExternalReference.1", "target_url": "direction://asset/asset-3b-t2" } },
-  "active_media_reference_key": "DEFAULT_MEDIA",
-  "effects": [ { "OTIO_SCHEMA": "Effect.1", "effect_name": "direction.transform",
-                 "metadata": { "direction": { "params": { "scale": 1.6, "y": -0.08 } } } } ],
-  "metadata": { "direction": { "id": "clip-5d1c", "assetID": "asset-3b-t2", "note": 3 } } }
-```
-
-## Reading and writing
+`direction_timeline` returns the cut as **OpenTimelineIO** JSON (OTIO, the Academy Software Foundation's open timeline format), which agents and their tools already understand, plus a compact outline. Every item carries its id in `metadata.direction.id`; operations refer to those ids.
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `direction_timeline` | `cut?`, `revision?`, `range?` | The OTIO document, plus `outline`: a compact text view, one line per item (below). Pass `range` to get only items overlapping it. |
-| `direction_timeline_apply` | `baseEditRevision`, `document` or `path` (an `.otio` file in the working folder), `summary`, `notes` (note numbers this change answers), `idempotencyKey`, `validateOnly?` | The new `editRevision` and a list of what changed, or errors |
-| `direction_effects` | — | The effects and transitions catalog below, with every parameter's range and default |
-| `direction_edit` | unchanged | Small operations still work and are often simpler |
+| `direction_timeline` | `cut?`, `revision?`, `range?` | The OTIO document (only items overlapping `range`, if given) and `outline` |
+| `direction_edit_catalog` | — | Every operation below with its arguments, and every effect and transition with its parameters' ranges and defaults |
 
-**Apply** diffs the submitted document against `baseEditRevision` by `metadata.direction.id`: items without an id are new; ids that are gone are removed; changed fields become operations. All of it commits as one new revision, or nothing does. Errors are a list of `{path, code, message}` with a JSON pointer into the document:
-
-| Code | When |
+| OTIO | Direction meaning |
 |---|---|
-| `scene_locked` | Any change overlapping a locked scene's range, on any track |
-| `picture_locked` | Any picture change after picture lock |
-| `stale_revision` | `baseEditRevision` isn't current |
-| `overlap` | Two clips overlap on one track |
-| `unknown_effect`, `bad_param` | Not in the catalog, or a value out of range |
-| `missing_media` | An asset or graphic that doesn't exist |
-| `marker_changed` | A scene or note marker was edited |
+| `Timeline` | One cut. `metadata.direction`: `cut`, `editRevision`, `width`, `height`, `rate`, `look` (the director's) |
+| `Stack` → `Track` (kind `Video`) | Video layers, bottom first: V1 is the story track (footage), V2+ are overlays (graphics, cutaways, made shots). |
+| `Track` (kind `Audio`) | A1 dialogue, A2 music, A3 sound effects, A4+ more. |
+| `Clip` + `ExternalReference` | A take or a made clip. `metadata.direction.assetID` names the footage; `source_range` is the trim. |
+| `Clip` + `GeneratorReference` | Something Direction draws: `direction.graphic` (`parameters.graphicID`) or `direction.solid` (`parameters.color`) |
+| `Gap`, `Transition`, `Effect`, `LinearTimeWarp`, `FreezeFrame` | As OTIO defines them; effect parameters in `metadata.direction.params`, keyframes in `metadata.direction.keys` |
+| `Marker` | Scenes (`metadata.direction.scene: {number, title, locked}`) and notes (`metadata.direction.note: {number, kind}`) |
 
-**Outline** lines look like this, so the editor can read a cut without parsing JSON:
+The **outline** reads like this:
 
 ```
 Cut 3 · 3:40:00 · 1920×1080 · 23.976 · look "Window light" (film)
-V2  00:02:00–00:06:00  graphic "Title · Two years."  above look
-V1  00:00:00–00:09:12  1A T2  src 00:04:10–00:13:22  transform(scale 1.1)
-V1  00:09:12–00:25:00  1B T4  src 00:00:20–00:16:08  ‹scene 1›
-A2  00:00:00–00:25:00  music "Felt piano" (made)  gain −6 dB under A1
+V2  00:02:00–00:06:00  clip-91  graphic "Title · Two years."  above look
+V1  00:00:00–00:09:12  clip-12  1A T2  src 00:04:10–00:13:22  reframe(1.1)
+V1  00:09:12–00:25:00  clip-13  1B T4  src 00:00:20–00:16:08  ‹scene 1›
+A2  00:00:00–00:25:00  clip-40  music "Felt piano" (made)  ducked −6 dB under A1
 ```
 
-**Scripting.** The editor may export the timeline to its working folder, transform it with a script (Python with `opentimelineio`, or JavaScript), and apply the file. Direction never runs the editor's scripts; the editor's program does, inside its sandbox. Apply checks the result like any other change.
+The editor may export the document to its working folder and analyze it in a script (Python with `opentimelineio`, or JavaScript). The analysis can decide which operations to send; it can't send a document back.
 
-## What Direction renders
+## Writing: edit functions
 
-Order, per frame: each clip's effects in list order → its track's effects → layers composited bottom to top with their blend modes → **the director's look** (`looks.md`) → tracks marked `aboveLook` (graphics by default) → output. Audio: clip gain and keys → track effects → dialogue ducking → the mix to the loudness target.
+`direction_edit` takes a batch of operations and applies all of them as one new revision, or none.
+
+```json
+{ "baseEditRevision": 41, "idempotencyKey": "t3-note1", "summary": "Get to her face sooner",
+  "notes": [1], "validateOnly": false,
+  "operations": [
+    { "op": "removeRange", "range": { "start": 4.2, "end": 8.4 }, "ripple": true },
+    { "op": "roll", "editPoint": "clip-12|clip-13", "frames": -6 } ] }
+```
+
+- `notes` says which notes the batch answers; any operation may override it with its own `note`. A batch with no note is allowed only with latitude "free" and is labeled Unasked.
+- Times are cut seconds unless an argument says source; `frames` arguments count frames at the cut's rate. Direction snaps every result to whole frames.
+- Clips are named by id from `direction_timeline`. An edit point is `"<left clip>|<right clip>"`.
+- `validateOnly` checks everything and returns the predicted result (changed ranges, new length, warnings) without committing.
+- The result lists, per operation, what changed: the ranges in the new cut and the old cut, the scenes, and the delta. Changes and Play changes are built from this list.
+- Errors are `{index, code, message}`, pointing at the operation that failed.
+
+### Operations
+
+**Story** (V1, keeping every layer in sync unless the operation says otherwise)
+
+| Op | Arguments | What Direction does |
+|---|---|---|
+| `insert` | `assetID`, `sourceRange`, `at`, `track?` | Inserts and ripples everything after it |
+| `overwrite` | `assetID`, `sourceRange`, `at`, `track?` | Places over what's there, without moving anything |
+| `removeRange` | `range`, `ripple` | Removes the range on every track; ripple closes the gap |
+| `remove` | `clipID`, `ripple` | |
+| `move` | `clipID`, `to` (`at`, or `before`/`after` a clip) | Moves a clip and its linked sound |
+| `split` | `clipID`, `at` | |
+| `trim` | `clipID`, `edge` (`head`/`tail`), `frames`, `ripple` | Extends or shortens one end |
+| `roll` | `editPoint`, `frames` | Moves a cut point; the total length doesn't change |
+| `slip` | `clipID`, `frames` | Changes which part of the take plays, without moving the clip |
+| `slide` | `clipID`, `frames` | Moves a clip between its neighbors, trimming them to fit |
+| `splitEdit` | `editPoint`, `lead` (`sound`/`picture`), `frames` | J- and L-cuts: sound starts before the picture changes, or carries after |
+| `replaceTake` | `clipID`, `withAssetID`, `alignOn` (`words`/`head`/`tail`) | Swaps in another take. With `words`, Direction finds the same line in the new take's transcript and lines it up word for word: "use T5's reading". |
+| `removeWords` | `wordIDs` | Cuts the words and their picture on every layer (today's transcript edit) |
+| `tightenPauses` | `range`, `longerThan` (s), `to` (s) | Finds pauses in that range from the words and sounds, and shortens each one |
+| `speed` | `clipID`, `rate`, `ripple` | |
+| `freeze` | `clipID`, `at`, `seconds` | Holds a frame |
+
+**Picture**
+
+| Op | Arguments | What Direction does |
+|---|---|---|
+| `reframe` | `clipID`, `scale`, `x?`, `y?`, `follow?` (`face`/`subject`), `keepIn?` (thirds/center) | With `follow`, Direction tracks the face or subject with Vision and writes the keyframes that keep it placed |
+| `balance` | `clipID`, `exposure?`, `contrast?`, `saturation?`, `temperature?`, `tint?` | Shot matching (today's `color`) |
+| `matchBalance` | `clipID`, `toClipID` | Direction measures both shots and sets the balance that matches the reference |
+| `cameraLUT` | `assetID`, `lut` (`auto`, a file, or `none`) | Per take, not per clip |
+| `addEffect` | `target` (clip id or track), `effect`, `params`, `keys?` | Returns the effect's id |
+| `setEffect` | `effectID`, `params?`, `keys?` | |
+| `removeEffect` | `effectID` | |
+| `transition` | `editPoint`, `type`, `frames` | |
+| `removeTransition` | `editPoint` | |
+
+**Layers**
+
+| Op | Arguments | What Direction does |
+|---|---|---|
+| `cutaway` | `assetID`, `sourceRange`, `at`, `cover?` (a clip id or edit point) | Puts picture on V2 over the story; the sound underneath keeps playing. With `cover`, Direction centers it over a jump cut. |
+| `placeGraphic` | `graphic`, `at`, `seconds?`, `aboveLook` (default true) | Places a checked graphic (`graphics.md`) on the first free layer at V2 or above |
+| `placeMade` | `madeID`, `at`, `track`, `sourceRange?` | Places a made clip like footage |
+
+**Sound**
+
+| Op | Arguments | What Direction does |
+|---|---|---|
+| `gain` | `target` (clip id or track), `dB`, `keys?` | |
+| `fade` | `clipID`, `in?`, `out?` (frames) | |
+| `duck` | `track` (usually A2), `under` (usually A1), `dB`, `attack?`, `release?` | Direction finds every line of dialogue from the words and writes the gain keys |
+| `placeMusic` | `madeID` or `assetID`, `at`, `endOn` (`cut`, `word`, or a time) | Lines the music's end up with a cut or a word, trimming from the head |
+| `audio` | as today | EQ, compression and per-track settings |
+
+**Film**: `format` and `duplicateSequence` as today.
+
+Every operation is checked before anything commits:
+
+| Code | When |
+|---|---|
+| `scene_locked` | It would change anything overlapping a locked scene, on any track |
+| `picture_locked` | Any picture change after picture lock |
+| `stale_revision` | `baseEditRevision` isn't current |
+| `overlap` | It would make two clips overlap on one track |
+| `unknown_op`, `bad_argument` | Not in the catalog, or a value out of range |
+| `missing_media` | An asset, graphic or made clip that doesn't exist |
+| `no_words` | `replaceTake` with `words`, or `tightenPauses`, on a take with no transcript |
+| `look_is_yours` | Anything that would change the director's look |
+| `words_are_yours` | Changing a graphic's words the director set, without a note that names it |
 
 ### Effects catalog
 
-| `effect_name` | Parameters (range, default) | Keys | Notes |
+Used by `addEffect` and `setEffect`.
+
+| Effect | Parameters (range, default) | Keys | Notes |
 |---|---|---|---|
-| `direction.transform` | `scale` (0.1–8, 1), `x`, `y` (−1–1, 0; fraction of frame), `rotation` (−180–180, 0), `opacity` (0–1, 1), `crop` (`l r t b`, 0–0.5, 0) | yes | Reframing for notes like "tighter on her" |
-| `direction.balance` | `exposure` (−3–3 stops, 0), `contrast` (0.5–1.5, 1), `saturation` (0–2, 1), `temperature` (−1–1, 0), `tint` (−1–1, 0) | no | Shot matching. The existing `ColorGrade`. |
-| `direction.cameraLUT` | `file` (a LUT with use `.camera`) | no | Usually set automatically for log footage |
-| `direction.blend` | `mode`: normal, screen, multiply, overlay, add | no | On V2+ clips |
-| `direction.mask` | `shape`: rect, ellipse; `x y w h` (0–1); `feather` (0–0.5, 0.05); `invert` (false) | yes | Limits the clip's other effects to the shape: "brighten her face" |
-| `direction.blur` | `radius` (0–100 px, 0) | yes | |
-| `direction.sharpen` | `amount` (0–1, 0) | no | |
-| `direction.stabilize` | `amount` (0–1, 0.5) | no | Vision homographic registration, cached per clip |
-| `direction.filter.<kind>` | Every filter in `looks.md` | yes | Per-clip texture, apart from the director's look |
-| `direction.shader` | `file` (`Effects/<name>.metal`) and the parameters it declares | yes | Custom; see below |
-| Audio: `direction.gain` (−60–12 dB), `direction.eq`, `direction.compress` | As today's `AudioSettings` | gain only | |
+| `transform` | `scale` (0.1–8, 1), `x`, `y` (−1–1, 0; fraction of frame), `rotation` (−180–180, 0), `opacity` (0–1, 1), `crop` (`l r t b`, 0–0.5, 0) | yes | `reframe` writes this |
+| `blend` | `mode`: normal, screen, multiply, overlay, add | no | On V2+ clips |
+| `mask` | `shape`: rect, ellipse; `x y w h` (0–1); `feather` (0–0.5, 0.05); `invert` (false) | yes | Limits the clip's other effects to the shape: "brighten her face" |
+| `blur` | `radius` (0–100 px, 0) | yes | |
+| `sharpen` | `amount` (0–1, 0) | no | |
+| `stabilize` | `amount` (0–1, 0.5) | no | Vision homographic registration, cached per clip |
+| `filter.<kind>` | Every filter in `looks.md` | yes | Per-clip texture, apart from the director's look |
+| `shader` | `file` (`Effects/<name>.metal`) and the parameters it declares | yes | Custom; see below |
 
-### Transitions
-
-`Cut` (no transition), `SMPTE_Dissolve` (the OTIO name), `direction.dipToBlack`, `direction.dipToWhite`. Settings › Cutting › Transitions still decides whether the editor may add them without a note.
+Balance and camera LUTs have their own operations. Transitions: `dissolve`, `dipToBlack`, `dipToWhite` (shown in OTIO as `SMPTE_Dissolve` and Direction-named types). Settings › Cutting › Transitions still decides whether the editor may add them without a note.
 
 ### Custom effects (shaders)
 
-When no catalog effect does what a note needs, the editor may write a Metal fragment function in `Effects/<name>.metal`:
+When no catalog effect does what a note needs, the editor may write a Metal fragment function in `Effects/<name>.metal`, then use it with `addEffect` (`effect: "shader"`):
 
 ```metal
 // direction: param amount 0 1 0.5
@@ -104,28 +165,27 @@ When no catalog effect does what a note needs, the editor may write a Metal frag
 [[ stitchable ]] half4 effect(coreimage::sample_h s, float amount, float3 tint, coreimage::destination dest) { … }
 ```
 
-- The header comments declare parameters; `direction_effects` validates them.
-- Direction compiles it with `MTLDevice.makeLibrary(source:)` and wraps it as a Core Image kernel. Compile errors return to the editor with line numbers.
-- Before use, Direction renders 3 frames with it; a kernel that takes longer than 40 ms a frame at 1080p, or produces NaN, is refused (`shader_too_slow`, `shader_invalid`).
+- The header comments declare parameters; `direction_edit_catalog` lists custom effects once they compile.
+- Direction compiles it with `MTLDevice.makeLibrary(source:)` and wraps it as a Core Image kernel. Compile errors come back with line numbers.
+- Before use, Direction renders 3 frames with it; a kernel slower than 40 ms a frame at 1080p, or one that produces NaN, is refused (`shader_too_slow`, `shader_invalid`).
 - Shaders can't read files or the network; they only see pixels and their parameters.
 
-## Rules the renderer enforces
+## What Direction renders
 
-- The look is the director's: the timeline document shows it under `metadata.direction.look` and refuses changes to it.
-- Graphics' words that the director changed are locked against the editor unless a note asks (`graphics.md`).
-- Made clips are files in `<film>.direction/Made/`, referenced like footage.
-- Every apply records `summary` and `notes`, so Changes can show which note each change answers.
+Order, per frame: each clip's effects in order → its track's effects → layers composited bottom to top with their blend modes → **the director's look** (`looks.md`) → tracks marked above the look (graphics by default) → output. Audio: clip gain and keys → track effects → ducking → the mix to the loudness target.
 
 ## What we took from open source
 
 We looked at how other editors expose their work to code, without handing anything off to them:
-- **EffectCraft** (Rust, MIT/Apache): every action goes through one command registry behind its CLI and MCP server, projects are versioned JSON, every effect has fixed parameter names and defaults, and expressions are JavaScript. Direction takes the same stance: one catalog, fixed parameters, every action a tool.
-- **MLT** (the engine under Kdenlive and Shotcut): filters and transitions attached to producers and tracks in a scriptable XML graph. It's the model for per-clip and per-track effects here.
-- **OpenTimelineIO**: the shared vocabulary for tracks, clips, gaps, transitions and markers.
-- **Premation** (AGPL; study only, don't copy code): a deterministic WebGL/WebGPU renderer for motion graphics. It's the reason graphics here render in a browser engine on a clock Direction controls.
+- **EffectCraft** (Rust, MIT/Apache): every action goes through one command registry behind its CLI and MCP server, and every effect has fixed parameter names and defaults. Direction takes the same stance: one catalog of operations and effects, fixed arguments.
+- **MLT** (the engine under Kdenlive and Shotcut): filters and transitions attached to clips and tracks. It's the model for per-clip and per-track effects here.
+- **OpenTimelineIO**: the shared vocabulary the editor reads.
+- **Premation** (AGPL; study only, don't copy code): a deterministic WebGL/WebGPU renderer for motion graphics. It's why graphics render in a browser engine on a clock Direction controls.
 
 **Acceptance:**
-- [ ] `direction_timeline` then `direction_timeline_apply` with the document unchanged makes no new revision.
-- [ ] A script that round-trips the document through `opentimelineio` and back applies cleanly.
-- [ ] Any change inside Launch day (locked) fails with `scene_locked` and a pointer to the item.
+- [ ] There's no tool that accepts a timeline document. The only way to change a cut is `direction_edit`.
+- [ ] `replaceTake` with `words` keeps the line's first word within one frame of where the old take's first word was.
+- [ ] `tightenPauses` never cuts inside a word.
+- [ ] Any operation inside Launch day (locked) fails with `scene_locked` and its index, and nothing in the batch commits.
 - [ ] Every catalog effect renders the same frame in preview, `direction_frame` and export.
+- [ ] Each change in Changes names the operation and note that made it.

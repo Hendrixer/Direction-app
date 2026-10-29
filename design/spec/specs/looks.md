@@ -50,7 +50,7 @@ A note like "It should feel like a still of window light" (Picture) goes to the 
 2. Direction validates the LUT and returns before and after stills on three frames from different scenes.
 3. The editor answers the note with Options (A/B) or a question with up to four looks as stills. Picking one sets the film's look (or the scene's, if the note was on a scene).
 
-The editor never sets the look itself; `direction_timeline_apply` refuses it.
+The editor never sets the look itself; no edit function can change it (`look_is_yours`).
 
 ---
 
@@ -76,5 +76,5 @@ Opens with Film › Look… (`⇧⌘L`), from the picture's context menu (Look�
 **Acceptance:**
 - [ ] A LUT dropped into the Looks folder appears in an open Look sheet within 2 s.
 - [ ] Grain looks identical in two exports of the same cut.
-- [ ] The editor can't change the look; `direction_timeline_apply` returns an error if it tries.
+- [ ] The editor can't change the look; any edit that would returns `look_is_yours`.
 - [ ] VoiceOver reads each tile as "Print film, look" and each filter row as "Grain, on, 40 percent".

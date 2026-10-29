@@ -39,7 +39,7 @@ The month resets on the 1st. "Spent this month" sums Direction's own record of e
 
 - Over the turnover's limit, `direction_make` returns `spend_over_limit` with the estimate and what's left. The editor then asks a spend question (`direction_ask` kind `spend`, below) and calls again with the question's id once the director agrees.
 - Over the monthly cap, it returns `spend_cap`. There's no override from the editor's side.
-- Made files are saved in `<film>.direction/Made/` (copied in, never linked), probed like footage, and placed with `direction_timeline_apply` like any clip.
+- Made files are saved in `<film>.direction/Made/` (copied in, never linked), probed like footage, and placed with the `placeMade` or `placeMusic` edit functions (`agent-timeline.md`).
 - Footage first: the `take-turnover` skill tells the editor to search the footage (`direction_search_footage`) before making anything, and to say in the read-back when it plans to make something: "Note 4: make a sparser piano bed with ElevenLabs, about $0.40."
 
 ## Where made things show
