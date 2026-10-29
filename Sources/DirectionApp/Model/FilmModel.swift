@@ -441,6 +441,8 @@ final class FilmModel {
         // Leaving the first look for a room: the assembly keeps building in the background.
         if onboardingStep == .firstLook { onboardingDismissed = true }
         if self.room == .screening && room != .screening { endScreening(showEndCard: false) }
+        // The cut stops where it is when you change rooms; nothing plays in a room you can't see it in.
+        if self.room != room, playing || playingChanges { if playingChanges { stopChanges() } else { pause() } }
         if self.room != room { previousRoom = self.room }
         withAnimation(gateAnimation(Gate.Motion.glide)) { self.room = room }
         if room == .screening { startScreening() }

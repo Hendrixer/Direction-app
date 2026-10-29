@@ -24,6 +24,14 @@ struct FilmModelTests {
         #expect(!FilmLibraryIndex.trashed.contains(path))
     }
 
+    @Test func changingRoomsStopsTheCutWhereItIs() {
+        let m = SampleFilm.make(room: .screening)
+        m.playing = true
+        m.go(.dailies)
+        #expect(!m.playing)
+        #expect(m.room == .dailies)
+    }
+
     @Test func stripMergesClipsIntoScenesAtTheirRealLengths() {
         let m = SampleFilm.make()
         let scenes = m.stripScenes

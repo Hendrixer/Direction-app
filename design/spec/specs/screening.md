@@ -24,6 +24,8 @@ Keys in every Screening state:
 
 ---
 
+**Leaving.** Going to any other room (the switcher, ⌘1–⌘6, esc) stops the cut where it is; the playhead stays. Nothing plays in a room the picture isn't in. The same holds between every room, and for Play changes.
+
 ## 13 · Screening, playing
 Frame: `screens/13-screening.html` · Render: `renders/13-screening@2x.png`
 
