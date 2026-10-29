@@ -34,6 +34,8 @@ struct PrimaryAction {
     var enabled = true
     /// Help tag; for a disabled action, why it's disabled.
     var help: String? = nil
+    /// Key hint shown inside the button, e.g. "⌘↩".
+    var key: String? = nil
     var action: () -> Void
 }
 
@@ -231,6 +233,8 @@ final class FilmModel {
     var fps: Double { sequence?.frameRate.value ?? 24 }
     var aspect: CGFloat { CGFloat(sequence?.width ?? 1920) / CGFloat(max(1, sequence?.height ?? 1080)) }
     var filmName: String { project?.name ?? "Film" }
+    /// The crumb: "New film" until the brief names it.
+    var filmTitle: String { (project?.name ?? "").hasPrefix("Untitled film") ? "New film" : filmName }
     func cutName(_ id: String?) -> String { id.flatMap { id in cuts.first { $0.id == id }?.name } ?? "Working cut" }
     func asset(_ id: String?) -> MediaAsset? { id.flatMap { id in project?.assets.first { $0.id == id } } }
     var scenes: [DailiesScene] { dailies.scenes.sorted { $0.number < $1.number } }
@@ -372,7 +376,8 @@ final class FilmModel {
     func isEnabled(_ room: Room) -> Bool {
         switch room {
         case .finish: isPictureLocked
-        case .screening, .changes: !cuts.isEmpty || (sequence?.clips.isEmpty == false)
+        // Nothing to watch or note before the first cut.
+        case .screening, .notes, .changes: !cuts.isEmpty
         default: true
         }
     }
@@ -563,6 +568,12 @@ final class FilmModel {
     func setCircle(_ assetID: String, _ on: Bool) { perform { try $0.setCircle(assetID: assetID, circled: on) }; registerUndo(on ? "Circle Take" : "Uncircle Take") { $0.setCircle(assetID, !on) } }
     func moveTake(_ assetID: String, to sceneID: String?) { let old = dailies.take(assetID).sceneID; perform { try $0.setTakeScene(assetID: assetID, sceneID: sceneID) }; registerUndo("Move Take") { $0.moveTake(assetID, to: old) } }
     func setUnusable(_ assetID: String, _ on: Bool) { perform { try $0.setUnusable(assetID: assetID, unusable: on) }; registerUndo(on ? "Mark Not Usable" : "Mark Usable") { $0.setUnusable(assetID, !on) } }
+    @discardableResult
+    func addScene(title: String = "New scene") -> String? {
+        guard let store else { return nil }
+        do { let s = try store.addScene(title: title); refresh(force: true); return s.id } catch { self.error = error.localizedDescription; return nil }
+    }
+    func moveTake(_ assetID: String, toSetup code: String?) { let old = dailies.take(assetID).setupCode; perform { try $0.setTakeSetup(assetID: assetID, setupCode: code) }; registerUndo("Move Take") { $0.moveTake(assetID, toSetup: old) } }
     var circledCount: Int { dailies.takes.values.filter(\.circled).count }
     var suggestedCount: Int { dailies.takes.values.filter { $0.suggestion != nil && !$0.circled }.count }
 

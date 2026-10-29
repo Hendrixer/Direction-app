@@ -84,8 +84,8 @@ struct OnboardingFootageDrop: View {
                 Text(message).font(.system(size: 13.5)).foregroundStyle(rejected ? Gate.State.alert : Gate.Text.tertiary)
                     .multilineTextAlignment(.center).lineSpacing(3.5).frame(maxWidth: 404).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
-                    Button(action: choose) { HStack(spacing: 6) { Image(systemName: "folder"); Text("Choose folder\u{2026}"); KeyHint("\u{2318}O") } }
-                        .buttonStyle(.gate(.normal, .large)).keyboardShortcut("o")
+                    Button(action: choose) { HStack(spacing: 6) { Image(systemName: "folder"); Text("Choose folder\u{2026}"); KeyHint("\u{21E7}\u{2318}I") } }
+                        .buttonStyle(.gate(.normal, .large)).keyboardShortcut("i", modifiers: [.command, .shift])
                     cardMenu
                 }
                 HStack(spacing: 18) {

@@ -66,9 +66,9 @@ struct DailiesSidebar: View {
             HStack(spacing: 8) {
                 SectionLabel("Scenes")
                 Spacer(minLength: 0)
-                Button {} label: { Image(systemName: "plus") }
-                    .buttonStyle(.gate(.ghost, .small, icon: true)).disabled(true)
-                    .help("New scene: drag takes onto a scene for now")
+                Button { if let id = model.addScene() { model.selectedSceneID = id; renaming = id; renameText = "New scene" } } label: { Image(systemName: "plus") }
+                    .buttonStyle(.gate(.ghost, .small, icon: true)).disabled(model.isPreview)
+                    .help("New scene")
             }
             .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
             ScrollView {

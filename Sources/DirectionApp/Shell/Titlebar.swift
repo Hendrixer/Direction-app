@@ -48,7 +48,7 @@ struct Titlebar: View {
                 }
                 Divider()
                 Button("Edit the Brief…") { model.sheet = .brief }
-            } label: { crumbLabel(model.filmName, bold: true) }
+            } label: { crumbLabel(model.filmTitle, bold: true) }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
             if model.onboardingStep == nil {
                 Text("/").foregroundStyle(Gate.Text.disabled).padding(.horizontal, 2)
@@ -56,7 +56,7 @@ struct Titlebar: View {
                     ForEach(model.cuts.reversed()) { cut in
                         Button { model.watch(cut) } label: { Text(cut.id == model.latestCut?.id ? "\(cut.name) (latest)" : cut.name) }
                     }
-                } label: { crumbLabel(model.watchedCut?.name ?? "No cuts yet", bold: false) }
+                } label: { crumbLabel(model.watchedCut?.name ?? (model.openTurnover?.kind == "assembly" ? "Assembly" : "No cuts yet"), bold: false, chevron: !model.cuts.isEmpty) }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().disabled(model.cuts.isEmpty)
                 if model.isPictureLocked { Chip("Picture locked", icon: "lock.fill", mono: false).padding(.leading, 6) }
             }
@@ -64,10 +64,10 @@ struct Titlebar: View {
         .font(.system(size: 13))
     }
 
-    private func crumbLabel(_ text: String, bold: Bool) -> some View {
+    private func crumbLabel(_ text: String, bold: Bool, chevron: Bool = true) -> some View {
         HStack(spacing: 4) {
             Text(text).fontWeight(bold ? .semibold : .medium).foregroundStyle(bold ? Gate.Text.primary : Gate.Text.secondary)
-            Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Gate.Text.disabled)
+            if chevron { Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Gate.Text.disabled) }
         }.padding(.horizontal, 7).frame(height: 26).contentShape(Rectangle())
     }
 
@@ -78,6 +78,7 @@ struct Titlebar: View {
                     if let icon = p.icon { Image(systemName: icon) }
                     Text(p.title)
                     if let count = p.count { CountTag(count, onSteel: model.sheet == nil) }
+                    if let key = p.key { KeyHint(key) }
                 }
             }
             .buttonStyle(.gate(model.sheet == nil ? .steel : .normal))

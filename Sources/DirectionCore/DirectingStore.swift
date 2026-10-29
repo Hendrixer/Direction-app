@@ -99,6 +99,27 @@ extension ProjectStore {
             d.scenes[i].locked = locked; d.scenes[i].lockedAt = locked ? Date().timeIntervalSince1970 : nil
         }
     }
+    /// The director adds a scene; it takes the next number.
+    @discardableResult
+    public func addScene(title: String) throws -> DailiesScene {
+        var created: DailiesScene?
+        try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Added a scene") { d in
+            let scene = DailiesScene(number: (d.scenes.map(\.number).max() ?? 0) + 1, title: title)
+            d.scenes.append(scene); created = scene
+        }
+        return created!
+    }
+    /// Moves a take to another setup of its scene.
+    public func setTakeSetup(assetID: String, setupCode: String?) throws {
+        try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Moved a take to another setup") { d in
+            var t = d.take(assetID)
+            if let code = setupCode, let scene = d.scenes.first(where: { $0.id == t.sceneID }), !scene.setups.contains(where: { $0.code == code }) {
+                guard let i = d.scenes.firstIndex(where: { $0.id == scene.id }) else { return }
+                d.scenes[i].setups.append(DailiesSetup(code: code, description: ""))
+            }
+            t.setupCode = setupCode; d.takes[assetID] = t
+        }
+    }
     public func renameScene(id: String, title: String) throws {
         try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Renamed a scene") { d in
             guard let i = d.scenes.firstIndex(where: { $0.id == id }) else { throw DirectionError("scene_not_found", "Scene not found.") }
