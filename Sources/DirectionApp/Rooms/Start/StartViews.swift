@@ -162,12 +162,12 @@ extension FilmModel {
         let session = OnboardingSession.of(self)
         switch step {
         case .brief:
-            return PrimaryAction(title: "Continue", enabled: session.canContinue) { session.continueBrief() }
+            return PrimaryAction(title: "Continue", enabled: session.canContinue, help: session.canContinue ? "Save the brief and bring footage (\u{2318}\u{21A9})" : "Give the film a title, one sentence and how it should feel first") { session.continueBrief() }
         case .footage:
-            if hasFootage { return PrimaryAction(title: "Open Dailies", icon: "square.grid.2x2", enabled: !dailies.scenes.isEmpty) { self.openDailiesFromLogging() } }
-            return PrimaryAction(title: "Start logging", enabled: !session.pending.isEmpty) { session.importPending() }
+            if hasFootage { return PrimaryAction(title: "Open Dailies", icon: "square.grid.2x2", enabled: !dailies.scenes.isEmpty, help: dailies.scenes.isEmpty ? "Opens once the editor has found a scene" : "Start circling takes; logging carries on (\u{2318}\u{21A9})") { self.openDailiesFromLogging() } }
+            return PrimaryAction(title: "Start logging", enabled: !session.pending.isEmpty, help: session.pending.isEmpty ? "Drop footage or choose a folder first" : "Start logging now (\u{2318}\u{21A9})") { session.importPending() }
         case .firstLook:
-            return PrimaryAction(title: "Screen the assembly", icon: "play.fill", enabled: !cuts.isEmpty) { self.go(.screening) }
+            return PrimaryAction(title: "Screen the assembly", icon: "play.fill", enabled: !cuts.isEmpty, help: cuts.isEmpty ? "The editor is still building the assembly" : "Screen the assembly (\u{2318}\u{21A9})") { self.go(.screening) }
         }
     }
 }

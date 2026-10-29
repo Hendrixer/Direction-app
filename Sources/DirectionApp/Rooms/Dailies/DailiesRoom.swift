@@ -214,7 +214,8 @@ extension FilmModel {
     var dailiesPrimary: PrimaryAction? {
         if cuts.isEmpty {
             let building = openTurnover?.kind == "assembly"
-            return PrimaryAction(title: building ? "Assembling\u{2026}" : "Assemble from circles", count: String(circledCount), enabled: circledCount > 0 && openTurnover == nil) {
+            let help = building ? "The editor is building the assembly" : openTurnover != nil ? "The editor is still working" : circledCount == 0 ? "Circle at least one take first (C)" : "Build the first cut from your circles (\u{2318}\u{21A9})"
+            return PrimaryAction(title: building ? "Assembling\u{2026}" : "Assemble from circles", count: String(circledCount), enabled: circledCount > 0 && openTurnover == nil, help: help) {
                 self.assembleFromCircles()
                 // Show the first look even if Dailies was opened while the editor was still logging.
                 self.onboardingDismissed = false
@@ -222,7 +223,7 @@ extension FilmModel {
         }
         let since = lastTurnover?.createdAt ?? 0
         let fresh = dailiesLogged.filter { $0.circled && ($0.circledAt ?? 0) > since }
-        return PrimaryAction(title: "Use circles in next cut", count: String(fresh.count), enabled: !fresh.isEmpty) {
+        return PrimaryAction(title: "Use circles in next cut", count: String(fresh.count), enabled: !fresh.isEmpty, help: fresh.isEmpty ? "Circle a take since the last turnover first" : "Add a note asking for your new circles (\u{2318}\u{21A9})") {
             let numbers = Array(Set(fresh.compactMap { self.scene($0.sceneID)?.number })).sorted().map(String.init)
             let scenes = numbers.isEmpty ? "" : numbers.count == 1 ? " in scene \(numbers[0])" : " in scenes \(numbers.dropLast().joined(separator: ", ")) and \(numbers.last!)"
             self.addNote(text: "Use my new circles\(scenes).", kind: .story)
