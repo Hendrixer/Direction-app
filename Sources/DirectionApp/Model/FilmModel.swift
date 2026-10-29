@@ -330,6 +330,9 @@ final class FilmModel {
         }
         if cants > 0 { return .cant(cants) }
         if asks > 0 { return .asks(asks) }
+        if isLogging, let total = project?.assets.count, total > 0, cuts.isEmpty {
+            return .working("Logging \(loggedCount) of \(total)", Double(loggedCount) / Double(total))
+        }
         return .ready
     }
     var isPictureLocked: Bool { directing.pictureLocked }
@@ -341,10 +344,13 @@ final class FilmModel {
         if !brief.isComplete { return .brief }
         if !hasFootage { return .footage }
         if openTurnover?.kind == "assembly" { return .firstLook }
-        // Footage is in but the editor hasn't logged scenes yet: Logging footage.
-        if dailies.scenes.isEmpty { return .footage }
+        // Footage is in but the editor hasn't logged every take yet: Logging footage.
+        if isLogging { return .footage }
         return nil
     }
+    /// Takes the editor has logged, out of all footage.
+    var loggedCount: Int { project?.assets.filter { dailies.takes[$0.id] != nil }.count ?? 0 }
+    var isLogging: Bool { hasFootage && (project?.assets.contains { dailies.takes[$0.id] == nil } ?? false) }
     var defaultRoom: Room {
         if !unreviewedAnswers.isEmpty { return .changes }
         if cuts.isEmpty { return .dailies }

@@ -34,7 +34,7 @@ struct Titlebar: View {
     }
 
     @ViewBuilder private var center: some View {
-        if let step = model.onboardingStep { OnboardingStepper(step: step) }
+        if let step = model.onboardingStep, step != .firstLook { OnboardingStepper(step: step) }
         else { RoomSwitcher(model: model) }
     }
 

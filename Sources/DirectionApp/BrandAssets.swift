@@ -10,6 +10,12 @@ enum BrandAssets {
         return NSImage(contentsOf: url)
     }()
 
+    /// The chrome D, cut out on transparency: welcome and empty states.
+    static let mark: NSImage? = {
+        guard let url = Bundle.module.url(forResource: "BrandMark", withExtension: "png") else { return icon }
+        return NSImage(contentsOf: url)
+    }()
+
     private static let archivoURL = Bundle.module.url(forResource: "Archivo-Variable", withExtension: "ttf")
         ?? Bundle.module.url(forResource: "Archivo-Variable", withExtension: "ttf", subdirectory: "Fonts")
 
