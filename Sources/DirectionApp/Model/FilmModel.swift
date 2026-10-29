@@ -32,6 +32,8 @@ struct PrimaryAction {
     var icon: String?
     var count: String?
     var enabled = true
+    /// Help tag; for a disabled action, why it's disabled.
+    var help: String? = nil
     var action: () -> Void
 }
 
@@ -330,6 +332,9 @@ final class FilmModel {
         }
         if cants > 0 { return .cant(cants) }
         if asks > 0 { return .asks(asks) }
+        if isDelivering { return .working("Delivering \(delivery.doneCount + 1) of \(delivery.items.count)", delivery.items.isEmpty ? nil : Double(delivery.doneCount) / Double(delivery.items.count)) }
+        if isPictureLocked, let item = directing.finishing?.first(where: { $0.state == "working" && $0.by.contains("editor") }) { return .working(item.title == "Sound mix" ? "Mixing sound" : item.title, item.progress) }
+        if let cut = latestCut, !unreviewedAnswers.isEmpty, openTurnover == nil { return .cutReady("\(cut.name) ready") }
         if isLogging, let total = project?.assets.count, total > 0, cuts.isEmpty {
             return .working("Logging \(loggedCount) of \(total)", Double(loggedCount) / Double(total))
         }
@@ -525,9 +530,13 @@ final class FilmModel {
 
     // MARK: Changes
 
-    func acceptAnswer(_ noteID: String) { perform { try $0.acceptAnswer(noteID: noteID) } }
+    func acceptAnswer(_ noteID: String) { perform { try $0.acceptAnswer(noteID: noteID) }; registerUndo("Accept") { m in m.perform { try $0.unacceptAnswer(noteID: noteID) } } }
     func pickOption(_ noteID: String, _ label: String) { let old = note(noteID)?.latestAnswer?.pick; perform { try $0.pickOption(noteID: noteID, label: label) }; if let old { registerUndo("Pick Option") { $0.pickOption(noteID, old) } } }
-    func reopen(_ noteID: String, text: String) { perform { try $0.reopenAnswer(noteID: noteID, text: text) } }
+    func reopen(_ noteID: String, text: String) {
+        let turnoverID = note(noteID)?.turnoverID
+        perform { try $0.reopenAnswer(noteID: noteID, text: text) }
+        registerUndo("Reply") { m in m.perform { try $0.undoReopen(noteID: noteID, turnoverID: turnoverID) } }
+    }
     func playChanges() {
         let reel = changeReel(in: watchedCut)
         guard !reel.isEmpty else { return }

@@ -82,6 +82,7 @@ struct Titlebar: View {
             }
             .buttonStyle(.gate(model.sheet == nil ? .steel : .normal))
             .disabled(!p.enabled || model.sheet != nil)
+            .help(p.help ?? "\(p.title) (⌘↩)")
             .keyboardShortcut(.return, modifiers: .command)
         }
     }
