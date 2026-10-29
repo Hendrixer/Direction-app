@@ -1,0 +1,326 @@
+import Foundation
+import Darwin
+import DirectionCore
+import DirectionTools
+
+/// Starts Claude Code or Codex for each job and follows it (specs/editor.md › How Direction runs a job).
+/// App-wide: a film's run keeps working after its window moves on to another film. One run per
+/// film; two films at once; the rest queue. Runs live in each film's store, so they survive relaunch.
+@MainActor final class EditorRunner {
+    static let shared = EditorRunner()
+    static let maxConcurrent = 2
+
+    /// Tests point these at the fake program and helper.
+    var programOverride: [EditorProgram: String] = [:]
+    var helperOverride: String?
+    /// Called after a run's state changes, with the film it belongs to.
+    var onChange: ((URL) -> Void)?
+
+    private var stores: [String: ProjectStore] = [:]
+    private var live: [String: LiveRun] = [:]
+    private var awake: NSObjectProtocol?
+    private var offlineRetries: [String: Task<Void, Never>] = [:]
+
+    @MainActor final class LiveRun {
+        let runID: String, store: ProjectStore, program: EditorProgram, process: Process
+        var claude = ClaudeStreamParser(), codex = CodexStreamParser()
+        var buffer = Data()
+        var pending: Set<String> = []
+        var intent: RunStateMachine.Intent = .none
+        var pauseWhenIdle = false
+        var stderrTail: [String] = []
+        var failures: [String] = []
+        var spendCap: String?
+        var result: String?
+        var cost: Double?
+        var tokens: Int?
+        var exited: Int32?
+        var outputClosed = false
+        var finished = false
+        init(runID: String, store: ProjectStore, program: EditorProgram, process: Process) { self.runID = runID; self.store = store; self.program = program; self.process = process }
+    }
+
+    func isLive(_ runID: String) -> Bool { live[runID] != nil }
+    var liveCount: Int { live.count }
+    func register(_ store: ProjectStore) { stores[store.url.path] = store }
+
+    // MARK: Queue
+
+    /// Starts queued runs where there's room: one per film, two films at once.
+    func pump() {
+        // Not until programs have been looked for: a run would fail as not installed.
+        let programs = EditorPrograms.shared
+        guard (programs.checked && !programs.checking) || !programOverride.isEmpty else { return }
+        for store in stores.values {
+            guard live.count < Self.maxConcurrent, let runs = try? store.runs() else { continue }
+            guard !runs.contains(where: { $0.state.isActive && isLive($0.id) }) else { continue }
+            guard let next = runs.first(where: { $0.state == .queued && !$0.held }) else { continue }
+            launch(next, store: store)
+        }
+    }
+
+    // MARK: Launch
+
+    /// Starts the program for a run: its first job text, or `continuation` on the saved session.
+    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil) {
+        register(store)
+        // The store's copy: the session or state may have moved since the caller read it.
+        var run = (try? store.run(run.id)) ?? run
+        // A run that never started takes the editor chosen now (Choose another editor…, a new Version).
+        if run.invocations == 0, let p = EditorSetup.runsOn.program, programOverride.isEmpty, p.rawValue != run.program || EditorSetup.version(p) != run.version {
+            run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = EditorSetup.version(p) }) ?? run
+        }
+        guard live[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
+        offlineRetries[run.id]?.cancel(); offlineRetries[run.id] = nil
+        guard let path = programOverride[program] ?? EditorPrograms.shared.install(program)?.path else {
+            end(run.id, store: store, outcome: .init(state: .failed, reason: .notInstalled)); return
+        }
+        guard let helper = helperOverride ?? EditorJobs.helperPath else {
+            end(run.id, store: store, outcome: .init(state: .failed, reason: .programQuit, detail: "Direction\u{2019}s tools aren\u{2019}t in this copy of the app. Build it with scripts/build-app.sh.")); return
+        }
+        do {
+            let folder = try EditorJobs.prepareFolder(film: store.url, job: run.job)
+            let mcp = folder.appendingPathComponent(".mcp.json"), schema = folder.appendingPathComponent(".direction/result.schema.json")
+            try EditorProgram.mcpConfig(helper: helper, film: store.url, runID: run.id).data(pretty: true).write(to: mcp, options: .atomic)
+            try EditorProgram.resultSchema.data(pretty: true).write(to: schema, options: .atomic)
+            // A continuation without a saved session starts over with the whole job, then the answer.
+            let session = continuation == nil ? nil : run.session
+            var job = try (session == nil ? EditorJobs.text(for: run, store: store) : continuation!)
+            if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
+            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts)
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: path)
+            p.arguments = program.arguments(invocation)
+            p.currentDirectoryURL = folder
+            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id])
+            let out = Pipe(), err = Pipe()
+            p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
+            let l = LiveRun(runID: run.id, store: store, program: program, process: p)
+            out.fileHandleForReading.readabilityHandler = { [weak self] h in
+                let d = h.availableData
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.output(l, d) } }
+            }
+            err.fileHandleForReading.readabilityHandler = { h in
+                let d = h.availableData
+                DispatchQueue.main.async { MainActor.assumeIsolated { if d.isEmpty { h.readabilityHandler = nil } else { l.stderrTail = Array((l.stderrTail + String(decoding: d, as: UTF8.self).split(separator: "\n").map(String.init)).suffix(20)) } } }
+            }
+            p.terminationHandler = { [weak self] proc in
+                let status = proc.terminationStatus
+                DispatchQueue.main.async { MainActor.assumeIsolated { l.exited = status; self?.maybeFinish(l) } }
+                // A grandchild holding the pipe open mustn't keep the run alive forever.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MainActor.assumeIsolated { l.outputClosed = true; self?.maybeFinish(l) } }
+            }
+            try p.run()
+            live[run.id] = l
+            try store.updateRun(run.id) { r in
+                r.state = .starting; r.reason = nil; r.detail = nil; r.held = false; r.pausedByQuit = false
+                r.pid = p.processIdentifier; r.ownerPID = getpid(); r.startedAt = r.startedAt ?? Date().timeIntervalSince1970; r.endedAt = nil; r.invocations += 1
+            }
+            if run.job == .turnover || run.job == .assemble, let id = run.turnoverID { reopenTurnover(id, store: store) }
+            stayAwake()
+            onChange?(store.url)
+        } catch {
+            end(run.id, store: store, outcome: .init(state: .failed, reason: .programQuit, detail: error.localizedDescription))
+        }
+    }
+
+    // MARK: Following
+
+    private func output(_ l: LiveRun, _ data: Data) {
+        guard !l.finished else { return }
+        if data.isEmpty { l.outputClosed = true; maybeFinish(l); return }
+        l.buffer.append(data)
+        while let nl = l.buffer.firstIndex(of: 0x0A) {
+            let line = String(decoding: l.buffer[l.buffer.startIndex..<nl], as: UTF8.self)
+            l.buffer.removeSubrange(l.buffer.startIndex...nl)
+            let events = l.program == .claudeCode ? l.claude.parse(line) : l.codex.parse(line)
+            for e in events { handle(l, e) }
+        }
+    }
+
+    func handle(_ l: LiveRun, _ e: StreamEvent) {
+        switch e {
+        case .session(let s): _ = try? l.store.updateRun(l.runID) { if $0.session != s { $0.session = s } }
+        case .toolStarted(let id, let name, let input):
+            l.pending.insert(id)
+            if let r = try? l.store.run(l.runID), r.state == .starting { _ = try? l.store.updateRun(l.runID) { $0.state = .working } }
+            // Direction's own tools write their activity in the MCP server; the rest is the program's.
+            let isDirection = name.hasPrefix("mcp__direction__") || name.hasPrefix("direction_")
+            if !isDirection, let a = EditorActivityLog.programActivity(tool: name, path: input["file_path"].string ?? input["path"].string ?? input["notebook_path"].string) {
+                _ = try? l.store.recordActivity(a, runID: l.runID)
+            }
+        case .toolFinished(let id, let isError, let text):
+            l.pending.remove(id)
+            if isError, EditorFailure.isSpendCap(text) { l.spendCap = EditorFailure.amount(text).map { "\($0) spent on services this month." } ?? "This month\u{2019}s limit for services is reached." }
+            if l.pauseWhenIdle, l.pending.isEmpty { l.pauseWhenIdle = false; l.process.interrupt() }
+        case .cost(let c): l.cost = c
+        case .tokens(let t): l.tokens = (l.tokens ?? 0) + t
+        case .result(let text, let isError): l.result = text; if isError { l.failures.append(text) }
+        case .failure(let m): l.failures.append(m)
+        }
+    }
+
+    private func maybeFinish(_ l: LiveRun) {
+        guard !l.finished, let status = l.exited, l.outputClosed else { return }
+        l.finished = true
+        if !l.buffer.isEmpty { output(l, Data("\n".utf8)) }
+        guard let run = try? l.store.run(l.runID) else { live[l.runID] = nil; return }
+        var exit = RunStateMachine.Exit(status: status, intent: l.intent, finished: Self.finished(run, store: l.store), waitingForYou: Self.waitingForYou(run, store: l.store), failures: l.failures, spendCap: l.spendCap, lastErrorLine: l.stderrTail.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }))
+        if status != 0 { exit.failures += l.stderrTail }
+        let result = l.result.flatMap(EditorResult.parse)
+        live[l.runID] = nil
+        end(l.runID, store: l.store, outcome: RunStateMachine.outcome(exit), cost: l.cost, tokens: l.tokens, result: result)
+    }
+
+    /// Records how a run ended, and what that means for its turnover.
+    private func end(_ runID: String, store: ProjectStore, outcome o: RunStateMachine.Outcome, cost: Double? = nil, tokens: Int? = nil, result: EditorResult? = nil) {
+        guard let run = try? store.updateRun(runID, { r in
+            // A pause the director asked for stays a pause even if the program exits on its own.
+            if r.state == .paused && o.state != .done && o.reason != .pausedByQuit { r.endedAt = Date().timeIntervalSince1970 }
+            else { r.state = o.state; r.reason = o.reason; r.detail = o.detail; r.pausedByQuit = o.reason == .pausedByQuit; r.endedAt = Date().timeIntervalSince1970 }
+            if let cost { r.spend = (r.spend ?? 0) + cost }
+            if let tokens { r.tokens = (r.tokens ?? 0) + tokens }
+            if let result { r.summary = result.summary; r.needsYou = result.needsYou }
+            r.pid = nil
+        }) else { return }
+        if run.state == .failed, let reason = run.reason {
+            if let id = run.turnoverID { failTurnover(id, reason: reason, run: run, store: store) }
+            if reason == .notSignedIn, let p = EditorProgram(rawValue: run.program) { EditorSetup.setSignedIn(p, false) }
+            if reason == .offline { retryWhenOnline(run.id, store: store) }
+        }
+        stayAwake()
+        onChange?(store.url)
+        pump()
+    }
+
+    // MARK: Control
+
+    /// Interrupts after the current tool call (SIGINT; the program saves its session). Edits made stay.
+    func pause(_ runID: String, store: ProjectStore) {
+        _ = try? store.updateRun(runID) { if $0.state.isOpen { $0.state = .paused } }
+        guard let l = live[runID] else { onChange?(store.url); return }
+        l.intent = .pause
+        if l.pending.isEmpty { l.process.interrupt() }
+        else {
+            l.pauseWhenIdle = true
+            // A tool call that never returns mustn't keep the editor working.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 60) { MainActor.assumeIsolated { if l.exited == nil { l.process.interrupt() } } }
+        }
+        stayAwake(); onChange?(store.url)
+    }
+
+    /// Ends the run. The program gets SIGINT, then SIGTERM if it lingers.
+    func stop(_ runID: String, store: ProjectStore) {
+        _ = try? store.updateRun(runID) { $0.state = .stopped; $0.reason = .stoppedByYou; $0.held = false }
+        offlineRetries[runID]?.cancel(); offlineRetries[runID] = nil
+        guard let l = live[runID] else { onChange?(store.url); pump(); return }
+        l.intent = .stop
+        l.process.interrupt()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MainActor.assumeIsolated { if l.exited == nil { l.process.terminate() } } }
+    }
+
+    /// Quitting: pause every working run and keep its session; the next launch offers Resume.
+    /// Calls back once every program has exited, or after a few seconds.
+    func pauseAllForQuit(_ done: @escaping @MainActor () -> Void) {
+        let working = live.values
+        guard !working.isEmpty else { done(); return }
+        for l in working {
+            l.intent = .quit
+            _ = try? l.store.updateRun(l.runID) { $0.state = .paused; $0.reason = .pausedByQuit; $0.pausedByQuit = true }
+            l.process.interrupt()
+        }
+        func wait(_ tries: Int) {
+            if live.isEmpty || tries == 0 { done(); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { MainActor.assumeIsolated { wait(tries - 1) } }
+        }
+        wait(40)
+    }
+
+    /// At launch: runs a previous Direction left working are paused, so they can be resumed.
+    func recover(_ store: ProjectStore) {
+        register(store)
+        for r in (try? store.runs()) ?? [] where r.state.isActive && !isLive(r.id) {
+            if let pid = r.pid, r.ownerPID != getpid(), kill(pid, 0) == 0 { kill(pid, SIGINT) }
+            _ = try? store.updateRun(r.id) { $0.state = .paused; $0.reason = .pausedByQuit; $0.pausedByQuit = true; $0.pid = nil }
+        }
+    }
+
+    private func retryWhenOnline(_ runID: String, store: ProjectStore) {
+        offlineRetries[runID]?.cancel()
+        offlineRetries[runID] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled, let self, let r = try? store.run(runID), r.state == .failed, r.reason == .offline else { return }
+            self.launch(r, store: store, continuation: EditorJobs.continuation("Continue where you stopped.", job: r.job))
+        }
+    }
+
+    /// Holds the Mac awake (not the display) while a run works.
+    private func stayAwake() {
+        let working = live.values.contains { $0.intent == .none }
+        if working, awake == nil { awake = ProcessInfo.processInfo.beginActivity(options: [.idleSystemSleepDisabled], reason: "The editor is working") }
+        if !working, let a = awake { ProcessInfo.processInfo.endActivity(a); awake = nil }
+    }
+
+    // MARK: What the store says
+
+    /// The job's finishing tool did its work (specs/editor.md › Jobs).
+    static func finished(_ run: EditorRun, store: ProjectStore) -> Bool {
+        switch run.job {
+        case .logFootage:
+            guard let p = try? store.read(), let d = try? store.dailies(), !p.assets.isEmpty else { return false }
+            return p.assets.allSatisfy { d.takes[$0.id] != nil }
+        case .assemble, .turnover:
+            return (try? run.turnoverID.map { try store.turnover($0) })??.state == .delivered
+        case .finish:
+            guard let s = try? store.directingState(), s.pictureLocked, let items = s.finishing else { return false }
+            return items.filter { $0.by.contains("editor") }.allSatisfy { ["done", "needsYou"].contains($0.state) }
+        }
+    }
+
+    /// The program stopped to wait for the director: a read-back to OK or a question to answer.
+    static func waitingForYou(_ run: EditorRun, store: ProjectStore) -> Bool {
+        let open = ((try? store.questions()) ?? []).filter { $0.answer == nil }
+        if let id = run.turnoverID, let t = try? store.turnover(id) {
+            if t.state == .readBack && !t.readBackApproved { return true }
+            return open.contains { $0.turnoverID == id }
+        }
+        return open.contains { $0.turnoverID == nil && $0.createdAt >= (run.startedAt ?? run.createdAt) }
+    }
+
+    /// A failed run leaves its turnover stopped at the note it was on (frame 58).
+    private func failTurnover(_ id: String, reason: EditorRunReason, run: EditorRun, store: ProjectStore) {
+        _ = try? store.modifyTurnover(id, summary: "The editor stopped") { t in
+            guard t.state.isOpen else { return }
+            t.state = .failed
+            t.message = EditorStopCopy.title(reason, run: run)
+            for (k, v) in t.progress where v == .working { t.progress[k] = .stopped }
+        }
+    }
+
+    /// Starting again puts a stopped turnover back where the editor left it; the read-back stays.
+    private func reopenTurnover(_ id: String, store: ProjectStore) {
+        _ = try? store.modifyTurnover(id, summary: "The editor started again") { t in
+            guard t.state == .failed else { return }
+            t.state = t.readBack.isEmpty ? .waiting : (t.readBackApproved || !t.waitForOK || t.kind == "assembly") ? .cutting : .readBack
+            t.message = nil
+            for (k, v) in t.progress where v == .stopped { t.progress[k] = .queued }
+        }
+    }
+}
+
+/// Frame 58's words for each reason.
+enum EditorStopCopy {
+    static func title(_ reason: EditorRunReason, run: EditorRun?) -> String {
+        let name = run.flatMap { EditorProgram(rawValue: $0.program)?.name } ?? "The editor"
+        switch reason {
+        case .notInstalled: return "The editor isn\u{2019}t installed."
+        case .notSignedIn: return "\(name) isn\u{2019}t signed in."
+        case .offline: return "The editor is offline."
+        case .programQuit: return "The editor quit unexpectedly."
+        case .stoppedWithoutFinishing: return "The editor stopped before finishing."
+        case .spendCap: return "You\u{2019}ve reached this month\u{2019}s limit."
+        case .pausedByQuit: return "The editor was paused when Direction quit."
+        case .stoppedByYou: return "You stopped the editor."
+        }
+    }
+}

@@ -146,8 +146,11 @@ private struct FilmMenuItems: View {
             ForEach(Latitude.allCases, id: \.self) { Text($0.label).tag($0) }
         }
         .disabled(film == nil)
-        Button(film?.directing.editorPaused == true ? "Resume Editor" : "Pause Editor") { if let film { film.setEditorPaused(!film.directing.editorPaused) } }.disabled(film == nil)
-        Button("Copy Request for Your Editor") { film?.copyEditorRequest() }.disabled(film?.url == nil)
+        // ⌥⌘.: interrupts a run Direction started after its current tool call, or resumes it.
+        Button(film?.editorIsPaused == true ? "Resume Editor" : "Pause Editor") { if let film { film.setEditorPaused(!film.editorIsPaused) } }
+            .keyboardShortcut(".", modifiers: [.option, .command]).disabled(film == nil)
+        // Your own session only: when Direction starts the editor there's nothing to copy.
+        if film?.runs.startsEditor != true { Button("Copy Request for Your Editor") { film?.copyEditorRequest() }.disabled(film?.url == nil) }
         Divider()
         // MenuState follows the playhead's scene, so the menu doesn't rebuild on every frame.
         let scene = MenuState.shared.sceneID.flatMap { id in film?.dailies.scenes.first { $0.id == id } }

@@ -98,6 +98,7 @@ struct AudioOutputDevice: Hashable {
 
 struct EditorPane: View {
     var app: AppModel?
+    var preview = false
     @AppStorage(SettingsKey.defaultLatitude) private var latitude = Latitude.faithful.rawValue
     @AppStorage(SettingsKey.waitForReadBack) private var waitForOK = true
     @AppStorage(SettingsKey.cutFeelingTwoWays) private var twoWays = true
@@ -114,7 +115,7 @@ struct EditorPane: View {
 
     var body: some View {
         SettingsPane {
-            EditorWhoEditsGroup(app: app)
+            EditorWhoEditsGroup(app: app, preview: preview)
             SettingsGroup(label: "How much freedom the editor has", note: AnyView(SettingsNote("You can change this for a single turnover in the Turnover sheet."))) {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(Latitude.allCases, id: \.self) { l in latitudeCard(l) }
@@ -123,15 +124,13 @@ struct EditorPane: View {
                 .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 14)
                 .accessibilityElement(children: .contain).accessibilityLabel("How much freedom the editor has")
             }
-            SettingsGroup(label: "Before cutting") {
+            // The conflict list moved into Change…'s popover so the pane stays under 860 (frame 43).
+            SettingsGroup(label: "Before cutting", note: AnyView(SettingsNote("The editor reads the brief before every cut."))) {
                 SettingsRow(label: "Wait for my OK on read-backs", detail: "Off: the editor starts cutting right after it reads back. You can still read it.", first: true) { GateSwitch(isOn: $waitForOK) }
                 SettingsRow(label: "Cut Feeling notes two ways", detail: "You pick A or B in Changes.") { GateSwitch(isOn: $twoWays) }
                     .disabled(latitude == Latitude.exact.rawValue)
                 SettingsRow(label: "Ask before guessing", detail: "When a note could mean two things, the editor asks instead of choosing.") { GateSwitch(isOn: $askFirst) }
-                SettingsRow(label: "Follow the brief", detail: "The brief is read before every cut. Edit it from the Film menu.") { OutlineChip("Always on") }
-            }
-            SettingsGroup(label: "When notes conflict", note: AnyView(conflictNote)) {
-                ConflictOrderList(order: $order)
+                ConflictOrderRow(order: $order)
             }
         }
     }
@@ -152,22 +151,6 @@ struct EditorPane: View {
         .buttonStyle(.plain)
         .accessibilityLabel(l.label).accessibilityHint(Self.detail(l))
         .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
-    }
-
-    /// The note under the list; "Restore default" is a link that resets the order.
-    private var conflictNote: some View {
-        var text = AttributedString("The higher kind wins, and the editor tells you in the read-back. Drag to reorder. The default follows Walter Murch\u{2019}s Rule of Six. ")
-        var link = AttributedString("Restore default")
-        link.link = URL(string: "direction-settings:restore-conflict-order")
-        link.foregroundColor = Gate.Text.secondary
-        text.append(link)
-        return SettingsNote(Text(text))
-            .tint(Gate.Text.secondary)
-            .environment(\.openURL, OpenURLAction { _ in
-                withAnimation(SettingsKey.reducesMotion ? nil : Gate.Motion.settle) { order = SettingsKey.defaultConflictOrder }
-                return .handled
-            })
-            .accessibilityAction(named: "Restore default") { order = SettingsKey.defaultConflictOrder }
     }
 }
 

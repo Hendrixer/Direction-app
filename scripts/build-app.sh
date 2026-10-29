@@ -18,6 +18,8 @@ fi
 cp "$direction_root/Resources/Info.plist" "$direction_app/Contents/Info.plist"
 cp "$direction_root/Resources/AppIcon.icns" "$direction_app/Contents/Resources/AppIcon.icns"
 cp "$direction_root/THIRD_PARTY_NOTICES.md" "$direction_app/Contents/Resources/THIRD_PARTY_NOTICES.md"
+# The skills Direction hands the editor it starts (docs/editor-runs.md).
+cp -R "$direction_root/plugins/direction/skills" "$direction_app/Contents/Resources/Skills"
 mkdir -p "$direction_app/Contents/Resources/Licenses"
 for direction_dependency in "$direction_root"/.build/checkouts/*; do
   if [ -d "$direction_dependency" ]; then

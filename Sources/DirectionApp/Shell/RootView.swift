@@ -23,15 +23,21 @@ struct FilmWindow: View {
     var app: AppModel?
     @Bindable var model: FilmModel
     @State private var sweep: CGFloat = -1
+    @State private var fullScreen = false
     @Environment(\.undoManager) private var undoManager
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 if !screeningFullBleed { Titlebar(model: model, app: app) }
                 SystemBanners(model: model)
+                EditorRunBanner(model: model)
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            if screeningFullBleed { ScreeningRoom(model: model, app: app) }
+            if screeningFullBleed { ScreeningRoom(model: model, app: app).environment(\.editorPlayhead, nil) }
+            // While the editor works: the 1 pt prism edge inside the content, under the titlebar.
+            if model.runs.isWorking && !screeningFullBleed && model.room != .screening && !fullScreen {
+                EditorWindowEdge().padding(.top, Gate.Size.titlebar).zIndex(4)
+            }
             sweepEdge
             if let sheet = model.sheet { sheetView(sheet).zIndex(10) }
             if model.showCommandMenu { CommandMenuOverlay(model: model, app: app).zIndex(20) }
@@ -41,7 +47,11 @@ struct FilmWindow: View {
             if !screeningFullBleed { GrainOverlay().ignoresSafeArea().zIndex(40) }
         }
         .background(Gate.Surface.ground)
+        .background(FullScreenReader(isFullScreen: $fullScreen))
         .ignoresSafeArea()
+        // Nothing moves during playback except the playhead and time.
+        .environment(\.motionHeld, model.playing)
+        .environment(\.editorPlayhead, editorPlayhead)
         .onAppear { model.undoManager = undoManager }
         .onChange(of: model.sweepToken) { _, _ in runSweep() }
         .onChange(of: model.position) { _, _ in model.tickChanges() }
@@ -52,6 +62,11 @@ struct FilmWindow: View {
     }
 
     private var screeningFullBleed: Bool { model.room == .screening && model.onboardingStep == nil }
+    /// The editor's latest timed activity, for every scene strip. Never in Screening.
+    private var editorPlayhead: EditorPlayheadValue? {
+        guard model.room != .screening, let a = model.runs.playhead, let t = a.time else { return nil }
+        return EditorPlayheadValue(time: t, at: a.at, hold: model.isPreview)
+    }
 
     @ViewBuilder private var content: some View {
         if let step = model.onboardingStep { OnboardingView(model: model, step: step) }
@@ -76,6 +91,7 @@ struct FilmWindow: View {
         case .relink: RelinkSheet(model: model)
         case .brief: BriefSheet(model: model)
         case .look: LookSheet(model: model)
+        case .editorSetup: EditorSetupSheet(model: model)
         }
     }
 
@@ -122,6 +138,7 @@ struct FilmWindow: View {
 extension FilmModel {
     /// The one steel button: the room's primary action in its current state.
     var primaryAction: PrimaryAction? {
+        if let p = editorPrimary { return p }
         if let step = onboardingStep { return onboardingPrimary(step) }
         switch room {
         case .dailies: return dailiesPrimary
@@ -131,5 +148,16 @@ extension FilmModel {
         case .changes: return changesPrimary
         case .finish: return finishPrimary
         }
+    }
+
+    /// When Direction starts the editor: work held for your Start makes the room's primary "Start the
+    /// editor", and a stopped turnover makes it "Try again" in Notes (frame 58).
+    private var editorPrimary: PrimaryAction? {
+        guard runs.startsEditor, room != .screening, onboardingStep != .brief else { return nil }
+        if case .readyToCut = pill { return PrimaryAction(title: "Start the editor", icon: "play.fill", help: "Start the editor (\u{2318}\u{21A9})") { self.runs.start(self) } }
+        if let f = runs.failed, room == .notes, onboardingStep == nil, f.turnoverID != nil, f.turnoverID == openTurnover?.id {
+            return PrimaryAction(title: "Try again", icon: "arrow.uturn.backward", help: "Start the editor again where it stopped (\u{2318}\u{21A9})") { self.runs.retry(self) }
+        }
+        return nil
     }
 }

@@ -40,6 +40,7 @@ struct SceneStrip<Menu: View>: View {
     @ViewBuilder var menu: (StripScene) -> Menu
 
     @State private var dragStart: Double?
+    @Environment(\.editorPlayhead) private var editorPlayhead
     private var sceneHeight: CGFloat { tall ? Gate.Component.Strip.tallScene : Gate.Component.Strip.scene }
     private var height: CGFloat { tall ? Gate.Component.Strip.tallHeight : Gate.Component.Strip.height }
     private var current: StripScene? { playhead.flatMap { t in scenes.first { t >= $0.start && t < $0.end } ?? scenes.last } }
@@ -74,6 +75,10 @@ struct SceneStrip<Menu: View>: View {
                     }
                     .position(x: x(mark.time), y: 8 + sceneHeight + 7)
                     .allowsHitTesting(false)
+                }
+                // The editor's playhead rides every strip under the director's (specs/editor.md).
+                if let editor = editorPlayhead {
+                    EditorPlayheadMark(value: editor, height: sceneHeight, x: x)
                 }
                 if let playhead {
                     Playhead(height: sceneHeight + 12).position(x: x(playhead), y: 2 + (sceneHeight + 12) / 2).allowsHitTesting(false)

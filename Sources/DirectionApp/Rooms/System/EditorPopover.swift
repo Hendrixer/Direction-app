@@ -9,6 +9,16 @@ struct EditorPopover: View {
     @State private var connecting = false
 
     var body: some View {
+        // While a run Direction started works or is paused: frame 57's activity popover.
+        if !connecting, model.runs.startsEditor, let run = model.runs.current, run.state.isActive || run.state == .paused {
+            EditorActivityPopover(model: model, run: run)
+                .onExitCommand { model.showEditorPopover = false }
+        } else {
+            idle
+        }
+    }
+
+    private var idle: some View {
         VStack(alignment: .leading, spacing: 0) {
             if connecting { ConnectEditorPage(model: model) { connecting = false } }
             else {
@@ -44,6 +54,9 @@ struct EditorPopover: View {
         case .needsFootage: ("Waiting for footage", .bad)
         case .paused: ("Paused", .plain)
         case .offline: ("Offline", .plain)
+        case .notSetUp: ("Not set up", .plain)
+        case .looking: ("Looking at footage", .agent)
+        case .readyToCut(let s): (s, .plain)
         }
     }
 
@@ -68,10 +81,24 @@ struct EditorPopover: View {
             return [lead, detail.map { $0.hasSuffix(".") ? $0 : $0 + "." }].compactMap { $0 }.joined(separator: " ")
         case .asks(let n): return "I need your call on \(n == 1 ? "one thing" : "\(n) things") before I finish \(nextCut)."
         case .cant: return model.openQuestions.first { $0.kind == "cant" }?.text ?? "I can\u{2019}t do one of your notes as written."
-        case .stopped: return model.openTurnover?.message ?? "I stopped before finishing. Your notes are safe; try again when you\u{2019}re ready."
+        case .stopped:
+            if let r = model.runs.failed { return [EditorStopCopy.title(r.reason ?? .stoppedWithoutFinishing, run: r), model.runs.stopBody(r, film: model)].filter { !$0.isEmpty }.joined(separator: " ") }
+            return model.openTurnover?.message ?? "I stopped before finishing. Your notes are safe; try again when you\u{2019}re ready."
         case .paused: return "Paused. Nothing will change until you resume."
         case .needsFootage: return "\(model.missingTakes == 1 ? "1 take is" : "\(model.missingTakes) takes are") missing. I can\u{2019}t cut scenes that use them until you find the footage."
         case .offline: return "You\u{2019}re offline. An editor that works online picks up when you\u{2019}re back."
+        case .notSetUp: return "Choose who edits, and Direction starts the editor whenever there\u{2019}s work."
+        case .looking(let done, let total): return "Looking at your footage before logging it: \(done) of \(total) takes so far."
+        case .readyToCut: return "\(model.runs.held.map { Self.work($0.job) } ?? "Your notes are turned over"). Start the editor when you\u{2019}re ready."
+        }
+    }
+
+    private static func work(_ job: EditorJob) -> String {
+        switch job {
+        case .turnover: "Your notes are turned over"
+        case .assemble: "You asked for the assembly"
+        case .finish: "Picture is locked"
+        case .logFootage: "Your footage is in"
         }
     }
 
@@ -89,6 +116,10 @@ struct EditorPopover: View {
                 Chip(chip.0, style: chip.1, icon: pill == .offline ? "wifi.slash" : pill == .paused ? "pause.fill" : nil)
             }
             Text(sentence).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).cssLineHeight(1.45, size: 12).fixedSize(horizontal: false, vertical: true)
+            // Your own session: Direction shows what it does but can't start or stop it (specs/editor.md).
+            if !model.runs.startsEditor && !model.isPreview {
+                Text("Your own session. Direction shows what it does but can\u{2019}t start or pause it.").font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
+            }
             if case .working = pill, let t = model.openTurnover, t.kind != "assembly" { checklist(t) }
             statusActions
         }
@@ -96,15 +127,21 @@ struct EditorPopover: View {
     }
 
     @ViewBuilder private var statusActions: some View {
-        let connected = model.editorStatus != nil || !model.cuts.isEmpty || model.isPreview
+        let connected = model.editorStatus != nil || !model.cuts.isEmpty || model.isPreview || model.runs.startsEditor
         switch pill {
+        case .readyToCut:
+            Button("Start") { model.runs.start(model); model.showEditorPopover = false }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+        case .notSetUp:
+            Button("Set up\u{2026}") { model.showEditorPopover = false; model.sheet = .editorSetup }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+        case .stopped:
+            if let r = model.runs.failed { EditorStopActions(model: model, run: r, small: true) }
         case .readBackReady:
             Button("Open read-back") { open(.notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .asks:
             Button("Answer") { model.notesTab = .questions; open(.notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .cant:
             Button("Show me") { model.notesTab = .questions; open(.notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
-        case .waiting:
+        case .waiting where !model.runs.startsEditor:
             HStack(spacing: 8) {
                 Button("Copy request for your editor") { model.copyEditorRequest(); model.showEditorPopover = false }.buttonStyle(.gate(.normal, .small))
                 if !connected { Button("Connect an editor\u{2026}") { connecting = true }.buttonStyle(.gate(.ghost, .small)) }
@@ -257,7 +294,7 @@ struct EditorPopover: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            let paused = model.directing.editorPaused
+            let paused = model.editorIsPaused
             Button { model.setEditorPaused(!paused) } label: {
                 Label(paused ? "Resume editor" : "Pause editor", systemImage: paused ? "play.fill" : "pause.fill")
             }

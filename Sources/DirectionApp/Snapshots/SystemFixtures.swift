@@ -9,7 +9,6 @@ enum SystemFixtures {
             "39-share": { let m = SampleFilm.make(); m.sheet = .share; return .film(m) },
             "41-agent-popover": { popover() },
             "42-settings-general": { settings(.general, height: 600) },
-            "43-settings-editor": { settings(.editor, height: 853) },
             "54-settings-footage": { settings(.footage, height: 724) },
             "44-settings-cutting": { settings(.cutting, height: 650) },
             "45-settings-notifications": { settings(.notifications, height: 530) },
@@ -39,6 +38,7 @@ enum SystemFixtures {
                          readBackApproved: true, resultCutID: "cut-3", createdAt: SampleFilm.date(10, 26, 13, 50), updatedAt: SampleFilm.date(10, 26, 13, 58))
         t.readBack = Array(SampleFilm.sampleReadBack.prefix(5))
         m.turnovers = [t]
+        m.runs.previewPillOpen = true
         return SnapshotScene(ZStack(alignment: .topLeading) {
             FilmWindow(app: nil, model: m)
             PopoverChrome { EditorPopover(model: m) }.offset(x: 1440 - 126 - 360, y: 46)
@@ -86,12 +86,16 @@ enum SystemFixtures {
 }
 
 /// What NSPopover draws around the editor popover: panel, radius 12, line-2 ring, arrow toward the pill.
+/// The shadow is `.pop`'s `0 24px 60px -12px`, inset before the blur so it doesn't darken the pill.
 private struct PopoverChrome<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         content
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .background(SystemPopBackground(radius: 12))
+            .clipShape(shape)
+            .background(shape.fill(Color.black.opacity(0.9)).padding(12).offset(y: 24).blur(radius: 30))
+            .overlay(shape.strokeBorder(Gate.Line.strong, lineWidth: 1))
+            .overlay(alignment: .top) { Color.white.opacity(0.06).frame(height: 1).padding(.horizontal, 12).padding(.top, 1) }
             .overlay(alignment: .topTrailing) {
                 // The arrow: a 12 pt square turned 45°, its two upper edges in line-2.
                 Rectangle().fill(Gate.Surface.panel).frame(width: 12, height: 12)

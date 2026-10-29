@@ -90,13 +90,17 @@ struct NotesSheet: View {
                 Divider()
                 Button("Take Notes Back") { model.takeNotesBack(); model.clearComposer() }
             }
-            Divider()
-            Button("Copy Request for Your Editor") { model.copyEditorRequest() }
+            if !model.runs.startsEditor {
+                Divider()
+                Button("Copy Request for Your Editor") { model.copyEditorRequest() }
+            }
         } else {
             Button("Turn Over…") { model.sheet = .turnover }.disabled(model.readyNotes.isEmpty)
             Toggle("Show Dropped Notes", isOn: $model.showDropped)
-            Divider()
-            Button("Copy Request for Your Editor") { model.copyEditorRequest() }
+            if !model.runs.startsEditor {
+                Divider()
+                Button("Copy Request for Your Editor") { model.copyEditorRequest() }
+            }
         }
     }
 
