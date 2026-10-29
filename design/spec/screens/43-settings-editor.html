@@ -1,16 +1,22 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="frame" content="720x830">
+<meta name="frame" content="720x853">
 <title>43 Settings, Editor</title>
 <link rel="stylesheet" href="../gate.css">
 <link rel="stylesheet" href="../css/system.css">
 <style></style>
-</head><body class="settings" style="height:830px">
+</head><body class="settings" style="height:853px">
 <script src="../gate.js"></script>
 <div class="set-tb" data-c="settings-toolbar">
   <div class="title"><div class="lights"><i></i><i></i><i></i></div>Editor</div>
-  <div class="set-tabs" data-c="settings-tabs"><span class=""><svg class="ico"><use href="#i-gear"/></svg>General</span><span class="on"><svg class="ico"><use href="#i-gem"/></svg>Editor</span><span class=""><svg class="ico"><use href="#i-film"/></svg>Cutting</span><span class=""><svg class="ico"><use href="#i-bell"/></svg>Notifications</span><span class=""><svg class="ico"><use href="#i-keyboard"/></svg>Shortcuts</span><span class=""><svg class="ico"><use href="#i-disk"/></svg>Storage</span><span class=""><svg class="ico"><use href="#i-people"/></svg>Sharing</span></div>
+  <div class="set-tabs" data-c="settings-tabs"><span><svg class="ico"><use href="#i-gear"/></svg>General</span><span class="on"><svg class="ico"><use href="#i-gem"/></svg>Editor</span><span><svg class="ico"><use href="#i-stack"/></svg>Footage</span><span><svg class="ico"><use href="#i-film"/></svg>Cutting</span><span><svg class="ico"><use href="#i-key"/></svg>Services</span><span><svg class="ico"><use href="#i-bell"/></svg>Notifications</span><span><svg class="ico"><use href="#i-keyboard"/></svg>Shortcuts</span><span><svg class="ico"><use href="#i-disk"/></svg>Storage</span><span><svg class="ico"><use href="#i-people"/></svg>Sharing</span></div>
 </div><div class="set-body">
+<div class="set-group"><span class="label">Who edits</span><div class="set-card">
+  <div class="set-row" data-c="settings-row"><div class="lbl"><b>Editor runs on</b><small>Claude Code 2.4.1 · signed in</small></div><div class="ctl"><span class="seg" data-c="seg"><span class="on">Claude Code</span><span>Codex</span><span>Your own session</span></span></div></div>
+  <div class="set-row" data-c="settings-row"><div class="lbl"><b>Version</b></div><div class="ctl"><span class="select" data-c="select">Claude Opus 5.5<svg class="ico"><use href="#i-down"/></svg></span></div></div>
+  <div class="set-row" data-c="settings-row"><div class="lbl"><b>Start work</b><small>When notes are turned over or footage arrives.</small></div><div class="ctl"><span class="select" data-c="select">Right away<svg class="ico"><use href="#i-down"/></svg></span></div></div>
+  <div class="set-row" data-c="settings-row"><div class="lbl"><b>Let the editor run scripts</b><small>Only inside its own folder in the film, with no internet. Some graphics and looks need it.</small></div><div class="ctl"><span class="switch on" data-c="switch"></span></div></div>
+</div></div>
 <div class="set-group"><span class="label">How much freedom the editor has</span>
   <div class="set-card" data-c="latitude-picker"><div class="lat">
     <div class="o"><b><span class="radio"></span>Do what I wrote</b><p>Changes only what each note names. Never offers options. Asks when a note is unclear.</p></div>
@@ -18,15 +24,12 @@
     <div class="o"><b><span class="radio"></span>Take a pass</b><p>May also suggest changes no note asked for. Each one is marked Unasked and waits for your OK.</p></div>
   </div></div>
   <p class="set-note">You can change this for a single turnover in the Turnover sheet.</p>
-</div><div class="set-group"><span class="label">Before cutting</span><div class="set-card"><div class="set-row" data-c="settings-row"><div class="lbl"><b>Wait for my OK on read-backs</b><small>Off: the editor starts cutting right after it reads back. You can still read it.</small></div><div class="ctl"><span class="switch on" data-c="switch"></span></div></div><div class="set-row" data-c="settings-row"><div class="lbl"><b>Cut Feeling notes two ways</b><small>You pick A or B in Changes.</small></div><div class="ctl"><span class="switch on" data-c="switch"></span></div></div><div class="set-row" data-c="settings-row"><div class="lbl"><b>Ask before guessing</b><small>When a note could mean two things, the editor asks instead of choosing.</small></div><div class="ctl"><span class="switch on" data-c="switch"></span></div></div><div class="set-row" data-c="settings-row"><div class="lbl"><b>Follow the brief</b><small>The brief is read before every cut. Edit it from the Film menu.</small></div><div class="ctl"><span class="chip k">Always on</span></div></div></div></div>
-<div class="set-group"><span class="label">When notes conflict</span>
-  <div class="set-card order" data-c="conflict-order">
-    <div class="it"><svg class="ico"><use href="#i-grip"/></svg><span class="n">1</span>Feeling<small>How it should feel</small></div>
-    <div class="it"><svg class="ico"><use href="#i-grip"/></svg><span class="n">2</span>Story<small>What happens and in what order</small></div>
-    <div class="it"><svg class="ico"><use href="#i-grip"/></svg><span class="n">3</span>Pace<small>Length and rhythm</small></div>
-    <div class="it"><svg class="ico"><use href="#i-grip"/></svg><span class="n">4</span>Picture<small>Framing, crop, look</small></div>
-    <div class="it"><svg class="ico"><use href="#i-grip"/></svg><span class="n">5</span>Sound<small>Music, levels, dialogue</small></div>
-  </div>
-  <p class="set-note">The higher kind wins, and the editor tells you in the read-back. Drag to reorder. The default follows Walter Murch’s Rule of Six. <span style="color:var(--text-2)">Restore default</span></p>
-</div></div>
+</div>
+<div class="set-group"><span class="label">Before cutting</span><div class="set-card">
+  <div class="set-row" data-c="settings-row"><div class="lbl"><b>Wait for my OK on read-backs</b><small>Off: the editor starts cutting right after it reads back. You can still read it.</small></div><div class="ctl"><span class="switch on" data-c="switch"></span></div></div>
+  <div class="set-row" data-c="settings-row"><div class="lbl"><b>Cut Feeling notes two ways</b><small>You pick A or B in Changes.</small></div><div class="ctl"><span class="switch on" data-c="switch"></span></div></div>
+  <div class="set-row" data-c="settings-row"><div class="lbl"><b>Ask before guessing</b><small>When a note could mean two things, the editor asks instead of choosing.</small></div><div class="ctl"><span class="switch on" data-c="switch"></span></div></div>
+  <div class="set-row" data-c="settings-row"><div class="lbl"><b>When notes conflict</b></div><div class="ctl"><span class="set-val" data-c="conflict-order">Feeling › Story › Pace › Picture › Sound</span><span class="btn" data-c="button">Change…</span></div></div>
+</div><p class="set-note">The editor reads the brief before every cut.</p></div>
+</div>
 </body></html>
