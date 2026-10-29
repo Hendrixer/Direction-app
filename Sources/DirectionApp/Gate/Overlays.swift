@@ -128,12 +128,12 @@ struct EmptyStateView<Actions: View>: View {
 // MARK: Editor pill
 
 enum EditorPillState: Equatable {
-    case ready, waiting, readingBack(String), readBackReady, working(String, Double?), asks(Int), cant(Int), stopped, offline, paused, assembling(String, Double?)
+    case ready, waiting, readingBack(String), readBackReady, working(String, Double?), asks(Int), cant(Int), stopped, offline, paused, assembling(String, Double?), cutReady(String)
     var text: String {
         switch self {
         case .ready: "Ready"
         case .waiting: "Waiting for the editor"
-        case .readingBack(let s): s
+        case .readingBack(let s), .cutReady(let s): s
         case .readBackReady: "Read-back ready"
         case .working(let s, _), .assembling(let s, _): s
         case .asks(let n): n == 1 ? "1 question" : "\(n) questions"
@@ -172,6 +172,7 @@ struct EditorPill: View {
     private var foreground: Color {
         switch state {
         case .asks, .readBackReady: Gate.Voice.agent
+        case .cutReady: Gate.Text.primary
         case .cant, .stopped: Gate.State.alert
         case .working, .assembling, .readingBack: Gate.Text.primary
         case .offline, .paused: Gate.Text.tertiary
@@ -184,6 +185,8 @@ struct EditorPill: View {
             Capsule().fill(Gate.Surface.panel).overlay(ShimmerBorder())
         case .asks, .readBackReady:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Voice.agent.opacity(0.45), lineWidth: 1))
+        case .cutReady:
+            Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Line.strong, lineWidth: 1))
         case .cant, .stopped:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.State.alert.opacity(0.45), lineWidth: 1))
         default:

@@ -186,6 +186,7 @@ public struct FeedbackReply: Codable, Hashable, Sendable, Identifiable {
     public var text: String
     public var revision: Int?
     public var createdAt: Double
+    public init(id: String, author: String, text: String, revision: Int?, createdAt: Double) { self.id = id; self.author = author; self.text = text; self.revision = revision; self.createdAt = createdAt }
 }
 
 public struct ReviewComment: Codable, Hashable, Sendable, Identifiable {

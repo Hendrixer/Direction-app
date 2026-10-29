@@ -80,25 +80,30 @@ struct FilmWindow: View {
     @ViewBuilder private var sweepEdge: some View {
         if sweep >= 0 {
             GeometryReader { g in
-                Gate.Voice.prism.frame(width: g.size.width * 0.4, height: 2).offset(x: g.size.width * (sweep * 1.4 - 0.4))
-            }.frame(height: 2).padding(.top, Gate.Size.titlebar).allowsHitTesting(false).zIndex(5)
+                // One pass left to right, then the edge rests as a static line before fading.
+                if sweep < 1 { Gate.Voice.prism.frame(width: g.size.width * 0.4, height: 2).offset(x: g.size.width * (sweep * 1.4 - 0.4)) }
+                else { Gate.Voice.prism.frame(width: g.size.width, height: 2) }
+            }.frame(height: 2).padding(.top, Gate.Size.titlebar).allowsHitTesting(false).zIndex(5).transition(.opacity)
         }
     }
 
     private func runSweep() {
         sweep = 0
         withAnimation(gateAnimation(Gate.Motion.sweep)) { sweep = 1 }
-        Task { try? await Task.sleep(for: .seconds(Gate.Motion.sweepDuration + 0.1)); sweep = -1 }
+        Task {
+            try? await Task.sleep(for: .seconds(Gate.Motion.sweepDuration + Gate.Motion.shimmerPeriod))
+            withAnimation(gateAnimation(Gate.Motion.settle)) { sweep = -1 }
+        }
     }
 
     @ViewBuilder private var toast: some View {
         if let toast = model.toast {
             VStack {
                 if model.room == .screening { ToastView(toast: toast, action: nil) { model.toast = nil }.padding(.top, 70); Spacer() }
-                else { Spacer(); ToastView(toast: toast, action: toast.actionTitle == nil ? nil : { model.toast = nil; model.go(.changes) }) { model.toast = nil }.padding(.bottom, 20) }
+                else { Spacer(); ToastView(toast: toast, action: toast.actionTitle == nil ? nil : { model.toast = nil; model.go(.changes) }) { model.toast = nil }.padding(.bottom, 96) }
             }
             .frame(maxWidth: .infinity, alignment: model.room == .screening ? .topTrailing : .bottomLeading)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, model.room == .screening ? 20 : 24)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
             .task(id: toast.id) { try? await Task.sleep(for: .seconds(toast.actionTitle == nil ? 4 : 8)); if model.toast?.id == toast.id { model.toast = nil } }
         }

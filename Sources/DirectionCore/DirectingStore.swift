@@ -27,6 +27,9 @@ public struct AnswerInput: Codable, Sendable {
     public var preferred: String?
     public var unasked: Bool?
     public var kind: NoteKind?
+    public init(noteID: String? = nil, summary: String, delta: String? = nil, start: Double? = nil, end: Double? = nil, options: [NoteOption]? = nil, preferred: String? = nil, unasked: Bool? = nil, kind: NoteKind? = nil) {
+        self.noteID = noteID; self.summary = summary; self.delta = delta; self.start = start; self.end = end; self.options = options; self.preferred = preferred; self.unasked = unasked; self.kind = kind
+    }
 }
 
 enum DirectingKey {
@@ -237,6 +240,25 @@ extension ProjectStore {
             if var answer = c.answers?.last { answer.state = "reopened"; c.answers![c.answers!.count - 1] = answer }
             c.status = "open"; c.noteState = .reopened; c.turnoverID = nil
             c.replies.append(.init(id: newID("reply"), author: "Director", text: text, revision: c.answers?.last?.revision, createdAt: Date().timeIntervalSince1970))
+        }
+    }
+
+    /// Undo for Accept: back to an unreviewed answer.
+    public func unacceptAnswer(noteID: String) throws {
+        try modifyNote(noteID, summary: "Took back an accept") { c, _ in
+            guard c.status == "accepted", var answer = c.answers?.last else { return }
+            answer.state = "unreviewed"; c.answers![c.answers!.count - 1] = answer
+            c.status = "addressed"; c.noteState = .answered
+            if c.replies.last?.author == "Director" { c.replies.removeLast() }
+        }
+    }
+    /// Undo for Reply: the answer stands again and the director's words are withdrawn.
+    public func undoReopen(noteID: String, turnoverID: String?) throws {
+        try modifyNote(noteID, summary: "Took back a reply") { c, _ in
+            guard c.noteState == .reopened, var answer = c.answers?.last else { return }
+            answer.state = "unreviewed"; c.answers![c.answers!.count - 1] = answer
+            c.status = "addressed"; c.noteState = .answered; c.turnoverID = turnoverID
+            if c.replies.last?.author == "Director" { c.replies.removeLast() }
         }
     }
 
