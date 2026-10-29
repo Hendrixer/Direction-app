@@ -325,7 +325,8 @@ final class FilmModel {
     var pill: EditorPillState {
         if offline { return .offline }
         if directing.editorPaused { return .paused }
-        if missingTakes > 0, openTurnover != nil || isLogging { return .needsFootage }
+        // The editor can't cut scenes whose takes are missing; say so until they're found.
+        if missingTakes > 0 { return .needsFootage }
         let cants = openQuestions.filter { $0.kind == "cant" }.count, asks = openQuestions.filter { $0.kind == "question" }.count
         if let t = openTurnover {
             let total = max(1, t.noteIDs.count), done = t.progress.values.filter { $0 == .done }.count

@@ -56,6 +56,7 @@ enum SystemFixtures {
         let m = SampleFilm.make()
         let order = ["take-2a-t1", "take-2a-t2", "take-2a-t3", "take-2b-t1", "take-4c-t2", "take-5a-t3", "take-2a-t4", "take-2b-t2", "take-2b-t3", "take-3a-t2", "take-3a-t3", "take-3b-t1", "take-4a-t1", "take-4b-t1"]
         MissingFootage.setPreviewMissing(order, for: m)
+        m.missingTakes = order.count
         let rows: [RelinkSearch.Row] = order.compactMap { id in
             guard let asset = m.project?.assets.first(where: { $0.id == id }) else { return nil }
             let label = MissingFootage.label(asset, dailies: m.dailies)
