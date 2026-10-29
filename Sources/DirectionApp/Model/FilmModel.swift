@@ -60,7 +60,8 @@ final class FilmModel {
     var transcripts: [SourceTranscript] = []
     var jobs: [JobRecord] = []
     var events: [ProjectEvent] = []
-    var error: String?
+    /// An alert's text. Every one also goes in Direction's log.
+    var error: String? { didSet { if let error, error != oldValue, !isPreview { DirectionLog.error("Alert in \(filmName): \(error)") } } }
 
     // MARK: Navigation
     var room: Room = .notes
@@ -212,6 +213,13 @@ final class FilmModel {
             knownDelivered.insert(t.id)
             guard let cut = cuts.first(where: { $0.id == t.resultCutID }) else { continue }
             sweepToken += 1
+            if t.kind == "assembly" {
+                // Nothing to review yet: screen it (start.md › 06).
+                let length = ((try? project?.sequence(cut.sequenceID))??.duration.seconds).map { " " + Timecode.duration($0) + "." } ?? ""
+                toast = Toast(title: "The assembly is ready.\(length)", editor: true, actionTitle: room == .screening ? nil : "Screen it", run: { [weak self] in self?.go(.screening) })
+                onNotify?("The assembly is ready", "\(filmName) · screen it when you\u{2019}re ready", NotificationKey.cutReady)
+                continue
+            }
             let answers = notes.filter { $0.latestAnswer?.cutID == cut.id }.count
             toast = Toast(title: "\(cut.name) is ready", detail: "\(answers) answers · \(Timecode.duration(changesDuration(in: cut))) of changes to watch", editor: true, actionTitle: "Watch changes")
             if watchedCutID == nil { loadDisplayed(force: true) }
@@ -372,6 +380,7 @@ final class FilmModel {
         if let cut = latestCut, !unreviewedAnswers.isEmpty, openTurnover == nil { return .cutReady("\(cut.name) ready") }
         // Before logging, the index looks at every take (footage-index.md).
         if let l = index.looking { return .looking(l.done, l.total) }
+        if let l = index.listening, isLogging { return .listening(l.done, l.total) }
         if isLogging, let total = project?.assets.count, total > 0, cuts.isEmpty || runs.active?.job == .logFootage {
             return .working("Logging \(loggedCount) of \(total)", Double(loggedCount) / Double(total))
         }
@@ -384,7 +393,9 @@ final class FilmModel {
     /// The director left onboarding early (Open Dailies while the editor is still logging).
     var onboardingDismissed = false
     var onboardingStep: OnboardingStep? {
-        guard cuts.isEmpty, !onboardingDismissed else { return nil }
+        guard !onboardingDismissed else { return nil }
+        // The assembly is in: the first look stays, ready, until you screen it (start.md › 06).
+        if !cuts.isEmpty { return assemblyAwaitsScreening ? .firstLook : nil }
         if !brief.isComplete { return .brief }
         if !hasFootage { return .footage }
         if openTurnover?.kind == "assembly" { return .firstLook }
@@ -392,6 +403,14 @@ final class FilmModel {
         if isLogging { return .footage }
         return nil
     }
+    /// The only cut is the assembly, and it hasn't been screened or noted yet.
+    var assemblyAwaitsScreening: Bool {
+        guard cuts.count == 1, notes.isEmpty, turnovers.contains(where: { $0.kind == "assembly" && $0.state == .delivered && $0.resultCutID == cuts[0].id }) else { return false }
+        if isPreview { return previewAssemblyReady }
+        return project.map { UserDefaults.standard.integer(forKey: "screenings.\($0.id)") == 0 } ?? false
+    }
+    /// Snapshots of the first look once the assembly is in.
+    var previewAssemblyReady = false
     /// Takes the editor has logged, out of all footage.
     var loggedCount: Int { project?.assets.filter { dailies.takes[$0.id] != nil }.count ?? 0 }
     var isLogging: Bool { hasFootage && (project?.assets.contains { dailies.takes[$0.id] == nil } ?? false) }

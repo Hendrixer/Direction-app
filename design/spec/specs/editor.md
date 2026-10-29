@@ -104,7 +104,7 @@ A skill is a short playbook in Markdown (`plugins/direction/skills/<name>/SKILL.
 
 - **The pill** shows the current Activity: "Watching 01:12", "Cutting scene 2", "Making music". Shimmer (prism, 2.4 s) while working. Truncate the object at 18 characters.
 - **The editor's playhead.** On every scene strip, a 9 pt prism diamond rides the top edge at the latest Activity time, with a 1 pt prism line down through the strip. It glides (Settle) between times and fades out 2 s after the last Activity that had a time. It never moves the director's playhead and isn't drawn in Screening.
-- **The window edge.** While a run is working (not paused), a 1 pt prism line runs around the inside of the window's content, under the titlebar's hairline. It shimmers once every 2.4 s; with Reduce Motion it's static. Not drawn in Screening or when the window is full screen.
+- **No window edge.** The pill and the editor's playhead are enough. A line around the window's content fought the window's rounded corners, so it was dropped.
 - **The popover** (frame 57) lists what the editor did, newest first.
 - **Notifications.** "Cut 4 is ready" is unchanged. New: "The editor stopped" with the reason as the body and **Show me**.
 
@@ -163,7 +163,6 @@ Frame: `screens/57-editor-working.html` · 1440 × 900.
 The Notes room while the editor cuts Cut 4 (state of frame 25), with the popover open from the pill.
 
 - Pill: shimmering "Cutting 3 of 7".
-- Window edge: the 1 pt prism line.
 - Scene strip: the editor's playhead at 01:12:08 in scene 3 (note 3's anchor).
 - Popover (320 wide, `.pop`), under the pill:
   - Header: diamond + "Cutting Cut 4" (13/600), sub "Claude Code · Claude Opus 5.5 · 4 min" (11.5 text-3).
@@ -181,7 +180,7 @@ The list keeps the newest 6. "Show all" appears under it when there are more and
 
 **Acceptance:**
 - [ ] The playhead diamond moves when the editor watches another passage, within 0.5 s.
-- [ ] Pause changes the pill to "Paused" and removes the window edge within 2 s.
+- [ ] Pause changes the pill to "Paused" and stops its shimmer within 2 s.
 - [ ] Nothing in this frame moves during playback except the director's playhead and time.
 
 ---

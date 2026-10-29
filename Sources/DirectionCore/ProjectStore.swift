@@ -216,6 +216,7 @@ public final class ProjectStore: Sendable {
         for i in jobs.indices where !jobs[i].isTerminal && jobs[i].ownerPID != getpid() {
             if kill(jobs[i].ownerPID, 0) != 0 && errno == ESRCH {
                 jobs[i].status = "interrupted"; jobs[i].phase = "The process running this job exited"; jobs[i].updatedAt = Date().timeIntervalSince1970
+                DirectionLog.warning("The \(jobs[i].kind) job \(jobs[i].id)\(jobs[i].assetID.map { " on \($0)" } ?? "") stopped: process \(jobs[i].ownerPID) exited before it finished", "jobs")
                 try saveJob(jobs[i])
             }
         }

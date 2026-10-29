@@ -195,7 +195,8 @@ Frame: `screens/06-assembling.html` · Render: `renders/06-assembling@2x.png`
 - Black stage with a soft radial glow. Centered 980 pt column, 34 pt gaps.
 - Header: ion uppercase label with diamond, "Assembly" Archivo 800 48 at 125%, a 15 pt `--text-2` line.
 - Scene tiles: 5 columns, 10 pt gap. Tile = 16:9 preview (radius 6) + 12 pt label row (status icon, name, mono duration right). Done tiles show a still; the live tile has a 1 pt prism border and a blurred, darkened still; pending tiles are empty sunken boxes with `--text-4` names.
-- Below: log column + 320 pt "First look is yours" card (ground, radius 10).
+- The 320 pt "First look is yours" card (ground, radius 10) sits to the right of the header, top-aligned with it. Under the bottom of a short log it read as a box floating on its own.
+- Below the tiles: the log, full width.
 
 **Content:** Pill "Assembling 3 of 5" with a meter. Header line: "From your 7 circled takes and the brief. About 3 minutes left." Log (each a `.say`, done rows with steel diamonds, current row prism and `--text-1`):
 1. "Read the brief. Holding on faces, letting quiet moments run."
@@ -209,6 +210,7 @@ Card: "First look is yours" / "Nobody else can see the assembly until you've scr
 - The editor can ask a question mid-assembly; it appears as a `.question` card above the log, the pill turns `.asks` "1 question", and the remaining scenes wait.
 - If no takes are circled in a scene, the log says "Scene 5: nothing circled, so I used my suggestions. Change them in Dailies." Those tiles show a diamond on their label.
 - Failure: the live tile turns into an alert state, and frame 28's pattern applies.
+- **Ready.** When the assembly is delivered the frame stays; it doesn't drop back to Dailies. Label "Your first cut is ready", header line "From your 1 circled take and the brief. It runs 3:12. Watch it once all the way through.", every scene with picture done, the log's last line no longer current, and a large raised **Screen the assembly ⌘↩** under the header line (the titlebar's steel primary does the same). The toast reads "The assembly is ready. 3:12." with **Screen it**. The frame stays until the director screens the assembly, writes a note or goes to another room.
 
 **Interactions:** Clicking a done tile plays that scene in a sheet (preview only, not a screening; no marks). Esc closes. Leaving the room doesn't stop the work.
 

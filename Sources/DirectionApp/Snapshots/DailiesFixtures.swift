@@ -11,6 +11,15 @@ enum DailiesFixtures {
                 m.selectedSceneID = "scene-2"
                 return scene(m, DailiesPreview(art: art, hoverTakeID: "take-2a-t3"))
             },
+            "07-dailies-first-circle": {
+                // Before anything is circled: the how-to line, and the bar for the selected take.
+                let m = film()
+                m.selectedSceneID = "scene-2"
+                var d = m.dailies
+                for id in d.takes.keys { d.takes[id]?.circled = false }
+                m.dailies = d
+                return scene(m, DailiesPreview(art: art, selectedTakeID: "take-2a-t3"))
+            },
             "08-dailies-take": {
                 let m = film()
                 m.selectedSceneID = "scene-2"

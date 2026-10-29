@@ -9,7 +9,8 @@ import DirectionCore
 final class AppModel {
     var films: [ProjectEntry] = []
     var film: FilmModel?
-    var error: String?
+    /// An alert's text. Every one also goes in Direction's log.
+    var error: String? { didSet { if let error, error != oldValue { DirectionLog.error("Alert: \(error)") } } }
     /// Previews show sample films without touching the library.
     var previewFilms: [FilmSummary]?
 
@@ -17,6 +18,8 @@ final class AppModel {
     @ObservationIgnored @AppStorage("lastFilm") var lastFilm = ""
 
     func start() {
+        let info = Bundle.main.infoDictionary
+        DirectionLog.info("Direction \(info?["CFBundleShortVersionString"] as? String ?? "dev") (\(info?["CFBundleVersion"] as? String ?? "?")) started on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
         reloadFilms()
         if let index = CommandLine.arguments.firstIndex(of: "--project"), CommandLine.arguments.count > index + 1 { open(URL(fileURLWithPath: CommandLine.arguments[index + 1])) }
         else if whenOpening == "lastFilm", !lastFilm.isEmpty, FileManager.default.fileExists(atPath: lastFilm) { open(URL(fileURLWithPath: lastFilm)) }

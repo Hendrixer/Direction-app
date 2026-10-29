@@ -239,11 +239,13 @@ extension FilmModel {
         let transcribed = Set(transcripts.filter { !$0.words.isEmpty }.map(\.assetID))
         let running = jobs.filter { !$0.isTerminal && $0.kind == "transcription" }
         let editorActive = editorStatus.map { Date().timeIntervalSince1970 - $0.updatedAt < 120 } ?? false
-        // Jobs don't name their file: the editor transcribes dialogue takes it has logged, then the rest, in order.
-        let untranscribed = assets.filter { !$0.audio.isEmpty && !transcribed.contains($0.id) }
+        // Jobs name their take; older ones didn't, so guess those: dialogue takes logged, then the rest, in order.
+        var transcribing = Dictionary(running.compactMap { j in j.assetID.map { ($0, j.progress) } }, uniquingKeysWith: { a, _ in a })
+        let unnamed = running.filter { $0.assetID == nil }
+        let untranscribed = assets.filter { !$0.audio.isEmpty && !transcribed.contains($0.id) && transcribing[$0.id] == nil }
         let dialogue = untranscribed.filter { dailies.takes[$0.id]?.caption?.hasPrefix("\u{201C}") == true }
         let unlogged = untranscribed.filter { dailies.takes[$0.id] == nil }
-        let transcribing = Dictionary((dialogue + unlogged).prefix(running.count).enumerated().map { ($1.id, running[$0].progress) }, uniquingKeysWith: { a, _ in a })
+        for (i, a) in (dialogue + unlogged).prefix(unnamed.count).enumerated() where transcribing[a.id] == nil { transcribing[a.id] = unnamed[i].progress }
         var rows: [LoggingRow] = []
         for a in assets {
             let info = dailies.takes[a.id]

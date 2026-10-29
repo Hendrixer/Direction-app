@@ -23,7 +23,6 @@ struct FilmWindow: View {
     var app: AppModel?
     @Bindable var model: FilmModel
     @State private var sweep: CGFloat = -1
-    @State private var fullScreen = false
     @Environment(\.undoManager) private var undoManager
     var body: some View {
         ZStack(alignment: .top) {
@@ -34,10 +33,6 @@ struct FilmWindow: View {
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if screeningFullBleed { ScreeningRoom(model: model, app: app).environment(\.editorPlayhead, nil) }
-            // While the editor works: the 1 pt prism edge inside the content, under the titlebar.
-            if model.runs.isWorking && !screeningFullBleed && model.room != .screening && !fullScreen {
-                EditorWindowEdge().padding(.top, Gate.Size.titlebar).zIndex(4)
-            }
             sweepEdge
             if let sheet = model.sheet { sheetView(sheet).zIndex(10) }
             if model.showCommandMenu { CommandMenuOverlay(model: model, app: app).zIndex(20) }
@@ -47,7 +42,6 @@ struct FilmWindow: View {
             if !screeningFullBleed { GrainOverlay().ignoresSafeArea().zIndex(40) }
         }
         .background(Gate.Surface.ground)
-        .background(FullScreenReader(isFullScreen: $fullScreen))
         .ignoresSafeArea()
         // Nothing moves during playback except the playhead and time.
         .environment(\.motionHeld, model.playing)

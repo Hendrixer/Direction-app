@@ -25,10 +25,6 @@
 /* ============ 57 · The editor at work ============ */
 /* Pill while its popover is open: hover fill, prism edge kept */
 .agent.working.open { background: linear-gradient(var(--hover), var(--hover)) padding-box, var(--prism) border-box; background-size: 100% 100%, 300% 100%; }
-/* PROMOTE: window edge. 1 pt prism line inside the content, under the titlebar hairline, while a run works */
-.window-edge { position: absolute; left: 0; right: 0; top: var(--titlebar-h); bottom: 0; z-index: 40; pointer-events: none;
-  border: 1px solid transparent; background: var(--prism) border-box;
-  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0) border-box; -webkit-mask-composite: xor; mask-composite: exclude; }
 /* PROMOTE: the editor's playhead on a scene strip. 9 pt prism diamond on the scenes' top edge, 1 pt prism line down */
 .strip .eph { position: absolute; top: 8px; height: 26px; width: 1px; margin-left: -.5px; z-index: 4; pointer-events: none;
   background: linear-gradient(180deg, var(--prism-1), var(--prism-2) 34%, var(--prism-3) 66%, var(--prism-4)); }

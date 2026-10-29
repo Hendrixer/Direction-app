@@ -21,7 +21,18 @@ public actor ToolRuntime {
         try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 
+    /// Every tool call, from the app or the editor. A call that fails goes in Direction's log.
     public func invoke(_ name: String, arguments a: JSONValue = .object([:])) async throws -> ToolResponse {
+        do { return try await dispatch(name, a) }
+        catch is CancellationError { throw CancellationError() }
+        catch {
+            let code = (error as? DirectionError)?.code
+            DirectionLog.warning("\(name) failed\(code.map { " (\($0))" } ?? ""): \(error.localizedDescription)", "tools")
+            throw error
+        }
+    }
+
+    private func dispatch(_ name: String, _ a: JSONValue) async throws -> ToolResponse {
         noteToolCall(name, a)
         try Task.checkCancellation()
         try ToolCatalog.validate(a, for: name)
@@ -88,8 +99,18 @@ public actor ToolRuntime {
         case "direction_cuts": return ToolResponse(try .wrapping(store.cuts()))
         case "direction_restore": return ToolResponse(try .wrapping(store.restore(revision: try requiredInt(a, "revision"), expectedRevision: try baseRevision(a), key: a["idempotencyKey"].string ?? UUID().uuidString)))
         case "direction_transcript":
-            let p = try store.read(revision: a["revision"].int), all = TranscriptEditing.words(in: try p.sequence(a["sequenceID"].string), transcripts: try store.transcripts())
             let offset = max(0, a["offset"].int ?? 0), limit = min(5_000, max(1, a["limit"].int ?? 1_000))
+            if let assetID = a["assetID"].string {
+                // A take's own words: the transcript chosen last, if it has more than one track.
+                _ = try store.read().asset(assetID)
+                guard let t = try store.transcripts().filter({ $0.assetID == assetID }).max(by: { ($0.selectedAt ?? 0) < ($1.selectedAt ?? 0) }) else {
+                    return ToolResponse(.object(["assetID": .string(assetID), "words": .array([]), "text": .string(""), "total": .number(0), "nextOffset": .null, "note": .string("This take has no transcript yet.")]))
+                }
+                let words = Array(t.words.dropFirst(offset).prefix(limit)), next = min(t.words.count, offset + words.count)
+                let timed: [JSONValue] = words.map { .object(["id": .string($0.id), "text": .string($0.text), "start": .number(($0.range.start.seconds * 100).rounded() / 100), "end": .number(($0.range.end.seconds * 100).rounded() / 100)]) }
+                return ToolResponse(.object(["assetID": .string(assetID), "audioTrackID": .number(Double(t.audioTrackID)), "provider": .string(t.provider), "words": .array(timed), "text": .string(words.map(\.text).joined(separator: " ")), "total": .number(Double(t.words.count)), "nextOffset": next < t.words.count ? .number(Double(next)) : .null]))
+            }
+            let p = try store.read(revision: a["revision"].int), all = TranscriptEditing.words(in: try p.sequence(a["sequenceID"].string), transcripts: try store.transcripts())
             let words = Array(all.dropFirst(offset).prefix(limit)), next = min(all.count, offset + words.count)
             return ToolResponse(.object(["editRevision": .number(Double(p.editRevision)), "words": try .wrapping(words), "total": .number(Double(all.count)), "nextOffset": next < all.count ? .number(Double(next)) : .null]))
         case "direction_import_transcript":
@@ -125,7 +146,7 @@ public actor ToolRuntime {
             let model = a["model"].string ?? SharedSettings.whisperModel
             let useWhisper = engine == .whisper, fallbackNote = note
             let phase = engine == .whisper ? (WhisperTranscriber.isDownloaded(model) ? "Transcribing with Whisper" : "Downloading the Whisper model") : "Preparing local speech model"
-            let job = try startJob(kind: "transcription", revision: p.editRevision, phase: phase) {
+            let job = try startJob(kind: "transcription", revision: p.editRevision, phase: phase, assetID: asset.id) {
                 let transcript = useWhisper
                     ? try await WhisperTranscriber.transcribe(asset: asset, trackID: track, language: language, model: model, directory: directory)
                     : try await LocalTranscriber.transcribe(asset: asset, trackID: track, language: language, directory: directory)
@@ -190,14 +211,15 @@ public actor ToolRuntime {
 
     public func cancelAll() { for task in tasks.values { task.cancel() } }
 
-    private func startJob(kind: String, revision: Int, phase: String, operation: @escaping @Sendable () async throws -> JSONValue) throws -> JobRecord {
+    private func startJob(kind: String, revision: Int, phase: String, assetID: String? = nil, operation: @escaping @Sendable () async throws -> JSONValue) throws -> JobRecord {
         let now = Date().timeIntervalSince1970
-        let job = JobRecord(id: newID("job"), kind: kind, revision: revision, ownerPID: getpid(), status: "running", phase: phase, progress: nil, result: nil, error: nil, createdAt: now, updatedAt: now)
+        let job = JobRecord(id: newID("job"), kind: kind, revision: revision, ownerPID: getpid(), status: "running", phase: phase, progress: nil, result: nil, error: nil, createdAt: now, updatedAt: now, assetID: assetID)
         try store.saveJob(job)
         tasks[job.id] = Task { [store] in
             var completed = job
             do { completed.result = try await operation(); try Task.checkCancellation(); completed.status = "completed"; completed.phase = "Completed"; completed.progress = 1 }
             catch { completed.status = Task.isCancelled || error is CancellationError ? "cancelled" : "failed"; completed.error = error.localizedDescription; completed.phase = completed.status == "cancelled" ? "Cancelled" : "Failed" }
+            if completed.status == "failed" { DirectionLog.error("The \(kind) job failed\(assetID.map { " on \($0)" } ?? ""): \(completed.error ?? "")", "jobs") }
             completed.updatedAt = Date().timeIntervalSince1970
             try? store.saveJob(completed)
             self.finished(job.id)

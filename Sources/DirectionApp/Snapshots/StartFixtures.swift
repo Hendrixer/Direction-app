@@ -35,6 +35,7 @@ enum StartFixtures {
             },
             "05-footage-logging": { DailiesFixtures.scene(logging(), DailiesPreview(art: DailiesFixtures.art)) },
             "06-assembling": { DailiesFixtures.scene(assembling(), DailiesPreview(art: DailiesFixtures.art)) },
+            "06-assembly-ready": { DailiesFixtures.scene(assemblyReady(), DailiesPreview(art: DailiesFixtures.art)) },
         ]
     }
 
@@ -114,6 +115,23 @@ enum StartFixtures {
             "The ridge: you circled two takes of 3A. Trying both against the music.",
         ].joined(separator: "\n")
         m.turnovers = [t]
+        return m
+    }
+
+    /// Frame 06, done: the assembly is a cut and the first look waits for you to screen it.
+    static func assemblyReady() -> FilmModel {
+        let m = assembling()
+        var p = m.project!
+        p.sequences[0].clips += [("take-3a-t1", 86.0, 131.0), ("take-4a-t3", 131, 197), ("take-5a-t1", 197, 241)].map { id, start, end in
+            Clip(id: "clip-\(id)", assetID: id, name: id, start: .init(seconds: start), sourceRange: .init(start: 2, end: 2 + end - start))
+        }
+        m.project = p; m.displayed = p
+        var t = m.turnovers[0]
+        t.state = .delivered; t.phase = "Assembly is ready"; t.percent = 1; t.resultCutID = "cut-assembly"
+        t.message = (t.message ?? "") + "\nScene 5: kept the last look long. Done."
+        m.turnovers = [t]
+        m.cuts = [ReviewCut(id: "cut-assembly", name: "Assembly", editRevision: p.editRevision, sequenceID: "sequence-main", createdAt: Date().timeIntervalSince1970)]
+        m.previewAssemblyReady = true
         return m
     }
 }

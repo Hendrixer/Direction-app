@@ -16,17 +16,18 @@ struct OnboardingAssemblyView: View {
             EllipticalGradient(stops: [.init(color: Gate.Steel.ramp[2], location: 0), .init(color: Gate.Surface.canvas, location: 0.75)], center: UnitPoint(x: 0.5, y: 0.4), startRadiusFraction: 0, endRadiusFraction: 0.55)
             ScrollView {
                 VStack(alignment: .leading, spacing: 34) {
-                    top
-                    tiles
+                    // The promise sits with the title it explains, not off on its own below.
                     HStack(alignment: .top, spacing: 40) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            ForEach(questions) { AssemblyQuestion(model: model, question: $0) }
-                            logList
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        top.frame(maxWidth: .infinity, alignment: .leading)
                         promise.frame(width: 320)
                     }
                     .fixedSize(horizontal: false, vertical: true)
+                    tiles
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(questions) { AssemblyQuestion(model: model, question: $0) }
+                        logList
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .frame(width: 980)
                 .padding(.vertical, 40)
@@ -43,16 +44,32 @@ struct OnboardingAssemblyView: View {
 
     private var top: some View {
         VStack(alignment: .leading, spacing: 12) {
-            DailiesEditorLabel(text: failed ? "The editor stopped" : "The editor is building your first cut")
+            DailiesEditorLabel(text: failed ? "The editor stopped" : ready ? "Your first cut is ready" : "The editor is building your first cut")
             Text("Assembly").font(Gate.Font.brand(size: 48, width: 125, weight: 800)).foregroundStyle(Gate.Text.primary)
             Text(headline).font(.system(size: 15)).foregroundStyle(failed ? Gate.State.alert : Gate.Text.secondary)
+            if ready {
+                Button { model.go(.screening) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.fill").font(.system(size: 11))
+                        Text("Screen the assembly")
+                        Text("\u{2318}\u{21A9}").font(.system(size: 11, design: .monospaced)).foregroundStyle(Gate.Text.tertiary)
+                    }
+                }
+                .buttonStyle(.gate(.normal, .large)).padding(.top, 8)
+            }
         }
     }
 
     private var failed: Bool { turnover?.state == .failed }
+    /// Delivered: the assembly is a cut now, waiting to be screened.
+    private var ready: Bool { turnover?.state == .delivered && !model.cuts.isEmpty }
 
     private var headline: String {
         if failed { return turnover?.message?.split(separator: "\n").last.map(String.init) ?? "The assembly didn't finish." }
+        if ready {
+            let length = model.sequence.map { " It runs \(Timecode.duration($0.duration.seconds))." } ?? ""
+            return "From your \(DailiesFormat.count(model.circledCount, "circled take")) and the brief.\(length) Watch it once all the way through."
+        }
         var line = "From your \(DailiesFormat.count(model.circledCount, "circled take")) and the brief."
         if let t = turnover, let p = t.percent, p > 0.05, p < 1 {
             let minutes = Int(((Date().timeIntervalSince1970 - t.createdAt) * (1 - p) / p / 60).rounded())
@@ -72,7 +89,10 @@ struct OnboardingAssemblyView: View {
         return (placed ?? -1) + 1
     }
 
-    private func state(_ i: Int) -> TileState { i < currentIndex ? .done : i == currentIndex && turnover?.state.isOpen == true ? .live : .pending }
+    private func state(_ i: Int) -> TileState {
+        if ready { return durationInCut(model.scenes[i]) > 0 ? .done : .pending }
+        return i < currentIndex ? .done : i == currentIndex && turnover?.state.isOpen == true ? .live : .pending
+    }
 
     /// The scene's running time in the working sequence so far.
     private func durationInCut(_ scene: DailiesScene) -> Double {
@@ -134,10 +154,10 @@ struct OnboardingAssemblyView: View {
 
     private var logList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if log.isEmpty { DailiesSayLine(text: "Reading the brief and your circles.") }
+            if log.isEmpty { DailiesSayLine(text: ready ? "Done." : "Reading the brief and your circles.") }
             ForEach(Array(log.enumerated()), id: \.offset) { i, line in
-                let now = i == log.count - 1
-                DailiesSayLine(text: line, color: now ? Gate.Text.primary : Gate.Text.secondary, steelDiamond: !now).frame(maxHeight: .infinity, alignment: .top)
+                let now = i == log.count - 1 && !ready
+                DailiesSayLine(text: line, color: now ? Gate.Text.primary : Gate.Text.secondary, steelDiamond: !now)
             }
         }
         .accessibilityElement(children: .contain)

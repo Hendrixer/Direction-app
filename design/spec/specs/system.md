@@ -384,3 +384,7 @@ Every command is listed with its key equivalent. Room-scoped commands are disabl
 | — | |
 | Contact Support… | |
 | Editor Status Page | |
+| — | |
+| Show Direction Log | |
+
+**Show Direction Log** opens `~/Library/Logs/Direction/Direction.log` in Console. The app and the `direction` helper both write to it: every tool call that fails, every job that fails or whose process exits, every editor run's start and end (with the program's last error lines when it fails), and every alert. API keys and bearer tokens are masked before a line is written. It rolls over at 5 MB, keeping one older file (`Direction.1.log`).

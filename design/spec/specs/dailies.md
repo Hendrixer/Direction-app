@@ -29,6 +29,8 @@ Frame: `screens/07-dailies.html` · Render: `renders/07-dailies@2x.png`
 - Suggested: diamond top-right; status line in ion with the reason.
 - Circled and suggested: both marks; status reads "Circled by you · also suggested".
 - Hover (drawn on T3): the thumbnail lifts 4% and a tooltip "Circle T3 C" appears after 600 ms. Scrubbing horizontally across the thumbnail scrubs the take.
+- Nothing circled yet in the film: under the editor note, one 12 pt `--text-3` line with key caps: "Click a take to select it, then press C to circle it. Double-click or press ↩ to watch it." It goes once anything is circled.
+- Takes selected: a glass bar centered 16 pt above the bottom edge names the selection ("A1", or "3 takes") in SF Mono and offers **Circle** (amber) `C`, **Watch** `↩` (one take only) and **Not Usable** `X`. The same bar shows in Unsorted and Not usable. Clicking a take was a dead end before it: nothing said what selecting was for.
 - Empty scene: centered "No takes in this scene yet. Drag takes here from Unsorted."
 
 **Interactions:** Click selects; `C` or clicking the take number circles/uncircles; `X` marks Not usable; `Space` or double-click opens 08; arrows move; `⌘A` then `C` circles all selected. Drag takes between setups or onto a sidebar scene. Context menu on a take: Circle, Play, Open in Script, Move to Scene ›, Not usable, Show in Finder.

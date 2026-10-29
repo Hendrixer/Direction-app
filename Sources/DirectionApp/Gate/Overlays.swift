@@ -136,6 +136,8 @@ enum EditorPillState: Equatable {
     case notSetUp
     /// The index is looking at footage before logging: "Looking at footage · 88 of 214".
     case looking(Int, Int)
+    /// Direction is transcribing takes before logging: "Listening · 3 of 12".
+    case listening(Int, Int)
     /// Start work is Ask me first: work waits for Start in the popover.
     case readyToCut(String)
     var text: String {
@@ -153,11 +155,12 @@ enum EditorPillState: Equatable {
         case .paused: "Paused"
         case .notSetUp: "Editor not set up"
         case .looking(let done, let total): "Looking at footage \u{00B7} \(done) of \(total)"
+        case .listening(let done, let total): "Listening \u{00B7} \(done) of \(total)"
         }
     }
-    /// The editor is doing something: shimmer, window edge.
+    /// The editor, or Direction for it, is doing something: shimmer.
     var isWorking: Bool {
-        switch self { case .working, .assembling, .readingBack, .looking: true; default: false }
+        switch self { case .working, .assembling, .readingBack, .looking, .listening: true; default: false }
     }
 }
 
@@ -181,6 +184,7 @@ struct EditorPill: View {
             if case .working(_, let p) = state { meter(p) }
             if case .assembling(_, let p) = state { meter(p) }
             if case .looking(let done, let total) = state { meter(Double(done) / Double(max(1, total))) }
+            if case .listening(let done, let total) = state { meter(Double(done) / Double(max(1, total))) }
         }
         .font(.system(size: 12, weight: .medium)).foregroundStyle(foreground).lineLimit(1).fixedSize()
         .padding(.leading, 10).padding(.trailing, 11).frame(height: Gate.Size.pill)
@@ -197,14 +201,14 @@ struct EditorPill: View {
         case .ready where open: Gate.Text.primary
         case .cutReady, .readBackReady, .readyToCut: Gate.Text.primary
         case .cant, .stopped, .needsFootage: Gate.State.alert
-        case .working, .assembling, .readingBack, .looking: Gate.Text.primary
+        case .working, .assembling, .readingBack, .looking, .listening: Gate.Text.primary
         case .offline, .paused: Gate.Text.tertiary
         default: Gate.Text.secondary
         }
     }
     @ViewBuilder private var background: some View {
         switch state {
-        case .working, .assembling, .readingBack, .looking:
+        case .working, .assembling, .readingBack, .looking, .listening:
             Capsule().fill(open ? Gate.Surface.hover : Gate.Surface.panel).overlay(ShimmerBorder())
         case .asks, .readBackReady:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Voice.agent.opacity(0.45), lineWidth: 1))

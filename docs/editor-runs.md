@@ -14,7 +14,7 @@ How Direction starts the editor (Claude Code or Codex), follows it, and shows it
 | Processes, queue, pause/resume/stop, quit, recovery | `EditorRunner.swift` (app-wide singleton) |
 | Job text | `Resources/Editor/jobs/*.md`, filled by `EditorJobs.swift` |
 | Per-film state, finding work, the actions the UI calls | `EditorRunsModel.swift` (`film.runs`) |
-| UI | `EditorActivityPopover.swift` (57), `EditorSetupSheet.swift` (56), `EditorStopped.swift` (58 notice, banners), `EditorWhoEditsGroup.swift` (43), `EditorWindowEdge.swift` (edge, editor playhead) |
+| UI | `EditorActivityPopover.swift` (57), `EditorSetupSheet.swift` (56), `EditorStopped.swift` (58 notice, banners), `EditorWhoEditsGroup.swift` (43), `EditorPlayhead.swift` (the editor playhead on scene strips) |
 | Frames | `RunsFixtures.swift`: `43-settings-editor`, `56-editor-setup`, `57-editor-working`, `58-editor-stopped` |
 
 ## Activity

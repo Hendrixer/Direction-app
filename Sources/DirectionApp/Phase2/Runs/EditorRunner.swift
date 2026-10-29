@@ -111,6 +111,7 @@ import DirectionTools
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MainActor.assumeIsolated { l.outputClosed = true; self?.maybeFinish(l) } }
             }
             try p.run()
+            DirectionLog.info("Started \(program.name) for \(run.job.rawValue) (run \(run.id), session \(session ?? "new"), pid \(p.processIdentifier)) in \(store.url.lastPathComponent)", "editor")
             live[run.id] = l
             try store.updateRun(run.id) { r in
                 r.state = .starting; r.reason = nil; r.detail = nil; r.held = false; r.pausedByQuit = false
@@ -151,6 +152,7 @@ import DirectionTools
             }
         case .toolFinished(let id, let isError, let text):
             l.pending.remove(id)
+            if isError { DirectionLog.warning("A tool call in run \(l.runID) failed: \(text.prefix(600))", "editor") }
             if isError, EditorFailure.isSpendCap(text) { l.spendCap = EditorFailure.amount(text).map { "\($0) spent on services this month." } ?? "This month\u{2019}s limit for services is reached." }
             if l.pauseWhenIdle, l.pending.isEmpty { l.pauseWhenIdle = false; l.process.interrupt() }
         case .cost(let c): l.cost = c
@@ -167,6 +169,9 @@ import DirectionTools
         guard let run = try? l.store.run(l.runID) else { live[l.runID] = nil; return }
         var exit = RunStateMachine.Exit(status: status, intent: l.intent, finished: Self.finished(run, store: l.store), waitingForYou: Self.waitingForYou(run, store: l.store), failures: l.failures, spendCap: l.spendCap, lastErrorLine: l.stderrTail.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }))
         if status != 0 { exit.failures += l.stderrTail }
+        if status != 0 || !l.failures.isEmpty {
+            DirectionLog.error("\(l.program.name) exited with status \(status) in run \(l.runID). Failures: \(l.failures.joined(separator: " | ").prefix(1_500)). Last stderr: \(l.stderrTail.suffix(8).joined(separator: " | "))", "editor")
+        }
         let result = l.result.flatMap(EditorResult.parse)
         live[l.runID] = nil
         end(l.runID, store: l.store, outcome: RunStateMachine.outcome(exit), cost: l.cost, tokens: l.tokens, result: result)
@@ -183,6 +188,8 @@ import DirectionTools
             if let result { r.summary = result.summary; r.needsYou = result.needsYou }
             r.pid = nil
         }) else { return }
+        let ended = "Run \(run.id) (\(run.job.rawValue)) ended \(run.state.rawValue)\(run.reason.map { ": \($0.rawValue)" } ?? "")\(run.detail.map { " \u{2014} \($0)" } ?? "")"
+        if run.state == .failed || run.state == .stopped { DirectionLog.error(ended, "editor") } else { DirectionLog.info(ended + (run.summary.map { ". \($0)" } ?? ""), "editor") }
         if run.state == .failed, let reason = run.reason {
             if let id = run.turnoverID { failTurnover(id, reason: reason, run: run, store: store) }
             if reason == .notSignedIn, let p = EditorProgram(rawValue: run.program) { EditorSetup.setSignedIn(p, false) }

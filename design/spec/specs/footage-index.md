@@ -55,7 +55,16 @@ Speed targets are for the sample film (214 takes, 3 h 12 min, about 1,900 shots)
 
 ### The pill while footage is looked at
 
-Looking at footage is Direction's own work, done on the editor's behalf. Until the editor's logging run starts, the pill reads "Looking at footage · 88 of 214" (no shimmer, no window edge: those mean the editor itself is working). Once logging starts, the pill shows the run ("Logging 42 of 214") and the index carries on underneath.
+Looking at footage is Direction's own work, done on the editor's behalf. Until the editor's logging run starts, the pill reads "Looking at footage · 88 of 214" (no shimmer: that means the editor itself is working). Once logging starts, the pill shows the run ("Logging 42 of 214") and the index carries on underneath.
+
+### Listening
+
+Transcription is Direction's work too. When footage arrives, the app transcribes every take with sound, one at a time, with the engine in Settings › Footage, alongside looking at it. The editor's logging run starts only once both are done, so the editor logs from the words. While Direction is still transcribing after the index finishes, the pill reads "Listening · 3 of 12".
+
+- The app owns these jobs, never the editor's helper, so they outlive an editor run. A transcription job whose process exited (an editor run that ended, a crash) is started again by the app, twice at most.
+- A transcript where Whisper got stuck repeating itself (a run of 60 words using fewer than 18 different ones) counts as missing and is made again.
+- A take whose transcription failed (no speech on it, say) doesn't hold up logging. Its transcript section in Dailies says why and offers **Transcribe Again**.
+- Whisper runs through its library rather than its command line, with fallback temperatures, each window started fresh (`condition_on_previous_text` off) and silences skipped where it would make words up (`hallucination_silence_threshold` 2 s). The command line can't ask for fallback temperatures, so a window that began to loop ran on to the end of the take.
 
 ## What the editor gets (tools)
 

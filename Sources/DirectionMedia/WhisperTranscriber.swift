@@ -37,6 +37,31 @@ public enum WhisperTranscriber {
         ])
     }
 
+    /// The Python that runs the `mlx_whisper` script, read from its first line, so Direction can call
+    /// Whisper's own `transcribe` with the settings its command line can't pass.
+    public static func interpreter(for tool: URL) -> URL? {
+        guard let handle = try? FileHandle(forReadingFrom: tool.resolvingSymlinksInPath()), let head = try? handle.read(upToCount: 512) else { return nil }
+        try? handle.close()
+        guard let line = String(decoding: head, as: UTF8.self).split(separator: "\n").first, line.hasPrefix("#!") else { return nil }
+        let path = line.dropFirst(2).trimmingCharacters(in: .whitespaces)
+        // `#!/usr/bin/env python3` names the program rather than a path; the command line serves then.
+        guard !path.contains(" "), FileManager.default.isExecutableFile(atPath: path) else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
+    /// Whisper's command line decodes at one temperature, so when a window starts repeating itself
+    /// nothing catches it, and with each window primed by the last the loop runs on to the end of the
+    /// take. This asks for the library's fallback temperatures (a window that compresses too well is
+    /// decoded again), starts each window fresh, and skips silences where it would make words up.
+    public static let script = """
+    import json, sys, mlx_whisper
+    audio, model, language, out = sys.argv[1:5]
+    result = mlx_whisper.transcribe(audio, path_or_hf_repo=model, language=language, word_timestamps=True,
+        condition_on_previous_text=False, hallucination_silence_threshold=2.0, verbose=None)
+    with open(out, "w") as f:
+        json.dump({"segments": [{"words": [{"word": w["word"], "start": float(w["start"]), "end": float(w["end"])} for w in s.get("words", [])]} for s in result["segments"]]}, f)
+    """
+
     public static func transcribe(asset: MediaAsset, trackID: Int32, language: String, model: String, directory: URL) async throws -> SourceTranscript {
         guard let tool = executable() else { throw DirectionError("whisper_unavailable", "mlx_whisper isn't installed. Install it with `pip install mlx-whisper`, or choose Apple in Settings › Footage.") }
         guard let ffmpeg = ffmpeg() else { throw DirectionError("whisper_unavailable", "Whisper needs ffmpeg to read audio. Install it with `brew install ffmpeg`.") }
@@ -44,16 +69,28 @@ public enum WhisperTranscriber {
         let output = directory.appendingPathComponent("Whisper").appendingPathComponent(newID("whisper"))
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: output) }
+        let words = output.appendingPathComponent("words.json")
 
         // "en-US" → "en"; Whisper names languages by their two-letter code.
         let code = language.split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? "en"
         let process = Process()
-        process.executableURL = tool
-        process.arguments = [audio.path, "--model", model, "--language", code, "--word-timestamps", "True", "--output-format", "json", "--output-dir", output.path, "--output-name", "words", "--verbose", "False"]
+        if let python = interpreter(for: tool) {
+            process.executableURL = python
+            process.arguments = ["-I", "-c", script, audio.path, model, code, words.path]
+        } else {
+            process.executableURL = tool
+            process.arguments = [audio.path, "--model", model, "--language", code, "--word-timestamps", "True", "--condition-on-previous-text", "False", "--hallucination-silence-threshold", "2", "--output-format", "json", "--output-dir", output.path, "--output-name", "words", "--verbose", "False"]
+        }
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = ffmpeg.deletingLastPathComponent().path + ":" + (environment["PATH"] ?? "/usr/bin:/bin")
+        // Once the model is here, don't ask the Hugging Face hub about it again: that can hang offline.
+        if isDownloaded(model) { environment["HF_HUB_OFFLINE"] = "1" }
+        environment["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
         process.environment = environment
-        let errors = Pipe()
+        // Keep reading what it says so a chatty run can't fill the pipe and stall.
+        let errors = Pipe(), tail = ErrorTail()
+        errors.fileHandleForReading.readabilityHandler = { h in tail.append(h.availableData) }
+        defer { errors.fileHandleForReading.readabilityHandler = nil }
         process.standardError = errors
         process.standardOutput = FileHandle.nullDevice
 
@@ -65,13 +102,11 @@ public enum WhisperTranscriber {
         } onCancel: { process.terminate() }
         try Task.checkCancellation()
         guard process.terminationStatus == 0 else {
-            let message = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?.split(separator: "\n").last.map(String.init) ?? ""
-            throw DirectionError("whisper_failed", "Whisper stopped before finishing. \(message)".trimmingCharacters(in: .whitespaces))
+            throw DirectionError("whisper_failed", "Whisper stopped before finishing. \(tail.last)".trimmingCharacters(in: .whitespaces))
         }
-        let data = try Data(contentsOf: output.appendingPathComponent("words.json"))
-        let words = try words(fromWhisperJSON: data, duration: asset.duration)
-        guard !words.isEmpty else { throw DirectionError("no_speech", "No timed speech was recognized on this audio track.") }
-        return .init(assetID: asset.id, audioTrackID: trackID, language: language, provider: "mlx-whisper:" + (model.split(separator: "/").last.map(String.init) ?? model), words: words)
+        let timed = try self.words(fromWhisperJSON: try Data(contentsOf: words), duration: asset.duration)
+        guard !timed.isEmpty else { throw DirectionError("no_speech", "No timed speech was recognized on this audio track.") }
+        return .init(assetID: asset.id, audioTrackID: trackID, language: language, provider: "mlx-whisper:" + (model.split(separator: "/").last.map(String.init) ?? model), words: timed)
     }
 
     private struct Output: Decodable {

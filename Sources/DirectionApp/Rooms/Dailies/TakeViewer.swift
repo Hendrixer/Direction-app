@@ -177,17 +177,41 @@ struct DailiesTakeViewer: View {
         .hairlineBorder(.leading)
     }
 
+    /// No words yet: say why, truthfully, and offer the way out.
+    @ViewBuilder private var emptyTranscript: some View {
+        switch model.isPreview ? .none : model.transcriptStatus(takeID) {
+        case .transcribing:
+            HStack(spacing: 8) { GateSpinner(); Text("Transcribing\u{2026}").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary) }
+        case .waiting:
+            Text("Waiting to transcribe").font(Gate.Font.body).foregroundStyle(Gate.Text.tertiary)
+        case .failed(let why):
+            Text("Couldn\u{2019}t transcribe this take.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary)
+            Text(why).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
+            Button("Try Again") { model.index.transcribeAgain(takeID, film: model) }.buttonStyle(.gate(.normal, .small))
+        case .words, .none:
+            Text("No dialogue").font(Gate.Font.body).foregroundStyle(Gate.Text.tertiary)
+            DailiesWaveform().frame(height: 40)
+            if asset?.audio.isEmpty == false, !model.isPreview {
+                Button("Transcribe") { model.index.transcribeAgain(takeID, film: model) }.buttonStyle(.gate(.ghost, .small))
+            }
+        }
+    }
+
     private var transcript: some View {
         let current = lines.lastIndex { $0.start <= position + 0.001 }
         let flub = take.flatMap(model.dailiesFlub)
         return ScrollViewReader { scroll in
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("Transcript")
-                    if lines.isEmpty {
-                        Text("No dialogue").font(Gate.Font.body).foregroundStyle(Gate.Text.tertiary)
-                        DailiesWaveform().frame(height: 40)
+                    HStack {
+                        SectionLabel("Transcript")
+                        Spacer()
+                        if !lines.isEmpty, !model.isPreview, model.transcriptStatus(takeID) != .transcribing {
+                            Button("Transcribe Again") { model.index.transcribeAgain(takeID, film: model) }.buttonStyle(.gate(.ghost, .small))
+                                .help("Make this take\u{2019}s words again with the engine in Settings \u{203A} Footage")
+                        }
                     }
+                    if lines.isEmpty { emptyTranscript }
                     ForEach(lines) { line in
                         let state = current.map { line.id < $0 ? -1 : line.id == $0 ? 0 : 1 } ?? 1
                         Button { player.seek(line.start) } label: {

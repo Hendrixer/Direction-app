@@ -254,6 +254,16 @@ public struct SourceTranscript: Codable, Hashable, Sendable {
     /// The most recently chosen track is used for this source's text edits.
     public var selectedAt: Double?
     public init(assetID: String, audioTrackID: Int32, language: String = "en-US", provider: String = "imported", words: [TranscriptWord]) { self.assetID = assetID; self.audioTrackID = audioTrackID; self.language = language; self.provider = provider; self.words = words }
+
+    /// Whisper stuck in a loop ("I'm going to go into too much detail on this, but I'm going…" to the
+    /// end of the take): somewhere a run of 60 words uses fewer than 18 different ones. Real speech,
+    /// retakes included, stays above 35.
+    public var looksLooped: Bool {
+        let w = words.map { $0.text.lowercased().filter { $0.isLetter || $0.isNumber || $0 == "'" } }
+        let span = 60
+        guard w.count >= span else { return false }
+        return stride(from: 0, through: w.count - span, by: 10).contains { Set(w[$0..<$0 + span]).count < 18 }
+    }
 }
 
 public struct TimelineWord: Codable, Hashable, Sendable, Identifiable {
@@ -361,6 +371,9 @@ public struct JobRecord: Codable, Sendable, Identifiable {
     public var error: String?
     public var createdAt: Double
     public var updatedAt: Double
-    public init(id: String, kind: String, revision: Int, ownerPID: Int32, status: String, phase: String, progress: Double?, result: JSONValue?, error: String?, createdAt: Double, updatedAt: Double) { self.id = id; self.kind = kind; self.revision = revision; self.ownerPID = ownerPID; self.status = status; self.phase = phase; self.progress = progress; self.result = result; self.error = error; self.createdAt = createdAt; self.updatedAt = updatedAt }
+    /// The take a job works on, when it works on one (transcription), so a job that died can be found
+    /// and started again.
+    public var assetID: String?
+    public init(id: String, kind: String, revision: Int, ownerPID: Int32, status: String, phase: String, progress: Double?, result: JSONValue?, error: String?, createdAt: Double, updatedAt: Double, assetID: String? = nil) { self.id = id; self.kind = kind; self.revision = revision; self.ownerPID = ownerPID; self.status = status; self.phase = phase; self.progress = progress; self.result = result; self.error = error; self.createdAt = createdAt; self.updatedAt = updatedAt; self.assetID = assetID }
     public var isTerminal: Bool { ["completed", "failed", "cancelled", "interrupted"].contains(status) }
 }

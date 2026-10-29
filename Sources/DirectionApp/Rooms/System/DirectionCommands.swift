@@ -255,5 +255,11 @@ private struct HelpMenuItems: View {
         Button("How Direction Works") { CommandMenuLaunch.pendingFilter = .help; film?.showCommandMenu = true }.disabled(film == nil)
         Divider()
         Button("Connect an Editor\u{2026}") { EditorConnection.presentAlert() }
+        Divider()
+        // What went wrong, kept on this Mac (DirectionLog): open it in Console.
+        Button("Show Direction Log") {
+            if !FileManager.default.fileExists(atPath: DirectionLog.file.path) { DirectionLog.info("Log opened") }
+            NSWorkspace.shared.open(DirectionLog.file)
+        }
     }
 }

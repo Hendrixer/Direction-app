@@ -39,6 +39,7 @@ struct DailiesSceneView: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 if let note = editorNote { DailiesSayLine(text: note, color: Gate.Text.secondary).frame(maxWidth: 780, alignment: .leading) }
+                if model.circledCount == 0, !allTakes.isEmpty { DailiesHowTo() }
                 if allTakes.isEmpty {
                     Text("No takes in this scene yet. Drag takes here from Unsorted.").font(Gate.Font.body).foregroundStyle(Gate.Text.tertiary)
                         .frame(maxWidth: .infinity).padding(.top, 120)
@@ -53,6 +54,7 @@ struct DailiesSceneView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.automatic)
+        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: order.filter(selection.contains)) { if let id = selection.first { model.openTakeID = id } } }
         .dropDestination(for: String.self) { items, _ in dropHere(items) }
         .modifier(DailiesGridKeys(model: model, order: order, columns: 4, selection: $selection, anchor: $anchor, showMove: $showMove))
         .focused($focused)
@@ -138,6 +140,7 @@ struct DailiesTakeCard: View {
     @Environment(\.dailiesPreview) private var preview
     @State private var scrub: Double?
     @State private var width: CGFloat = 276
+    @State private var tip = false
 
     var body: some View {
         let hovered = scrub != nil || preview.hoverTakeID == take.assetID
@@ -146,10 +149,18 @@ struct DailiesTakeCard: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = max(1, $0) }
                 .onContinuousHover { phase in
                     // Moving across the picture scrubs the take.
-                    switch phase { case .active(let p): scrub = max(0, min(1, p.x / width)); case .ended: scrub = nil }
+                    switch phase { case .active(let p): scrub = max(0, min(1, p.x / width)); case .ended: scrub = nil; tip = false }
                 }
-                .help(take.unusable ? "Not usable (X)" : "\(take.circled ? "Uncircle" : "Circle") \(model.dailiesShortLabel(take)) (C)")
-                .overlay(alignment: .topLeading) { if preview.hoverTakeID == take.assetID { DailiesTip(text: "Circle \(model.dailiesShortLabel(take))", key: "C").offset(x: 113, y: 84) } }
+                // "Circle T3  C" after 600 ms of hovering (frame 07 › Hover).
+                .task(id: scrub == nil) {
+                    guard scrub != nil, !take.unusable else { return }
+                    try? await Task.sleep(for: .milliseconds(600))
+                    if !Task.isCancelled, scrub != nil { withAnimation(gateAnimation(Gate.Motion.snap)) { tip = true } }
+                }
+                .overlay(alignment: .topLeading) {
+                    if preview.hoverTakeID == take.assetID { DailiesTip(text: "Circle \(model.dailiesShortLabel(take))", key: "C").offset(x: 113, y: 84) }
+                    else if tip { DailiesTip(text: "\(take.circled ? "Uncircle" : "Circle") \(model.dailiesShortLabel(take))", key: "C").padding(8).transition(.opacity) }
+                }
                 .draggable(payload) { DailiesTakeThumb(asset: model.asset(take.assetID), art: preview.art[take.assetID] ?? model.dailiesArt(take.assetID), preview: model.isPreview).frame(width: 168, height: 94.5).clipShape(RoundedRectangle(cornerRadius: 7)).rotationEffect(.degrees(-3)).opacity(0.92) }
             Text(model.dailiesCaption(take)).font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary).lineSpacing(1.8).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             status.font(.system(size: 11.5)).lineLimit(1).padding(.top, -4)
@@ -358,6 +369,60 @@ struct DailiesMenuRowStyle: ButtonStyle {
 }
 
 /// A help tag as the frames draw it, for snapshots of hover states.
+/// The first time through, before anything is circled: how circling works, in one line.
+struct DailiesHowTo: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("Click a take to select it, then press")
+            Key("C"); Text("to circle it. Double-click or press"); Key("\u{21A9}"); Text("to watch it.")
+        }
+        .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+        .accessibilityElement(children: .combine)
+    }
+    private struct Key: View {
+        var text: String
+        init(_ text: String) { self.text = text }
+        var body: some View {
+            Text(text).font(.system(size: 10.5, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.secondary)
+                .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 17)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Gate.Surface.panel).overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Gate.Line.strong, lineWidth: 1)))
+        }
+    }
+}
+
+/// With takes selected: what you can do with them, and the keys for it.
+struct DailiesSelectionBar: View {
+    var model: FilmModel
+    var ids: [String]
+    var onOpen: () -> Void
+    var body: some View {
+        let takes = ids.compactMap { model.dailies.takes[$0] }
+        if !takes.isEmpty {
+            let circled = takes.allSatisfy(\.circled), unusable = takes.allSatisfy(\.unusable)
+            HStack(spacing: 4) {
+                Text(takes.count == 1 ? model.dailiesLabel(takes[0]) : "\(takes.count) takes").font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Gate.Text.secondary).padding(.horizontal, 8)
+                item(circled ? "Uncircle" : "Circle", key: "C", color: Gate.Voice.director) { model.toggleCircles(ids) }.disabled(unusable)
+                if takes.count == 1 { item("Watch", key: "\u{21A9}") { onOpen() } }
+                item(unusable ? "Usable Again" : "Not Usable", key: "X") { model.toggleUnusable(ids) }
+            }
+            .padding(5).gateGlass(12).fixedSize()
+            .frame(maxWidth: .infinity).padding(.bottom, 16)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
+    }
+    private func item(_ title: String, key: String, color: Color = Gate.Text.primary, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Text(title).foregroundStyle(color)
+                Text(key).font(.system(size: 11, design: .monospaced)).foregroundStyle(Gate.Text.disabled)
+            }
+            .font(.system(size: 12.5, weight: .medium)).padding(.horizontal, 10).frame(height: 28).contentShape(Rectangle())
+        }
+        .buttonStyle(.gate(.ghost))
+    }
+}
+
 struct DailiesTip: View {
     var text: String
     var key: String? = nil
@@ -456,6 +521,7 @@ struct DailiesBinGrid<Action: View, Footer: View>: View {
             .padding(.horizontal, 28).padding(.top, 24).padding(.bottom, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: takes.map(\.assetID).filter(selection.contains)) { if let id = selection.first { model.openTakeID = id } } }
         .modifier(DailiesGridKeys(model: model, order: takes.map(\.assetID), columns: 5, selection: $selection, anchor: $anchor, showMove: $showMove))
         .focused($focused)
         .onAppear { focused = true }

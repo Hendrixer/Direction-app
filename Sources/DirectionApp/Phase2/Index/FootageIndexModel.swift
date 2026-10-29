@@ -11,6 +11,8 @@ import DirectionMedia
     var states: [String: IndexState] = [:]
     /// The live index job, here or in the MCP server.
     var job: JobRecord?
+    /// Takes with sound that still need their words, while Direction transcribes them: "Listening · 1 of 2".
+    var listening: IndexProgress?
 
     // MARK: Search (frame 60)
 
@@ -37,6 +39,8 @@ import DirectionMedia
     @ObservationIgnored private var lastAutoStart = Date.distantPast
     @ObservationIgnored private var lastGrow = Date.distantPast
     @ObservationIgnored private weak var film: FilmModel?
+    @ObservationIgnored private var startingTranscription = false
+    @ObservationIgnored private var transcribeAttempts: [String: Int] = [:]
 
     /// Called from `FilmModel.refresh()` whenever the store changes.
     func refresh(_ film: FilmModel) {
@@ -56,6 +60,7 @@ import DirectionMedia
             looking = job != nil && !assets.isEmpty ? IndexProgress(done: done, total: assets.count) : nil
             shotCache = shotCache.filter { takes[$0.key]?.updatedAt == $0.value.stamp }
             autoStart(film, assets: assets)
+            listen(film, assets: assets)
             // "Results will grow": search again as takes are looked at, every few seconds at most.
             if searching, !searchedQuery.isEmpty, job != nil, Date().timeIntervalSince(lastGrow) > 3 { lastGrow = Date(); search(film, now: true) }
         } catch { film.error = error.localizedDescription }
@@ -68,6 +73,43 @@ import DirectionMedia
         guard assets.contains(where: { states[$0.id] == .waiting }) else { return }
         lastAutoStart = Date()
         lookAtFootage(film)
+    }
+
+    /// Every take with sound gets its words before the editor logs it (footage-index.md › Listening).
+    /// The app transcribes them itself, one at a time, so the job outlives an editor run. A job whose
+    /// process exited, or a transcript stuck in a loop, is started again, twice at most; one that failed
+    /// (no speech, say) is left for Transcribe Takes in Script.
+    private func listen(_ film: FilmModel, assets: [MediaAsset]) {
+        let speaking = assets.filter { !$0.audio.isEmpty }
+        let heard = Set(film.transcripts.filter { !$0.words.isEmpty && !$0.looksLooped }.map(\.assetID))
+        let jobs = film.jobs.filter { $0.kind == "transcription" }
+        func settled(_ a: MediaAsset) -> Bool {
+            if heard.contains(a.id) || transcribeAttempts[a.id, default: 0] >= 2 { return true }
+            guard let last = jobs.first(where: { $0.assetID == a.id }) else { return false }
+            return last.status == "failed" || last.status == "cancelled"
+        }
+        let waiting = speaking.filter { !settled($0) }
+        listening = waiting.isEmpty || film.isPreview ? nil : IndexProgress(done: speaking.count - waiting.count, total: speaking.count)
+        guard !film.isPreview, !startingTranscription, !jobs.contains(where: { !$0.isTerminal }), let next = waiting.first, let runtime = film.runtime else { return }
+        startingTranscription = true
+        transcribeAttempts[next.id, default: 0] += 1
+        Task {
+            do { _ = try await runtime.invoke("direction_transcribe", arguments: .object(["assetID": .string(next.id)])) }
+            catch { transcribeAttempts[next.id] = 2; DirectionLog.error("Couldn\u{2019}t transcribe \(next.name): \(error.localizedDescription)") }
+            startingTranscription = false
+            film.refresh(force: true)
+        }
+    }
+
+    /// Transcribe Again on a take: its words are made fresh with the engine in Settings.
+    func transcribeAgain(_ assetID: String, film: FilmModel) {
+        guard let runtime = film.runtime else { return }
+        transcribeAttempts[assetID] = 0
+        Task {
+            do { _ = try await runtime.invoke("direction_transcribe", arguments: .object(["assetID": .string(assetID)])) }
+            catch { film.error = error.localizedDescription }
+            film.refresh(force: true)
+        }
     }
 
     /// Film › Look at Footage, or footage arriving.
@@ -139,3 +181,19 @@ import DirectionMedia
 }
 
 struct IndexProgress: Equatable { var done: Int; var total: Int }
+
+/// Where a take's words are, for its transcript in Dailies.
+enum TakeTranscriptStatus: Equatable { case words, transcribing, waiting, failed(String), none }
+
+extension FilmModel {
+    func transcriptStatus(_ assetID: String) -> TakeTranscriptStatus {
+        if transcripts.contains(where: { $0.assetID == assetID && !$0.words.isEmpty && !$0.looksLooped }) { return .words }
+        let jobs = self.jobs.filter { $0.kind == "transcription" }
+        if let last = jobs.first(where: { $0.assetID == assetID }) {
+            if !last.isTerminal { return .transcribing }
+            if last.status == "failed" { return .failed(last.error ?? "Transcription stopped.") }
+        }
+        guard asset(assetID)?.audio.isEmpty == false else { return .none }
+        return index.listening != nil ? .waiting : .none
+    }
+}

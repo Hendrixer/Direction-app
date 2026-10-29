@@ -56,6 +56,7 @@ struct EditorPopover: View {
         case .offline: ("Offline", .plain)
         case .notSetUp: ("Not set up", .plain)
         case .looking: ("Looking at footage", .agent)
+        case .listening: ("Listening", .agent)
         case .readyToCut(let s): (s, .plain)
         }
     }
@@ -89,6 +90,7 @@ struct EditorPopover: View {
         case .offline: return "You\u{2019}re offline. An editor that works online picks up when you\u{2019}re back."
         case .notSetUp: return "Choose who edits, and Direction starts the editor whenever there\u{2019}s work."
         case .looking(let done, let total): return "Looking at your footage before logging it: \(done) of \(total) takes so far."
+        case .listening(let done, let total): return "Transcribing what\u{2019}s said before the editor logs it: \(done) of \(total) takes so far."
         case .readyToCut: return "\(model.runs.held.map { Self.work($0.job) } ?? "Your notes are turned over"). Start the editor when you\u{2019}re ready."
         }
     }
