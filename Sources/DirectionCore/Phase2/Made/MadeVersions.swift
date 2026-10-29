@@ -35,9 +35,13 @@ public struct MadeVersion: Codable, Hashable, Sendable, Identifiable {
     }
 
     /// "Google: Nano Banana 2 (Gemini 3.1 Flash Image)" → "Nano Banana 2"; "Lyria 3 Clip Preview" → "Lyria 3 Clip".
+    /// A name that says nothing on its own keeps its maker: "AssemblyAI: TTS 1" → "AssemblyAI TTS 1".
     public static func displayName(_ listed: String, id: String) -> String {
         var name = listed.isEmpty ? id : listed
-        if let colon = name.range(of: ": ") { name = String(name[colon.upperBound...]) }
+        if let colon = name.range(of: ": ") {
+            let maker = name[..<colon.lowerBound], rest = String(name[colon.upperBound...])
+            name = rest.hasPrefix("TTS") ? "\(maker) \(rest)" : rest
+        }
         if let paren = name.range(of: " (") { name = String(name[..<paren.lowerBound]) }
         for suffix in [" Preview", " (free)"] where name.hasSuffix(suffix) { name = String(name.dropLast(suffix.count)) }
         return name

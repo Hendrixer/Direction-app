@@ -78,6 +78,7 @@ struct DailiesSidebar: View {
                     SectionLabel("Not in a scene").frame(height: 11).padding(.horizontal, 9).padding(.top, 14).padding(.bottom, 6)
                     binRow(DailiesBin.unsorted, icon: "folder", title: "Unsorted", count: model.dailiesUnsorted.count)
                     binRow(DailiesBin.unusable, icon: "trash", title: "Not usable", count: model.dailiesUnusable.count)
+                    DailiesMadeGroup(model: model)
                 }
                 .padding(.horizontal, 8).padding(.vertical, 4)
             }

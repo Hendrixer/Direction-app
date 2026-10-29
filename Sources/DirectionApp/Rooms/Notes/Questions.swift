@@ -81,19 +81,20 @@ struct QuestionCard: View {
             .font(Gate.Font.small).lineHeight(12, 1.45)
             Text(question.text).font(.system(size: 13.5)).foregroundStyle(Gate.Text.primary).lineHeight(13.5, 1.5)
                 .fixedSize(horizontal: false, vertical: true)
+            if let spend = question.spend { SpendLine(spend: spend) }
             if !question.noteIDs.isEmpty {
                 HStack(spacing: 5) {
                     Chip("Holds", mono: false)
                     ForEach(question.noteIDs, id: \.self) { id in Chip(model.noteNumber(id), style: .director) }
-                    Text("Everything else keeps cutting.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
+                    // Only true while the editor cuts; a question during the read-back holds everything.
+                    if model.notesTurnover?.state != .readBack { Text("Everything else keeps cutting.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
                 }
             }
             VStack(spacing: 8) {
                 ForEach(question.choices) { c in
-                    QuestionChoiceRow(model: model, choice: c, on: choice == c.id, fallbackScene: heldScene) {
-                        ui.choices[question.id] = c.id
-                        ui.answerText[question.id] = nil
-                    }
+                    let pick = { ui.choices[question.id] = c.id; ui.answerText[question.id] = nil }
+                    if question.spend != nil { SpendChoiceRow(model: model, question: question, choice: c, on: choice == c.id, pick: pick) }
+                    else { QuestionChoiceRow(model: model, choice: c, on: choice == c.id, fallbackScene: heldScene, pick: pick) }
                 }
             }
             .accessibilityElement(children: .contain)

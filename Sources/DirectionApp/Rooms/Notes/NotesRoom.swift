@@ -200,6 +200,8 @@ extension FilmModel {
             case .waiting:
                 return PrimaryAction(title: "Start cutting", enabled: false) {}
             case .readBack where !t.readBackApproved:
+                // A question asked during the read-back (a spend question, frame 62) has the steel Answer.
+                if notesTab == .questions && openQuestions.contains(where: { $0.kind != "cant" }) { return nil }
                 return PrimaryAction(title: "Start cutting", key: "\u{2318}\u{21A9}") { self.startCutting() }
             case .failed:
                 return PrimaryAction(title: "Retry", icon: "arrow.uturn.backward") { self.copyEditorRequest() }

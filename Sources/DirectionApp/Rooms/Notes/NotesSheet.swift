@@ -50,25 +50,33 @@ struct NotesSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// A question asked during the read-back (a spend question, frame 62) keeps the read-back's head and foot.
+    private var waitingReadBack: Turnover? { model.notesTurnover.flatMap { $0.state == .readBack && !$0.readBackApproved ? $0 : nil } }
+
     private var title: String {
         switch mode {
         case .readBack, .waiting: "Read-back for \(model.nextCutName)"
+        case .questions where waitingReadBack != nil: "Read-back for \(model.nextCutName)"
         default: "Notes on \(model.notesCutName)"
         }
     }
 
     private var status: String {
         switch mode {
-        case .readBack(let t):
-            let when = model.notesUI.now.timeIntervalSince1970 - t.createdAt < 90 ? "just now" : "at \(model.clockTime(t.createdAt))"
-            let count = t.noteIDs.count == 1 ? "1 note" : "\(t.noteIDs.count) notes"
-            return model.isCutting(t) ? "\(count) turned over \(when) · cutting now" : "\(count) turned over \(when) · waiting for your OK"
+        case .questions where waitingReadBack != nil: return readBackStatus(waitingReadBack!)
+        case .readBack(let t): return readBackStatus(t)
         case .waiting(let t):
             let count = t.noteIDs.count == 1 ? "1 note" : "\(t.noteIDs.count) notes"
             return "\(count) turned over at \(model.clockTime(t.createdAt)) · waiting for the editor"
         default:
             return model.sheetStatus
         }
+    }
+
+    private func readBackStatus(_ t: Turnover) -> String {
+        let when = model.notesUI.now.timeIntervalSince1970 - t.createdAt < 90 ? "just now" : "at \(model.clockTime(t.createdAt))"
+        let count = t.noteIDs.count == 1 ? "1 note" : "\(t.noteIDs.count) notes"
+        return model.isCutting(t) ? "\(count) turned over \(when) · cutting now" : "\(count) turned over \(when) · waiting for your OK"
     }
 
     @ViewBuilder private var menuItems: some View {
@@ -114,7 +122,8 @@ struct NotesSheet: View {
         case .notes:
             NotesComposer(model: model, onLeave: onLeave)
         case .questions:
-            if let t = model.notesTurnover, model.isCutting(t) { CuttingStatusFoot(model: model, turnover: t) }
+            if let t = waitingReadBack { ReadBackFoot(model: model, turnover: t) }
+            else if let t = model.notesTurnover, model.isCutting(t) { CuttingStatusFoot(model: model, turnover: t) }
         case .outside:
             OutsideFoot(model: model)
         case .readBack(let t):

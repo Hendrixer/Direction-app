@@ -52,8 +52,12 @@ extension SharedSettings {
         let v = (defaults.object(forKey: SpendKey.stopAt) as? Double) ?? 50
         return v > 0 ? v : nil
     }
-    /// The version Settings › Services chose for a kind; nil follows the default.
-    public static func madeVersion(_ kind: MadeKind) -> String? { defaults.string(forKey: SpendKey.version(kind)).flatMap { $0.isEmpty ? nil : $0 } }
+    /// The version Settings › Services chose for a kind; nil follows the default. Sound effects use the
+    /// music version and a shot from one you have uses the new-shot version (made-media.md › Services).
+    public static func madeVersion(_ kind: MadeKind) -> String? {
+        let shown: MadeKind = kind == .soundEffect ? .music : kind == .changedShot ? .shot : kind
+        return defaults.string(forKey: SpendKey.version(shown)).flatMap { $0.isEmpty ? nil : $0 }
+    }
 }
 
 public struct SpendLimits: Sendable, Equatable {
