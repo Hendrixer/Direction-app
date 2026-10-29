@@ -128,16 +128,40 @@ enum QuitGuard {
         (film?.jobs ?? []).filter { $0.kind == "export" && !$0.isTerminal && $0.ownerPID == getpid() }
     }
 
-    /// "Quit and stop delivering?" Call from applicationShouldTerminate(_:).
+    /// "Quit and stop delivering?" and "The editor is cutting Cut 4. Quit and pause it?"
+    /// Call from applicationShouldTerminate(_:).
     static func shouldTerminate(_ app: AppModel?) -> NSApplication.TerminateReply {
-        guard !runningDeliveries(app?.film).isEmpty else { return .terminateNow }
+        if !runningDeliveries(app?.film).isEmpty {
+            let alert = NSAlert()
+            alert.messageText = "Quit and stop delivering?"
+            alert.informativeText = "\(app?.film?.filmName ?? "The film") is still being delivered. If you quit now, the files won\u{2019}t be finished. You can deliver again later."
+            alert.addButton(withTitle: "Quit")
+            alert.addButton(withTitle: "Keep Delivering")
+            alert.buttons.first?.hasDestructiveAction = true
+            guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        }
+        let runner = EditorRunner.shared
+        guard runner.liveCount > 0 else { return .terminateNow }
         let alert = NSAlert()
-        alert.messageText = "Quit and stop delivering?"
-        alert.informativeText = "\(app?.film?.filmName ?? "The film") is still being delivered. If you quit now, the files won\u{2019}t be finished. You can deliver again later."
+        alert.messageText = "\(editorDoing(app?.film)) Quit and pause it?"
+        alert.informativeText = "It keeps its place. When you open Direction again, you can resume it."
         alert.addButton(withTitle: "Quit")
-        alert.addButton(withTitle: "Keep Delivering")
-        alert.buttons.first?.hasDestructiveAction = true
-        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        // Quit pauses each run and keeps its session; the next launch offers Resume.
+        runner.pauseAllForQuit { NSApp.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
+    }
+
+    /// "The editor is cutting Cut 4."
+    private static func editorDoing(_ film: FilmModel?) -> String {
+        guard let film, let run = film.runs.active else { return "The editor is working." }
+        switch run.job {
+        case .turnover: return "The editor is cutting \(film.nextCutName)."
+        case .assemble: return "The editor is building the assembly."
+        case .logFootage: return "The editor is logging your footage."
+        case .finish: return "The editor is finishing \(film.filmName)."
+        }
     }
 }
 

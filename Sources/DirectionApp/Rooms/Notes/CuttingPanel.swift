@@ -27,7 +27,9 @@ struct CuttingPanel: View {
             head
             ScrollView {
                 VStack(spacing: 0) {
-                    if failed { ErrorNotice(model: model, turnover: turnover, openSettings: { openSettings() }) }
+                    // A run Direction started that stopped shows why, and what to do (frame 58).
+                    if failed, let run = model.runs.failed, run.turnoverID == turnover.id { EditorStoppedNotice(model: model, run: run) }
+                    else if failed { ErrorNotice(model: model, turnover: turnover, openSettings: { openSettings() }) }
                     ForEach(blockers) { q in
                         if q.kind == "cant" { CantNotice(model: model, question: q) }
                         else { QuestionCard(model: model, question: q, primary: false, steel: false).padding(.horizontal, 16).padding(.vertical, 12) }
@@ -48,7 +50,7 @@ struct CuttingPanel: View {
         .onAppear(perform: track)
         .onChange(of: turnover) { _, _ in track() }
         .background {
-            if failed { Button("Retry") { model.copyEditorRequest() }.keyboardShortcut("r", modifiers: .command).opacity(0).allowsHitTesting(false).accessibilityHidden(true) }
+            if failed { Button("Retry") { model.retryEditor() }.keyboardShortcut("r", modifiers: .command).opacity(0).allowsHitTesting(false).accessibilityHidden(true) }
         }
     }
 
@@ -62,8 +64,10 @@ struct CuttingPanel: View {
                 MoreMenu(label: "More") {
                     Button("Show Read-back") { ui.cuttingSide = .readBack }.disabled(turnover.readBack.isEmpty)
                     Button("Write Notes for the Next Turnover") { ui.cuttingSide = .notes }
-                    Divider()
-                    Button("Copy Request for Your Editor") { model.copyEditorRequest() }
+                    if !model.runs.startsEditor {
+                        Divider()
+                        Button("Copy Request for Your Editor") { model.copyEditorRequest() }
+                    }
                 }
             }
             .frame(height: Gate.Size.controlSmall)
@@ -98,7 +102,8 @@ struct CuttingPanel: View {
         HStack(spacing: 8) {
             if failed {
                 let stopped = turnover.noteIDs.first { turnover.progress[$0] == .stopped }
-                Text(stopped.map { "Retry picks up at note \(model.noteNumber($0))." } ?? "Retry picks up where it stopped.")
+                let again = model.runs.startsEditor ? "Try again" : "Retry"
+                Text(stopped.map { "\(again) picks up at note \(model.noteNumber($0))." } ?? "\(again) picks up where it stopped.")
                 Spacer(minLength: 0)
                 Text("\u{2318}R").font(.system(size: 12, design: .monospaced))
             } else {

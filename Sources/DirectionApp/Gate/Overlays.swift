@@ -132,11 +132,17 @@ struct EmptyStateView<Actions: View>: View {
 
 enum EditorPillState: Equatable {
     case ready, waiting, readingBack(String), readBackReady, working(String, Double?), asks(Int), cant(Int), stopped, offline, paused, assembling(String, Double?), cutReady(String), needsFootage
+    /// Direction starts the editor but no program is chosen or found (frame 56).
+    case notSetUp
+    /// The index is looking at footage before logging: "Looking at footage · 88 of 214".
+    case looking(Int, Int)
+    /// Start work is Ask me first: work waits for Start in the popover.
+    case readyToCut(String)
     var text: String {
         switch self {
         case .ready: "Ready"
         case .waiting: "Waiting for the editor"
-        case .readingBack(let s), .cutReady(let s): s
+        case .readingBack(let s), .cutReady(let s), .readyToCut(let s): s
         case .readBackReady: "Read-back ready"
         case .working(let s, _), .assembling(let s, _): s
         case .asks(let n): n == 1 ? "1 question" : "\(n) questions"
@@ -145,24 +151,34 @@ enum EditorPillState: Equatable {
         case .needsFootage: "Waiting for footage"
         case .offline: "Offline"
         case .paused: "Paused"
+        case .notSetUp: "Editor not set up"
+        case .looking(let done, let total): "Looking at footage \u{00B7} \(done) of \(total)"
         }
+    }
+    /// The editor is doing something: shimmer, window edge.
+    var isWorking: Bool {
+        switch self { case .working, .assembling, .readingBack, .looking: true; default: false }
     }
 }
 
 /// Always in the titlebar, always truthful. Click opens the editor popover.
 struct EditorPill: View {
     var state: EditorPillState
+    /// The popover is open: hover fill, prism edge kept (frame 57).
+    var open = false
     var body: some View {
         HStack(spacing: 8) {
             switch state {
             case .offline: Image(systemName: "wifi.slash").font(.system(size: 10, weight: .semibold))
+            case .paused: Image(systemName: "pause.fill").font(.system(size: 9, weight: .semibold))
             case .stopped, .cant, .needsFootage: GemMark(size: 7, color: Gate.State.alert)
-            case .ready, .paused, .waiting: GemMark(size: 7, color: Gate.Text.disabled)
+            case .ready, .waiting, .notSetUp, .readyToCut: GemMark(size: 7, color: Gate.Text.disabled)
             default: GemMark(size: 7)
             }
             Text(state.text)
             if case .working(_, let p) = state { meter(p) }
             if case .assembling(_, let p) = state { meter(p) }
+            if case .looking(let done, let total) = state { meter(Double(done) / Double(max(1, total))) }
         }
         .font(.system(size: 12, weight: .medium)).foregroundStyle(foreground).lineLimit(1).fixedSize()
         .padding(.leading, 10).padding(.trailing, 11).frame(height: Gate.Size.pill)
@@ -176,22 +192,25 @@ struct EditorPill: View {
     private var foreground: Color {
         switch state {
         case .asks: Gate.Voice.agent
-        case .cutReady, .readBackReady: Gate.Text.primary
+        case .cutReady, .readBackReady, .readyToCut: Gate.Text.primary
         case .cant, .stopped, .needsFootage: Gate.State.alert
-        case .working, .assembling, .readingBack: Gate.Text.primary
+        case .working, .assembling, .readingBack, .looking: Gate.Text.primary
         case .offline, .paused: Gate.Text.tertiary
         default: Gate.Text.secondary
         }
     }
     @ViewBuilder private var background: some View {
         switch state {
-        case .working, .assembling, .readingBack:
-            Capsule().fill(Gate.Surface.panel).overlay(ShimmerBorder())
+        case .working, .assembling, .readingBack, .looking:
+            Capsule().fill(open ? Gate.Surface.hover : Gate.Surface.panel).overlay(ShimmerBorder())
         case .asks, .readBackReady:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Voice.agent.opacity(0.45), lineWidth: 1))
-        case .cutReady:
+        case .cutReady, .readyToCut:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Line.strong, lineWidth: 1))
-        case .cant, .stopped, .needsFootage:
+        // A stopped editor is a hard blocker: alert text on the alert wash, no shimmer (frame 58).
+        case .stopped:
+            Capsule().fill(Gate.State.alertWash).overlay(Capsule().strokeBorder(Gate.State.alert.opacity(0.45), lineWidth: 1))
+        case .cant, .needsFootage:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.State.alert.opacity(0.45), lineWidth: 1))
         default:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Line.subtle, lineWidth: 1))
@@ -199,10 +218,17 @@ struct EditorPill: View {
     }
 }
 
-/// The prism border that slides while the editor works (2.4 s loop). Static under Reduce Motion.
+/// Nothing moves during playback except the playhead and time: shimmers hold still while a cut plays.
+struct MotionHeldKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var motionHeld: Bool { get { self[MotionHeldKey.self] } set { self[MotionHeldKey.self] = newValue } }
+}
+
+/// The prism border that slides while the editor works (2.4 s loop). Static under Reduce Motion and during playback.
 struct ShimmerBorder: View {
+    @Environment(\.motionHeld) private var held
     var body: some View {
-        if SettingsKey.reducesMotion {
+        if SettingsKey.reducesMotion || held {
             Capsule().strokeBorder(Gate.Voice.prism, lineWidth: 1)
         } else {
             TimelineView(.animation(minimumInterval: 1 / 30)) { context in

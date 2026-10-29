@@ -241,6 +241,8 @@ struct WaitingBody: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                // Direction starts the editor itself: nothing to copy (specs/editor.md).
+                if model.runs.startsEditor { EditorWaitingNotice(model: model, turnover: turnover) } else {
                 Notice(tone: .plain, inset: false) {
                     HStack(spacing: 8) {
                         Image(systemName: "clock").font(.system(size: 11, weight: .medium)).foregroundStyle(Gate.Text.tertiary)
@@ -253,6 +255,7 @@ struct WaitingBody: View {
                         Button("Take notes back") { model.takeNotesBack(); model.clearComposer() }.buttonStyle(.gate(.ghost))
                             .help("Return these notes to written so you can change them")
                     }
+                }
                 }
                 SectionLabel("Turned over")
                 CompactNoteList(model: model, notes: model.turnoverNotes(turnover))

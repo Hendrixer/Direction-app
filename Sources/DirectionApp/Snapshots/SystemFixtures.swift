@@ -9,7 +9,6 @@ enum SystemFixtures {
             "39-share": { let m = SampleFilm.make(); m.sheet = .share; return .film(m) },
             "41-agent-popover": { popover() },
             "42-settings-general": { settings(.general, height: 600) },
-            "43-settings-editor": { settings(.editor, height: 853) },
             "54-settings-footage": { settings(.footage, height: 724) },
             "44-settings-cutting": { settings(.cutting, height: 650) },
             "45-settings-notifications": { settings(.notifications, height: 530) },

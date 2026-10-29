@@ -15,6 +15,8 @@ enum Room: String, CaseIterable, Identifiable {
 }
 
 enum ActiveSheet: String, Identifiable { case turnover, lockPicture, deliver, share, relink, brief
+    /// Who's editing? (frame 56)
+    case editorSetup
     var id: String { rawValue }
 }
 
@@ -136,6 +138,8 @@ final class FilmModel {
 
     init(preview: Bool = false) {
         isPreview = preview
+        // Previews show the editor as your own session unless a fixture says Direction starts it.
+        if preview { runs.previewStarts = false }
         guard !preview else { return }
         player.automaticallyWaitsToMinimizeStalling = false
         let output = UserDefaults.standard.string(forKey: "audioOutput") ?? ""
@@ -328,13 +332,22 @@ final class FilmModel {
 
     var pill: EditorPillState {
         if offline { return .offline }
-        if directing.editorPaused { return .paused }
+        if directing.editorPaused || runs.isPaused { return .paused }
         // The editor can't cut scenes whose takes are missing; say so until they're found.
         if missingTakes > 0 { return .needsFootage }
+        // Direction starts the editor: a stopped run, no program yet, or work held for your Start.
+        if runs.startsEditor {
+            if runs.failed != nil { return .stopped }
+            if !runs.ready { return .notSetUp }
+            if let h = runs.held { return .readyToCut(h.job == .logFootage ? "Ready to log" : "Ready to cut") }
+            if openTurnover.map({ runs.run(for: $0)?.state == .stopped }) == true { return .readyToCut("Ready to cut") }
+        }
         let cants = openQuestions.filter { $0.kind == "cant" }.count, asks = openQuestions.filter { $0.kind == "question" }.count
         if let t = openTurnover {
             let total = max(1, t.noteIDs.count), done = t.progress.values.filter { $0 == .done }.count
             switch t.state {
+            // Once Direction has started the editor, a turnover nobody has read back yet is being read.
+            case .waiting where runs.isWorking: return t.kind == "assembly" ? .assembling("Building the assembly", nil) : .readingBack("Reading back")
             case .waiting: return .waiting
             case .readBack: return t.readBackApproved ? .working("Starting", nil) : .readBackReady
             case .cutting:
@@ -349,11 +362,19 @@ final class FilmModel {
         if cants > 0 { return .cant(cants) }
         if asks > 0 { return .asks(asks) }
         if isDelivering { return .working("Delivering \(delivery.doneCount + 1) of \(delivery.items.count)", delivery.items.isEmpty ? nil : Double(delivery.doneCount) / Double(delivery.items.count)) }
+        if isPictureLocked, runs.active?.job == .finish {
+            let mine = (directing.finishing ?? []).filter { $0.by.contains("editor") }, done = mine.filter { ["done", "needsYou"].contains($0.state) }.count
+            if !mine.isEmpty { return .working("Finishing \(min(mine.count, done + 1)) of \(mine.count)", Double(done) / Double(mine.count)) }
+        }
         if isPictureLocked, let item = directing.finishing?.first(where: { $0.state == "working" && $0.by.contains("editor") }) { return .working(item.title == "Sound mix" ? "Mixing sound" : item.title, item.progress) }
         if let cut = latestCut, !unreviewedAnswers.isEmpty, openTurnover == nil { return .cutReady("\(cut.name) ready") }
-        if isLogging, let total = project?.assets.count, total > 0, cuts.isEmpty {
+        // Before logging, the index looks at every take (footage-index.md).
+        if let l = index.looking { return .looking(l.done, l.total) }
+        if isLogging, let total = project?.assets.count, total > 0, cuts.isEmpty || runs.active?.job == .logFootage {
             return .working("Logging \(loggedCount) of \(total)", Double(loggedCount) / Double(total))
         }
+        // Any other work: what the editor is doing right now.
+        if runs.isWorking { return .working(runs.activityText ?? "Starting", nil) }
         return .ready
     }
     var isPictureLocked: Bool { directing.pictureLocked }
@@ -556,7 +577,12 @@ final class FilmModel {
     func approveReadBack() { guard let t = openTurnover else { return }; perform { _ = try $0.approveReadBack(turnoverID: t.id) } }
     func adjustReadBack(noteID: String, text: String) { guard let t = openTurnover else { return }; perform { _ = try $0.adjustReadBack(turnoverID: t.id, noteID: noteID, text: text) } }
     func flipConflict(noteID: String) { guard let t = openTurnover else { return }; perform { _ = try $0.flipConflict(turnoverID: t.id, noteID: noteID) } }
-    func takeNotesBack() { guard let t = openTurnover else { return }; perform { try $0.cancelTurnover(t.id) } }
+    func takeNotesBack() {
+        guard let t = openTurnover else { return }
+        // A run Direction started for it stops first, and its unfinished cut is discarded.
+        if runs.startsEditor, runs.run(for: t) != nil { runs.takeTurnoverBack(self); return }
+        perform { try $0.cancelTurnover(t.id) }
+    }
     func answer(_ q: EditorQuestion, choiceID: String?, text: String?) { perform { _ = try $0.answerQuestion(id: q.id, choiceID: choiceID, text: text) } }
 
     // MARK: Changes
@@ -657,7 +683,17 @@ final class FilmModel {
 
     // MARK: Editor
 
-    func setEditorPaused(_ on: Bool) { perform { _ = try $0.updateDirectingState(summary: on ? "Paused the editor" : "Resumed the editor") { $0.editorPaused = on } } }
+    /// Pause Editor / Resume Editor. A session Direction started is interrupted after its current tool
+    /// call and resumed with its saved session; your own session reads the flag.
+    func setEditorPaused(_ on: Bool) {
+        perform { _ = try $0.updateDirectingState(summary: on ? "Paused the editor" : "Resumed the editor") { $0.editorPaused = on } }
+        guard runs.startsEditor else { return }
+        if on { runs.pause(self) } else { runs.resume(self) }
+    }
+    /// Paused: by you, or a run Direction started.
+    var editorIsPaused: Bool { directing.editorPaused || runs.isPaused }
+    /// Try again: a new run of the same job when Direction starts the editor, else the request to copy.
+    func retryEditor() { if runs.startsEditor && runs.failed != nil { runs.retry(self) } else { copyEditorRequest() } }
     /// Words a director can paste to their agent; in-app turnovers don't wake it.
     var editorRequest: String {
         guard let url else { return "" }
@@ -677,4 +713,6 @@ final class FilmModel {
 /// UserDefaults keys for Settings › Notifications. Default on.
 enum NotificationKey {
     static let cutReady = "notifyCutReady", question = "notifyQuestion", cant = "notifyCant", delivery = "notifyDelivery"
+    /// "The editor stopped" (specs/editor.md › Notifications). Not in Settings; on unless set.
+    static let editorStopped = "notifyEditorStopped"
 }

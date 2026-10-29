@@ -3,7 +3,10 @@ import DirectionCore
 
 // MARK: Buttons
 
-enum GateButtonKind { case normal, steel, ghost, danger }
+enum GateButtonKind { case normal, steel, ghost, danger
+    /// `.btn.ghost.danger`: a text button in the alert color (Stop the editor, frame 57).
+    case ghostDanger
+}
 enum GateButtonSize { case regular, large, small }
 
 /// Raised, steel (one per window state), ghost and danger buttons. 28 pt, radius 8.
@@ -28,7 +31,7 @@ private struct GateButtonBody: View {
         switch kind {
         case .steel: Gate.Component.Button.steelInk
         case .ghost: hovered ? Gate.Text.primary : Gate.Text.secondary
-        case .danger: Gate.State.alert
+        case .danger, .ghostDanger: Gate.State.alert
         case .normal: Gate.Text.primary
         }
     }
@@ -40,7 +43,7 @@ private struct GateButtonBody: View {
             .frame(minWidth: iconOnly ? height : nil, minHeight: height, maxHeight: height)
             .background { background }
             .contentShape(RoundedRectangle(cornerRadius: radius))
-            .offset(y: pressed && kind != .ghost ? 0.5 : 0)
+            .offset(y: pressed && kind != .ghost && kind != .ghostDanger ? 0.5 : 0)
             .opacity(enabled ? 1 : Gate.Component.Button.disabledOpacity)
             .onHover { hovered = $0 }
             .animation(gateAnimation(Gate.Motion.snap), value: hovered)
@@ -56,7 +59,7 @@ private struct GateButtonBody: View {
                 .overlay(alignment: .top) { shape.stroke(Color.white, lineWidth: 1).mask(VStack(spacing: 0) { Color.white.frame(height: 1); Spacer(minLength: 0) }).padding(.horizontal, 1) }
                 .overlay(alignment: .bottom) { shape.stroke(Color.black.opacity(0.22), lineWidth: 1).mask(VStack(spacing: 0) { Spacer(minLength: 0); Color.white.frame(height: 1) }).padding(.horizontal, 1) }
                 .shadow(color: .black.opacity(0.6), radius: 1, y: 1)
-        case .ghost:
+        case .ghost, .ghostDanger:
             shape.fill(hovered ? Gate.Surface.raised : .clear)
         case .normal, .danger:
             shape.fill(pressed ? Gate.Surface.panel : hovered ? Gate.Surface.hover : Gate.Surface.raised)
@@ -296,15 +299,18 @@ struct GateSelect<Value: Hashable>: View {
     @Binding var selection: Value
     /// Text-3 label, for selects inside a quiet row (the composer's anchor).
     var muted = false
+    /// A wider select keeps its chevron at the right edge (the Version select, frame 56).
+    var minWidth: CGFloat? = nil
     var body: some View {
         Menu {
             ForEach(options.indices, id: \.self) { i in Button(options[i].1) { selection = options[i].0 } }
         } label: {
             HStack(spacing: 8) {
                 Text(options.first { $0.0 == selection }?.1 ?? "").font(.system(size: 12.5))
+                if minWidth != nil { Spacer(minLength: 0) }
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Gate.Text.tertiary)
             }
-            .foregroundStyle(muted ? Gate.Text.tertiary : Gate.Text.primary).padding(.leading, 10).padding(.trailing, 8).frame(height: Gate.Size.control)
+            .foregroundStyle(muted ? Gate.Text.tertiary : Gate.Text.primary).padding(.leading, 10).padding(.trailing, 8).frame(minWidth: minWidth, minHeight: Gate.Size.control, maxHeight: Gate.Size.control)
             .background(RoundedRectangle(cornerRadius: Gate.Radius.control).fill(Gate.Surface.raised).overlay(RoundedRectangle(cornerRadius: Gate.Radius.control).strokeBorder(Gate.Line.subtle, lineWidth: 1)))
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
