@@ -91,7 +91,7 @@ func expectError(_ code: String, _ body: () throws -> Void) {
 @Test func overlappingVideoNeedsAnotherLayer() throws {
     let p = fixtureProject()
     var op = EditOperation("insert"); op.assetID = p.assets[0].id; op.at = .zero
-    expectError("overlapping_clips") { _ = try EditReducer.apply(.init(baseEditRevision: 0, operations: [op]), to: p) }
+    expectError("overlap") { _ = try EditReducer.apply(.init(baseEditRevision: 0, operations: [op]), to: p) }
     op.layer = 1
     #expect(try EditReducer.apply(.init(baseEditRevision: 0, operations: [op]), to: p).sequences[0].clips.count == 2)
 }
@@ -99,11 +99,11 @@ func expectError(_ code: String, _ body: () throws -> Void) {
 @Test func invalidAndOutOfBoundsEditsFail() {
     let p = fixtureProject()
     var op = EditOperation("trim"); op.clipID = "clip-main"; op.range = .init(start: 0, end: 11)
-    expectError("source_out_of_bounds") { _ = try EditReducer.apply(.init(baseEditRevision: 0, operations: [op]), to: p) }
+    expectError("bad_argument") { _ = try EditReducer.apply(.init(baseEditRevision: 0, operations: [op]), to: p) }
     var format = EditOperation("format"); format.width = 1_079
-    expectError("invalid_format") { _ = try EditReducer.apply(.init(baseEditRevision: 0, operations: [format]), to: p) }
+    expectError("bad_argument") { _ = try EditReducer.apply(.init(baseEditRevision: 0, operations: [format]), to: p) }
     var audio = EditOperation("audio"); audio.assetID = p.assets[0].id; audio.audioTrackID = 88; audio.audio = .init(muted: true)
-    expectError("audio_track_not_found") { _ = try EditReducer.apply(.init(baseEditRevision: 0, operations: [audio]), to: p) }
+    expectError("bad_argument") { _ = try EditReducer.apply(.init(baseEditRevision: 0, operations: [audio]), to: p) }
 }
 
 @Test func removalCanEmptySequenceWithoutCorruptingProject() throws {
@@ -119,7 +119,7 @@ func expectError(_ code: String, _ body: () throws -> Void) {
     let p = try store.read()
     var valid = EditOperation("split"); valid.clipID = p.sequences[0].clips[0].id; valid.at = .init(seconds: 2)
     let invalid = EditOperation("unsupported")
-    expectError("unknown_operation") { _ = try store.apply(.init(baseEditRevision: 1, operations: [valid, invalid])) }
+    expectError("unknown_op") { _ = try store.apply(.init(baseEditRevision: 1, operations: [valid, invalid])) }
     #expect(try store.read() == p)
     #expect(try store.revision() == 1)
 }

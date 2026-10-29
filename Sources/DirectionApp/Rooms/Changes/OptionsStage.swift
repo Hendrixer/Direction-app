@@ -32,7 +32,7 @@ final class ABPlayback {
             player.automaticallyWaitsToMinimizeStalling = false
             tasks.append(Task { [weak self] in
                 do {
-                    let compiled = try await SequenceRenderer.compile(project: project, sequenceID: side.sequenceID, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1280)
+                    let compiled = try await SequenceRenderer.compile(project: project, sequenceID: side.sequenceID, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1280, looks: try? runtime.store.lookContext())
                     try Task.checkCancellation()
                     guard let self else { return }
                     player.replaceCurrentItem(with: compiled.playerItem())

@@ -414,7 +414,7 @@ final class FilmModel {
         if sequence.clips.isEmpty { player.pause(); player.replaceCurrentItem(with: nil); compiled = nil; isPreparing = false; return }
         renderTask = Task {
             do {
-                let result = try await SequenceRenderer.compile(project: p, sequenceID: sequence.id, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1920)
+                let result = try await SequenceRenderer.compile(project: p, sequenceID: sequence.id, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1920, looks: try? runtime.store.lookContext())
                 try Task.checkCancellation()
                 guard renderKey == key else { return }
                 let target = pendingSeek ?? position
