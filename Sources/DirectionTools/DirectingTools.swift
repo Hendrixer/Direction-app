@@ -25,7 +25,10 @@ extension ToolRuntime {
 
         case "direction_dailies":
             let p = try store.read()
-            let assets: [JSONValue] = p.assets.map { .object(["id": .string($0.id), "name": .string($0.name), "durationSeconds": .number($0.duration.seconds), "hasAudio": .bool(!$0.audio.isEmpty)]) }
+            // Each take's index (footage-index.md): waiting, looking, done or failed.
+            autoIndexIfNeeded()
+            let index = try indexStates()
+            let assets: [JSONValue] = p.assets.map { .object(["id": .string($0.id), "name": .string($0.name), "durationSeconds": .number($0.duration.seconds), "hasAudio": .bool(!$0.audio.isEmpty), "index": .string((index[$0.id] ?? .done).rawValue)]) }
             return ToolResponse(.object(["dailies": try .wrapping(store.dailies()), "assets": .array(assets)]))
 
         case "direction_log_dailies":

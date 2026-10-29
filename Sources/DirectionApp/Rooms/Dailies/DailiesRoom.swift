@@ -8,7 +8,8 @@ struct DailiesRoom: View {
     @Environment(\.dailiesPreview) private var preview
     var body: some View {
         HStack(spacing: 0) {
-            DailiesSidebar(model: model, current: currentBin).frame(width: Gate.Size.sidebar)
+            // Search results aren't a scene: no row is current while they show (frame 60).
+            DailiesSidebar(model: model, current: model.index.searching && model.openTakeID == nil ? nil : currentBin).frame(width: Gate.Size.sidebar)
             main.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Gate.Surface.ground)
@@ -23,6 +24,7 @@ struct DailiesRoom: View {
             Button("Unsorted") { model.openTakeID = nil; model.selectedSceneID = DailiesBin.unsorted }
                 .keyboardShortcut("1", modifiers: [.command, .shift]).hidden()
         }
+        .modifier(DailiesFindKey(model: model))
     }
 
     /// The sidebar row on show: the chosen scene or bin, else the first scene.
@@ -34,6 +36,9 @@ struct DailiesRoom: View {
     @ViewBuilder private var main: some View {
         if let id = model.openTakeID, model.dailies.takes[id] != nil {
             DailiesTakeViewer(model: model, takeID: id, bin: currentBin)
+        } else if model.index.searching {
+            // Frame 60: results replace the take grid until esc.
+            DailiesSearchView(model: model)
         } else {
             switch currentBin {
             case DailiesBin.unsorted?: DailiesUnsortedView(model: model)

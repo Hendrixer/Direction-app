@@ -148,6 +148,7 @@ public actor ToolRuntime {
             guard let track = a["trackID"].int.flatMap(Int32.init(exactly:)) ?? asset.audio.first?.id else { throw DirectionError("no_audio", "The source has no audio.") }
             return ToolResponse(try await AudioProcessor.measure(asset: asset, trackID: track, directory: cacheDirectory.appendingPathComponent("Audio")))
         case "direction_frame":
+            if a["assetID"] != .null { return try await sourceFrame(a) }
             let p = try store.read(revision: a["revision"].int)
             let seconds = a["time"].double ?? 0
             guard seconds.isFinite && seconds >= 0 else { throw DirectionError("invalid_time", "Frame time must be a nonnegative number.") }

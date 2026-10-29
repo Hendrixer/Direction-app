@@ -170,6 +170,7 @@ struct DailiesTakeCard: View {
 
     @ViewBuilder private var status: some View {
         if take.unusable { Text("Not usable as a take").foregroundStyle(Gate.Text.disabled) }
+        else if model.indexFailed(take.assetID) { Text("Couldn\u{2019}t look at this take").foregroundStyle(Gate.Text.disabled) }
         else if take.circled && take.suggestion != nil { Text("Circled by you").foregroundColor(Gate.Voice.director) + Text(" \u{00B7} also suggested").foregroundColor(Gate.Voice.agent) }
         else if take.circled { Text("Circled by you").foregroundStyle(Gate.Voice.director) }
         else if let s = take.suggestionShort { Text("Suggested: \(s)").foregroundStyle(Gate.Voice.agent) }
@@ -255,6 +256,10 @@ struct DailiesTakeMenu: View {
             Button("Unsorted") { model.moveTakes(ids, to: nil) }
         }
         Button(unusable ? "Usable Again" : "Not Usable") { model.toggleUnusable(ids) }
+        // A take Direction couldn't look at (footage-index.md › Acceptance).
+        if ids.contains(where: model.indexFailed) {
+            Button("Try Again") { for id in ids where model.indexFailed(id) { model.index.retry(id, film: model) } }
+        }
         Divider()
         Button("Show in Finder") { model.revealTakes(ids) }
     }

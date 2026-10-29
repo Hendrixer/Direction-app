@@ -270,6 +270,26 @@ extension FilmModel {
         return rows.enumerated().sorted { ($0.element.rank, $0.offset) < ($1.element.rank, $1.offset) }.map(\.element)
     }
 
+    /// The stage line under the progress (footage-index.md › 05): the latest of Reading → Finding
+    /// shots → Looking at footage → Listening → Sorting into scenes to have started. Counts in SF Mono.
+    var loggingStage: (text: Text, spoken: String)? {
+        let assets = (project?.assets ?? []).filter { !$0.isImage }
+        guard !assets.isEmpty else { return nil }
+        func line(_ words: String, _ n: Int? = nil, _ of: Int? = nil) -> (Text, String) {
+            guard let n, let of else { return (Text(words), words) }
+            let mono = { (v: Int) in Text(String(v)).font(.system(size: 11.5, design: .monospaced)) }
+            return (Text("\(words) \u{00B7} ") + mono(n) + Text(" of ") + mono(of), "\(words), \(n) of \(of)")
+        }
+        if loggedCount > 0 || !dailies.scenes.isEmpty { return line("Sorting into scenes") }
+        let speaking = assets.filter { !$0.audio.isEmpty }
+        let transcribed = Set(transcripts.filter { !$0.words.isEmpty }.map(\.assetID))
+        if !transcribed.isEmpty || jobs.contains(where: { $0.kind == "transcription" && !$0.isTerminal }) { return line("Listening", speaking.filter { transcribed.contains($0.id) }.count, speaking.count) }
+        let takes = index.takes.values
+        if takes.contains(where: { $0.step == "describing" || $0.described > 0 }) { return line("Looking at footage", index.states.values.filter { $0 == .done }.count, assets.count) }
+        if index.job != nil || takes.contains(where: { $0.shotCount > 0 }) { return line("Finding shots") }
+        return line("Reading \(DailiesFormat.count(assets.count, "take"))")
+    }
+
     static func clip(_ s: String, _ n: Int = 48) -> String { s.count > n ? String(s.prefix(n)).trimmingCharacters(in: .whitespaces) + "\u{2026}" : s }
 
     /// "About 6 minutes left." from how fast the editor has logged so far.
@@ -344,6 +364,7 @@ struct OnboardingLoggingView: View {
                 Text(finished ? "Every take is in Dailies." : ([model.loggingEstimate, model.dailies.scenes.isEmpty ? nil : "You can start circling takes now."].compactMap { $0 }.joined(separator: " "))).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
             }
             if !finished { LoggingBar(value: fraction).frame(height: 5).accessibilityLabel("Logged").accessibilityValue("\(Int(fraction * 100)) percent") }
+            if !finished, let stage = model.loggingStage { stage.text.font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).padding(.top, -6).accessibilityLabel(stage.spoken) }
             HStack(alignment: .top, spacing: 28) {
                 stat("\(logged) / \(total)", "takes logged")
                 stat(DailiesFormat.hoursMinutes(loggedSeconds), "of \(DailiesFormat.hoursMinutes(seconds))")
