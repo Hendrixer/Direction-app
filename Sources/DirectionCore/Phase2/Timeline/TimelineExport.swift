@@ -145,7 +145,7 @@ public enum TimelineExport {
         func row(_ c: Clip) -> String? {
             guard overlaps(c.start.seconds, c.end.seconds) else { return nil }
             let a = asset(c), role = ["A1": "voice", "A2": "music", "A3": "effects"][c.trackName] ?? "sound"
-            var parts = [c.trackName.padding(toLength: 3, withPad: " ", startingAt: 0), "\(tc(c.start.seconds))–\(tc(c.end.seconds))", c.id]
+            var parts = [c.trackName, "\(tc(c.start.seconds))–\(tc(c.end.seconds))", c.id]
             if c.kind == .title { parts.append("title \"\(c.title ?? c.name)\"") }
             else if let g = a?.graphic { parts.append("graphic \"\(g)\"") }
             else if a?.madeID != nil { parts.append((c.kind == .audio ? role : "shot") + " \"\(c.name)\" (made)") }

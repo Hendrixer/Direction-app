@@ -448,6 +448,8 @@ struct EditWork {
     var s: Sequence { get { project.sequences[si] } set { project.sequences[si] = newValue } }
     var frame: Double { Double(s.frameRate.denominator) / Double(s.frameRate.numerator) }
     func frames(_ n: Int) -> MediaTime { MediaTime(value: Int64(n) * Int64(s.frameRate.denominator), timescale: s.frameRate.numerator) }
+    /// n frames in seconds, exactly: 15 frames at 30 fps is 0.5, not 15 × (1/30).
+    func secs(_ n: Int) -> Double { Double(n) * Double(s.frameRate.denominator) / Double(s.frameRate.numerator) }
     func snap(_ t: MediaTime) -> MediaTime { frames(Int((t.seconds / frame).rounded())) }
     func snapUp(_ t: MediaTime) -> MediaTime { frames(Int((t.seconds / frame - 1e-6).rounded(.up))) }
     func snapDown(_ t: MediaTime) -> MediaTime { frames(Int((t.seconds / frame + 1e-6).rounded(.down))) }
@@ -755,7 +757,7 @@ struct EditWork {
         guard let edge = op.edge, edge == "head" || edge == "tail" else { throw bad("edge is head or tail.") }
         guard let n = op.frames, n != 0 else { throw bad("frames is a whole number: positive lengthens, negative shortens.") }
         let d = frames(abs(n)), ds = d.seconds, ripple = op.ripple ?? true, story = c.layer == 0
-        let summary = "\(n > 0 ? "Extended" : "Trimmed") \(label(c))’s \(edge), \(deltaText(Double(n) * frame))"
+        let summary = "\(n > 0 ? "Extended" : "Trimmed") \(label(c))’s \(edge), \(deltaText(secs(n)))"
         if n < 0 { guard c.duration.seconds - ds >= frame - 1e-9 else { throw bad("\(c.id) is only \(framesText(c.duration.seconds)) long.") } }
         if n > 0 {
             let h = edge == "tail" ? handleAfter(c) : handleBefore(c)
@@ -828,7 +830,7 @@ struct EditWork {
     mutating func slip(_ op: EditOperation) throws -> Outcome {
         let i = try clipIndex(op.clipID); let c = s.clips[i]
         guard let n = op.frames, n != 0 else { throw bad("frames slips the take: positive shows later footage.") }
-        let ds = Double(abs(n)) * frame
+        let ds = secs(abs(n))
         if n > 0 { guard handleAfter(c) + 1e-6 >= ds else { throw bad("\(label(c)) has only \(framesText(handleAfter(c))) after its out point.") } }
         else { guard handleBefore(c) + 1e-6 >= ds else { throw bad("\(label(c)) has only \(framesText(handleBefore(c))) before its in point.") } }
         let shift = frames(n).scaled(by: c.speed)
@@ -862,7 +864,7 @@ struct EditWork {
         let (li, r) = try editPoint(op.editPoint); let l = li!
         guard let lead = op.lead, lead == "sound" || lead == "picture" else { throw bad("lead is sound (a J-cut) or picture (an L-cut).") }
         guard let n = op.frames, n >= 0 else { throw bad("frames is how far the sound leads or carries; 0 makes it a straight cut again.") }
-        let L = s.clips[l], R = s.clips[r], N = Double(n) * frame
+        let L = s.clips[l], R = s.clips[r], N = secs(n)
         guard hasSound(L) || hasSound(R) else { throw bad("Neither clip has sound.") }
         if n == 0 { s.clips[l].soundTail = nil; s.clips[r].soundLead = nil }
         else if lead == "sound" {
@@ -912,7 +914,9 @@ struct EditWork {
             var end = newWords[last.1].range.end + (room > .zero ? room : .zero)
             if end > new.duration { end = new.duration }
             let s0 = max(.zero, start)
-            src = .init(start: s0, duration: end - s0)
+            // The clip's new length is whole frames, without running past the take.
+            let length = snap(end - s0)
+            src = .init(start: s0, duration: s0 + length > new.duration ? snapDown(end - s0) : length)
         }
         guard src.isValid else { throw bad("\(new.name) is too short to use here.") }
         let offset = (src.start - c.sourceRange.start).seconds
@@ -1216,7 +1220,7 @@ struct EditWork {
         guard R.kind != .audio else { throw bad("Transitions are for picture; fade sound with fade.") }
         if li == nil && type == "dissolve" { throw bad("A dissolve needs a clip on each side. Use dipToBlack to fade in.") }
         let beforeFrames = li == nil ? 0 : n / 2, afterFrames = n - beforeFrames
-        let before = Double(beforeFrames) * frame, after = Double(afterFrames) * frame
+        let before = secs(beforeFrames), after = secs(afterFrames)
         if type == "dissolve", let li {
             let L = s.clips[li]
             guard handleAfter(L) + 1e-6 >= after else { throw bad("\(label(L)) has only \(framesText(handleAfter(L))) after its out point; a \(n)-frame dissolve needs \(afterFrames).") }
@@ -1308,8 +1312,8 @@ struct EditWork {
         guard op.fadeIn != nil || op.fadeOut != nil else { throw bad("fade takes in and/or out, in frames.") }
         let total = Int((c.duration.seconds / frame).rounded())
         for v in [op.fadeIn, op.fadeOut].compactMap({ $0 }) { guard v >= 0, v <= total else { throw bad("Fades are 0 to \(total) frames for this clip.") } }
-        if let v = op.fadeIn { s.clips[i].fadeIn = v == 0 ? nil : Double(v) * frame }
-        if let v = op.fadeOut { s.clips[i].fadeOut = v == 0 ? nil : Double(v) * frame }
+        if let v = op.fadeIn { s.clips[i].fadeIn = v == 0 ? nil : secs(v) }
+        if let v = op.fadeOut { s.clips[i].fadeOut = v == 0 ? nil : secs(v) }
         return change("Faded \(label(c))’s sound" + (op.fadeIn.map { " in over \($0) frames" } ?? "") + (op.fadeOut.map { (op.fadeIn != nil ? " and" : "") + " out over \($0) frames" } ?? ""), c)
     }
 
