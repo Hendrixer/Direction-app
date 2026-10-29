@@ -26,7 +26,9 @@ struct WhisperTests {
     }
 
     @Test func sharedSettingsDefaultToApple() {
-        SharedSettings.defaults.removeObject(forKey: SharedSettings.Key.transcriptionEngine)
+        let real = SharedSettings.defaults, suite = "dev.direction.tests.\(UUID().uuidString)"
+        SharedSettings.defaults = UserDefaults(suiteName: suite)!
+        defer { SharedSettings.defaults.removePersistentDomain(forName: suite); SharedSettings.defaults = real }
         #expect(SharedSettings.transcriptionEngine == .apple)
         #expect(SharedSettings.whisperModel == "mlx-community/whisper-large-v3-turbo")
     }

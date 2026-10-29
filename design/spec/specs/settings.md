@@ -185,8 +185,8 @@ Frame: `screens/54-settings-footage.html` · Render: `renders/54-settings-footag
 | Transcription | Transcribe with | Seg: Apple / Whisper | Apple | Apple: "Fast and built into macOS. Runs on this Mac." Whisper: "Slower, with tighter word times for cutting on a single word. Runs on this Mac." Stored in the `dev.direction.shared` defaults suite, so the editor's tools use it too. |
 | Transcription | Whisper version | Select: Large v3 Turbo / Large v3 | Large v3 Turbo | Sub-label: "Fast. Nearly as accurate as Large v3. Downloaded · 1.6 GB." or "Slower, and a little more accurate. Downloads 3.1 GB the first time it's used." Disabled while Apple is chosen. |
 | Transcription | mlx-whisper (only while Whisper is chosen) | Chip "Ready", or **Copy Command** | — | Ready shows the path (`~/.local/bin/mlx_whisper`). Missing: "mlx-whisper isn't installed" / "Install it in Terminal with pip install mlx-whisper. Until then, Apple transcribes." Missing ffmpeg: "Whisper needs ffmpeg" / "brew install ffmpeg". |
-| Looking at footage | Look with | Seg: This Mac / Gemini | This Mac | This Mac: "Private and free. Footage never leaves this Mac." Gemini: "Sees motion across whole takes. Footage is uploaded to Google at low resolution. Needs a key in Services." |
-| Looking at footage | Detail | Select: Quick · 1.4 GB / Standard · 5.8 GB / Best · 17 GB | Standard | Sub-label names the version and state: "Qwen3-VL 8B. Downloaded." Disabled for Gemini. When free space is short: "Only 13 GB free on Macintosh HD. Standard needs 5.8 GB." in alert text, with Quick offered. |
+| Looking at footage | Look with | Seg: This Mac / OpenRouter | This Mac | This Mac: "Private and free. Footage never leaves this Mac." OpenRouter: "Sends three small frames of each shot to a vision version through OpenRouter. Needs your key in Services." |
+| Looking at footage | Detail | Select: Quick · 2.4 GB / Standard · 5.8 GB / Best · 17 GB (This Mac); or a select of OpenRouter vision versions, default Gemini 3.1 Flash | Standard | Sub-label names the version and state: "Qwen3-VL 8B. Downloaded." Needs mlx-vlm: when it isn't installed, the row reads "mlx-vlm isn't installed" / "Install it in Terminal with uv tool install mlx-vlm. Until then, nothing is described; shots and sounds are still found." with **Copy Command**. |
 | Looking at footage | Look at new footage automatically | Switch | On | Off: footage is indexed only when the editor asks or you choose Film › Look at Footage. |
 | Color | Looks folder | Path field (read-only, folder icon) with **Change…** and **Show in Finder** | `~/Movies/Direction/Looks` | LUTs here appear in the Look sheet (frame 63). Subfolders become groups. |
 | Color | Convert log footage automatically | Switch | On | Sub-label: "Apple Log, S-Log3, LogC and V-Log become normal video before any look. Camera LUTs live in the Camera folder." |
@@ -203,27 +203,29 @@ Note under Looking at footage: "The editor reads what's found here to log takes,
 ## 55 · Settings, Services
 Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 682. Tab icon: `key`.
 
-**Service rows** (`.set-row`, min 56): a 28 rounded-square monogram (`--raised` fill, hairline border, radius 8, the service's initial in 12/700 text-2; no brand logos), the name (13/600) with what it's for under it (11.5 text-3), and on the right the state: a chip "Ready" (ok style) with "$4.20 this month" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`).
+**The OpenRouter row** (`.set-row`, min 56): a 28 rounded-square monogram "O" (`--raised` fill, hairline border, radius 8, 12/700 text-2; no brand logo), "OpenRouter" (13/600) with "Music, voice, sound effects, new shots and stills" under it (11.5 text-3), and on the right a chip "Ready" (ok style) with "$37.20 left" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`, key icon).
 
-| Service | Sub-label | State in the frame |
+**Editing the key:** the row grows to show a secure `.input` (placeholder "Paste your OpenRouter key"), a text link "Get a key" with an arrow-up-right icon (opens openrouter.ai/keys), and Cancel (plain) / **Save** (`.btn`, not steel; the window has no steel button). After Save, Direction checks the key (`GET /key`) and shows Ready or "That key didn't work: <OpenRouter's message>". The row's context menu has Replace Key…, Remove Key, and Show Credits (opens openrouter.ai/credits).
+
+**What the editor uses** (a card under the key, one row per kind, each a select of OpenRouter versions with the default first):
+
+| Kind | Default | Sub-label |
 |---|---|---|
-| ElevenLabs | Music, sound effects and voice | Ready · $4.20 this month |
-| Runway | Changing shots you have | Editing a key (below) |
-| Higgsfield | New shots | Ready · $8.60 this month |
-| Gemini | Looking at footage, if chosen in Footage | Add Key… |
+| Music | Lyria 3 Clip | "About $0.04 a 30 s clip" |
+| Voice | (first speech version) | — |
+| New shots | Veo 3.1 | "About $0.40 a second at 1080p" |
+| Stills | Nano Banana 2 | — |
 
-**Editing a key** (Runway in the frame): the row grows to show a secure `.input` (placeholder "Paste your Runway key"), a text link "Get a key" with an arrow-up-right icon (opens the service's key page), and Cancel (plain) / **Save** (`.btn`, not steel; the window has no steel button). After Save, the row tests the key and shows Ready or "That key didn't work: <the service's message>".
-
-Each saved row's context menu has Replace Key…, Remove Key, and Show Terms.
+Prices in sub-labels come from OpenRouter's listing and update with it.
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
 | Spending | Ask before spending more than | Select: $1.00 / $5.00 / $10.00 / $25.00 per turnover | $5.00 per turnover | Over this, the editor asks a spend question (frame 62). |
 | Spending | Stop for the month at | Select: $25.00 / $50.00 / $100.00 / $250.00 / No limit | $50.00 | Nothing is made past this. |
-| Spending | Spent this month | Meter (like Storage's), one segment per service, with a legend: ElevenLabs $4.20, Higgsfield $8.60 | — | Read-only. "$12.80 of $50.00" in SF Mono on the right of the row. |
+| Spending | Spent this month | Meter (like Storage's), one segment per kind, with a legend: Music $0.36, New shots $12.40, Looking at footage $0.04 | — | Read-only. "$12.80 of $50.00" in SF Mono on the right of the row. |
 
-Note under Services: "Keys are kept in your Mac's keychain. The editor never sees them; Direction makes every request."
-Note under Spending: "Check each service's terms before you release a film. Some don't cover film or TV."
+Note under the key: "Your key is kept in your Mac's keychain. The editor never sees it; Direction makes every request."
+Note under Spending: "Check each version's terms on OpenRouter before you release a film. Some don't cover film or TV."
 
 **Acceptance:**
 - [ ] A key is never written to UserDefaults, the film package, logs or the editor's tools.

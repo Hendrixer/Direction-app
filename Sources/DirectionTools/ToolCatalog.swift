@@ -9,14 +9,14 @@ public struct ToolDefinition: Codable, Sendable {
 }
 
 public enum ToolCatalog {
-    private static let string = JSONValue.object(["type": .string("string")])
-    private static let number = JSONValue.object(["type": .string("number")])
-    private static let integer = JSONValue.object(["type": .string("integer"), "minimum": .number(0)])
-    private static let bool = JSONValue.object(["type": .string("boolean")])
-    private static let object = JSONValue.object(["type": .string("object")])
-    private static func record(_ properties: [String: JSONValue], required: [String] = []) -> JSONValue { .object(["type": .string("object"), "properties": .object(properties), "required": .array(required.map(JSONValue.string)), "additionalProperties": .bool(false)]) }
-    private static func list(_ item: JSONValue) -> JSONValue { .object(["type": .string("array"), "items": item]) }
-    private static let time = record(["value": integer, "timescale": .object(["type": .string("integer"), "minimum": .number(1)])], required: ["value", "timescale"])
+    static let string = JSONValue.object(["type": .string("string")])
+    static let number = JSONValue.object(["type": .string("number")])
+    static let integer = JSONValue.object(["type": .string("integer"), "minimum": .number(0)])
+    static let bool = JSONValue.object(["type": .string("boolean")])
+    static let object = JSONValue.object(["type": .string("object")])
+    static func record(_ properties: [String: JSONValue], required: [String] = []) -> JSONValue { .object(["type": .string("object"), "properties": .object(properties), "required": .array(required.map(JSONValue.string)), "additionalProperties": .bool(false)]) }
+    static func list(_ item: JSONValue) -> JSONValue { .object(["type": .string("array"), "items": item]) }
+    static let time = record(["value": integer, "timescale": .object(["type": .string("integer"), "minimum": .number(1)])], required: ["value", "timescale"])
     private static let range = record(["start": time, "duration": time], required: ["start", "duration"])
     private static let grade = record(["exposure": number, "contrast": number, "saturation": number, "temperature": number, "tint": number], required: ["exposure", "contrast", "saturation", "temperature", "tint"])
     private static let framing = record(["fit": bool, "scale": number, "offsetX": number, "offsetY": number, "opacity": number], required: ["fit", "scale", "offsetX", "offsetY", "opacity"])
@@ -25,10 +25,10 @@ public enum ToolCatalog {
     private static let operation = record(["type": .object(["type": .string("string"), "enum": .array(["insert", "title", "removeRange", "remove", "split", "trim", "move", "speed", "color", "frame", "audio", "format", "rename", "duplicateSequence"].map(JSONValue.string))]), "assetID": string, "clipID": string, "at": time, "range": range, "layer": integer, "speed": number, "ripple": bool, "grade": grade, "framing": framing, "audioTrackID": integer, "audio": audio, "text": string, "width": integer, "height": integer, "frameRate": record(["numerator": integer, "denominator": integer], required: ["numerator", "denominator"])], required: ["type"])
     private static let batch = record(["baseEditRevision": integer, "sequenceID": string, "idempotencyKey": string, "summary": string, "operations": list(operation)], required: ["baseEditRevision", "idempotencyKey", "summary", "operations"])
     private static let transcript = record(["assetID": string, "audioTrackID": integer, "language": string, "provider": string, "words": list(record(["id": string, "text": string, "range": range], required: ["id", "text", "range"]))], required: ["assetID", "audioTrackID", "language", "provider", "words"])
-    private static func definition(_ name: String, _ description: String, _ properties: [String: JSONValue] = [:], required: [String] = [], readOnly: Bool = true) -> ToolDefinition {
+    static func definition(_ name: String, _ description: String, _ properties: [String: JSONValue] = [:], required: [String] = [], readOnly: Bool = true) -> ToolDefinition {
         .init(name: name, description: description, inputSchema: .object(["type": .string("object"), "properties": .object(properties), "required": .array(required.map(JSONValue.string)), "additionalProperties": .bool(false)]), readOnly: readOnly)
     }
-    public static let definitions: [ToolDefinition] = (rawDefinitions + directingDefinitions).map { definition in
+    public static let definitions: [ToolDefinition] = (rawDefinitions + directingDefinitions + phase2Definitions).map { definition in
         var result = definition
         guard case .object(var schema) = result.inputSchema, case .object(var properties) = schema["properties"] else { return result }
         if definition.name == "direction_edit" { properties["batch"] = batch }
@@ -71,7 +71,7 @@ public enum ToolCatalog {
         definition("direction_events", "Read ordered project/feedback/job events after a cursor.", ["since": integer]),
     ]
 
-    private static func strings(_ values: [String]) -> JSONValue { .object(["type": .string("string"), "enum": .array(values.map(JSONValue.string))]) }
+    static func strings(_ values: [String]) -> JSONValue { .object(["type": .string("string"), "enum": .array(values.map(JSONValue.string))]) }
     /// The director–editor protocol. Notes reach the editor only when the director turns them over.
     private static let directingDefinitions: [ToolDefinition] = [
         definition("direction_brief", "Read the director's brief (logline, how it should feel, length, audience, must-keeps, references, things to avoid) plus the default latitude and lock state. Read it before every assembly or cut; must-keeps are never cut."),

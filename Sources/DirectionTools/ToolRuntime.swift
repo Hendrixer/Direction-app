@@ -22,6 +22,7 @@ public actor ToolRuntime {
     }
 
     public func invoke(_ name: String, arguments a: JSONValue = .object([:])) async throws -> ToolResponse {
+        noteToolCall(name, a)
         try Task.checkCancellation()
         try ToolCatalog.validate(a, for: name)
         if let path = a["projectPath"].string {
@@ -179,6 +180,7 @@ public actor ToolRuntime {
         case "direction_events": return ToolResponse(try .wrapping(store.events(since: Int64(a["since"].int ?? 0))))
         default:
             if let response = try invokeDirecting(name, a) { return response }
+            if let response = try await invokePhase2(name, a) { return response }
             throw DirectionError("unknown_tool", "Unknown Direction tool: \(name).")
         }
     }

@@ -45,7 +45,7 @@ The director is never named in the UI; it's "you". The agent speaks in first per
 
 Never show the words "AI", "generate", "prompt", "model", "revision", "comment", "task", or "magic".
 
-**Program names.** Settings › Editor, Settings › Footage (Whisper, mlx-whisper, Gemini, and the local vision version such as "Qwen3-VL 8B"), Settings › Services, the editor setup sheet (frame 56), the Editor popover (frames 41, 57) and a stopped editor's message (frame 58) may name the programs and services the director installs and pays for: Claude Code, Codex, ElevenLabs, Runway, Higgsfield, Gemini, and each one's version ("Claude Opus 5.5"). Provenance of made media names its service ("Made with ElevenLabs"), and so does anything that asks the director to spend with one: a spend question (frame 62) or a read-back line that plans to make something. Nowhere else. A version is a "version", never a "model". What the editor asked a service for is "What the editor asked for", never a prompt.
+**Program names.** Settings › Editor, Settings › Footage (Whisper, mlx-whisper, mlx-vlm, OpenRouter, and versions such as "Qwen3-VL 8B"), Settings › Services, the editor setup sheet (frame 56), the Editor popover (frames 41, 57) and a stopped editor's message (frame 58) may name the programs and services the director installs and pays for: Claude Code, Codex, OpenRouter, and each one's version ("Claude Opus 5.5", "Veo 3.1", "Lyria 3 Clip"). Provenance of made media names its version and service ("Made with Lyria 3 Clip · OpenRouter"), and so does anything that asks the director to spend with one: a spend question (frame 62) or a read-back line that plans to make something. Nowhere else. A version is a "version", never a "model". What the editor asked a service for is "What the editor asked for", never a prompt.
 
 ## Objects
 
@@ -139,7 +139,7 @@ Filter    kind: .grain | .halation | .bloom | .vignette | .gateWeave | .chromati
 LUT       file (.cube), use: .camera | .look, size: 17–65, from: .folder | .film | .editor
 Graphic   name: "Title · Launch day", source: folder in the film (HTML + JavaScript), duration, words: [GraphicWord], note: Note?
 GraphicWord  key, label: "Title", text, maxLength?    // the director may change words directly
-Made      kind: .music | .soundEffect | .voice | .shot | .changedShot, service, version, asked: String, from: (Take, range)?,
+Made      kind: .music | .soundEffect | .voice | .shot | .changedShot | .still, service ("openrouter"), version, asked: String, from: (Take, time)?,
           spend: Money, note: Note?, file      // appears in Dailies under Made, and in History with its provenance
 Service   name, uses: [Made.kind], key (Keychain), state: .notSet | .ready | .failing(reason), spentThisMonth: Money
 Spending  askAbove: Money per turnover, stopAt: Money per month
@@ -247,7 +247,7 @@ The director's side stays simple: no timeline, no effect controls. Everything be
 | `specs/agent-timeline.md` | The full timeline the editor reads and writes, as OpenTimelineIO, with effects, layers and keyframes. | — |
 | `specs/looks.md` | LUTs, filters, the Look sheet. | 54, 63 |
 | `specs/graphics.md` | Graphics written in JavaScript, rendered by Direction, words the director can fix. | 64 |
-| `specs/made-media.md` | Services (ElevenLabs, Runway, Higgsfield, Gemini), keys, spend, provenance. | 55, 61, 62 |
+| `specs/made-media.md` | Made media through OpenRouter: the key, versions, spend, provenance. | 55, 61, 62 |
 
 ## Formats
 - Timecode: `MM:SS:FF` under an hour (`01:12:08` = 1 min 12 s frame 8), `H:MM:SS:FF` over. Always SF Mono, tabular.

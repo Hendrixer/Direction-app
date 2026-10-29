@@ -19,7 +19,7 @@ All steps run at background priority, in parallel with transcription, take by ta
 | 3. Contact sheet | 16 frames evenly across the take, a 4 × 4 grid, 1600 px wide, each cell labeled with its source timecode in SF Mono | One JPEG per take in `Index/` |
 | 4. Descriptions | A vision engine (below) looks at 3 keyframes per shot (10%, 50%, 90%) at 672 px, with the take's words for that range, and fills a fixed shape | `description`, `size`, `movement`, `people`, `flags` per shot |
 | 5. Sounds | SoundAnalysis `SNClassifySoundRequest(classifierIdentifier: .version1)` in 1 s windows. Runs merge; the top label maps to the seven kinds in `Sound`. Loudness per second is kept for the strip. | `Sound` rows |
-| 6. Search | A Core ML image-and-text encoder (SigLIP 2 base) makes a vector for each keyframe. Descriptions and transcript words go into SQLite FTS5. | Vectors in `project.sqlite`; the FTS index |
+| 6. Search | Apple's NaturalLanguage sentence embeddings (`NLEmbedding.sentenceEmbedding(for: .english)`, built into macOS) make a vector for each shot's description and for each line of dialogue. Descriptions and transcript words also go into SQLite FTS5. Vision feature prints from step 2 are kept per keyframe for "more like this shot". | Vectors in `project.sqlite`; the FTS index |
 
 Steps 1–3, 5 and 6 are built into macOS or bundled and always run on this Mac. Step 4 is the one with a choice of engine.
 
@@ -34,22 +34,22 @@ Steps 1–3, 5 and 6 are built into macOS or bundled and always run on this Mac.
   "flags": ["soft"] }                 // soft | shaky | overexposed | underexposed
 ```
 
-The engine decodes greedily (temperature 0) into this JSON with a 160-token limit, validated against the shape, with one retry. Because nothing is sampled creatively, the sampler differences between local engines (min-p versus top-n-sigma) don't matter here.
+Both engines decode greedily (temperature 0) into this JSON with a 160-token limit, validated against the shape, with one retry. Because nothing is sampled creatively, the sampler differences between local engines (min-p versus top-n-sigma) don't matter here.
 
 ### Engines for descriptions
 
 | Engine | Detail | Runs | Size | Speed target (M4 Max) | Notes |
 |---|---|---|---|---|---|
-| This Mac | Quick | FastVLM 1.5B with MLX Swift, in Direction's process | 1.4 GB | ~0.3 s a shot | Apple's own; shorter, plainer lines |
-| This Mac | **Standard** (default) | Qwen3-VL 8B, 4-bit, MLX Swift | 5.8 GB | ~1 s a shot | Best balance |
-| This Mac | Best | Qwen3-VL 30B-A3B, 4-bit, MLX Swift | 17 GB | ~1.5 s a shot | Needs 32 GB of memory or more |
-| Gemini | — | Gemini Flash through the Gemini API with your key | — | Depends on upload | Footage leaves this Mac (360p proxies). Sees motion across a whole take, not only keyframes. |
+| This Mac | Quick | Qwen2.5-VL 3B, 4-bit, through `mlx-vlm` | 2.4 GB | ~0.4 s a shot | Shorter, plainer lines |
+| This Mac | **Standard** (default) | Qwen3-VL 8B, 4-bit, through `mlx-vlm` | 5.8 GB | ~1 s a shot | Best balance |
+| This Mac | Best | Qwen3-VL 30B-A3B, 4-bit, through `mlx-vlm` | 17 GB | ~1.5 s a shot | Needs 32 GB of memory or more |
+| OpenRouter | a vision version (default Gemini 3.1 Flash) | OpenRouter chat completions with your key | — | ~1 s a shot, in parallel | Three 672 px keyframes per shot leave this Mac; nothing else does |
 
-- Local engines run in-process with `mlx-swift-lm` (MLXVLM). No Python. Weights download on first use to `~/Library/Application Support/Direction/Vision/` with progress in Settings › Footage, and show in Settings › Storage.
-- If free disk space is less than the download plus 2 GB, the download doesn't start, and Settings shows "Only 13 GB free on Macintosh HD. Standard needs 5.8 GB." with Quick offered instead.
-- Memory: Standard holds about 6 GB while it looks, and unloads 60 s after the last shot.
-- Gemini sends each take's 360p proxy through the Files API and asks for the shot list and the same shape per shot, with timestamps; Direction's own shots (step 2) are kept and Gemini's lines are matched to them by time. Spend counts toward Settings › Services limits.
-- A Gemini app subscription isn't an API key. The key comes from Google AI Studio and is entered in Settings › Services.
+- **On this Mac**, Direction runs a small Python helper shipped in the app (`Resources/Vision/describe.py`) with the Python from `uv tool install mlx-vlm` (found like mlx-whisper: `~/.local/share/uv/tools/mlx-vlm/bin/python`, or any `python3` that can `import mlx_vlm`). The helper loads the version once and answers JSON lines on stdin/stdout: `{"images": [paths], "prompt": "…"}` → `{"text": "…"}`. It's stopped 60 s after the last shot. Apple's MLX library for Swift isn't used because `swift build` can't compile its GPU code.
+- Weights download on first use to the Hugging Face cache (`~/.cache/huggingface/hub`), with progress in Settings › Footage, and show in Settings › Storage.
+- If free disk space is less than the download plus 2 GB, the download doesn't start, and Settings says so with Quick offered instead.
+- **Through OpenRouter**, each shot's three keyframes go as `image_url` parts (JPEG data URLs) with `response_format` set to the description's JSON schema. Requests run 4 at a time. Spend counts toward Settings › Services limits.
+- Without mlx-vlm and without an OpenRouter key, steps 1–3, 5 and 6 still run; descriptions are skipped and search uses words only.
 
 Speed targets are for the sample film (214 takes, 3 h 12 min, about 1,900 shots): Standard finishes in about 35 minutes, and circling can start as soon as the first scene is logged.
 
@@ -67,7 +67,7 @@ Looking at footage is Direction's own work, done on the editor's behalf. Until t
 | `direction_watch` | `start`, `end` (cut seconds), `revision?`, `frames` (8–24, default 12) | A filmstrip image of the passage with timecodes, the words in it, sounds, and where the cuts fall. The closest thing to watching. |
 | `direction_search_footage` | `query`, `sceneID?`, `circledOnly?`, `limit` (default 12) | Ranked shots with a score, why they matched (`picture`, `words` or `both`), and keyframe paths |
 
-- Search ranks by vector similarity of the query to keyframes, blended with FTS5 scores over descriptions and words (0.6 picture, 0.4 text), best shot per take first.
+- Search ranks by the similarity of the query's sentence embedding to each shot's description and lines, blended with FTS5 scores (0.6 meaning, 0.4 exact words), best shot per take first. `similarTo: shotID` ranks by Vision feature-print distance instead.
 - `direction_dailies` gains an `index` field per take: `waiting`, `looking`, `done` or `failed`.
 - **Check your work.** Every skill that cuts ends with: watch every passage you changed with `direction_watch` before delivering. The turnover's finishing tool refuses delivery if a changed range was never watched in that run, with `not_watched` and the ranges.
 
@@ -104,5 +104,5 @@ Frame: `screens/60-dailies-search.html` · 1440 × 900.
 
 **Acceptance:**
 - [ ] Search returns in under 300 ms for 2,000 shots on this Mac.
-- [ ] Searching never sends footage or the query off this Mac unless the engine is Gemini, and even then the query stays local.
+- [ ] Searching never sends footage or the query off this Mac. Only describing shots through OpenRouter sends keyframes.
 - [ ] A take whose index failed still shows in Dailies with "Couldn't look at this take" and **Try again** in its context menu.

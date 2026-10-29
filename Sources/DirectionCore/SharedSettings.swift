@@ -4,7 +4,8 @@ import Foundation
 /// every process reads the same defaults suite, so the editor's tools follow what the director chose.
 public enum SharedSettings {
     public static let suiteName = "dev.direction.shared"
-    public static var defaults: UserDefaults { UserDefaults(suiteName: suiteName) ?? .standard }
+    /// Tests point this at a throwaway suite so they never touch the director's settings.
+    nonisolated(unsafe) public static var defaults: UserDefaults = UserDefaults(suiteName: suiteName) ?? .standard
 
     public enum Key {
         public static let transcriptionEngine = "transcriptionEngine"

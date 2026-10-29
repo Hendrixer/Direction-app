@@ -2,9 +2,9 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Settings › General, Editor, Footage, Cutting, Notifications, Shortcuts, Storage, Sharing.
+/// Settings › General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, editor, footage, cutting, notifications, shortcuts, storage, sharing
+    case general, editor, footage, cutting, services, notifications, shortcuts, storage, sharing
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
     var icon: String {
@@ -13,6 +13,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .editor: "gem"
         case .footage: "film.stack"
         case .cutting: "film"
+        case .services: "key"
         case .notifications: "bell"
         case .shortcuts: "keyboard"
         case .storage: "externaldrive"
@@ -73,6 +74,7 @@ struct SettingsView: View {
         case .editor: EditorPane(app: app)
         case .footage: FootagePane(preview: preview)
         case .cutting: CuttingPane(app: app)
+        case .services: ServicesPane(preview: preview)
         case .notifications: NotificationsPane(preview: preview)
         case .shortcuts: ShortcutsPane(recording: recording)
         case .storage: StoragePane(app: app, preview: preview)
@@ -130,7 +132,7 @@ struct SettingsToolbar: View {
                 Text(t.title).font(.system(size: 11))
             }
             .foregroundStyle(on ? Gate.Text.primary : Gate.Text.tertiary)
-            .frame(width: 76).padding(.top, 5).padding(.bottom, 6)
+            .frame(width: 74).padding(.top, 5).padding(.bottom, 6)
             .background { if on { RoundedRectangle(cornerRadius: 7).fill(Gate.Surface.raised) } }
             .contentShape(RoundedRectangle(cornerRadius: 7))
         }

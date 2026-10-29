@@ -163,6 +163,9 @@ final class FilmModel {
         room = defaultRoom
     }
 
+    // Phase 2 areas, each refreshed with the film (Sources/DirectionApp/Phase2).
+    let runs = EditorRunsModel(), index = FootageIndexModel(), looks = LooksModel(), graphics = GraphicsModel(), made = MadeModel()
+
     func startPolling() {
         guard pollTask == nil, !isPreview else { return }
         pollTask = Task { [weak self] in
@@ -195,6 +198,7 @@ final class FilmModel {
             announceDeliveredCuts()
             announceQuestions()
             loadDisplayed()
+            runs.refresh(self); index.refresh(self); looks.refresh(self); graphics.refresh(self); made.refresh(self)
         } catch { self.error = error.localizedDescription }
     }
 

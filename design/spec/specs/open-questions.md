@@ -22,7 +22,8 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 15. **Direction makes every service request.** Keys stay in the Keychain; the editor asks Direction with `direction_make`.
 16. **Direction starts the editor** (Claude Code or Codex) by default. Your own session over MCP stays supported with activity but no control.
 17. **Graphics are JavaScript Direction renders**, not Remotion. Examples ship with the app.
-18. **Local first for looking at footage.** MLX Swift in-process (Qwen3-VL 8B by default); Gemini is optional with a key.
+18. **Local first for looking at footage.** mlx-vlm in a helper process (Qwen3-VL 8B by default); OpenRouter is optional with a key.
+21. **One service: OpenRouter.** Music, voice, sound effects, new shots, stills and (optionally) looking at footage all go through OpenRouter with one key, replacing separate ElevenLabs, Runway, Higgsfield and Gemini keys.
 
 19. **Phase 2 frames vary the sample.** Frame 61 shows note 4 answered two ways, B with made music, where story.md has a single −6 dB answer. Frame 64 adds an eighth answer to Cut 4, a title for the cold open numbered 8, although Script's note 8 is "Let this breathe" and the Cut 4 turnover covers notes 1–7. Treat 61 and 64 as alternate samples that each show one feature, not one continuous state.
 20. **The Look sheet's layout** (frame 63): Strength sits on the Looks header row, Apply to sits in the sheet's foot left of the buttons, and filter rows are 22 tall, so everything fits a 720-tall sheet without scrolling. This wins over looks.md where they differ.
@@ -34,6 +35,6 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 - **Region dim strength.** While drawing, the area outside the region is dimmed 35%. That may be too subtle over bright footage; 50% while drawing, 35% at rest is the fallback.
 - **Codex versions.** The list of versions to offer for Codex. Until decided, "The program's default" and Other….
 - **Cost with plan sign-ins.** Claude Code and Codex may report no cost when signed in with a plan. The popover hides spend then; decide whether to show tokens instead.
-- **Music for release.** ElevenLabs' self-serve music terms exclude film and TV. Decide whether to require an enterprise plan, add another music service, or warn at delivery when a film contains made music.
+- **Music for release.** Each music version on OpenRouter has its own terms. Decide whether Direction warns at delivery when a film contains made music.
 - **Vision downloads.** Standard is 5.8 GB and Best 17 GB. This Mac has 13 GB free today; decide whether Quick should be the default on Macs with less than 50 GB free.
 - **GSAP's license** is free for commercial use but excludes tools that compete with Webflow. Direction isn't one; confirm before bundling, or drop it from the bundled libraries.

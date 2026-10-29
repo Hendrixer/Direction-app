@@ -56,7 +56,7 @@ public final class ProjectStore: Sendable {
                 """)
             }
         }
-        try database.write { db in try Self.ensureDirectingTables(db) }
+        try database.write { db in try Self.ensureDirectingTables(db); try Self.ensurePhase2Tables(db) }
     }
 
     public func read(revision: Int? = nil) throws -> Project {

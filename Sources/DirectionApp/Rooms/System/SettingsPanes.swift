@@ -114,6 +114,7 @@ struct EditorPane: View {
 
     var body: some View {
         SettingsPane {
+            EditorWhoEditsGroup(app: app)
             SettingsGroup(label: "How much freedom the editor has", note: AnyView(SettingsNote("You can change this for a single turnover in the Turnover sheet."))) {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(Latitude.allCases, id: \.self) { l in latitudeCard(l) }
@@ -299,6 +300,8 @@ struct FootagePane: View {
                 .disabled(!usesWhisper)
                 if usesWhisper { setupRow }
             }
+            FootageLookingGroup(preview: preview)
+            FootageColorGroup(preview: preview)
         }
         .task { await check() }
     }
