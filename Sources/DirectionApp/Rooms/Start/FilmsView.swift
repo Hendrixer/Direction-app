@@ -330,6 +330,8 @@ private struct FilmCardView: View {
 /// First launch (01): the mark, one sentence on what Direction does, and how it goes.
 private struct FilmsWelcome: View {
     var app: AppModel
+    /// Snapshots pin the mark's light; the app lets it move.
+    var markMoment: Double? = nil
     @State private var shown = false
 
     var body: some View {
@@ -337,11 +339,10 @@ private struct FilmsWelcome: View {
             EllipticalGradient(stops: [.init(color: Gate.Steel.ramp[3], location: 0), .init(color: Gate.Surface.canvas, location: 0.7)], center: UnitPoint(x: 0.5, y: 0.42), startRadiusFraction: 0, endRadiusFraction: 0.5)
                 .scaleEffect(x: 1, y: 0.9, anchor: UnitPoint(x: 0.5, y: 0.42))
             VStack(spacing: 22) {
-                if let mark = BrandAssets.mark {
-                    Image(nsImage: mark).resizable().interpolation(.high).scaledToFit().frame(width: 168, height: 168)
+                if BrandAssets.mark != nil {
+                    ChromeMark(size: 168, at: markMoment)
                         .shadow(color: .black.opacity(0.85), radius: 22, y: 34)
                         .opacity(shown ? 1 : 0).offset(y: shown || reduceMotion ? 0 : 8)
-                        .accessibilityHidden(true)
                 }
                 VStack(spacing: 22) {
                     Text("Start a film").font(Gate.Font.brand(size: 56, width: 125, weight: 800)).tracking(-1.4).foregroundStyle(Gate.Text.primary)

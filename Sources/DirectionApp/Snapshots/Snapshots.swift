@@ -43,6 +43,13 @@ enum Snapshots {
     static func render(_ id: String, to url: URL) -> Bool {
         guard let make = registry[id] else { FileHandle.standardError.write(Data("No snapshot named \(id). Known: \(registry.keys.sorted().joined(separator: ", "))\n".utf8)); return false }
         let scene = make()
+        // Ids starting "zz-" are motion studies: ImageRenderer draws SwiftUI blend modes, which cacheDisplay drops.
+        if id.hasPrefix("zz-") {
+            let renderer = ImageRenderer(content: scene.view.frame(width: scene.size.width, height: scene.size.height).environment(\.colorScheme, .dark))
+            renderer.scale = 2
+            guard let image = renderer.cgImage, let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return false }
+            do { try data.write(to: url); print("rendered \(id) → \(url.path)"); return true } catch { return false }
+        }
         let host = NSHostingView(rootView: scene.view.frame(width: scene.size.width, height: scene.size.height).environment(\.colorScheme, .dark))
         host.frame = NSRect(origin: .zero, size: scene.size)
         let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
