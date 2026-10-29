@@ -75,7 +75,7 @@ extension ToolRuntime {
                 path = output.path; times = layout.times
             }
             let cells: [JSONValue] = times.enumerated().map { i, t in .object(["cell": .number(Double(i + 1)), "time": .number((t * 1000).rounded() / 1000), "timecode": .string(SourceTimecode.format(t, fps: fps))]) }
-            return ToolResponse(.object(["assetID": .string(asset.id), "take": .string(label(asset.id, try store.dailies(), [asset.id: asset])), "columns": .number(Double(layout.columns)), "rows": .number(Double(layout.rows)), "cells": .array(cells), "path": .string(path), "order": .string("Cells read left to right, top to bottom.")]), imagePaths: [path])
+            return ToolResponse(.object(["assetID": .string(asset.id), "take": .string(label(asset.id, try store.dailies(), [asset.id: asset])), "columns": .number(Double(layout.columns)), "rows": .number(Double(layout.rows)), "cells": .array(cells), "path": .string(path), "order": .string("Cells read left to right, top to bottom.")]), imagePaths: [try pngCopy(path)])
 
         case "direction_watch":
             return try await watch(a)
@@ -155,8 +155,8 @@ extension ToolRuntime {
         heard.sort { $0.0 < $1.0 }
         let footer = text.isEmpty ? "No words in this passage." : "\u{201C}\(text)\u{201D}"
         let image = try ContactSheet.draw(layout, images: images, labels: layout.times.map { SourceTimecode.format($0, fps: fps) }, marks: marks, footer: footer)
-        let output = cacheDirectory.appendingPathComponent("Watch").appendingPathComponent(newID("watch") + ".jpg")
-        try SourceFrames.writeJPEG(image, to: output, quality: 0.8)
+        let output = cacheDirectory.appendingPathComponent("Watch").appendingPathComponent(newID("watch") + ".png")
+        try MediaInspector.writePNG(image, to: output)
         try store.recordWatched(revision: p.editRevision, start: start, end: stop)
         let cells: [JSONValue] = layout.times.enumerated().map { i, t in .object(["cell": .number(Double(i + 1)), "time": .number((t * 1000).rounded() / 1000), "timecode": .string(SourceTimecode.format(t, fps: fps)), "afterCut": .bool(marks.contains(i))]) }
         return ToolResponse(.object([
@@ -165,6 +165,15 @@ extension ToolRuntime {
             "words": .string(text), "sounds": .array(heard.map { .object(["start": .number(($0.0 * 100).rounded() / 100), "end": .number(($0.1 * 100).rounded() / 100), "kind": .string($0.2.rawValue)]) }),
             "path": .string(output.path), "watched": .bool(true),
         ]), imagePaths: [output.path])
+    }
+
+    /// MCP sends every image as PNG, so a JPEG sheet goes out as a PNG copy in the cache.
+    private func pngCopy(_ jpeg: String) throws -> String {
+        guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: jpeg) as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw DirectionError("image_unreadable", "Couldn't read the contact sheet.") }
+        let output = cacheDirectory.appendingPathComponent("Sheets").appendingPathComponent(newID("sheet") + ".png")
+        try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try MediaInspector.writePNG(image, to: output)
+        return output.path
     }
 
     // MARK: States
@@ -204,7 +213,9 @@ extension ToolRuntime {
             value["people"] = .array(look.people.map(JSONValue.string)); value["setting"] = look.setting.map(JSONValue.string) ?? .null
             value["flags"] = .array(look.flags.map(JSONValue.string)); value["describedWith"] = s.engine.map(JSONValue.string) ?? .null
         } else {
-            value["description"] = .null
+            // Not described (yet): the same keys, empty, so every shot reads the same way.
+            for key in ["description", "size", "movement", "setting", "describedWith"] { value[key] = .null }
+            value["people"] = .array([]); value["flags"] = .array([])
         }
         return .object(value)
     }

@@ -39,6 +39,7 @@ public enum FootageIndexer {
     /// engine isn't ready, and nothing falls back to another engine (footage stays on this Mac).
     public static func chosenDescriber() -> (describer: (any ShotDescriber)?, skipped: String?, download: SharedSettings.LookDetail?) {
         if let override = describerOverride { return override() }
+        if SharedSettings.lookOverride == "none" { return (nil, "Descriptions are off for this process.", nil) }
         switch SharedSettings.lookEngine {
         case .thisMac:
             let detail = SharedSettings.lookDetail

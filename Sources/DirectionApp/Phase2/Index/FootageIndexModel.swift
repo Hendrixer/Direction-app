@@ -35,6 +35,7 @@ import DirectionMedia
     @ObservationIgnored private var shotCache: [String: (stamp: Double, shots: [Shot], sounds: [IndexSound])] = [:]
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var lastAutoStart = Date.distantPast
+    @ObservationIgnored private var lastGrow = Date.distantPast
     @ObservationIgnored private weak var film: FilmModel?
 
     /// Called from `FilmModel.refresh()` whenever the store changes.
@@ -55,7 +56,8 @@ import DirectionMedia
             looking = job != nil && !assets.isEmpty ? IndexProgress(done: done, total: assets.count) : nil
             shotCache = shotCache.filter { takes[$0.key]?.updatedAt == $0.value.stamp }
             autoStart(film, assets: assets)
-            if searching, !searchedQuery.isEmpty, job != nil { search(film, now: true) }
+            // "Results will grow": search again as takes are looked at, every few seconds at most.
+            if searching, !searchedQuery.isEmpty, job != nil, Date().timeIntervalSince(lastGrow) > 3 { lastGrow = Date(); search(film, now: true) }
         } catch { film.error = error.localizedDescription }
     }
 

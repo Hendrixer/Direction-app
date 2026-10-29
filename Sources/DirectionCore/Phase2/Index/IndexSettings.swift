@@ -39,11 +39,14 @@ extension SharedSettings {
         ("openai/gpt-5.4-mini", "GPT-5.4 Mini"),
     ]
 
+    /// `DIRECTION_LOOK_ENGINE` (thisMac, openRouter or none) and `DIRECTION_LOOK_DETAIL` override
+    /// Settings for one process, so a smoke run never changes the director's choice.
+    public static var lookOverride: String? { ProcessInfo.processInfo.environment["DIRECTION_LOOK_ENGINE"] }
     public static var lookEngine: LookEngine {
-        defaults.string(forKey: IndexKey.engine).flatMap(LookEngine.init(rawValue:)) ?? .thisMac
+        lookOverride.flatMap(LookEngine.init(rawValue:)) ?? defaults.string(forKey: IndexKey.engine).flatMap(LookEngine.init(rawValue:)) ?? .thisMac
     }
     public static var lookDetail: LookDetail {
-        let id = defaults.string(forKey: IndexKey.detail) ?? "standard"
+        let id = ProcessInfo.processInfo.environment["DIRECTION_LOOK_DETAIL"] ?? defaults.string(forKey: IndexKey.detail) ?? "standard"
         return lookDetails.first { $0.id == id } ?? lookDetails[1]
     }
     public static var lookOpenRouterVersion: String {
