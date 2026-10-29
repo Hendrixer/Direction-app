@@ -178,6 +178,30 @@ struct TimelineRenderTests {
     }
 }
 
+/// The editor reads the timeline; it changes the cut only through edit functions.
+@Test func noToolTakesATimelineDocument() async throws {
+    for d in ToolCatalog.definitions where !d.readOnly {
+        for key in ["otio", "timeline", "document", "sequence", "tracks", "clips"] { #expect(d.inputSchema["properties"][key] == .null, "\(d.name) takes \(key)") }
+    }
+    #expect(ToolCatalog.definitions.contains { $0.name == "direction_timeline" && $0.readOnly } && ToolCatalog.definitions.contains { $0.name == "direction_edit_catalog" && $0.readOnly })
+    let f = try await MediaFixture.make(); defer { f.cleanup() }
+    let first = try f.store.revision()
+    _ = try await f.runtime.invoke("direction_create_cut", arguments: .object(["name": .string("Assembly")]))
+    _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(first)), "notes": .array([]), "operations": .array([.object(["op": .string("removeRange"), "range": .object(["start": .number(0), "end": .number(1)])])])]))
+    let saved = try await f.runtime.invoke("direction_timeline", arguments: .object(["cut": .string("Assembly")])).value
+    #expect(saved["editRevision"].int == first && saved["cut"].string == "Assembly" && saved["otio"]["OTIO_SCHEMA"].string == "Timeline.1")
+    let working = try await f.runtime.invoke("direction_timeline").value
+    #expect(working["cut"].string == "Cut 2 (working)" && working["editRevision"].int == first + 1)
+    // Errors point at the operation that failed.
+    do {
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(first + 1)), "operations": .array([.object(["op": .string("split"), "clipID": .string("nope"), "at": .number(1)]), .object(["op": .string("trim"), "colour": .string("red")])])]))
+        Issue.record("Expected an error")
+    } catch let e as DirectionError {
+        let encoded = String(decoding: try JSONEncoder.direction.encode(e), as: UTF8.self)
+        #expect(e.code == "bad_argument" && e.index == 1 && encoded.contains("\"index\":1"))
+    }
+}
+
 /// One second of half-transparent blue at 320×180, ProRes 4444 with alpha.
 func writeAlphaMovie(to url: URL) async throws {
     let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
