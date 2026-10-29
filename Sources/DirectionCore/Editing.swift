@@ -334,7 +334,7 @@ public enum EditReducer {
         case "overlapping_clips": "overlap"
         case "asset_not_found", "missing_asset": "missing_media"
         case "unknown_operation": "unknown_op"
-        case "scene_locked", "picture_locked", "overlap", "unknown_op", "missing_media", "no_words", "look_is_yours", "words_are_yours", "stale_revision", "shader_too_slow", "shader_invalid": c
+        case "scene_locked", "picture_locked", "overlap", "unknown_op", "missing_media", "no_words", "look_is_yours", "words_are_yours", "stale_revision", "shader_too_slow", "shader_invalid", "not_in_sync": c
         default: "bad_argument"
         }
     }
@@ -1238,13 +1238,17 @@ struct EditWork {
     mutating func cutaway(_ op: EditOperation) throws -> Outcome {
         let a = try asset(op.assetID)
         guard !a.video.isEmpty else { throw bad("\(a.name) has no picture to cut away to.") }
-        let src = try sourceRange(op.sourceRange ?? op.range, of: a)
+        // Without a source range, the same moment plays from a take in sync with the story.
+        let synced = op.sourceRange == nil && op.range == nil
+        if synced, (op.seconds ?? 0) <= 0 { throw bad("Without sourceRange, seconds says how long the cutaway runs; it plays the same moment from a take in sync with V1.") }
+        let length = synced ? snap(MediaTime(seconds: op.seconds!)) : try sourceRange(op.sourceRange ?? op.range, of: a).duration
         var at: MediaTime
         if let cover = op.cover {
             let cut: MediaTime
             if cover.contains("|") { cut = s.clips[try editPoint(cover, needsLeft: false).right].start } else { cut = s.clips[try clipIndex(cover, "cover")].start }
-            at = snap(cut - src.duration.scaled(by: 0.5)); if at < .zero { at = .zero }
+            at = snap(cut - length.scaled(by: 0.5)); if at < .zero { at = .zero }
         } else { guard let t = op.at else { throw bad("at, or cover with an edit point, says where the cutaway goes.") }; at = snap(t) }
+        let src = synced ? try syncedSource(a, at: at, length: length) : try sourceRange(op.sourceRange ?? op.range, of: a)
         let r = MediaRange(start: at, duration: src.duration)
         let layer = firstFree(audio: false, from: 1, r)
         var clip = Clip(assetID: a.id, name: a.name, kind: .video, layer: layer, start: at, sourceRange: src)
@@ -1252,6 +1256,16 @@ struct EditWork {
         for stream in a.audio { var m = stream.settings; m.muted = true; clip.audioOverrides[String(stream.id)] = m }
         s.clips.append(clip)
         return .init(summary: "Cut away to \(label(clip)) at \(tc(at))" + (op.cover != nil ? ", over the jump cut" : ""), changes: [.init(before: (at.seconds, clip.end.seconds), after: (at.seconds, clip.end.seconds), tracks: [clip.trackName])], clipIDs: [clip.id])
+    }
+
+    /// The part of `a` that recorded the same moment as V1 at `at` (footage-index.md › Sync).
+    func syncedSource(_ a: MediaAsset, at: MediaTime, length: MediaTime) throws -> MediaRange {
+        guard let base = s.clips.first(where: { $0.kind == .video && $0.layer == 0 && $0.assetID != nil && $0.start <= at && at < $0.end }), let baseID = base.assetID else { throw bad("There's no story clip on V1 at \(tc(at)) to line \(a.name) up with.") }
+        let here = base.sourceRange.start.seconds + (at - base.start).seconds * base.speed
+        let dailies = context?.dailies ?? Dailies()
+        guard let start = dailies.syncedTime(here, from: baseID, to: a.id) else { throw DirectionError("not_in_sync", "\(a.name) isn't in sync with \(label(base)). Give sourceRange, or see direction_dailies › syncGroups.") }
+        guard start >= -frame / 2, start + length.seconds <= a.duration.seconds + frame else { throw bad("\(a.name) wasn't recording for all of \(tc(at))–\(tc(at + length)).") }
+        return try sourceRange(MediaRange(start: MediaTime(seconds: max(0, start)), duration: length), of: a)
     }
 
     mutating func placeGraphic(_ op: EditOperation) throws -> Outcome {

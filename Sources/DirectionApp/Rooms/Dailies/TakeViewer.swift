@@ -170,11 +170,49 @@ struct DailiesTakeViewer: View {
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .hairlineBorder(.bottom)
+            if let group = model.dailies.syncGroup(for: takeID) { angles(group) }
             transcript.frame(maxHeight: .infinity)
             footer
         }
         .background(Gate.Surface.ground)
         .hairlineBorder(.leading)
+    }
+
+    /// Takes in sync with this one: switch between them at the same moment.
+    private func angles(_ group: SyncGroup) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                SectionLabel("Angles")
+                Spacer()
+                Text("In sync by sound").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
+            }
+            HStack(spacing: 6) {
+                ForEach(group.takes, id: \.assetID) { t in
+                    let label = model.dailiesLabel(model.dailies.take(t.assetID)), open = t.assetID == takeID
+                    Button { if !open { model.openTakeID = t.assetID } } label: {
+                        HStack(spacing: 5) {
+                            if t.assetID == group.soundAssetID { Image(systemName: "waveform").font(.system(size: 10)).foregroundStyle(Gate.Text.tertiary) }
+                            Text(label).font(.system(size: 12, weight: open ? .semibold : .regular, design: .monospaced))
+                        }
+                        .padding(.horizontal, 9).frame(height: 26)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(open ? Gate.Surface.raised : .clear).overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(open ? Gate.Line.strong : Gate.Line.subtle, lineWidth: 1)))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).foregroundStyle(open ? Gate.Text.primary : Gate.Text.secondary)
+                    .help(t.assetID == group.soundAssetID ? "\(label): the cut uses this take\u{2019}s sound" : "\(label), \(Self.offsetText(t.offset)) from the sound take")
+                    .accessibilityLabel("\(label)\(t.assetID == group.soundAssetID ? ", its sound is used" : "")\(open ? ", open" : "")")
+                }
+            }
+        }
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .hairlineBorder(.bottom)
+    }
+
+    /// "89 ms early", "1.2 s late".
+    static func offsetText(_ offset: Double) -> String {
+        let ms = abs(offset) * 1000
+        let amount = ms < 1000 ? "\(Int(ms.rounded())) ms" : String(format: "%.1f s", abs(offset))
+        return offset == 0 ? "in step" : "\(amount) \(offset > 0 ? "late" : "early")"
     }
 
     /// No words yet: say why, truthfully, and offer the way out.
@@ -309,6 +347,8 @@ struct DailiesTakeViewer: View {
     /// The same moment in the next take: same line (by its words, else its place), same offset into it.
     private func carriedPosition(from old: String, to new: String) -> Double {
         let pos = player.position, newDuration = model.dailiesDuration(new)
+        // An angle of the same moment: exactly where this one is.
+        if let t = model.dailies.syncedTime(pos, from: old, to: new) { return min(max(0, t), max(0, newDuration - 0.05)) }
         let a = model.dailiesLines(old), b = model.dailiesLines(new)
         func words(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0 == " " } }
         if let i = a.lastIndex(where: { $0.start <= pos }) {

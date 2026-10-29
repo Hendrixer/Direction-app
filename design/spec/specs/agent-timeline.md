@@ -108,7 +108,7 @@ The editor may export the document to its working folder and analyze it in a scr
 
 | Op | Arguments | What Direction does |
 |---|---|---|
-| `cutaway` | `assetID`, `sourceRange`, `at`, `cover?` (a clip id or edit point) | Puts picture on V2 over the story; the sound underneath keeps playing. With `cover`, Direction centers it over a jump cut. |
+| `cutaway` | `assetID`, `sourceRange?`, `seconds?`, `at`, `cover?` (a clip id or edit point) | Puts picture on V2 over the story; the sound underneath keeps playing. With `cover`, Direction centers it over a jump cut. Without `sourceRange`, `seconds` long: a take in sync with V1 there plays the same moment, lined up to the frame (switching angles, a screen recording under the words about it, picture-in-picture with `reframe`). |
 | `placeGraphic` | `graphic`, `at`, `seconds?`, `aboveLook` (default true) | Places a checked graphic (`graphics.md`) on the first free layer at V2 or above |
 | `placeMade` | `madeID`, `at`, `track`, `sourceRange?` | Places a made clip like footage |
 
@@ -135,6 +135,7 @@ Every operation is checked before anything commits:
 | `unknown_op`, `bad_argument` | Not in the catalog, or a value out of range |
 | `missing_media` | An asset, graphic or made clip that doesn't exist |
 | `no_words` | `replaceTake` with `words`, or `tightenPauses`, on a take with no transcript |
+| `not_in_sync` | A `cutaway` without `sourceRange` from a take that isn't in sync with the story clip under it |
 | `look_is_yours` | Anything that would change the director's look |
 | `words_are_yours` | Changing a graphic's words the director set, without a note that names it |
 

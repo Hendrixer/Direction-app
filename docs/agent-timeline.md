@@ -70,6 +70,7 @@ Each change is placed in the new cut (through every later operation in the batch
 | `unknown_op` / `bad_argument` | Not in the catalog / a value out of range, a missing argument, an unknown argument, an id that isn't in the cut, not enough handle. |
 | `missing_media` | An asset, graphic, made clip or LUT file that doesn't exist. |
 | `no_words` | `replaceTake` with words, `removeWords`, `tightenPauses` or `duck` with no transcript. |
+| `not_in_sync` | A `cutaway` without `sourceRange` from a take that isn't in sync with the V1 clip under it. |
 | `look_is_yours` | `look`, `setLook`, `applyLook`, or an effect named `look`/`lut`. |
 | `words_are_yours` | Raised by the graphics tools, not by edit functions, which never change a graphic's words. |
 | `shader_invalid` / `shader_too_slow` | A shader that doesn't compile or makes NaN or infinity / is slower than 40 ms a frame at 1080p. |
@@ -104,7 +105,7 @@ Story operations keep every layer in sync; overlays and sound-only clips move on
 | `setEffect` / `removeEffect` | `effectID, params?, keys?` / `effectID` | A clip's blend has the id `<clipID>:blend`. |
 | `transition` | `editPoint, type, frames` | Centered on the cut. `"|<clip>"` dips in at a clip's head. A dissolve needs handles; an edit that later takes them away drops it with a warning. |
 | `removeTransition` | `editPoint` | |
-| `cutaway` | `assetID, sourceRange, at \| cover` | First free layer at V2 or above; its own sound is muted. `cover` (a clip or edit point) centers it over that cut. |
+| `cutaway` | `assetID, sourceRange \| seconds, at \| cover` | First free layer at V2 or above; its own sound is muted. `cover` (a clip or edit point) centers it over that cut. With `seconds` and no `sourceRange`, a take in `direction_dailies › syncGroups` plays the same moment as V1 under it. |
 | `placeGraphic` | `graphic, at, seconds?, aboveLook?` (default true) | First free layer at V2 or above. |
 | `placeMade` | `madeID, at, track, sourceRange?` | Places a made clip like footage; the track must be free. |
 | `gain` | `target (clip or A track), dB, keys?: {dB: [{t, v}]}` | |

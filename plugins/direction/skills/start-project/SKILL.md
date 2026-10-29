@@ -11,11 +11,13 @@ Keep the returned `projectPath` and supply it on **every** project tool call. Op
 
 Inspect the project, then import each user-supplied file with `direction_import`. `append: false` only adds to the library; `append: true` places it at the end of the sequence. Separate media ingestion from the intended assembly. Inspect returned asset IDs and every embedded audio track before choosing dialogue/music sources. Don't generate or download footage unless the user requests it.
 
-Use `direction_edit` for the requested sequence format and initial assembly. There is no baked-in interview, multicam, or social workflow. Let the user's brief determine the cut. Landscape, portrait, and square are sequence dimensions. Multiple camera angles can be layered manually; automatic synchronization is not implemented.
+Use `direction_edit` for the requested sequence format and initial assembly. There is no baked-in interview, multicam, or social workflow. Let the user's brief determine the cut. Landscape, portrait, and square are sequence dimensions. Multiple camera angles, screen recordings and separate sound are synced by their sound (see below); a cutaway without `sourceRange` plays the same moment from a synced take.
 
 Inspect exact revision and tool schemas before editing. Use `baseEditRevision` and a distinct `idempotencyKey` for each intended mutation, retaining that key for identical retries. If another edit changed the revision, inspect again and revise the batch. Originals remain linked, so tell the user where their `.direction` project is stored and keep source files available.
 
 You can't watch video, so Direction looks at the footage for you, the way an assistant editor does when it comes in: it finds every shot, makes a contact sheet for every take, writes a line about each shot, notes the sounds, and makes it all searchable. It starts by itself when footage arrives (if Settings › Footage says so); otherwise call `direction_index`, which returns a job. How shots are described is the director's choice in Settings, never yours. `direction_dailies` gives each take an `index` state: `waiting`, `looking`, `done` or `failed`. A take can be logged as soon as its shots exist, before its descriptions do.
+
+Direction also finds takes that recorded the same moment by their sound (`direction_sync_takes`, run by itself when footage arrives): `direction_dailies` lists them as `syncGroups`, each with the take whose sound the cut uses and every take's offset on its clock. Log synced takes as angles of one moment in the same scene. Takes that don't share sound are never linked, so a single-camera film has none.
 
 Log the footage for the director's Dailies with `direction_log_dailies`, working from the index rather than raw files:
 

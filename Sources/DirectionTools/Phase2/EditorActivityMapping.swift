@@ -54,6 +54,8 @@ public enum EditorActivityLog {
             return ActivityInput(verb: "Looking at", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
         case "direction_transcribe", "direction_measure_audio", "direction_listen", "direction_sounds":
             return ActivityInput(verb: "Listening to", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
+        case "direction_sync_takes":
+            return ActivityInput(verb: "Matching", object: "the takes\u{2019} sound", tool: name)
         case "direction_audio":
             let asset = a["assetID"].string.map { take($0, c) } ?? "the sound"
             let changes = ["muted", "gainDB", "fadeIn", "fadeOut", "highPassHz", "bassDB", "trebleDB", "compressor", "thresholdDB", "limiter"].contains { a[$0] != .null }

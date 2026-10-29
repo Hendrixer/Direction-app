@@ -641,6 +641,9 @@ final class FilmModel {
 
     // MARK: Dailies
 
+    /// Not in Sync, and Use This Take's Sound (footage-index.md › Sync).
+    func unsync(_ assetID: String) { perform { try $0.unsync(assetID: assetID) } }
+    func useSyncSound(_ assetID: String) { perform { try $0.setSyncSound(assetID: assetID) } }
     func setCircle(_ assetID: String, _ on: Bool) { perform { try $0.setCircle(assetID: assetID, circled: on) }; registerUndo(on ? "Circle Take" : "Uncircle Take") { $0.setCircle(assetID, !on) } }
     func moveTake(_ assetID: String, to sceneID: String?) { let old = dailies.take(assetID).sceneID; perform { try $0.setTakeScene(assetID: assetID, sceneID: sceneID) }; registerUndo("Move Take") { $0.moveTake(assetID, to: old) } }
     func setUnusable(_ assetID: String, _ on: Bool) { perform { try $0.setUnusable(assetID: assetID, unusable: on) }; registerUndo(on ? "Mark Not Usable" : "Mark Usable") { $0.setUnusable(assetID, !on) } }

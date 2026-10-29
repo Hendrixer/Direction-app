@@ -477,3 +477,46 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     expectFailure("shader_invalid", index: nil) { _ = try ShaderHeader.params("// direction: param amount 1 0 0.5") }
     #expect(CutTimecode.string(72.27, rate: 30) == "01:12:08" && CutTimecode.rate(24_000.0 / 1_001) == "23.976" && CutTimecode.length(220, rate: 24) == "3:40:00")
 }
+
+// MARK: Sync (footage-index.md › Sync)
+
+@Test func aCutawayWithoutASourceRangePlaysTheSameMomentFromASyncedTake() throws {
+    var cut = TimelineCut.make()
+    // d started recording 1.5 s after a: a's time = d's time + 1.5.
+    cut.context.dailies.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "a", takes: [SyncedTake(assetID: "a", offset: 0, match: 1), SyncedTake(assetID: "d", offset: 1.5, match: 0.98)], method: "sound", createdAt: 0)]
+    // At cut 1.0, V1 plays a at 3.0, which is d at 1.5.
+    let r = try cut.apply(#"{"op":"cutaway","assetID":"d","at":1,"seconds":2}"#)
+    let away = clip(cut.project, r.operations[0].clipIDs![0])
+    #expect(close(away.sourceRange.start.seconds, 1.5, 0.001) && close(away.sourceRange.duration.seconds, 2, 0.001) && away.layer == 1)
+    // Under the cut between c1 and c2 the story is b, which isn't in sync with d.
+    expectFailure("not_in_sync", index: 0) { _ = try cut.run([#"{"op":"cutaway","assetID":"d","at":5,"seconds":2}"#]) }
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"cutaway","assetID":"d","at":1}"#]) }
+    // d hadn't started at cut 0 (a at 2.0 is d at 0.5, but 0.6 s earlier it wasn't recording).
+    cut.context.dailies.syncGroups![0].takes[1].offset = 2.6
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"cutaway","assetID":"d","at":0,"seconds":1}"#]) }
+}
+
+@Test func theDirectorShapesSyncAndDirectionKeepsTheirChoices() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-sync-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = try ProjectStore.create(at: dir.appendingPathComponent("Sync.direction"), name: "Sync")
+    let found = SyncGroup(id: "g", soundAssetID: "cam", takes: [SyncedTake(assetID: "cam", offset: 0, match: 1), SyncedTake(assetID: "screen", offset: -0.089, match: 0.99), SyncedTake(assetID: "phone", offset: 2.5, match: 0.8)], method: "sound", createdAt: 0)
+    try store.saveSync([found], checked: ["cam", "screen", "phone"])
+    // Use the screen recording's sound: every offset moves to its clock.
+    try store.setSyncSound(assetID: "screen")
+    var g = try #require(try store.dailies().syncGroups?.first)
+    #expect(g.soundAssetID == "screen" && g.take("screen")?.offset == 0 && g.take("cam")?.offset == 0.089 && g.take("phone")?.offset == 2.589)
+    #expect(try store.dailies().syncedTime(10, from: "phone", to: "cam") == 12.5)
+    // A fresh pass finds the same takes: the director's sound stays.
+    try store.saveSync([found], checked: [])
+    #expect(try store.dailies().syncGroups?.first?.soundAssetID == "screen")
+    // Not in Sync: the phone leaves, and the pair is remembered.
+    try store.unsync(assetID: "phone")
+    let d = try store.dailies()
+    g = try #require(d.syncGroups?.first)
+    #expect(g.takes.map(\.assetID).sorted() == ["cam", "screen"] && d.notInSync?.contains(["cam", "phone"]) == true && d.notInSync?.contains(["phone", "screen"]) == true)
+    // A group of one is no group.
+    try store.unsync(assetID: "cam")
+    #expect(try store.dailies().syncGroups?.isEmpty == true)
+    #expect(Set(try store.dailies().syncChecked ?? []) == ["cam", "screen", "phone"])
+}

@@ -41,6 +41,10 @@ import DirectionMedia
     @ObservationIgnored private weak var film: FilmModel?
     @ObservationIgnored private var startingTranscription = false
     @ObservationIgnored private var transcribeAttempts: [String: Int] = [:]
+    @ObservationIgnored private var startingSync = false
+    @ObservationIgnored private var syncAttempts = 0
+    /// Takes with sound whose sound hasn't been compared with the others yet.
+    var unsynced = 0
 
     /// Called from `FilmModel.refresh()` whenever the store changes.
     func refresh(_ film: FilmModel) {
@@ -61,6 +65,7 @@ import DirectionMedia
             shotCache = shotCache.filter { takes[$0.key]?.updatedAt == $0.value.stamp }
             autoStart(film, assets: assets)
             listen(film, assets: assets)
+            sync(film, assets: assets)
             // "Results will grow": search again as takes are looked at, every few seconds at most.
             if searching, !searchedQuery.isEmpty, job != nil, Date().timeIntervalSince(lastGrow) > 3 { lastGrow = Date(); search(film, now: true) }
         } catch { film.error = error.localizedDescription }
@@ -77,7 +82,25 @@ import DirectionMedia
 
     /// Direction is still looking at or listening to footage that arrived, so logging waits. A take
     /// that just arrived counts as waiting before its index job exists.
-    var busy: Bool { looking != nil || listening != nil || (SharedSettings.lookAutomatically && states.values.contains(.waiting)) }
+    var busy: Bool { looking != nil || listening != nil || unsynced > 0 || (SharedSettings.lookAutomatically && states.values.contains(.waiting)) }
+
+    /// Takes that recorded the same moment are found by their sound before logging, so the editor
+    /// logs them as angles of one moment (footage-index.md › Sync). Seconds of work on this Mac;
+    /// tried twice at most in a session.
+    private func sync(_ film: FilmModel, assets: [MediaAsset]) {
+        let checked = Set(film.dailies.syncChecked ?? [])
+        let speaking = assets.filter { !$0.audio.isEmpty && $0.duration.seconds >= 10 }
+        let running = film.jobs.contains { $0.kind == "sync" && !$0.isTerminal }
+        unsynced = film.isPreview || syncAttempts >= 2 ? 0 : speaking.filter { !checked.contains($0.id) }.count
+        guard unsynced > 0, !running, !startingSync, let runtime = film.runtime else { return }
+        startingSync = true; syncAttempts += 1
+        Task {
+            do { _ = try await runtime.invoke("direction_sync_takes") }
+            catch { DirectionLog.error("Couldn\u{2019}t compare the takes\u{2019} sound: \(error.localizedDescription)", "sync") }
+            startingSync = false
+            film.refresh(force: true)
+        }
+    }
 
     /// Every take with sound gets its words before the editor logs it (footage-index.md › Listening).
     /// The app transcribes them itself, one at a time, so the job outlives an editor run. A job that

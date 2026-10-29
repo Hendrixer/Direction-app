@@ -76,6 +76,51 @@ extension ProjectStore {
         }
     }
 
+    // MARK: Sync (footage-index.md › Sync)
+
+    /// Direction's sync pass: groups found among the takes it checked. Groups the director has
+    /// already shaped (their sound take) keep it when the same takes come back together.
+    public func saveSync(_ groups: [SyncGroup], checked: [String]) throws {
+        try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: groups.isEmpty ? "Compared the takes' sound" : "Found \(groups.count == 1 ? "takes" : "\(groups.count) sets of takes") in sync") { d in
+            let previous = d.syncGroups ?? []
+            d.syncGroups = groups.map { g in
+                guard let old = previous.first(where: { Set($0.takes.map(\.assetID)) == Set(g.takes.map(\.assetID)) }), old.soundAssetID != g.soundAssetID else { return g }
+                return Self.resound(g, to: old.soundAssetID)
+            }
+            d.syncChecked = Array(Set(d.syncChecked ?? []).union(checked)).sorted()
+        }
+    }
+
+    /// Not in Sync: the take leaves its group, and Direction won't link it with those takes again.
+    public func unsync(assetID: String) throws {
+        try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Took a take out of sync") { d in
+            guard let i = d.syncGroups?.firstIndex(where: { $0.take(assetID) != nil }), var g = d.syncGroups?[i] else { return }
+            let others = g.takes.map(\.assetID).filter { $0 != assetID }
+            d.notInSync = (d.notInSync ?? []) + others.map { [assetID, $0].sorted() }
+            g.takes.removeAll { $0.assetID == assetID }
+            if g.takes.count < 2 { d.syncGroups?.remove(at: i); return }
+            if g.soundAssetID == assetID { g = Self.resound(g, to: g.takes.max { $0.match < $1.match }!.assetID) }
+            d.syncGroups?[i] = g
+        }
+    }
+
+    /// Use This Take's Sound: the cut's sound comes from this take; offsets move to its clock.
+    public func setSyncSound(assetID: String) throws {
+        try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Chose which take's sound to use") { d in
+            guard let i = d.syncGroups?.firstIndex(where: { $0.take(assetID) != nil }) else { throw DirectionError("not_in_sync", "That take isn't in sync with another.") }
+            let g = d.syncGroups![i]
+            d.syncGroups?[i] = Self.resound(g, to: assetID)
+        }
+    }
+
+    static func resound(_ g: SyncGroup, to assetID: String) -> SyncGroup {
+        guard let base = g.take(assetID) else { return g }
+        var out = g; out.soundAssetID = assetID
+        out.takes = g.takes.map { SyncedTake(assetID: $0.assetID, offset: (($0.offset - base.offset) * 1000).rounded() / 1000, match: $0.match) }
+            .sorted { ($0.assetID != assetID ? 1 : 0, $0.assetID) < ($1.assetID != assetID ? 1 : 0, $1.assetID) }
+        return out
+    }
+
     // MARK: Dailies (director side)
 
     public func setCircle(assetID: String, circled: Bool) throws {

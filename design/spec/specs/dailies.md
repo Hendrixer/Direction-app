@@ -59,7 +59,7 @@ Frame: `screens/08-dailies-take.html` · Render: `renders/08-dailies-take@2x.png
 
 **Content:** 2A T3, A011_C002_1021.mov, 0:46, playhead 00:19:02. Reason: "Warmest read of the line, and she holds the look after it for two seconds." / "Fits "tired, then proud." T2, your circle, is a little faster." Secondary: "Not usable X", "Open in Script".
 
-**States and variants:** Playing (drawn) and paused. Takes with no transcript show "No dialogue" and a waveform instead. Flubbed takes show an alert chip at the flub time in the transcript.
+**States and variants:** Playing (drawn) and paused. A take in sync with others gets an **Angles** row above the transcript; switching keeps the same moment (footage-index.md › Sync). Takes with no transcript show "No dialogue" and a waveform instead. Flubbed takes show an alert chip at the flub time in the transcript.
 
 **Interactions:** Space play/pause; J K L shuttle; `C` circle; `X` not usable; `←`/`→` previous/next take, keeping the playhead's relative position so readings can be compared; clicking a transcript line seeks to it.
 

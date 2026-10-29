@@ -32,6 +32,7 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 24. **A changed shot changes the take itself** (Aleph 2.0 or FLUX Video Edit through OpenRouter), not a new shot from its frame. Runway and Higgsfield directly would add keys without adding versions: OpenRouter carries Runway's Aleph 2.0 and Gen-4.5 at Runway's prices, and Higgsfield's API resells the same versions.
 25. **Slow motion and sharpening are local.** Apple's frame interpolation and super resolution (VideoToolbox) run on this Mac at no cost; made shots are sharpened to the cut's size before they come in.
 26. **People in made shots.** For now the only person in the films is the director, so pickups that show someone from the footage need no extra consent step.
+27. **Takes that recorded the same moment are synced by their sound, not by a mode.** A screen recording and a camera, two cameras, a camera and a sound recorder are all the same thing: takes whose sound matches get linked, with offsets on the sound take's clock, and everything else is left alone. File dates can't be trusted for it (OBS stamps a recording when it ends). The editor never computes an offset: a cutaway without a source range plays the same moment (footage-index.md › Sync).
 
 ## Needs product decisions (not blockers for building the UI)
 

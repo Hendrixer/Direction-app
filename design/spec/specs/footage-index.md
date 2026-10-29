@@ -68,6 +68,17 @@ Transcription is Direction's work too. When footage arrives, the app transcribes
 - A take whose transcription failed (no speech on it, say) doesn't hold up logging. Its transcript section in Dailies says why and offers **Transcribe Again**.
 - Whisper runs through its library rather than its command line, with fallback temperatures, each window started fresh (`condition_on_previous_text` off) and silences skipped where it would make words up (`hallucination_silence_threshold` 2 s). The command line can't ask for fallback temperatures, so a window that began to loop ran on to the end of the take.
 
+### Sync
+
+Takes that recorded the same moment (two cameras, a camera and a screen recording, a camera and a separate sound recorder, takes against a song) are found by their sound, as part of listening. Nothing is a "multicam" or "screen share" mode: takes are linked only when their sound matches, so a single-camera film, B-roll or silent footage is never linked and nothing about it changes.
+
+- **How.** Every take with sound at least 10 s long becomes a loudness curve: its loudest unmuted track (a silent desktop-audio track is skipped), decoded at 8 kHz on Direction's own clock (the one it plays on), averaged every 10 ms and standardized. Every pair of curves is cross-correlated through the FFT. A pair is the same moment when the curves correlate at 0.6 or more over at least 10 s of overlap; the peak is placed between samples with a parabola. Pairs chain into groups. Curves are kept in the cache, so new footage costs only its own decoding. On this Mac, at no cost: two 3-minute takes take about a second.
+- **The sound take.** One take in each group carries the sound the cut uses: a sound-only take if there is one (a recorder beats a camera mic), otherwise the loudest. Every take's offset is on its clock: sound take's time = take's time + offset. The director can change it (**Use This Take's Sound**); Direction keeps that choice when it compares again.
+- **The director's say.** **Not in Sync** takes a take out of its group, and the pair is never linked again.
+- **When.** By itself when footage arrives, alongside looking and listening; the editor's logging run waits for it. Checked takes are remembered, so it runs again only for new footage. The editor can run it with `direction_sync_takes`.
+- **The editor.** `direction_dailies › syncGroups` lists the groups. A `cutaway` without `sourceRange` (give `seconds`) plays the same moment from a synced take, lined up to the frame: switching angles, a screen recording under the words about it, picture-in-picture with `reframe`. Logging logs synced takes as angles of one moment; the assembly lays the sound take (or the angle the brief wants seen most) on V1 and never lays its angles end to end.
+- **Dailies.** A synced take's card has a line under its status, "🔗 In sync with B1 · its sound". The open take (frame 08) gets an **Angles** row above the transcript: one button per take (a waveform glyph on the sound take), and switching keeps the same moment. ← → do too, between synced takes. The take's context menu has **Use This Take's Sound** and **Not in Sync**.
+
 ## What the editor gets (tools)
 
 | Tool | Arguments | Returns |
@@ -76,6 +87,7 @@ Transcription is Direction's work too. When footage arrives, the app transcribes
 | `direction_contact_sheet` | `assetID`, `range?`, `frames` (4–36, default 16) | One image grid with source timecodes, and the time of each cell |
 | `direction_frame` (extended) | `assetID` and `time` (source seconds), or the existing cut `time` | A real frame of a take, not only of the cut |
 | `direction_watch` | `start`, `end` (cut seconds), `revision?`, `frames` (8–24, default 12) | A filmstrip image of the passage with timecodes, the words in it, sounds, and where the cuts fall. The closest thing to watching. |
+| `direction_sync_takes` | `force?` | A job that finds takes in sync by their sound and writes `syncGroups` to Dailies |
 | `direction_search_footage` | `query`, `sceneID?`, `circledOnly?`, `limit` (default 12) | Ranked shots with a score, why they matched (`picture`, `words` or `both`), and keyframe paths |
 
 - Search ranks by the similarity of the query's sentence embedding to each shot's description and lines, blended with FTS5 scores (0.6 meaning, 0.4 exact words), best shot per take first. `similarTo: shotID` ranks by Vision feature-print distance instead.

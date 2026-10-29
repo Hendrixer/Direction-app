@@ -164,6 +164,7 @@ struct DailiesTakeCard: View {
                 .draggable(payload) { DailiesTakeThumb(asset: model.asset(take.assetID), art: preview.art[take.assetID] ?? model.dailiesArt(take.assetID), preview: model.isPreview).frame(width: 168, height: 94.5).clipShape(RoundedRectangle(cornerRadius: 7)).rotationEffect(.degrees(-3)).opacity(0.92) }
             Text(model.dailiesCaption(take)).font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary).lineSpacing(1.8).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             status.font(.system(size: 11.5)).lineLimit(1).padding(.top, -4)
+            if let g = model.dailies.syncGroup(for: take.assetID) { DailiesSyncLine(model: model, group: g, assetID: take.assetID).padding(.top, -4) }
         }
         .opacity(take.unusable ? 0.55 : 1)
         .contentShape(Rectangle())
@@ -271,6 +272,14 @@ struct DailiesTakeMenu: View {
         if ids.contains(where: model.indexFailed) {
             Button("Try Again") { for id in ids where model.indexFailed(id) { model.index.retry(id, film: model) } }
         }
+        if ids.count == 1, let g = model.dailies.syncGroup(for: ids[0]) {
+            Divider()
+            Button("Use This Take\u{2019}s Sound") { model.useSyncSound(ids[0]) }.disabled(g.soundAssetID == ids[0])
+            Button("Not in Sync") { model.unsync(ids[0]) }
+        }
+        if ids.count == 1, model.asset(ids[0])?.audio.isEmpty == false {
+            Button("Transcribe Again") { model.index.transcribeAgain(ids[0], film: model) }
+        }
         Divider()
         Button("Show in Finder") { model.revealTakes(ids) }
     }
@@ -369,6 +378,22 @@ struct DailiesMenuRowStyle: ButtonStyle {
 }
 
 /// A help tag as the frames draw it, for snapshots of hover states.
+/// "In sync with B1 · its sound": a take that recorded the same moment as others.
+struct DailiesSyncLine: View {
+    var model: FilmModel
+    var group: SyncGroup
+    var assetID: String
+    var body: some View {
+        let others = group.takes.filter { $0.assetID != assetID }.map { model.dailiesLabel(model.dailies.take($0.assetID)) }
+        HStack(spacing: 5) {
+            Image(systemName: "link").font(.system(size: 9.5, weight: .semibold))
+            Text("In sync with \(others.joined(separator: ", "))" + (group.soundAssetID == assetID ? " \u{00B7} its sound" : ""))
+        }
+        .font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
+        .help("Recorded at the same moment, matched by sound. Right-click for Not in Sync or Use This Take\u{2019}s Sound.")
+    }
+}
+
 /// The first time through, before anything is circled: how circling works, in one line.
 struct DailiesHowTo: View {
     var body: some View {

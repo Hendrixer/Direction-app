@@ -88,14 +88,51 @@ public struct Dailies: Codable, Hashable, Sendable {
     public var scenes: [DailiesScene] = []
     public var takes: [String: TakeInfo] = [:]
     public var updatedAt: Double?
+    /// Takes that recorded the same moment, found by their sound (footage-index.md › Sync).
+    public var syncGroups: [SyncGroup]?
+    /// Takes whose sound has been compared, so new footage is compared only against what's there.
+    public var syncChecked: [String]?
+    /// Pairs the director said aren't in sync; never linked again.
+    public var notInSync: [[String]]?
     public init() {}
     public init(scenes: [DailiesScene], takes: [String: TakeInfo]) { self.scenes = scenes; self.takes = takes }
     public func take(_ assetID: String) -> TakeInfo { takes[assetID] ?? TakeInfo(assetID: assetID) }
+    public func syncGroup(for assetID: String?) -> SyncGroup? { assetID.flatMap { id in syncGroups?.first { $0.take(id) != nil } } }
+    /// The same moment in another take: `time` in `from`'s source seconds, as `to`'s source seconds.
+    /// The same take maps to itself; takes that aren't in sync map to nothing.
+    public func syncedTime(_ time: Double, from: String, to: String) -> Double? {
+        if from == to { return time }
+        guard let g = syncGroup(for: from), let a = g.take(from), let b = g.take(to) else { return nil }
+        return time + a.offset - b.offset
+    }
     public func scene(for assetID: String?) -> DailiesScene? { assetID.flatMap { takes[$0]?.sceneID }.flatMap { id in scenes.first { $0.id == id } } }
     public var lockedAssetIDs: Set<String> {
         let locked = Set(scenes.filter(\.locked).map(\.id))
         return Set(takes.values.filter { $0.sceneID.map(locked.contains) ?? false }.map(\.assetID))
     }
+}
+
+/// Takes that recorded the same moment: two cameras, a camera and a screen recording, a camera
+/// and a sound recorder. Their clocks line up as: sound take's time = take's time + offset.
+public struct SyncGroup: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    /// The take whose sound the cut uses. Its offset is 0.
+    public var soundAssetID: String
+    public var takes: [SyncedTake]
+    /// "sound": their sound matched.
+    public var method: String
+    public var createdAt: Double
+    public init(id: String, soundAssetID: String, takes: [SyncedTake], method: String, createdAt: Double) { self.id = id; self.soundAssetID = soundAssetID; self.takes = takes; self.method = method; self.createdAt = createdAt }
+    public func take(_ assetID: String) -> SyncedTake? { takes.first { $0.assetID == assetID } }
+}
+
+public struct SyncedTake: Codable, Hashable, Sendable {
+    public var assetID: String
+    /// Seconds: sound take's time = this take's time + offset.
+    public var offset: Double
+    /// How closely its sound matched, 0–1.
+    public var match: Double
+    public init(assetID: String, offset: Double, match: Double) { self.assetID = assetID; self.offset = offset; self.match = match }
 }
 
 public enum NoteState: String, Codable, Sendable {

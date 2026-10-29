@@ -211,7 +211,7 @@ public actor ToolRuntime {
 
     public func cancelAll() { for task in tasks.values { task.cancel() } }
 
-    private func startJob(kind: String, revision: Int, phase: String, assetID: String? = nil, operation: @escaping @Sendable () async throws -> JSONValue) throws -> JobRecord {
+    func startJob(kind: String, revision: Int, phase: String, assetID: String? = nil, operation: @escaping @Sendable () async throws -> JSONValue) throws -> JobRecord {
         let now = Date().timeIntervalSince1970
         let job = JobRecord(id: newID("job"), kind: kind, revision: revision, ownerPID: getpid(), status: "running", phase: phase, progress: nil, result: nil, error: nil, createdAt: now, updatedAt: now, assetID: assetID)
         try store.saveJob(job)
