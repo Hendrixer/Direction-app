@@ -6,7 +6,7 @@ import DirectionTools
 
 @main
 struct DirectionCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Frame.self, Call.self, Tools.self, API.self, MCP.self])
+    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self])
 }
 
 struct ProjectOptions: ParsableArguments {

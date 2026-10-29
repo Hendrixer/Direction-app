@@ -94,7 +94,8 @@ extension ToolRuntime {
             let noteIDs = a["noteIDs"].array?.compactMap(\.string) ?? []
             let known = Set(try store.notes().map(\.id))
             for id in noteIDs where !known.contains(id) { throw DirectionError("feedback_not_found", "Note \(id) not found.") }
-            let q = EditorQuestion(id: newID("question"), turnoverID: a["turnoverID"].string, kind: try a.requiredString("kind"), noteIDs: noteIDs, text: try a.requiredString("text"), detail: a["detail"].string, choices: choices, allowsText: a["allowsText"].bool ?? true, answer: nil, createdAt: 0)
+            var q = EditorQuestion(id: newID("question"), turnoverID: a["turnoverID"].string, kind: try a.requiredString("kind"), noteIDs: noteIDs, text: try a.requiredString("text"), detail: a["detail"].string, choices: choices, allowsText: a["allowsText"].bool ?? true, answer: nil, createdAt: 0)
+            q.spend = try madeSpendAsk(a, kind: q.kind, choices: choices, turnoverID: q.turnoverID)
             return ToolResponse(try .wrapping(store.ask(q)))
 
         case "direction_questions":
