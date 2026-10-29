@@ -5,7 +5,7 @@ import Darwin
 /// Every writer, including another process, enters the same SQLite immediate transaction.
 public final class ProjectStore: Sendable {
     public let url: URL
-    private let database: DatabaseQueue
+    let database: DatabaseQueue
 
     public static func create(at url: URL, name: String) throws -> ProjectStore {
         guard !FileManager.default.fileExists(atPath: url.path) else { throw DirectionError("project_exists", "A file or project already exists at \(url.path).") }
@@ -56,6 +56,7 @@ public final class ProjectStore: Sendable {
                 """)
             }
         }
+        try database.write { db in try Self.ensureDirectingTables(db) }
     }
 
     public func read(revision: Int? = nil) throws -> Project {
@@ -82,7 +83,9 @@ public final class ProjectStore: Sendable {
             guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM state WHERE id = 1") else { throw DirectionError("corrupt_project", "Missing project state.") }
             var p = try JSONDecoder().decode(Project.self, from: data)
             guard p.editRevision == expectedRevision else { throw DirectionError("revision_conflict", "Expected revision \(expectedRevision); current revision is \(p.editRevision). Refresh before applying changes.") }
+            let before = p
             try transform(&p)
+            try LockRules.check(before: before, after: p, dailies: try Self.value(db, DirectingKey.dailies, as: Dailies.self) ?? Dailies(), state: try Self.value(db, DirectingKey.state, as: DirectingState.self) ?? DirectingState())
             try EditReducer.validate(p)
             p.editRevision += 1
             let output = try JSONEncoder.direction.encode(p)
@@ -147,9 +150,9 @@ public final class ProjectStore: Sendable {
         }
     }
 
-    public func addComment(text: String, author: String = "Director", sequenceID: String?, revision: Int, cutID: String? = nil, range: MediaRange? = nil, time: MediaTime? = nil, region: FrameRegion? = nil) throws -> ReviewComment {
+    public func addComment(text: String, author: String = "Director", sequenceID: String?, revision: Int, cutID: String? = nil, range: MediaRange? = nil, time: MediaTime? = nil, region: FrameRegion? = nil, extra: NoteFields? = nil, answers: [NoteAnswer]? = nil) throws -> ReviewComment {
         let p = try read(revision: revision), s = try p.sequence(sequenceID)
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && text.count <= 20_000 else { throw DirectionError("invalid_comment", "Feedback must contain 1–20,000 characters.") }
+        guard (extra?.noteState == .draft || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && text.count <= 20_000 else { throw DirectionError("invalid_comment", "Feedback must contain 1–20,000 characters.") }
         guard range == nil || time == nil else { throw DirectionError("invalid_comment", "Choose a moment or range, not both.") }
         if let r = range { guard r.isValid && r.end <= s.duration else { throw DirectionError("invalid_range", "Feedback range must be inside the reviewed cut.") } }
         if let t = time { guard t.isValid && t >= .zero && t < s.duration else { throw DirectionError("invalid_time", "Feedback moment must be inside the reviewed cut.") } }
@@ -158,7 +161,15 @@ public final class ProjectStore: Sendable {
         let contextRange = range ?? time.map { MediaRange(start: max(.zero, $0 - MediaTime(seconds: 3)), duration: MediaTime(seconds: 6)) }
         let contextWords = TranscriptEditing.words(in: s, transcripts: try transcripts()).filter { contextRange == nil || $0.range.intersection(contextRange!) != nil }
         var comment = ReviewComment(id: newID("feedback"), cutID: cutID, editRevision: revision, sequenceID: s.id, scope: range != nil ? "range" : time != nil ? "moment" : "cut", range: range, time: time, region: region, text: text, author: author, status: "open", anchors: ReviewAnchoring.anchors(project: p, sequence: s, range: range, time: time), transcriptContext: Array(contextWords.prefix(500)), replies: [], createdAt: Date().timeIntervalSince1970, cursor: 0)
+        if let extra {
+            comment.kind = extra.kind; comment.noteState = extra.noteState ?? .written; comment.authorRole = extra.authorRole; comment.person = extra.person
+            comment.outsideState = extra.authorRole == "outside" ? (extra.outsideState ?? "inbox") : nil
+            comment.scriptAction = extra.scriptAction; comment.sceneID = extra.sceneID
+        }
+        comment.answers = answers
+        let numbered = extra?.assignNumber ?? true, outside = extra?.authorRole == "outside"
         return try database.write { db in
+            if numbered && !outside { comment.number = try Self.nextNoteNumber(db) }
             try Self.event(db, kind: "feedback.created", revision: revision, summary: "Feedback from \(author)")
             comment.cursor = db.lastInsertedRowID
             try db.execute(sql: "INSERT INTO comments (id, payload, cursor) VALUES (?, ?, ?)", arguments: [comment.id, try JSONEncoder.direction.encode(comment), comment.cursor])
@@ -215,5 +226,5 @@ public final class ProjectStore: Sendable {
         // Table names are private compile-time constants, never supplied through a tool.
         try database.read { db in try Data.fetchAll(db, sql: "SELECT payload FROM \(table)").map { try JSONDecoder().decode(type, from: $0) } }
     }
-    private static func event(_ db: Database, kind: String, revision: Int, summary: String) throws { try db.execute(sql: "INSERT INTO events (kind, revision, summary, created_at) VALUES (?, ?, ?, ?)", arguments: [kind, revision, summary, Date().timeIntervalSince1970]) }
+    static func event(_ db: Database, kind: String, revision: Int, summary: String) throws { try db.execute(sql: "INSERT INTO events (kind, revision, summary, created_at) VALUES (?, ?, ?, ?)", arguments: [kind, revision, summary, Date().timeIntervalSince1970]) }
 }

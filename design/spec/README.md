@@ -12,6 +12,7 @@ This folder is the complete design for Direction, built on the Gate design langu
 | `css/*.css` | Room-specific components (start, notes, changes, system) | Recipes for components that appear in one room group. |
 | `specs/story.md` | The sample film every frame shows | Preview data and test fixtures. |
 | `specs/open-questions.md` | Cross-room decisions | Wins over room specs when they disagree. |
+| `specs/mac.md` | Mac conventions: windows, Settings (⌘,), titlebar double-click, menus, undo, keyboard, Dock, notifications, accessibility | Applies to every room. |
 | `screens/NN-*.html` | One frame per screen or state, 1440×900 pt unless noted | The exact picture to match. |
 | `renders/NN-*@1x.png`, `@2x.png` | Renders of each frame. Only 1x is committed; run `./render.sh` to make the 2x set (needs Google Chrome). | Visual comparison against your build. |
 | `renders/NN-*.layout.json` | Boxes of every `data-c` element: x, y, w, h, color, radius, font | Measurements. No guessing from pixels. |

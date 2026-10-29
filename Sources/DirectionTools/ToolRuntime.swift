@@ -82,8 +82,9 @@ public actor ToolRuntime {
             let c = try store.addComment(text: a.requiredString("text"), author: a["author"].string ?? "Director", sequenceID: a["sequenceID"].string, revision: p.editRevision, cutID: a["cutID"].string, range: range, time: time, region: region)
             return ToolResponse(try .wrapping(c))
         case "direction_feedback":
+            // Drafts, dropped notes and outside notes the director hasn't accepted stay private.
             let comments = try store.comments(since: Int64(a["since"].int ?? 0))
-            return ToolResponse(.object(["comments": try .wrapping(comments), "nextCursor": .number(Double(comments.last?.cursor ?? Int64(a["since"].int ?? 0))), "hasMore": .bool(comments.count == 500)]))
+            return ToolResponse(.object(["comments": try .wrapping(comments.filter(\.visibleToEditor)), "nextCursor": .number(Double(comments.last?.cursor ?? Int64(a["since"].int ?? 0))), "hasMore": .bool(comments.count == 500)]))
         case "direction_feedback_context":
             return try await feedbackContext(id: a.requiredString("commentID"), includeMedia: a["includeMedia"].bool ?? true, includeAudio: a["includeAudio"].bool ?? true)
         case "direction_feedback_reply":
@@ -158,7 +159,9 @@ public actor ToolRuntime {
             guard let task = tasks[id] else { if job.isTerminal { return ToolResponse(try .wrapping(job)) }; throw DirectionError("job_owned_elsewhere", "Cancel this job in the app or MCP process that started it.") }
             task.cancel(); return ToolResponse(.object(["jobID": .string(id), "cancellationRequested": .bool(true)]))
         case "direction_events": return ToolResponse(try .wrapping(store.events(since: Int64(a["since"].int ?? 0))))
-        default: throw DirectionError("unknown_tool", "Unknown Direction tool: \(name).")
+        default:
+            if let response = try invokeDirecting(name, a) { return response }
+            throw DirectionError("unknown_tool", "Unknown Direction tool: \(name).")
         }
     }
 

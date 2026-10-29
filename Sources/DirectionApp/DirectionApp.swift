@@ -2,33 +2,40 @@ import SwiftUI
 import AppKit
 
 @MainActor final class DirectionAppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) { BrandAssets.registerFonts(); NSApplication.shared.setActivationPolicy(.regular); NSApplication.shared.activate(ignoringOtherApps: true) }
+    var app: AppModel?
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        BrandAssets.registerFonts()
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate()
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
+    /// Opening a .direction package from Finder or the Dock.
+    func application(_ application: NSApplication, open urls: [URL]) { if let url = urls.first(where: { $0.pathExtension == "direction" }) { app?.open(url) } }
+    /// Clicking the Dock icon with no window brings the main window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { sender.windows.first { $0.frameAutosaveName == "DirectionMainWindow" }?.makeKeyAndOrderFront(nil) }
+        return true
+    }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 }
 
 @main struct DirectionApplication: App {
     @NSApplicationDelegateAdaptor(DirectionAppDelegate.self) var delegate
-    @State private var model = EditorModel()
+    @State private var app = AppModel()
+
+    init() { Snapshots.runIfRequested() }
+
     var body: some Scene {
         Window("Direction", id: "main") {
-            EditorView(model: model)
-                .preferredColorScheme(.dark)
-                .task { await model.start() }
-                .onOpenURL { model.open($0) }
+            MainWindow(app: app)
+                .task { delegate.app = app; app.start() }
+                .onOpenURL { app.open($0) }
         }
-        .defaultSize(width: 1440, height: 900)
+        .defaultSize(width: Gate.Size.windowDesign.width, height: Gate.Size.windowDesign.height)
         .windowStyle(.hiddenTitleBar)
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("New Project…", action: model.createProject).keyboardShortcut("n")
-                Button("Open Project…", action: model.chooseProject).keyboardShortcut("o")
-                Divider()
-                Button("Import Footage…", action: model.chooseMedia).keyboardShortcut("i").disabled(model.project == nil)
-            }
-            CommandMenu("Review") {
-                Button("Working Cut", action: model.followWorkingCut).disabled(model.project == nil)
-                Button("Mark Range In", action: model.markIn).keyboardShortcut("i", modifiers: [])
-                Button("Mark Range Out", action: model.markOut).keyboardShortcut("o", modifiers: [])
-            }
-        }
+        .windowResizability(.contentMinSize)
+        .commands { DirectionCommands(app: app) }
+
+        Settings { SettingsView().preferredColorScheme(.dark) }
     }
 }

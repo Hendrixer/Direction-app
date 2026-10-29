@@ -161,6 +161,7 @@ public struct ReviewCut: Codable, Hashable, Sendable, Identifiable {
     public var editRevision: Int
     public var sequenceID: String
     public var createdAt: Double
+    public init(id: String, name: String, editRevision: Int, sequenceID: String, createdAt: Double) { self.id = id; self.name = name; self.editRevision = editRevision; self.sequenceID = sequenceID; self.createdAt = createdAt }
 }
 
 public struct FrameRegion: Codable, Hashable, Sendable {
@@ -204,6 +205,23 @@ public struct ReviewComment: Codable, Hashable, Sendable, Identifiable {
     public var replies: [FeedbackReply]
     public var createdAt: Double
     public var cursor: Int64
+    /// Project-wide, permanent and never reused, so "note 4" means the same thing in every cut.
+    public var number: Int? = nil
+    public var kind: NoteKind? = nil
+    public var noteState: NoteState? = nil
+    /// nil or "director"; "outside" for people on a share link; "editor" for unasked changes.
+    public var authorRole: String? = nil
+    public var person: Person? = nil
+    /// inbox, accepted or declined, for outside notes.
+    public var outsideState: String? = nil
+    public var scriptAction: ScriptAction? = nil
+    public var sceneID: String? = nil
+    public var turnoverID: String? = nil
+    public var answers: [NoteAnswer]? = nil
+    public var updatedAt: Double? = nil
+    public init(id: String, cutID: String?, editRevision: Int, sequenceID: String, scope: String, range: MediaRange?, time: MediaTime?, region: FrameRegion?, text: String, author: String, status: String, anchors: [SourceAnchor], transcriptContext: [TimelineWord], replies: [FeedbackReply], createdAt: Double, cursor: Int64) {
+        self.id = id; self.cutID = cutID; self.editRevision = editRevision; self.sequenceID = sequenceID; self.scope = scope; self.range = range; self.time = time; self.region = region; self.text = text; self.author = author; self.status = status; self.anchors = anchors; self.transcriptContext = transcriptContext; self.replies = replies; self.createdAt = createdAt; self.cursor = cursor
+    }
 }
 
 public struct AnchorProjection: Codable, Hashable, Sendable {

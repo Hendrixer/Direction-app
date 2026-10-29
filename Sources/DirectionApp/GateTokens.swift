@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// Gate 2.0. The explicit CSS primitives are authoritative where the sample Swift differs.
+/// Gate tokens. Mirrors design/spec/tokens.json and design/spec/gate.css; CSS px are points.
 enum Gate {
     enum Steel {
         static let ramp: [Color] = [
@@ -19,12 +19,18 @@ enum Gate {
     }
 
     enum Surface {
+        /// Behind picture.
         static let canvas = Steel.ramp[0]
+        /// Inputs, wells.
         static let sunken = Steel.ramp[1]
+        /// Window background, sheets, sidebars.
         static let ground = Steel.ramp[2]
+        /// Cards, selected rows, popovers.
         static let panel = Steel.ramp[3]
+        /// Buttons, chips, selected segment.
         static let raised = Steel.ramp[4]
         static let hover = Steel.ramp[5]
+        static let scrim = Color.black.opacity(0.55)
     }
 
     enum Text {
@@ -40,33 +46,35 @@ enum Gate {
     }
 
     enum Voice {
+        /// The director's acts only: marks, note numbers, circles, ranges, regions.
         static let director = Color(oklch: 0.82, 0.13, 72)
         static let directorInk = Color(oklch: 0.26, 0.06, 60)
-        static let directorWash = director.opacity(0.15)
+        static let directorWash = Color(oklch: 0.82, 0.13, 72, opacity: 0.15)
+        /// Editor text and solid diamonds.
         static let agent = Color(oklch: 0.78, 0.11, 250)
-        static let agentWash = agent.opacity(0.13)
-        /// For suggestion diamonds and strokes no thicker than 2 points; never a text fill.
-        static let agentStroke = [
+        static let agentWash = Color(oklch: 0.78, 0.11, 250, opacity: 0.13)
+        static let prismStops = [
             Color(oklch: 0.82, 0.12, 200),
             Color(oklch: 0.70, 0.16, 268),
             Color(oklch: 0.72, 0.20, 330),
             Color(oklch: 0.84, 0.13, 62),
         ]
-        static let agentGradient = LinearGradient(
-            stops: zip(agentStroke, [0.0, 0.34, 0.66, 1.0]).map { .init(color: $0, location: $1) },
+        /// Editor hairlines (≤ 2 pt), diamonds, shimmer and sweep. Never a fill behind text.
+        static let prism = LinearGradient(
+            stops: zip(prismStops, [0.0, 0.34, 0.66, 1.0]).map { .init(color: $0, location: $1) },
             startPoint: .init(x: 0, y: 0.412), endPoint: .init(x: 1, y: 0.588)
         )
+        /// Kept for older call sites.
+        static var agentGradient: LinearGradient { prism }
+        static var agentStroke: [Color] { prismStops }
     }
 
     enum State {
         static let locked = Steel.ramp[9]
         static let approve = Color(oklch: 0.79, 0.13, 155)
+        static let approveWash = Color(oklch: 0.79, 0.13, 155, opacity: 0.13)
         static let alert = Color(oklch: 0.70, 0.17, 25)
-    }
-
-    /// Order reflects the director's priorities, not the order notes were entered.
-    enum NoteKind: Int, CaseIterable, Sendable {
-        case feeling, story, pace, picture, sound
+        static let alertWash = Color(oklch: 0.70, 0.17, 25, opacity: 0.13)
     }
 
     enum Space {
@@ -81,6 +89,18 @@ enum Gate {
         static let control: CGFloat = 8, chip: CGFloat = 6, frame: CGFloat = 2
     }
 
+    enum Size {
+        static let titlebar: CGFloat = 52
+        static let sidebar: CGFloat = 240
+        static let notesSheet: CGFloat = 380
+        static let control: CGFloat = 28, controlLarge: CGFloat = 36, controlSmall: CGFloat = 22
+        static let chip: CGFloat = 20, pill: CGFloat = 28
+        static let windowMin = CGSize(width: 1180, height: 740)
+        static let windowDesign = CGSize(width: 1440, height: 900)
+        static let settingsWidth: CGFloat = 720
+        static let trafficLightsX: CGFloat = 20
+    }
+
     enum Motion {
         static let snapDuration = 0.12, settleDuration = 0.22, glideDuration = 0.36, sweepDuration = 0.90
         static let snap = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: snapDuration)
@@ -88,33 +108,40 @@ enum Gate {
         static let glide = Animation.timingCurve(0.6, 0, 0.2, 1, duration: glideDuration)
         static let sweep = Animation.timingCurve(0.6, 0, 0.2, 1, duration: sweepDuration)
         static let shimmerPeriod = 2.4
-        static let reduced = Animation.linear(duration: snapDuration)
+        static let reduced = Animation.linear(duration: settleDuration)
     }
 
     @MainActor
     enum Font {
-        static var room: SwiftUI.Font { brand(size: 22) }
         static func brand(size: CGFloat, width: Double = 125, weight: Double = 800) -> SwiftUI.Font {
             SwiftUI.Font(BrandAssets.archivo(size: size, width: width, weight: weight))
         }
-        static let title = SwiftUI.Font.system(size: 17, weight: .semibold)
+        /// Empty-state and welcome titles.
+        static var brandXL: SwiftUI.Font { brand(size: 34, width: 125, weight: 800) }
+        /// Sheet and room titles.
+        static var brandL: SwiftUI.Font { brand(size: 24, width: 120, weight: 800) }
+        /// Panel headings: "Notes on Cut 3".
+        static var brandM: SwiftUI.Font { brand(size: 17, width: 112, weight: 700) }
+        /// Option labels, cut names in lists.
+        static var brandS: SwiftUI.Font { brand(size: 14, width: 112, weight: 700) }
+        static var room: SwiftUI.Font { brandM }
+        static let title = SwiftUI.Font.system(size: 15, weight: .semibold)
         static let body = SwiftUI.Font.system(size: 13)
+        static let bodyMedium = SwiftUI.Font.system(size: 13, weight: .medium)
         static let control = SwiftUI.Font.system(size: 12.5, weight: .medium)
-        static let caption = SwiftUI.Font.system(size: 11.5)
+        static let small = SwiftUI.Font.system(size: 12)
+        static let caption = SwiftUI.Font.system(size: 11)
+        static let label = SwiftUI.Font.system(size: 10.5, weight: .medium, design: .monospaced)
         static let timecode = SwiftUI.Font.system(size: 12, weight: .medium, design: .monospaced).monospacedDigit()
-        static let noteNumber = SwiftUI.Font.system(size: 15, weight: .semibold, design: .monospaced).monospacedDigit()
-        static let brandTrackingRatio: CGFloat = -0.025
-        static let minimumBrandSize: CGFloat = 14
-        static let titleLineHeight: CGFloat = 22, bodyLineHeight: CGFloat = 18
-        static let controlLineHeight: CGFloat = 16, captionLineHeight: CGFloat = 14, timecodeLineHeight: CGFloat = 16
+        static let timecodeSmall = SwiftUI.Font.system(size: 11, weight: .medium, design: .monospaced).monospacedDigit()
+        static let noteNumber = SwiftUI.Font.system(size: 14, weight: .semibold, design: .monospaced).monospacedDigit()
+        static let mono = SwiftUI.Font.system(size: 11, weight: .medium, design: .monospaced).monospacedDigit()
     }
 
     enum Material {
         static let glass = Color(oklch: 0.20, 0.005, 265, opacity: 0.55)
         static let glassBorder = Color.white.opacity(0.14)
         static let glassTopLip = Color.white.opacity(0.12)
-        static let glassBlur: CGFloat = 18
-        static let glassSaturation = 1.4
     }
 
     enum Component {
@@ -124,22 +151,11 @@ enum Gate {
             static let steelInk = Color(oklch: 0.17, 0.006, 265)
             static let steelHoverTop = Color.white
             static let steelHoverBottom = Color(oklch: 0.86, 0.006, 265)
-            static let steelPressedTop = steelBottom
-            static let steelPressedBottom = Color(oklch: 0.96, 0.002, 265)
-            static let steelGradient = LinearGradient(stops: [
-                .init(color: steelTop, location: 0), .init(color: steelBottom, location: 0.92),
-            ], startPoint: .top, endPoint: .bottom)
-            static let height: CGFloat = 30, largeHeight: CGFloat = 36
             static let disabledOpacity = 0.4
         }
-        enum Note {
-            static let numberColor = Voice.director
-            static let rowPadding = Space.s3
-        }
-        enum SceneStrip {
-            static let height: CGFloat = 44, sceneHeight: CGFloat = 24, gap: CGFloat = 2
-            static let changedEdge = Voice.agentGradient
-            static let directorMark = Voice.director
+        enum Strip {
+            static let height: CGFloat = 44, scene: CGFloat = 24, gap: CGFloat = 2
+            static let tallHeight: CGFloat = 64, tallScene: CGFloat = 40
         }
     }
 
@@ -154,7 +170,6 @@ struct GateSRGB: Equatable, Sendable {
 }
 
 /// OKLCH → OKLab → linear sRGB → encoded sRGB. Values outside sRGB are channel-clipped.
-/// This preserves the guide's explicit OKLCH values without treating lightness as RGB gray.
 enum GateColorSpace {
     static func sRGB(lightness: Double, chroma: Double, hue: Double, opacity: Double = 1) -> GateSRGB {
         let lightness = bounded(lightness)
@@ -173,9 +188,7 @@ enum GateColorSpace {
         )
     }
 
-    private static func bounded(_ value: Double) -> Double {
-        value.isNaN ? 0 : min(1, max(0, value))
-    }
+    private static func bounded(_ value: Double) -> Double { value.isNaN ? 0 : min(1, max(0, value)) }
 
     private static func encoded(_ value: Double) -> Double {
         let value = bounded(value)

@@ -3,27 +3,30 @@ import Testing
 
 @Suite("Gate timecode")
 struct TimecodeTests {
-    @Test func pausedFrameCountsUseSequenceRate() {
-        #expect(timecode(1.5, frameRate: 24) == "00:01:12")
-        #expect(timecode(1.5, frameRate: 30) == "00:01:15")
-        #expect(timecode(60, frameRate: 25) == "01:00:00")
-        #expect(timecode(60, frameRate: 30_000.0 / 1001) == "00:59:28")
+    @Test func framesUseTheSequenceRate() {
+        #expect(Timecode.format(1.5, fps: 24) == "00:01:12")
+        #expect(Timecode.format(1.5, fps: 30) == "00:01:15")
+        #expect(Timecode.format(72 + 8.0 / 24, fps: 24) == "01:12:08")
     }
-    @Test func playbackDropsFramesAndHoursAppearWhenNeeded() {
-        #expect(timecode(72.9, frames: false) == "01:12")
-        #expect(timecode(3601.5, frameRate: 24) == "01:00:01:12")
-        #expect(timecode(3601.5, frames: false) == "01:00:01")
+    @Test func hoursAppearOnlyWhenNeeded() {
+        #expect(Timecode.format(3601.5, fps: 24) == "1:00:01:12")
+        #expect(Timecode.duration(220) == "3:40")
+        #expect(Timecode.duration(46) == "0:46")
     }
     @Test func frameBoundaryDoesNotRoundIntoNextFrame() {
-        #expect(timecode(29.0 / 30) == "00:00:29")
-        #expect(timecode(0.999) == "00:00:29")
-        #expect(timecode(1) == "00:01:00")
+        #expect(Timecode.format(29.0 / 30, fps: 30) == "00:00:29")
+        #expect(Timecode.format(0.999, fps: 30) == "00:00:29")
+        #expect(Timecode.format(1, fps: 30) == "00:01:00")
+    }
+    @Test func deltasUseATrueMinusSign() {
+        #expect(Timecode.delta(-4.2) == "\u{2212}4.2 s")
+        #expect(Timecode.delta(1.6) == "+1.6 s")
+        #expect(Timecode.range(46, 58.5, fps: 24) == "00:46:00–00:58:12")
     }
     @Test func malformedInputDoesNotCrash() {
-        #expect(timecode(-1) == "00:00:00")
-        #expect(timecode(.nan) == "00:00:00")
-        #expect(timecode(.infinity, frames: false) == "00:00")
-        #expect(timecode(1.5, frameRate: .nan) == "00:01:15")
-        #expect(timecode(.greatestFiniteMagnitude) == "--:--:--")
+        #expect(Timecode.format(-1) == "00:00:00")
+        #expect(Timecode.format(.nan) == "--:--:--")
+        #expect(Timecode.format(1.5, fps: .nan) == "00:01:12")
+        #expect(Timecode.format(.greatestFiniteMagnitude) == "--:--:--")
     }
 }
