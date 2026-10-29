@@ -373,6 +373,8 @@ final class FilmModel {
     }
     func go(_ room: Room) {
         guard isEnabled(room) else { return }
+        // Leaving the first look for a room: the assembly keeps building in the background.
+        if onboardingStep == .firstLook { onboardingDismissed = true }
         if self.room == .screening && room != .screening { endScreening(showEndCard: false) }
         withAnimation(gateAnimation(Gate.Motion.glide)) { self.room = room }
         if room == .screening { startScreening() }
