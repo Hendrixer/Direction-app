@@ -19,6 +19,9 @@ public enum FootageSearch {
         public var start: Double
         public var end: Double
         public var keyframes: [String]
+        public init(shotID: String, assetID: String, score: Double, why: Why, text: String, matched: [String], start: Double, end: Double, keyframes: [String]) {
+            self.shotID = shotID; self.assetID = assetID; self.score = score; self.why = why; self.text = text; self.matched = matched; self.start = start; self.end = end; self.keyframes = keyframes
+        }
     }
 
     public struct Options: Sendable {

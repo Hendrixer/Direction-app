@@ -40,13 +40,16 @@ struct DailiesTakeViewer: View {
                 head
                 picture.frame(maxWidth: .infinity, maxHeight: .infinity)
                 transport
+                // Frame 59: the take's shots, once Direction has looked at it.
+                if hasShots { DailiesShotsRow(model: model, takeID: takeID, position: position) { seek($0) } }
+                else if model.indexFailed(takeID) { indexFailedRow }
                 reelRow
             }
             .background(Gate.Surface.canvas)
             info.frame(width: 320)
         }
         .focusable().focusEffectDisabled().focused($focused)
-        .onAppear { focused = true; player.load(asset, at: 0, autoplay: false) }
+        .onAppear { focused = true; player.load(asset, at: startTime, autoplay: false) }
         .onChange(of: takeID) { old, new in
             let at = carriedPosition(from: old, to: new)
             let wasPlaying = player.playing
@@ -109,11 +112,30 @@ struct DailiesTakeViewer: View {
             Button { toggle() } label: { Image(systemName: playing ? "pause.fill" : "play.fill") }
                 .buttonStyle(.gate(.normal, icon: true)).help(playing ? "Pause (Space)" : "Play (Space)")
             TimecodeLabel(time: position, total: duration)
-            DailiesTakeStrip(position: position, duration: duration, asset: asset, art: art, preview: model.isPreview) { player.seek($0) }
+            DailiesTakeStrip(position: position, duration: duration, asset: asset, art: art, preview: model.isPreview, shots: hasShots ? model.index.shots(takeID) : [], sounds: model.index.sounds(takeID)) { player.seek($0) }
             Button { player.muted.toggle() } label: { Image(systemName: player.muted ? "speaker.slash" : "speaker.wave.2") }
                 .buttonStyle(.gate(.ghost, icon: true)).help(player.muted ? "Unmute" : "Mute")
         }
-        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 6)
+        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, hasShots ? 4 : 6)
+    }
+
+    private var hasShots: Bool { !model.index.shots(takeID).isEmpty && !(asset?.video.isEmpty ?? true) }
+    /// Where the take starts: at a shot when it was opened from search, else the top.
+    private var startTime: Double {
+        guard let at = model.index.openAt, at.assetID == takeID else { return 0 }
+        model.index.openAt = nil
+        return at.time
+    }
+    private func seek(_ t: Double) { if model.isPreview { return }; player.seek(t) }
+
+    private var indexFailedRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary)
+            Text("Couldn\u{2019}t look at this take").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+            Button("Try Again") { model.index.retry(takeID, film: model) }.buttonStyle(.gate(.ghost, .small))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20).padding(.bottom, 12)
     }
 
     private var reelRow: some View {
@@ -276,28 +298,34 @@ struct DailiesTakeViewer: View {
     }
 }
 
-/// The take's own strip: one segment, playhead, click or drag to seek.
+/// The take's own strip: one segment, playhead, click or drag to seek. Once the take is indexed
+/// it's 38 tall: shot ticks over the picture and the sounds lane under it (frame 59).
 private struct DailiesTakeStrip: View {
     var position: Double
     var duration: Double
     var asset: MediaAsset?
     var art: FootageArt
     var preview: Bool
+    var shots: [Shot] = []
+    var sounds: [IndexSound] = []
     var seek: (Double) -> Void
+    private var indexed: Bool { !shots.isEmpty }
     var body: some View {
         GeometryReader { g in
             let x = duration > 0 ? g.size.width * min(1, position / duration) : 0
-            ZStack(alignment: .leading) {
+            ZStack(alignment: indexed ? .topLeading : .leading) {
                 DailiesTakeThumb(asset: asset, art: art, preview: preview).opacity(0.55)
                     .frame(height: 24).clipShape(RoundedRectangle(cornerRadius: 3))
                     .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Gate.Line.strong, lineWidth: 1))
-                Playhead(height: 30).position(x: x, y: 15)
+                    .offset(y: indexed ? 3 : 0)
+                if indexed { DailiesIndexLane(shots: shots, sounds: sounds, duration: duration) }
+                Playhead(height: indexed ? 36 : 30).position(x: x, y: indexed ? 18 : 15)
             }
-            .frame(height: 30)
+            .frame(height: indexed ? 38 : 30)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { v in seek(max(0, min(duration, Double(v.location.x / max(1, g.size.width)) * duration))) })
         }
-        .frame(height: 30)
+        .frame(height: indexed ? 38 : 30)
         .accessibilityElement().accessibilityLabel("Position in take")
         .accessibilityValue(Timecode.format(position))
         .accessibilityAdjustableAction { d in seek(max(0, min(duration, position + (d == .increment ? 1 : -1)))) }

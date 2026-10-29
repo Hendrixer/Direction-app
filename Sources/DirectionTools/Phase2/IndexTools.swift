@@ -304,6 +304,15 @@ final class JobProgress: @unchecked Sendable {
 }
 
 extension ToolRuntime {
+    /// The app's own way in (Film › Look at Footage, Try again, new footage): the same job as
+    /// `direction_index`, without passing through the editor's tool calls.
+    @discardableResult
+    public func lookAtFootage(assetIDs: [String]? = nil, force: Bool = false) throws -> JobRecord {
+        try startIndexJob(assetIDs: assetIDs, force: force)
+    }
+    /// Stops this process's index job for the film, if it runs one.
+    @discardableResult
+    public func stopLooking() -> Bool { IndexJobs.cancel(store.url.path) }
     /// Test hook: waits until this process's index job for the bound film is finished.
     public func waitForIndex() async { await IndexJobs.wait(store.url.path) }
 }
