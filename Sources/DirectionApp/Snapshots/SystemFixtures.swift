@@ -10,6 +10,7 @@ enum SystemFixtures {
             "41-agent-popover": { popover() },
             "42-settings-general": { settings(.general, height: 600) },
             "43-settings-editor": { settings(.editor, height: 830) },
+            "54-settings-footage": { settings(.footage, height: 360) },
             "44-settings-cutting": { settings(.cutting, height: 650) },
             "45-settings-notifications": { settings(.notifications, height: 530) },
             "46-settings-shortcuts": { settings(.shortcuts, height: 690, recording: .region) },

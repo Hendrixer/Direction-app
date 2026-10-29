@@ -30,7 +30,7 @@ public actor ToolRuntime {
         }
         switch name {
         case "direction_capabilities":
-            return ToolResponse(.object(["version": .string("0.2.0"), "gpu": .string(GPUCompositor.deviceName ?? "unavailable"), "transcription": await LocalTranscriber.availability(), "tools": try .wrapping(ToolCatalog.definitions), "timeContract": .string("Canonical media times are {value,timescale}; ranges are half-open. Convenience start/end parameters use seconds. Comments and renders pin editRevision. Text editing deletes existing timed words; it does not synthesize speech."), "feedbackLoop": .string("Read direction_feedback at the beginning of each user-requested revision. Saving a comment does not wake the external agent.")]))
+            return ToolResponse(.object(["version": .string("0.2.0"), "gpu": .string(GPUCompositor.deviceName ?? "unavailable"), "transcription": await LocalTranscriber.availability(), "whisper": WhisperTranscriber.availability(), "transcriptionEngine": .string(SharedSettings.transcriptionEngine.rawValue), "tools": try .wrapping(ToolCatalog.definitions), "timeContract": .string("Canonical media times are {value,timescale}; ranges are half-open. Convenience start/end parameters use seconds. Comments and renders pin editRevision. Text editing deletes existing timed words; it does not synthesize speech."), "feedbackLoop": .string("Read direction_feedback at the beginning of each user-requested revision. Saving a comment does not wake the external agent.")]))
         case "direction_inspect":
             let p = try store.read(revision: a["revision"].int), sequence = try p.sequence(a["sequenceID"].string)
             return ToolResponse(.object(["project": try .wrapping(p), "sequence": try .wrapping(sequence), "durationSeconds": .number(sequence.duration.seconds), "projectPath": .string(store.url.path), "eventCursor": .number(Double(try store.eventCursor()))]))
@@ -118,10 +118,28 @@ public actor ToolRuntime {
             let p = try store.read(), asset = try p.asset(a.requiredString("assetID"))
             guard let track = a["trackID"].int.flatMap(Int32.init(exactly:)) ?? asset.audio.first(where: { !$0.settings.muted })?.id ?? asset.audio.first?.id else { throw DirectionError("no_audio", "Choose an asset with an audio track.") }
             let language = a["language"].string ?? "en-US", directory = cacheDirectory.appendingPathComponent("Audio"), store = store
-            let job = try startJob(kind: "transcription", revision: p.editRevision, phase: "Preparing local speech model") {
-                let transcript = try await LocalTranscriber.transcribe(asset: asset, trackID: track, language: language, directory: directory)
+            // Settings › Footage picks the engine; an explicit `engine` overrides it. A chosen Whisper
+            // that isn't installed falls back to Apple and says so, so logging never stalls on setup.
+            let requested = try a["engine"].string.map { value in
+                guard let e = SharedSettings.TranscriptionEngine(rawValue: value) else { throw DirectionError("invalid_arguments", "engine is apple or whisper.") }
+                return e
+            }
+            var engine = requested ?? SharedSettings.transcriptionEngine, note: String?
+            if engine == .whisper && (WhisperTranscriber.executable() == nil || WhisperTranscriber.ffmpeg() == nil) {
+                if requested == .whisper { throw DirectionError("whisper_unavailable", "Whisper isn't set up on this Mac: it needs mlx_whisper (`pip install mlx-whisper`) and ffmpeg.") }
+                engine = .apple; note = "Whisper is chosen in Settings but isn't installed, so Apple's engine was used."
+            }
+            let model = a["model"].string ?? SharedSettings.whisperModel
+            let useWhisper = engine == .whisper, fallbackNote = note
+            let phase = engine == .whisper ? (WhisperTranscriber.isDownloaded(model) ? "Transcribing with Whisper" : "Downloading the Whisper model") : "Preparing local speech model"
+            let job = try startJob(kind: "transcription", revision: p.editRevision, phase: phase) {
+                let transcript = useWhisper
+                    ? try await WhisperTranscriber.transcribe(asset: asset, trackID: track, language: language, model: model, directory: directory)
+                    : try await LocalTranscriber.transcribe(asset: asset, trackID: track, language: language, directory: directory)
                 try store.saveTranscript(transcript)
-                return .object(["assetID": .string(asset.id), "audioTrackID": .number(Double(track)), "wordCount": .number(Double(transcript.words.count)), "provider": .string(transcript.provider)])
+                var result: [String: JSONValue] = ["assetID": .string(asset.id), "audioTrackID": .number(Double(track)), "wordCount": .number(Double(transcript.words.count)), "provider": .string(transcript.provider)]
+                if let fallbackNote { result["note"] = .string(fallbackNote) }
+                return .object(result)
             }
             return ToolResponse(try .wrapping(job))
         case "direction_measure_audio":

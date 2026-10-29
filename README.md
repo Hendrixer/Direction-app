@@ -33,7 +33,7 @@ Use the project menu for **New Project**, **Open Project**, and recent projects;
 - Atomic programmatic insert, trim, split, move, remove, speed, layering, title, framing, canvas, color, and audio edits.
 - Metal/Core Image compositing shared by playback, frame sampling, and export. Native H.264, HEVC, and ProRes export.
 - Moment, range, whole-cut, and frame-region feedback pinned to an immutable edit revision. Agents can fetch inline PNG frames and WAV audio through MCP.
-- Local Apple SpeechAnalyzer transcription. Agents can cut by transcript; the director directs from the Script room. Ambiguous repeated words require exact word selection.
+- On-device transcription with Apple SpeechAnalyzer (fast) or Whisper through mlx-whisper (tighter word times), chosen in Settings › Footage. Agents can cut by transcript; the director directs from the Script room. Ambiguous repeated words require exact word selection.
 - Agent tools for independent mute/gain on every embedded source audio track, plus per-clip overrides. Native EQ, compression, limiter, and fades.
 - Landscape, portrait, and square sequences; supplied B-roll, still images, titles, and separate audio. Source-timed transcript cuts ripple across all layers.
 - The app observes external edits. A playing review stays on its current revision until you load the update; paused playback refreshes automatically.

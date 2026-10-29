@@ -2,15 +2,16 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Settings › General, Editor, Cutting, Notifications, Shortcuts, Storage, Sharing.
+/// Settings › General, Editor, Footage, Cutting, Notifications, Shortcuts, Storage, Sharing.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, editor, cutting, notifications, shortcuts, storage, sharing
+    case general, editor, footage, cutting, notifications, shortcuts, storage, sharing
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
     var icon: String {
         switch self {
         case .general: "gearshape"
         case .editor: "gem"
+        case .footage: "film.stack"
         case .cutting: "film"
         case .notifications: "bell"
         case .shortcuts: "keyboard"
@@ -70,6 +71,7 @@ struct SettingsView: View {
         switch tab {
         case .general: GeneralPane(preview: preview)
         case .editor: EditorPane(app: app)
+        case .footage: FootagePane(preview: preview)
         case .cutting: CuttingPane(app: app)
         case .notifications: NotificationsPane(preview: preview)
         case .shortcuts: ShortcutsPane(recording: recording)

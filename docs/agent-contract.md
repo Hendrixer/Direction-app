@@ -109,7 +109,7 @@ Send to `direction_audio`. With no `clipID`, it changes that source stream every
 
 ## Local transcript and text cuts
 
-`direction_transcribe` takes assetID, optional trackID, and language (default en-US). It returns a job. On-device recognition may require Apple's first-use language download. Re-transcribing another track selects it for that source's text editing. Timed transcripts may also be supplied through `direction_import_transcript` using its full schema.
+`direction_transcribe` takes assetID, optional trackID, and language (default en-US). It uses the engine the director chose in Settings › Footage: `apple` (SpeechAnalyzer) or `whisper` (mlx-whisper, with Whisper's own word times). Pass `engine` and optionally `model` to override. If Whisper is chosen but mlx_whisper or ffmpeg is missing, Apple is used and the job result carries a `note`. It returns a job. On-device recognition may require Apple's first-use language download. Re-transcribing another track selects it for that source's text editing. Timed transcripts may also be supplied through `direction_import_transcript` using its full schema.
 
 `direction_transcript` projects timed words onto the requested cut, including clip-instance IDs. It is paginated with offset/limit; continue through nextOffset. Video on layer zero supplies the narrative transcript; if no such footage has a transcript, separate layer-zero audio supplies it.
 

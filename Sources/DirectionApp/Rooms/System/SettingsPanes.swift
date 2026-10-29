@@ -3,6 +3,7 @@ import AppKit
 import CoreAudio
 import UserNotifications
 import DirectionCore
+import DirectionMedia
 
 // MARK: 42 · General
 
@@ -258,6 +259,71 @@ private struct ReorderBehavior: ViewModifier {
         Text(kind.label).font(Gate.Font.body).foregroundStyle(Gate.Text.primary).padding(8)
             .background(SystemPopBackground(radius: 8))
             .onAppear { dragging = kind }
+    }
+}
+
+// MARK: 54 · Footage
+
+/// Settings › Footage: how takes are transcribed. Stored in the shared suite, because the editor's
+/// tools run in their own process and transcribe with whatever is chosen here.
+struct FootagePane: View {
+    var preview = false
+    @AppStorage(SharedSettings.Key.transcriptionEngine, store: SharedSettings.defaults) private var engine = SharedSettings.TranscriptionEngine.apple.rawValue
+    @AppStorage(SharedSettings.Key.whisperModel, store: SharedSettings.defaults) private var model = SharedSettings.whisperModels[0].id
+    @State private var whisper: WhisperSetup = .checking
+
+    enum WhisperSetup: Equatable { case checking, ready(String), missing, needsFFmpeg }
+    private static let sizes = ["mlx-community/whisper-large-v3-turbo": "1.6 GB", "mlx-community/whisper-large-v3-mlx": "3.1 GB"]
+    private var usesWhisper: Bool { engine == SharedSettings.TranscriptionEngine.whisper.rawValue }
+
+    private var engineDetail: String {
+        usesWhisper ? "Slower, with tighter word times for cutting on a single word. Runs on this Mac."
+            : "Fast and built into macOS. Runs on this Mac."
+    }
+    private var modelDetail: String {
+        let size = Self.sizes[model] ?? ""
+        let downloaded = preview ? model == SharedSettings.whisperModels[0].id : WhisperTranscriber.isDownloaded(model)
+        let speed = model == SharedSettings.whisperModels[0].id ? "Fast. Nearly as accurate as Large v3." : "Slower, and a little more accurate."
+        return speed + (downloaded ? " Downloaded · \(size)." : " Downloads \(size) the first time it\u{2019}s used.")
+    }
+
+    var body: some View {
+        SettingsPane {
+            SettingsGroup(label: "Transcription", note: AnyView(SettingsNote("Takes already transcribed keep their words. New footage uses this engine."))) {
+                SettingsRow(label: "Transcribe with", detail: engineDetail, first: true) {
+                    GateSegmented(options: [(SharedSettings.TranscriptionEngine.apple.rawValue, "Apple"), (SharedSettings.TranscriptionEngine.whisper.rawValue, "Whisper")], selection: $engine)
+                }
+                SettingsRow(label: "Whisper model", detail: modelDetail) {
+                    GateSelect(options: SharedSettings.whisperModels.map { ($0.id, $0.name) }, selection: $model)
+                }
+                .disabled(!usesWhisper)
+                if usesWhisper { setupRow }
+            }
+        }
+        .task { await check() }
+    }
+
+    @ViewBuilder private var setupRow: some View {
+        switch whisper {
+        case .checking:
+            SettingsRow(label: "mlx-whisper", detail: "Looking for it on this Mac\u{2026}") { GateSpinner() }
+        case .ready(let path):
+            SettingsRow(label: "mlx-whisper", detail: (path as NSString).abbreviatingWithTildeInPath) { Chip("Ready", style: .ok, mono: false) }
+        case .missing:
+            SettingsRow(label: "mlx-whisper isn\u{2019}t installed", detail: "Install it in Terminal with pip install mlx-whisper. Until then, Apple transcribes.") {
+                Button("Copy Command") { SystemSupport.copy("pip install mlx-whisper") }.buttonStyle(.gate(.normal))
+            }
+        case .needsFFmpeg:
+            SettingsRow(label: "Whisper needs ffmpeg", detail: "Install it in Terminal with brew install ffmpeg. Until then, Apple transcribes.") {
+                Button("Copy Command") { SystemSupport.copy("brew install ffmpeg") }.buttonStyle(.gate(.normal))
+            }
+        }
+    }
+
+    private func check() async {
+        if preview { whisper = .ready(NSHomeDirectory() + "/.local/bin/mlx_whisper"); return }
+        let found = await Task.detached { (WhisperTranscriber.executable()?.path, WhisperTranscriber.ffmpeg() != nil) }.value
+        whisper = found.0 == nil ? .missing : !found.1 ? .needsFFmpeg : .ready(found.0!)
     }
 }
 
