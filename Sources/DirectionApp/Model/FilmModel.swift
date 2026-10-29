@@ -595,6 +595,15 @@ final class FilmModel {
         guard let store else { return nil }
         do { let s = try store.addScene(title: title); refresh(force: true); return s.id } catch { self.error = error.localizedDescription; return nil }
     }
+    func deleteScene(_ id: String) {
+        guard let store else { return }
+        do {
+            let (scene, takes) = try store.deleteScene(id: id)
+            if selectedSceneID == id { selectedSceneID = scenes.first { $0.id != id }?.id }
+            refresh(force: true)
+            registerUndo("Delete Scene") { m in m.perform { try $0.restoreScene(scene, takes: takes) }; m.selectedSceneID = scene.id }
+        } catch { self.error = error.localizedDescription }
+    }
     func moveTake(_ assetID: String, toSetup code: String?) { let old = dailies.take(assetID).setupCode; perform { try $0.setTakeSetup(assetID: assetID, setupCode: code) }; registerUndo("Move Take") { $0.moveTake(assetID, toSetup: old) } }
     var circledCount: Int { dailies.takes.values.filter(\.circled).count }
     var suggestedCount: Int { dailies.takes.values.filter { $0.suggestion != nil && !$0.circled }.count }

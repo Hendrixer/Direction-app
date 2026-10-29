@@ -109,6 +109,27 @@ extension ProjectStore {
         }
         return created!
     }
+    /// Deletes a scene. Its takes go back to Unsorted; nothing on disk changes. Returns what undo needs.
+    @discardableResult
+    public func deleteScene(id: String) throws -> (DailiesScene, [String]) {
+        var removed: (DailiesScene, [String])?
+        try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Deleted a scene") { d in
+            guard let i = d.scenes.firstIndex(where: { $0.id == id }) else { throw DirectionError("scene_not_found", "Scene not found.") }
+            guard !d.scenes[i].locked else { throw DirectionError("scene_locked", "\(d.scenes[i].label) is locked. Unlock it before deleting it.") }
+            let takes = d.takes.values.filter { $0.sceneID == id }.map(\.assetID)
+            for t in takes { d.takes[t]?.sceneID = nil }
+            for (k, t) in d.takes where t.guessSceneID == id { d.takes[k]?.guessSceneID = nil }
+            removed = (d.scenes.remove(at: i), takes)
+        }
+        return removed!
+    }
+    /// Puts a deleted scene and its takes back (undo).
+    public func restoreScene(_ scene: DailiesScene, takes: [String]) throws {
+        try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Restored a scene") { d in
+            if !d.scenes.contains(where: { $0.id == scene.id }) { d.scenes.append(scene); d.scenes.sort { $0.number < $1.number } }
+            for t in takes where d.takes[t] != nil { d.takes[t]?.sceneID = scene.id }
+        }
+    }
     /// Moves a take to another setup of its scene.
     public func setTakeSetup(assetID: String, setupCode: String?) throws {
         try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Moved a take to another setup") { d in

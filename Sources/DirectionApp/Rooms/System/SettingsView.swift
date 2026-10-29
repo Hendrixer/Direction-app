@@ -58,11 +58,15 @@ struct SettingsView: View {
         Binding(get: { tab }, set: { select($0) })
     }
     private func select(_ new: SettingsTab) {
-        withAnimation(SettingsKey.reducesMotion ? nil : Gate.Motion.glide) { tab = new }
+        // No animated layout: the window resizes at once and only the pane's content fades in.
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) { tab = new }
         if storedTab != new.rawValue { storedTab = new.rawValue }
     }
 
-    @ViewBuilder private var pane: some View {
+    private var pane: some View { paneContent.id(tab).modifier(PaneFadeIn()) }
+
+    @ViewBuilder private var paneContent: some View {
         switch tab {
         case .general: GeneralPane(preview: preview)
         case .editor: EditorPane(app: app)
@@ -83,6 +87,15 @@ struct SettingsView: View {
             Button("Close") { NSApp.keyWindow?.performClose(nil) }.keyboardShortcut(.cancelAction)
         }
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+    }
+}
+
+/// A pane's content fades in when its tab is chosen; nothing slides or resizes in motion.
+private struct PaneFadeIn: ViewModifier {
+    @State private var shown = false
+    func body(content: Content) -> some View {
+        content.opacity(shown ? 1 : 0)
+            .onAppear { if SettingsKey.reducesMotion { shown = true } else { withAnimation(.easeOut(duration: 0.16)) { shown = true } } }
     }
 }
 

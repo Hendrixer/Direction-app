@@ -101,3 +101,16 @@ private func directedStore() throws -> (ProjectStore, Project, ReviewCut) {
     #expect(logged.take("asset-fixture").circled)
     #expect(logged.take("asset-fixture").suggestion == "Warmer read")
 }
+
+@Test func deletingASceneSendsItsTakesToUnsortedAndCanBeUndone() throws {
+    let (store, _, _) = try directedStore()
+    try store.setCircle(assetID: "asset-fixture", circled: true)
+    let (scene, takes) = try store.deleteScene(id: "scene-1")
+    #expect(try store.dailies().scenes.isEmpty)
+    #expect(try store.dailies().take("asset-fixture").sceneID == nil)
+    #expect(try store.dailies().take("asset-fixture").circled)
+    try store.restoreScene(scene, takes: takes)
+    #expect(try store.dailies().take("asset-fixture").sceneID == "scene-1")
+    try store.lockScene(id: "scene-1", locked: true)
+    expectError("scene_locked") { _ = try store.deleteScene(id: "scene-1") }
+}

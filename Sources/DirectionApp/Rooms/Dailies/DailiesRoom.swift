@@ -60,13 +60,14 @@ struct DailiesSidebar: View {
     @State private var renaming: String?
     @State private var renameText = ""
     @FocusState private var renameFocused: Bool
+    @State private var deleting: DailiesScene?
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 SectionLabel("Scenes")
                 Spacer(minLength: 0)
-                Button { if let id = model.addScene() { model.selectedSceneID = id; renaming = id; renameText = "New scene" } } label: { Image(systemName: "plus") }
+                Button { if let id = model.addScene() { model.selectedSceneID = id; startRename(id, "New scene") } } label: { Image(systemName: "plus") }
                     .buttonStyle(.gate(.ghost, .small, icon: true)).disabled(model.isPreview)
                     .help("New scene")
             }
@@ -85,6 +86,25 @@ struct DailiesSidebar: View {
         }
         .background(Gate.Surface.ground)
         .hairlineBorder(.trailing)
+        .onChange(of: renameFocused) { _, focused in if !focused { commitRename() } }
+        .alert(deleting.map { "Delete scene \($0.number), \($0.title)?" } ?? "", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+            Button("Delete Scene", role: .destructive) { if let s = deleting { model.deleteScene(s.id) }; deleting = nil }
+            Button("Cancel", role: .cancel) { deleting = nil }
+        } message: {
+            let n = deleting.map { model.dailiesTakes(inScene: $0.id).count } ?? 0
+            Text(n == 0 ? "You can undo this." : "Its \(n == 1 ? "take goes" : "\(n) takes go") back to Unsorted, circles and all. Nothing on disk changes, and you can undo it.")
+        }
+    }
+
+    private func startRename(_ id: String, _ text: String) {
+        renameText = text; renaming = id
+        DispatchQueue.main.async { renameFocused = true }
+    }
+    private func commitRename() {
+        guard let id = renaming else { return }
+        let text = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty, text != model.scene(id)?.title { model.renameScene(id, to: text) }
+        renaming = nil
     }
 
     private func sceneRow(_ scene: DailiesScene) -> some View {
@@ -93,8 +113,8 @@ struct DailiesSidebar: View {
             Text(String(scene.number)).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.disabled).frame(width: 12, alignment: .leading)
             if renaming == scene.id {
                 TextField("Scene name", text: $renameText).textFieldStyle(.plain).font(.system(size: 13)).focused($renameFocused)
-                    .onSubmit { model.renameScene(scene.id, to: renameText); renaming = nil }
-                    .onExitCommand { renaming = nil }
+                    .onSubmit { commitRename() }
+                    .onExitCommand { renaming = nil; renameFocused = false }
             } else {
                 Text(scene.title).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -108,13 +128,18 @@ struct DailiesSidebar: View {
         }
         .contextMenu {
             Button("Open") { open(scene.id) }
-            Button("Rename\u{2026}") { renameText = scene.title; renaming = scene.id; renameFocused = true }
+            Button("Rename\u{2026}") { startRename(scene.id, scene.title) }
             Button(scene.locked ? "Unlock Scene" : "Lock Scene") { model.lockScene(scene.id, !scene.locked) }
             Divider()
             Button("Circle Suggestions in This Scene") { model.toggleCircles(model.dailiesTakes(inScene: scene.id).filter { $0.suggestion != nil && !$0.circled }.map(\.assetID)) }
                 .disabled(!model.dailiesTakes(inScene: scene.id).contains { $0.suggestion != nil && !$0.circled })
             Button("Open in Script") { model.go(.script) }
+            Divider()
+            Button("Delete Scene\u{2026}", role: .destructive) { deleting = scene }
+                .disabled(scene.locked || model.isPreview)
         }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { if renaming != scene.id { startRename(scene.id, scene.title) } })
+        .help("Double-click to rename")
     }
 
     private func binRow(_ id: String, icon: String, title: String, count: Int) -> some View {
@@ -147,6 +172,7 @@ struct DailiesSidebar: View {
     }
 
     private func open(_ id: String) {
+        if renaming != nil && renaming != id { commitRename() }
         model.openTakeID = nil
         model.selectedSceneID = id
     }

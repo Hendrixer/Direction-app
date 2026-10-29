@@ -40,6 +40,18 @@ final class AppModel {
 
     func closeFilm() { film?.close(); film = nil; reloadFilms(); NSApp.dockTile.badgeLabel = nil }
 
+    /// Back to Films. A new film you haven't put anything into (no title, brief, footage or notes)
+    /// goes to the Trash instead of cluttering the list.
+    func leaveFilm() {
+        guard let film, let url = film.url else { closeFilm(); return }
+        let pristine = film.isUntitled && !film.hasFootage && film.brief.logline.isEmpty && film.brief.feeling.isEmpty && film.notes.isEmpty && film.cuts.isEmpty
+        closeFilm()
+        guard pristine else { return }
+        NSWorkspace.shared.recycle([url]) { _, error in
+            MainActor.assumeIsolated { if error == nil { FilmLibraryIndex.noteTrashed(url.path); self.reloadFilms() } }
+        }
+    }
+
     func chooseFilm() {
         let panel = NSOpenPanel(); panel.title = "Open a film"; panel.canChooseDirectories = true; panel.canChooseFiles = true; panel.allowsMultipleSelection = false; panel.treatsFilePackagesAsDirectories = false
         if panel.runModal() == .OK, let url = panel.url { open(url) }

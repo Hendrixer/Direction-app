@@ -40,6 +40,19 @@ struct Titlebar: View {
 
     private var crumb: some View {
         HStack(spacing: 2) {
+            if model.onboardingStep != nil, let app {
+                // Before the first cut there's no room to fall back to: Films is the way out.
+                Button { app.leaveFilm() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold)).foregroundStyle(Gate.Text.disabled)
+                        Text("Films").fontWeight(.medium).foregroundStyle(Gate.Text.secondary)
+                    }.padding(.horizontal, 7).frame(height: 26).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("[", modifiers: .command)
+                .help(model.isUntitled && !model.hasFootage ? "Back to Films. This empty film is discarded (\u{2318}[)" : "Back to Films (\u{2318}[)")
+                Text("/").foregroundStyle(Gate.Text.disabled).padding(.horizontal, 2)
+            }
             Menu {
                 if let app {
                     Button("Films…") { app.closeFilm() }
