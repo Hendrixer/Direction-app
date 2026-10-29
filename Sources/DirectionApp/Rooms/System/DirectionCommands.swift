@@ -139,6 +139,8 @@ private struct FilmMenuItems: View {
         let film = app.film, actions = film.map(FilmActions.init)
         Button("Brief\u{2026}") { film?.sheet = .brief }.shortcut(.brief).disabled(film == nil)
         Button("Editor\u{2026}") { film?.showEditorPopover = true }.shortcut(.editor).disabled(film == nil || film?.onboardingStep != nil)
+        // ⇧⌘L is Lock Picture (system.md, finish.md), so the Look sheet takes ⌥⌘L.
+        Button("Look\u{2026}") { film?.openLook() }.keyboardShortcut("l", modifiers: [.command, .option]).disabled(film.map { $0.cuts.isEmpty || $0.sheet != nil } ?? true)
         Divider()
         Picker("How Much Freedom", selection: Binding(get: { film?.directing.latitude ?? LatitudeSetting.current }, set: { LatitudeSetting.set($0, film: film) })) {
             ForEach(Latitude.allCases, id: \.self) { Text($0.label).tag($0) }

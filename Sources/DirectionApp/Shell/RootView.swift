@@ -75,6 +75,7 @@ struct FilmWindow: View {
         case .share: ShareSheet(model: model)
         case .relink: RelinkSheet(model: model)
         case .brief: BriefSheet(model: model)
+        case .look: LookSheet(model: model)
         }
     }
 

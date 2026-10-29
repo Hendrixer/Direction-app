@@ -15,6 +15,7 @@ enum Room: String, CaseIterable, Identifiable {
 }
 
 enum ActiveSheet: String, Identifiable { case turnover, lockPicture, deliver, share, relink, brief
+    case look
     var id: String { rawValue }
 }
 

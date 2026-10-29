@@ -191,6 +191,7 @@ struct PictureContextMenu: View {
                 if model.room != .notes && model.room != .screening { model.go(.notes) }
             },
             .item("Note on the Whole Cut", icon: "text.bubble") { FilmActions(model).startNote(anchor: .wholeCut) },
+            .item("Look\u{2026}", icon: "camera.filters", key: "\u{2318}\u{2325}L", shortcut: .init("l", modifiers: [.command, .option]), disabled: model.duration <= 0) { model.openLook() },
             .separator,
             .item("Copy Timecode", icon: "clock", key: keys.combo(.copyTimecode)?.text, shortcut: keys.menuShortcut(.copyTimecode)) { FilmActions(model).copyTimecode() },
             .item("Copy Frame as Image", icon: "film", disabled: model.runtime == nil) { copyFrame(model) },

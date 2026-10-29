@@ -163,8 +163,10 @@ struct LookFilterTests {
 
     @Test func halationGlowsRedAroundHighlights() {
         let o = original, p = run(.halation)
-        let d = px(p, nearSun.0, nearSun.1) - px(o, nearSun.0, nearSun.1)
-        #expect(d.x > 0.02 && d.x > d.y && d.y > d.z)
+        let before = px(o, nearSun.0, nearSun.1), d = px(p, nearSun.0, nearSun.1) - before
+        // Screened light: each channel's gain over its headroom is the glow's color, red-orange.
+        let gain = d / (SIMD3(repeating: 1) - before)
+        #expect(d.x > 0.02 && gain.x > gain.y && gain.y > gain.z, "\(gain)")
         #expect(abs(px(p, ground.0, ground.1).x - px(o, ground.0, ground.1).x) < 0.01)
     }
 
@@ -332,6 +334,27 @@ struct MakeLookTests {
         // A LUT from the folder by name, at a strength.
         let made = try await runtime.invoke("direction_make_look", arguments: .object(["name": .string("Print, softer"), "fromLUT": .string("Print film"), "strength": .number(0.6)]))
         #expect(made.value["look"]["strength"].double == 0.6)
+    }
+
+    @Test func aLUTDroppedIntoTheFolderIsSeenWithinTwoSeconds() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("direction-watch-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent("Kodak"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (changes, signal) = AsyncStream<Void>.makeStream()
+        let watcher = LooksWatcher(paths: [folder]) { signal.yield() }
+        defer { watcher.stop() }
+        try await Task.sleep(for: .milliseconds(300))
+        let dropped = Date()
+        try CubeLUT.identity(size: 17).text.write(to: folder.appendingPathComponent("Kodak/2383.cube"), atomically: true, encoding: .utf8)
+        let seen = await withTaskGroup(of: Bool.self) { group in
+            group.addTask { for await _ in changes { return true }; return false }
+            group.addTask { try? await Task.sleep(for: .seconds(2)); return false }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+        #expect(seen && Date().timeIntervalSince(dropped) < 2)
+        #expect(LooksLibrary.folderGroups(folder).map(\.name) == ["Kodak"])
     }
 
     @Test func findsLogNamesInMetadata() {
