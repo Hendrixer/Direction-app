@@ -51,6 +51,7 @@
     speaker: `<path d="M3 6.2h2.3L8.5 3.5v9L5.3 9.8H3z" ${s}/><path d="M10.8 5.8a3 3 0 0 1 0 4.4M12.6 4.2a5.4 5.4 0 0 1 0 7.6" ${s}/>`,
     cc: `<rect x="2" y="3.5" width="12" height="9" rx="1.8" ${s}/><path d="M7 6.6a1.8 1.8 0 1 0 0 2.8M11.2 6.6a1.8 1.8 0 1 0 0 2.8" ${s}/>`,
     color: `<circle cx="8" cy="8" r="5.5" ${s}/><path d="M8 2.5v11" ${s}/><path d="M8 2.5a5.5 5.5 0 0 0 0 11z" fill="currentColor"/>`,
+    copy: `<rect x="5.5" y="5.5" width="8" height="8" rx="1.6" ${s}/><path d="M10.5 3.6V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>`,
     stack: `<rect x="2.5" y="5" width="11" height="8.5" rx="1.5" ${s}/><path d="M4.5 3h7M6 1.5h4M5 5v8.5M11 5v8.5" ${s}/>`,
     key: `<circle cx="5.5" cy="10.5" r="3" ${s}/><path d="m7.7 8.3 5.3-5.3M11 5l1.6 1.6M9.4 6.6l1.4 1.4" ${s}/>`,
     grid: `<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" ${s}/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1" ${s}/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1" ${s}/><rect x="9" y="9" width="4.5" height="4.5" rx="1" ${s}/>`,

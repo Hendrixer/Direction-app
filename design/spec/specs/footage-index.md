@@ -53,6 +53,10 @@ The engine decodes greedily (temperature 0) into this JSON with a 160-token limi
 
 Speed targets are for the sample film (214 takes, 3 h 12 min, about 1,900 shots): Standard finishes in about 35 minutes, and circling can start as soon as the first scene is logged.
 
+### The pill while footage is looked at
+
+Looking at footage is Direction's own work, done on the editor's behalf. Until the editor's logging run starts, the pill reads "Looking at footage · 88 of 214" (no shimmer, no window edge: those mean the editor itself is working). Once logging starts, the pill shows the run ("Logging 42 of 214") and the index carries on underneath.
+
 ## What the editor gets (tools)
 
 | Tool | Arguments | Returns |
@@ -81,7 +85,7 @@ Frame: `screens/59-dailies-shots.html` · 1440 × 900.
 Frame 08's state (2A T3 open in the take viewer), with the take's index shown under the viewer.
 
 - Under the take's scrubber, a **Shots** row: one card per shot (the take has 4), each 168 wide: keyframe (16:9, radius 6), source range in SF Mono 11 text-3, the description in 12 text-2 (2 lines max), and a size chip ("Medium", plain chip). Flags appear as a neutral chip ("Soft at 0:42"). The shot under the playhead has a 1 pt text-1 ring.
-- On the scrubber itself, shot boundaries are 1 pt ticks in text-4, and sounds are a thin lane (4 tall) under it: speech steel-7, laughter steel-9, music steel-8, silence empty. Hovering a sound shows "Laughter · 0:51–0:53".
+- On the scrubber itself, shot boundaries are 1 pt ticks in text-4, and sounds are a thin lane (4 tall) under it: speech steel-7, laughter steel-9, music steel-8, silence empty. Hovering a sound shows "Laughter · 0:37–0:39".
 - Section label above the row: "SHOTS · LOGGED BY THE EDITOR" with a small diamond.
 - Clicking a shot seeks the take to its start. `←`/`→` with the row focused moves between shots.
 - The contact sheet: a **Contact sheet** button (`.btn`, grid icon) beside the label opens the take's sheet as a popover, 640 wide, click a cell to seek.

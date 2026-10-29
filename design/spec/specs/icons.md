@@ -89,3 +89,4 @@ For `hold`, use **`curlybraces`**. It reads as a bracketed passage at 13 pt, and
 | terminal | Open Terminal (frames 56, 58) | `apple.terminal` |
 | stop | Stop the editor (frame 57) | `stop.fill` |
 | out | Get a key (opens a web page) | `arrow.up.right.square` |
+| copy | Copy an install command (frame 56) | `doc.on.doc` |
