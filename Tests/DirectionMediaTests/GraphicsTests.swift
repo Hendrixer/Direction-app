@@ -4,6 +4,7 @@ import Foundation
 import DirectionCore
 import DirectionMedia
 import DirectionTools
+import ImageIO
 
 /// A film with no footage, a sequence at the given format and a graphics folder (graphics.md).
 struct GraphicsFixture: Sendable {
@@ -245,6 +246,40 @@ struct GraphicsTests {
         let result = try await GraphicMaker.make(store: f.store, name: "libraries", noteID: nil, checkOnly: true, cacheDirectory: f.runtime.cacheDirectory)
         #expect(result.consoleErrors.isEmpty, "\(result.consoleErrors)")
         #expect(result.problems.isEmpty, "\(result.problems)")
+    }
+
+    /// Placed like footage on V2, the render composites over the picture with its alpha, and a words
+    /// change shows in the same revision without a new edit.
+    @Test func aPlacedGraphicCompositesOverFootageAndFollowsItsWords() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let folder = f.store.graphicsFolder.appendingPathComponent("title", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // A white block in the middle third: easy to measure at 320×180.
+        try GraphicsFixture.page(words: "{ title: { label: 'Title', text: 'BLOCK', max: 20 } }", duration: 2,
+                                 style: "h1{top:60px;font:900 48px Archivo;color:#fff} #block{position:absolute;left:0;top:0;width:100px;height:180px;background:#fff}",
+                                 body: "<div id=\"block\"></div><h1 id=\"title\"></h1>").write(to: folder.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
+        let made = try await GraphicMaker.make(store: f.store, name: "title", noteID: nil, checkOnly: false, cacheDirectory: f.runtime.cacheDirectory)
+        let assetID = try #require(try f.store.graphicAssetID("title"))
+        var place = EditOperation("insert"); place.assetID = assetID; place.at = .init(seconds: 0); place.layer = 1
+        let placed = try f.store.apply(.init(baseEditRevision: try #require(made.editRevision), operations: [place]))
+        func pixel(_ x: Int, _ y: Int, revision: Int) async throws -> (Double, Double, Double) {
+            let compiled = try await SequenceRenderer.compile(project: f.store.read(revision: revision), cacheDirectory: f.runtime.cacheDirectory)
+            let url = f.directory.appendingPathComponent(UUID().uuidString + ".png")
+            _ = try await SequenceRenderer.frame(compiled, at: .init(seconds: 1), to: url, maxDimension: 320)
+            let image = try #require(CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+            var bytes = [UInt8](repeating: 0, count: 4)
+            let context = CGContext(data: &bytes, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(image, in: CGRect(x: -x, y: -(image.height - 1 - y), width: image.width, height: image.height))
+            return (Double(bytes[0]), Double(bytes[1]), Double(bytes[2]))
+        }
+        let white = try await pixel(40, 150, revision: placed.editRevision), footage = try await pixel(280, 150, revision: placed.editRevision)
+        #expect(white.0 > 230 && white.1 > 230 && white.2 > 230, "\(white)")
+        #expect(footage.0 > 120 && footage.2 < 80, "The footage should show through the transparent part: \(footage)")
+        // The director's words re-render it; the placed revision plays the new render.
+        let (_, after) = try await GraphicMaker.changeWords(store: f.store, name: "title", words: ["title": "WIDE BLOCK"])
+        #expect(try f.store.revision() == placed.editRevision)
+        #expect(try f.store.read(revision: placed.editRevision).assets.first { $0.id == assetID }?.path == after.render?.path)
+        _ = try await pixel(40, 150, revision: placed.editRevision)
     }
 
     /// DIRECTION_TEST_ARTIFACTS=<dir> keeps stills and movies for a look.

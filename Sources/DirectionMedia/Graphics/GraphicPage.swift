@@ -289,7 +289,8 @@ final class GraphicScheme: NSObject, WKURLSchemeHandler {
     static func inject(_ html: Data) -> Data {
         var text = String(decoding: html, as: UTF8.self)
         let meta = "<meta http-equiv=\"Content-Security-Policy\" content=\"\(policy)\">"
-        if let head = text.range(of: "<head[^>]*>", options: [.regularExpression, .caseInsensitive]) { text.insert(contentsOf: meta, at: head.upperBound) }
+        // `<head>` or `<head …>`, not `<header>`.
+        if let head = text.range(of: #"<head(\s[^>]*)?>"#, options: [.regularExpression, .caseInsensitive]) { text.insert(contentsOf: meta, at: head.upperBound) }
         else { text = meta + text }
         return Data(text.utf8)
     }
