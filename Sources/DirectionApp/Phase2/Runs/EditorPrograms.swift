@@ -31,8 +31,8 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     // MARK: Flags (checked against `--help` by EditorProgramTests)
 
     static let claudeFlags = ["--print", "--output-format", "--verbose", "--model", "--mcp-config", "--strict-mcp-config", "--allowedTools", "--append-system-prompt", "--resume", "--permission-mode", "--settings", "--tools", "--no-session-persistence"]
-    static let codexExecFlags = ["--json", "--model", "--cd", "--sandbox", "--config", "--output-schema", "--skip-git-repo-check", "--ephemeral"]
-    static let codexResumeFlags = ["--json", "--model", "--config", "--output-schema", "--skip-git-repo-check"]
+    static let codexExecFlags = ["--json", "--model", "--cd", "--sandbox", "--config", "--output-schema", "--skip-git-repo-check", "--ignore-user-config", "--ephemeral"]
+    static let codexResumeFlags = ["--json", "--model", "--config", "--output-schema", "--skip-git-repo-check", "--ignore-user-config"]
 
     /// What one invocation needs to know.
     struct Invocation {
@@ -69,7 +69,8 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             let toml = { (s: String) in "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\"" }
             // Scripts off: read-only is Codex's only way to keep commands from running.
             let sandbox = i.scripts ? "workspace-write" : "read-only"
-            var shared = ["--json", "--skip-git-repo-check"]
+            // --ignore-user-config: only Direction's tools, not the director's other MCP servers (auth still works).
+            var shared = ["--json", "--skip-git-repo-check", "--ignore-user-config"]
             if !i.version.isEmpty { shared += ["--model", i.version] }
             shared += [
                 "--config", "mcp_servers.direction.command=\(toml(i.helper))",

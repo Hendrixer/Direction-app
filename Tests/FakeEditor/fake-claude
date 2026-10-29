@@ -1,0 +1,34 @@
+#!/bin/bash
+# A stand-in for `claude -p … --output-format stream-json --verbose` (EditorRunnerTests).
+# It runs in the film's Editor folder, records its arguments there, and prints canned events
+# for the scenario in .fake-scenario: done, unfinished, auth, slow, crash.
+folder="$PWD"
+printf '%s\n' "$@" > "$folder/.fake-args"
+printf '%s\n' "${DIRECTION_RUN_ID:-}" > "$folder/.fake-run-id"
+scenario="$(cat "$folder/.fake-scenario" 2>/dev/null || echo done)"
+session="fake-session-1"
+echo '{"type":"system","subtype":"init","session_id":"'"$session"'","tools":[],"mcp_servers":[{"name":"direction","status":"connected"}]}'
+read_notes() {
+  echo '{"type":"assistant","message":{"content":[{"type":"text","text":"Reading my notes."},{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"'"$folder"'/NOTES.md"}}]},"session_id":"'"$session"'"}'
+  echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":[{"type":"text","text":"# Notes between runs"}]}]},"session_id":"'"$session"'"}'
+}
+case "$scenario" in
+  done|unfinished)
+    read_notes
+    echo '{"type":"result","subtype":"success","is_error":false,"result":"Done.\n{\"finished\": true, \"summary\": \"Logged 1 take.\", \"needsYou\": []}","total_cost_usd":0.42,"session_id":"'"$session"'"}'
+    ;;
+  auth)
+    echo '{"type":"result","subtype":"success","is_error":true,"result":"Invalid API key · Please run /login","total_cost_usd":0,"session_id":"'"$session"'"}'
+    exit 1
+    ;;
+  slow)
+    read_notes
+    trap 'kill $sleeper 2>/dev/null; exit 130' INT TERM
+    sleep 30 & sleeper=$!
+    wait $sleeper
+    ;;
+  crash)
+    echo "fake-claude: the program fell over at frame 214" >&2
+    exit 3
+    ;;
+esac

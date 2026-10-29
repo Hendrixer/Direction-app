@@ -373,8 +373,8 @@ final class FilmModel {
         if isLogging, let total = project?.assets.count, total > 0, cuts.isEmpty || runs.active?.job == .logFootage {
             return .working("Logging \(loggedCount) of \(total)", Double(loggedCount) / Double(total))
         }
-        // Any other work: what the editor is doing right now.
-        if runs.isWorking { return .working(runs.activityText ?? "Starting", nil) }
+        // Any other work: what the editor is doing right now, whether Direction started it or you did.
+        if runs.isWorking || runs.ownSession != nil { return .working(runs.activityText ?? "Starting", nil) }
         return .ready
     }
     var isPictureLocked: Bool { directing.pictureLocked }

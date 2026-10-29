@@ -21,6 +21,9 @@ import DirectionTools
     @ObservationIgnored private var offeredSetup = false
     @ObservationIgnored private var known: [String: EditorRunState] = [:]
     @ObservationIgnored private var recovered = false
+    /// Bumped when your own session's latest call goes stale, so the pill stops saying it works.
+    private var tick = 0
+    @ObservationIgnored private var staleTask: Task<Void, Never>?
 
     init() {
         // The app's own tool calls (bringing footage in) are the director's, never the editor's activity.
@@ -37,6 +40,7 @@ import DirectionTools
         if !recovered { recovered = true; runner.recover(store); EditorPrograms.shared.refreshIfNeeded() }
         runs = (try? store.runs()) ?? []
         activity = (try? store.activity(limit: 200)) ?? []
+        watchOwnSession()
         announce(film)
         findWork(film, store: store)
         offerSetup(film)
@@ -65,13 +69,28 @@ import DirectionTools
 
     /// The latest activity that had a time, while it's fresh: the editor's playhead on the strip.
     var playhead: EditorActivity? {
-        guard isWorking else { return nil }
-        return activity.first { $0.time != nil }
+        guard isWorking || ownSession != nil else { return nil }
+        return activity.first { $0.time != nil && $0.runID == active?.id }
     }
 
-    /// "Watching 01:12", "Cutting scene 2": the pill's words while a run works without other progress.
+    /// Your own session's latest call, while it's recent: its activity drives the pill and the playhead too.
+    var ownSession: EditorActivity? {
+        _ = tick
+        guard let a = activity.first, a.runID == nil, Date().timeIntervalSince1970 - a.at < Self.ownSessionWindow else { return nil }
+        return a
+    }
+    static let ownSessionWindow: Double = 20
+
+    private func watchOwnSession() {
+        staleTask?.cancel()
+        guard let a = ownSession else { return }
+        let left = a.at + Self.ownSessionWindow - Date().timeIntervalSince1970
+        staleTask = Task { [weak self] in try? await Task.sleep(for: .seconds(max(0.1, left))); if !Task.isCancelled { self?.tick += 1 } }
+    }
+
+    /// "Watching 01:12", "Cutting scene 2": the pill's words while the editor works without other progress.
     var activityText: String? {
-        guard let a = activity.first(where: { $0.runID == active?.id }) else { return nil }
+        guard let a = active.map({ r in activity.first { $0.runID == r.id } }) ?? ownSession else { return nil }
         let object = a.mono ? String(a.object.prefix(5)) : a.object
         return "\(a.verb) \(object.count > 18 ? String(object.prefix(17)) + "\u{2026}" : object)"
     }
@@ -102,8 +121,8 @@ import DirectionTools
         if film.isPictureLocked, latest(.finish) == nil, !EditorRunner.finished(EditorRun(job: .finish, program: program.rawValue, version: ""), store: store) {
             create(.finish, program: program, store: store)
         }
-        // Answering a question or approving a read-back continues the same session.
-        for r in runs where r.state == .waitingForYou && !EditorRunner.shared.isLive(r.id) {
+        // Answering a question or approving a read-back continues the same session (one run at a time).
+        for r in runs where r.state == .waitingForYou && !EditorRunner.shared.isLive(r.id) && active == nil {
             if let answer = continuation(for: r, film: film) { EditorRunner.shared.launch(r, store: store, continuation: EditorJobs.continuation(answer, job: r.job)) }
         }
     }

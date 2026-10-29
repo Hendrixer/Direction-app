@@ -1,11 +1,15 @@
 # Direction plugins
 
-`plugins/direction/` is a single local package with both `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json`. Both hosts use the same `.mcp.json` and four skills:
+`plugins/direction/` is a single local package with both `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json`. Both hosts use the same `.mcp.json` and six skills:
 
-- **start-project** — create/open a project, import supplied media, prepare and review an assembly.
+- **start-project** — create/open a project, import supplied media, log the footage for Dailies.
+- **assemble** — build the first cut from the director's circles in script order (`insert`, `roll`, `splitEdit`), watch it, deliver it.
 - **edit-video** — programmatic edits, transcript cuts, per-track audio, color, verification, export.
 - **take-turnover** — work as the director's editor: read the brief, read back a turnover, cut, ask, and deliver the next cut with an answer per note.
 - **review-feedback** — read original frames/audio/transcript and source projections, revise, reply as addressed.
+- **finish** — after picture lock: balance and match shots, mix to the loudness target, captions, deliveries.
+
+When Direction starts the editor itself (Settings › Editor › Editor runs on), it copies the job's skill into the film's working folder and names it in the job; see [editor-runs.md](editor-runs.md).
 
 Requires Apple Silicon and macOS 26+. It uses Direction's native executable; it does not embed an LLM, access a cloud service, generate footage, or install model dependencies. Apple's local speech model may download on first transcription.
 

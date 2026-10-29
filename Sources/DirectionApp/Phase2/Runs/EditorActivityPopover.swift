@@ -116,7 +116,6 @@ struct EditorActivityPopover: View {
                     Button { model.setEditorPaused(false) } label: { Label("Resume", systemImage: "play.fill") }.buttonStyle(.gate)
                 } else {
                     Button { model.setEditorPaused(true) } label: { Label("Pause", systemImage: "pause.fill") }.buttonStyle(.gate)
-                        .keyboardShortcut(".", modifiers: [.option, .command])
                 }
                 Button { model.showEditorPopover = false; runs.confirmStop(model) } label: { Label("Stop", systemImage: "stop.fill") }.buttonStyle(.gate(.ghostDanger))
             }

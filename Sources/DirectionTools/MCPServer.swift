@@ -26,7 +26,7 @@ public enum DirectionMCPServer {
                 return .init(content: [.text(text: String(decoding: try JSONEncoder.direction.encode(error), as: UTF8.self), annotations: nil, _meta: nil)], isError: true)
             }
         }
-        try await server.start(transport: StdioTransport())
+        try await server.start(transport: EditorClientTransport())
         await server.waitUntilCompleted()
         await router.cancelAll()
     }

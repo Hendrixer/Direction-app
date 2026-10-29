@@ -172,6 +172,8 @@ struct EditorPill: View {
             case .offline: Image(systemName: "wifi.slash").font(.system(size: 10, weight: .semibold))
             case .paused: Image(systemName: "pause.fill").font(.system(size: 9, weight: .semibold))
             case .stopped, .cant, .needsFootage: GemMark(size: 7, color: Gate.State.alert)
+            // Open over its popover, Ready reads as `.agent.ready`: prism gem, text-1, line-2 ring (frame 41).
+            case .ready where open: GemMark(size: 7)
             case .ready, .waiting, .notSetUp, .readyToCut: GemMark(size: 7, color: Gate.Text.disabled)
             default: GemMark(size: 7)
             }
@@ -192,6 +194,7 @@ struct EditorPill: View {
     private var foreground: Color {
         switch state {
         case .asks: Gate.Voice.agent
+        case .ready where open: Gate.Text.primary
         case .cutReady, .readBackReady, .readyToCut: Gate.Text.primary
         case .cant, .stopped, .needsFootage: Gate.State.alert
         case .working, .assembling, .readingBack, .looking: Gate.Text.primary
@@ -207,6 +210,8 @@ struct EditorPill: View {
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Voice.agent.opacity(0.45), lineWidth: 1))
         case .cutReady, .readyToCut:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Line.strong, lineWidth: 1))
+        case .ready where open:
+            Capsule().fill(Gate.Surface.hover).overlay(Capsule().strokeBorder(Gate.Line.strong, lineWidth: 1))
         // A stopped editor is a hard blocker: alert text on the alert wash, no shimmer (frame 58).
         case .stopped:
             Capsule().fill(Gate.State.alertWash).overlay(Capsule().strokeBorder(Gate.State.alert.opacity(0.45), lineWidth: 1))
