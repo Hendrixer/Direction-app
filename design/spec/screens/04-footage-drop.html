@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>04 Start · bring footage</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/start.css">
+<style>
+  .body { padding: 28px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 18px; min-height: 0; background: var(--ground); }
+  .dropzone .in { display: grid; justify-items: center; gap: 18px; }
+  .dropzone .stack { position: relative; width: 210px; height: 120px; }
+  .dropzone .stack div { position: absolute; width: 150px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px var(--line-2), 0 20px 40px -10px oklch(0 0 0 / .9); }
+  .dropzone h2 { font: 800 34px/1 var(--f-brand); font-stretch: 125%; letter-spacing: -.02em; }
+  .dropzone p { color: var(--text-3); font-size: 13.5px; max-width: 50ch; line-height: 1.5; }
+  .kinds-line { display: flex; gap: 18px; font-size: 12px; color: var(--text-4); }
+  .kinds-line span { display: inline-flex; gap: 6px; align-items: center; }
+  .foot { display: flex; align-items: center; gap: 14px; font-size: 12.5px; color: var(--text-3); }
+</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Films</span><span class="sl">/</span><span class="seg-btn cut">Launch film</span></div>
+    <div class="steps" data-c="stepper"><span class="st done"><i><svg class="ico" style="width:9px;height:9px"><use href="#i-check"/></svg></i>Brief</span><span class="bar"></span><span class="st on"><i>2</i>Footage</span><span class="bar"></span><span class="st"><i>3</i>First look</span></div>
+    <div class="tb-right">
+      <span class="agent" data-c="agent-pill"><span class="mk gem"></span>Ready</span>
+      <span class="btn steel disabled" data-c="primary">Start logging</span>
+    </div>
+  </div>
+  <div class="body">
+    <div class="dropzone" data-c="drop-zone">
+      <div class="in">
+        <div class="stack"><div style="left:0;top:22px;transform:rotate(-8deg)"><div class="ft f-night"></div></div><div style="left:60px;top:0;z-index:2"><div class="ft f-dusk"></div></div><div style="left:118px;top:26px;transform:rotate(7deg)"><div class="ft f-room"></div></div></div>
+        <h2>Bring footage</h2>
+        <p>Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes. Your files stay where they are.</p>
+        <div class="row" style="gap:10px"><span class="btn lg" data-c="choose-folder"><svg class="ico"><use href="#i-folder"/></svg>Choose folder… <kbd>⌘O</kbd></span><span class="btn lg ghost" data-c="from-card"><svg class="ico"><use href="#i-disk"/></svg>From a camera card</span></div>
+        <div class="kinds-line"><span><svg class="ico s"><use href="#i-film"/></svg>MOV, MP4, MXF, BRAW, R3D</span><span><svg class="ico s"><use href="#i-wave"/></svg>WAV, separate sound synced by timecode</span><span><svg class="ico s"><use href="#i-script"/></svg>A script, if you have one (PDF, FDX)</span></div>
+      </div>
+    </div>
+    <div class="foot" data-c="footer">
+      <svg class="ico" style="color:var(--text-4)"><use href="#i-brief"/></svg><span>Brief saved. "Tired, then proud. Quiet, not triumphant."</span><span class="btn ghost sm">Edit brief</span>
+      <span class="sp"></span><span>Nothing is moved or copied. Proxies go to ~/Movies/Direction.</span>
+    </div>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Direction Spec</title>
+<link rel="stylesheet" href="gate.css">
+<style>
+  body { overflow: auto; height: auto; background: var(--canvas); }
+  .wrap { max-width: 1480px; margin: 0 auto; padding: 40px max(16px, 3vw) 120px; display: grid; gap: 48px; }
+  header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  header img { width: 56px; }
+  header p { color: var(--text-3); max-width: 70ch; margin-top: 8px; }
+  nav { display: flex; gap: 6px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; padding: 10px 0; background: var(--canvas); }
+  nav a { color: var(--text-2); text-decoration: none; font-size: 12.5px; padding: 5px 10px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line); }
+  nav a:hover { background: var(--panel); color: var(--text-1); }
+  section { display: grid; gap: 16px; scroll-margin-top: 56px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 20px; }
+  .card { display: grid; gap: 10px; text-decoration: none; color: inherit; }
+  .card .shot { border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--line-2); background: var(--ground); aspect-ratio: 16 / 10; display: grid; place-items: center; }
+  .card .shot img { width: 100%; height: 100%; object-fit: contain; display: block; background: var(--canvas); }
+  .card .shot.missing::after { content: "not rendered yet"; color: var(--text-4); font-size: 12px; }
+  .card .cap { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+  .card .cap b { font-family: var(--f-tc); font-weight: 500; color: var(--text-4); font-size: 11.5px; }
+  .card .cap small { margin-left: auto; color: var(--text-4); font-size: 11.5px; }
+  .card:hover .shot { box-shadow: 0 0 0 1px var(--text-2); }
+  .docs { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
+</head><body>
+<script src="gate.js"></script>
+<script src="frames.js"></script>
+<div class="wrap">
+  <header>
+    <img src="assets/brand/mark-chrome.png" alt="">
+    <div><h1 class="brand-xl">Direction spec</h1><p>Every screen and state, built on Gate. Click a frame to open it live; the render beside it is what the app must match. Start with the README.</p>
+    <div class="docs" style="margin-top:14px"><a class="btn" href="README.md">README</a><a class="btn" href="product-model.md">Product model</a><a class="btn" href="specs/components.md">Components</a><a class="btn" href="tokens.json">tokens.json</a><a class="btn" href="specs/story.md">Sample film</a></div></div>
+  </header>
+  <nav id="nav"></nav>
+  <div id="groups" style="display:grid;gap:56px"></div>
+</div>
+<script>
+  const groups = {};
+  for (const f of FRAMES) (groups[f.group] ||= []).push(f);
+  const nav = document.getElementById('nav'), out = document.getElementById('groups');
+  for (const [g, list] of Object.entries(groups)) {
+    const id = g.toLowerCase();
+    nav.insertAdjacentHTML('beforeend', `<a href="#${id}">${g}</a>`);
+    out.insertAdjacentHTML('beforeend', `<section id="${id}"><div class="row"><h2 class="brand-l">${g}</h2><span class="sp"></span><a class="btn ghost sm" href="specs/${list[0].spec}">specs/${list[0].spec}</a></div><div class="grid">${list.map(f =>
+      `<a class="card" href="screens/${f.id}.html"><div class="shot"><img src="renders/${f.id}@1x.png" alt="" loading="lazy" onerror="this.parentNode.classList.add('missing');this.remove()"></div><div class="cap"><b>${f.id.slice(0,2)}</b><span>${f.title}</span><small>${f.size || '1440x900'}</small></div></a>`).join('')}</div></section>`);
+  }
+</script>
+</body></html>

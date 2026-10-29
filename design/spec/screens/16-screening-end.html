@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>16 Screening · end of cut</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/notes.css">
+<style>
+  .scope .ft { filter: brightness(.32) saturate(.6); }
+  .endcard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 640px; border-radius: 20px; padding: 32px 32px 26px; display: grid; gap: 18px; z-index: 10; }
+  .endcard .lede { color: var(--text-2); font-size: 14px; }
+  .endcard .strip { height: 56px; padding-top: 10px; padding-bottom: 14px; }
+  .endcard .strip .sc { height: 30px; }
+  .endcard .acts { display: flex; gap: 8px; align-items: center; }
+  .endcard .marks .mk.pin { transform: scale(1.1); }
+</style>
+</head><body class="frame screening">
+<script src="../gate.js"></script>
+<div class="scope" data-c="picture"><div class="ft f-day"></div></div>
+
+<div class="tb over scrimmed" data-c="titlebar-overlay">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="crumb"><span class="seg-btn">Launch film</span><span class="sl">/</span><span class="seg-btn cut">Cut 3</span></div>
+  <div class="rooms" data-c="rooms"><span>Dailies</span><span>Script</span><span class="on">Screening</span><span>Notes</span><span>Changes</span><span class="off">Finish</span></div>
+  <div class="tb-right">
+    <span class="agent" data-c="agent-pill"><span class="mk gem"></span>Ready</span>
+    <span class="btn ghost" data-c="end-screening"><svg class="ico"><use href="#i-exit"/></svg>End screening <kbd>esc</kbd></span>
+  </div>
+</div>
+
+<div class="endcard glass" data-c="end-card">
+  <div class="label">End of screening · 3:40</div>
+  <h1 class="brand-xl">That’s Cut 3.</h1>
+  <p class="lede">You dropped 4 marks. Write them up while it’s fresh, then turn the sheet over.</p>
+  <div class="strip" data-c="scene-strip">
+    <div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div>
+    <div class="sc" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div>
+    <div class="sc" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div>
+    <div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div>
+    <div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div>
+    <div class="marks"><span class="mk pin" style="left:8.2%"></span><span class="mk pin" style="left:21%"></span><span class="mk pin" style="left:32.7%"></span><span class="mk pin" style="left:47%"></span></div>
+  </div>
+  <div class="acts">
+    <span class="btn lg ghost" data-c="watch-again"><svg class="ico"><use href="#i-revert"/></svg>Watch again</span>
+    <span class="sp"></span>
+    <span class="btn lg steel" data-c="primary"><svg class="ico"><use href="#i-note"/></svg>Write notes <kbd>↩</kbd></span>
+  </div>
+</div>
+</body></html>

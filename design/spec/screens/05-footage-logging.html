@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>05 Start · logging footage</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/start.css">
+<style>
+  .body { display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: 0; }
+  .main { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-width: 0; background: var(--ground); }
+  .sum { padding: 24px 24px 18px; display: grid; gap: 14px; border-bottom: 1px solid var(--line); }
+  .sum .big { display: flex; align-items: baseline; gap: 14px; }
+  .sum .big h2 { font: 800 28px/1 var(--f-brand); font-stretch: 122%; }
+  .sum .nums { display: flex; gap: 28px; font-size: 12.5px; color: var(--text-3); }
+  .sum .nums b { display: block; font: 600 15px/1.3 var(--f-tc); color: var(--text-1); }
+  .list { overflow: hidden; }
+  .found { border-left: 1px solid var(--line); background: var(--sunken); padding: 24px 22px; display: grid; gap: 16px; align-content: start; }
+  .scn { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 12px; align-items: center; }
+  .scn .th { position: relative; height: 30px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+  .scn b { font-weight: 500; font-size: 13px; display: block; }
+  .scn small { font: 11px var(--f-tc); color: var(--text-4); }
+  .scn.pend { opacity: .45; }
+</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Films</span><span class="sl">/</span><span class="seg-btn cut">Launch film</span></div>
+    <div class="steps" data-c="stepper"><span class="st done"><i><svg class="ico" style="width:9px;height:9px"><use href="#i-check"/></svg></i>Brief</span><span class="bar"></span><span class="st on"><i>2</i>Footage</span><span class="bar"></span><span class="st"><i>3</i>First look</span></div>
+    <div class="tb-right">
+      <span class="agent working" data-c="agent-pill"><span class="mk gem"></span>Logging 131 of 214 <span class="meter"><i style="width:61%"></i></span></span>
+      <span class="btn steel" data-c="primary"><svg class="ico"><use href="#i-takes"/></svg>Open Dailies</span>
+    </div>
+  </div>
+  <div class="body">
+    <div class="main">
+      <div class="sum" data-c="logging-summary">
+        <div class="big"><h2>Logging footage</h2><span class="t-small">About 6 minutes left. You can start circling takes now.</span></div>
+        <div class="progress agent" style="height:5px"><i style="width:61%"></i></div>
+        <div class="nums"><span><b>131 / 214</b>takes logged</span><span><b>1 h 58 m</b>of 3 h 12 m</span><span><b>96</b>transcribed</span><span><b>5</b>scenes found</span><span style="color:var(--alert)"><b style="color:var(--alert)">2</b>need you</span></div>
+      </div>
+      <div class="files-head label"><span></span><span>Take</span><span>File</span><span>Duration</span><span>Scene</span><span>Status</span></div>
+      <div class="list" data-c="file-list">
+        <div class="file bad" data-c="file-row-problem"><svg class="ico" style="color:var(--alert)"><use href="#i-warn"/></svg><div class="th"><div class="ft f-hands dim70"></div></div><div class="nm"><b>A014_C007_1022.mov</b><small>4B · Whiteboard</small></div><span class="mono">0:38</span><span class="t-small">4 Building it</span><span class="state">No audio. Separate sound file?<span class="btn sm" style="margin-left:4px">Find sound…</span></span></div>
+        <div class="file bad"><svg class="ico" style="color:var(--alert)"><use href="#i-warn"/></svg><div class="th"><div class="ft f-black"></div></div><div class="nm"><b>CLIP0031.R3D</b><small>Unreadable</small></div><span class="mono faint">—</span><span class="t-small faint">—</span><span class="state">Can't read this file. It may be damaged.<span class="btn sm ghost" style="margin-left:4px">Skip</span></span></div>
+        <div class="file" data-c="file-row-transcribing"><span class="spinner"></span><div class="th"><div class="ft f-room"></div></div><div class="nm"><b>A011_C002_1021.mov</b><small>2A T3 · Wide, window light</small></div><span class="mono">0:46</span><span class="t-small">2 Maya, the problem</span><span class="state"><span class="progress agent"><i style="width:70%"></i></span>Transcribing</span></div>
+        <div class="file"><span class="spinner"></span><div class="th"><div class="ft f-room dim85"></div></div><div class="nm"><b>A011_C003_1021.mov</b><small>2A T4</small></div><span class="mono">0:12</span><span class="t-small">2 Maya, the problem</span><span class="state"><span class="progress agent"><i style="width:22%"></i></span>Logging</span></div>
+        <div class="file" data-c="file-row-done"><svg class="ico" style="color:var(--approve)"><use href="#i-check"/></svg><div class="th"><div class="ft f-room"></div></div><div class="nm"><b>A011_C001_1021.mov</b><small>2A T2 · Wide, window light</small></div><span class="mono">0:44</span><span class="t-small">2 Maya, the problem</span><span class="state">"Editing was the part nobody wanted."</span></div>
+        <div class="file"><svg class="ico" style="color:var(--approve)"><use href="#i-check"/></svg><div class="th"><div class="ft f-room"></div></div><div class="nm"><b>A010_C009_1021.mov</b><small>2A T1</small></div><span class="mono">0:48</span><span class="t-small">2 Maya, the problem</span><span class="state">"So we started with the edit, and…"</span></div>
+        <div class="file"><svg class="ico" style="color:var(--approve)"><use href="#i-check"/></svg><div class="th"><div class="ft f-dusk"></div></div><div class="nm"><b>B003_C012_1019.mov</b><small>3A T2 · Wide, dusk</small></div><span class="mono">1:04</span><span class="t-small">3 The ridge</span><span class="state">No dialogue · wind</span></div>
+        <div class="file"><svg class="ico" style="color:var(--approve)"><use href="#i-check"/></svg><div class="th"><div class="ft f-night"></div></div><div class="nm"><b>B001_C004_1018.mov</b><small>1A T5 · Street, night</small></div><span class="mono">0:22</span><span class="t-small">1 Cold open</span><span class="state">No dialogue · traffic</span></div>
+        <div class="file q" data-c="file-row-queued"><span class="ico"></span><div class="th"><div class="ft f-hands"></div></div><div class="nm"><b>A015_C001_1022.mov</b><small>Waiting</small></div><span class="mono">0:21</span><span>—</span><span class="state">Queued</span></div>
+        <div class="file q"><span class="ico"></span><div class="th"><div class="ft f-hands"></div></div><div class="nm"><b>A015_C002_1022.mov</b><small>Waiting</small></div><span class="mono">0:19</span><span>—</span><span class="state">Queued</span></div>
+        <div class="file q"><span class="ico"></span><div class="th"><div class="ft f-day"></div></div><div class="nm"><b>C002_C001_1024.mov</b><small>Waiting</small></div><span class="mono">0:57</span><span>—</span><span class="state">Queued</span></div>
+        <div class="file q"><span class="ico"></span><div class="th"><div class="ft f-day"></div></div><div class="nm"><b>C002_C002_1024.mov</b><small>Waiting</small></div><span class="mono">0:41</span><span>—</span><span class="state">Queued</span></div>
+      </div>
+    </div>
+    <aside class="found" data-c="scenes-found">
+      <div class="row" style="color:var(--agent);font:500 10.5px var(--f-tc);letter-spacing:.07em;text-transform:uppercase"><span class="mk gem"></span>What the editor is finding</div>
+      <div class="say"><span class="mk gem"></span><p>Five scenes so far, from the dialogue and the light. Rename or merge them in Dailies.</p></div>
+      <div class="scn"><div class="th"><div class="ft f-night"></div></div><div><b>1 Cold open</b><small>2 setups · 11 takes</small></div></div>
+      <div class="scn"><div class="th"><div class="ft f-room"></div></div><div><b>2 Maya, the problem</b><small>2 setups · 7 takes · transcribed</small></div></div>
+      <div class="scn"><div class="th"><div class="ft f-dusk"></div></div><div><b>3 The ridge</b><small>2 setups · 9 takes</small></div></div>
+      <div class="scn"><div class="th"><div class="ft f-hands"></div></div><div><b>4 Building it</b><small>3 setups · 38 takes so far</small></div></div>
+      <div class="scn pend"><div class="th"><div class="ft f-day"></div></div><div><b>5 Launch day?</b><small>Still logging</small></div></div>
+      <div class="divider"></div>
+      <div class="say"><span class="mk gem"></span><p>No script found. I'll build one from the transcript for the Script room.<small>Have one? Drop the PDF here.</small></p></div>
+    </aside>
+  </div>
+</div>
+</body></html>

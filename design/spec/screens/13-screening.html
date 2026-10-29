@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>13 Screening · playing, chrome visible</title>
+<link rel="stylesheet" href="../gate.css">
+<style>
+  body { background: var(--canvas); }
+  .scope { position: absolute; left: 0; right: 0; top: 149px; height: 602px; }
+  .tb.over { background: linear-gradient(180deg, oklch(0 0 0 / .7), transparent); }
+  .dock { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); width: 960px; border-radius: 16px; padding: 6px 14px 2px 10px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+  .dock .strip { flex: 1; }
+  .hint { position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); font-size: 12px; color: var(--text-3); display: flex; gap: 8px; align-items: center; }
+</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+
+<div class="scope" data-c="picture"><div class="ft f-dusk"></div></div>
+
+<div class="tb over" data-c="titlebar-overlay">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="crumb"><span class="seg-btn">Launch film</span><span class="sl">/</span><span class="seg-btn cut">Cut 3</span></div>
+  <div class="rooms" data-c="rooms"><span>Dailies</span><span>Script</span><span class="on">Screening</span><span>Notes</span><span>Changes</span><span class="off">Finish</span></div>
+  <div class="tb-right">
+    <span class="agent" data-c="agent-pill"><span class="mk gem"></span>Ready</span>
+    <span class="btn ghost" data-c="end-screening"><svg class="ico"><use href="#i-exit"/></svg>End screening <kbd>esc</kbd></span>
+  </div>
+</div>
+
+<div class="hint">Press <span class="kbd">N</span> to mark a moment. Playback won't stop.</div>
+
+<div class="dock glass" data-c="dock">
+  <span class="btn ghost icon" data-c="play"><svg class="ico l"><use href="#i-pause"/></svg></span>
+  <span class="tc" data-c="timecode">01:12:08 <i>/ 3:40</i></span>
+  <div class="strip" data-c="scene-strip">
+    <div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div>
+    <div class="sc" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div>
+    <div class="sc cur" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div>
+    <div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div>
+    <div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div>
+    <div class="marks"><span class="mk pin" style="left:8%"></span><span class="mk pin" style="left:21%"></span></div>
+    <div class="ph" style="left:33%"></div>
+  </div>
+  <span class="chip d" data-c="mark-count"><span class="mk pin" style="transform:scale(.8)"></span>2 marks</span>
+  <span class="btn ghost icon" data-c="volume"><svg class="ico"><use href="#i-speaker"/></svg></span>
+  <span class="btn ghost icon" data-c="fullscreen"><svg class="ico"><use href="#i-full"/></svg></span>
+</div>
+</body></html>

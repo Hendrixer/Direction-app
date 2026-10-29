@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>20 Notes · the editor's questions</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/notes.css">
+<style>.qwrap{padding:14px 12px;display:grid;gap:12px;align-content:start}</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Launch film<svg class="ico"><use href="#i-down"/></svg></span><span class="sl">/</span><span class="seg-btn cut">Cut 3<svg class="ico"><use href="#i-down"/></svg></span></div>
+    <div class="rooms" data-c="rooms"><span>Dailies</span><span>Script</span><span>Screening</span><span class="on">Notes</span><span>Changes</span><span class="off">Finish</span></div>
+    <div class="tb-right">
+      <span class="agent asks" data-c="agent-pill"><span class="mk gem"></span>1 question</span>
+      <span class="btn ghost icon" data-c="share"><svg class="ico"><use href="#i-share"/></svg></span>
+    </div>
+  </div>
+  <div class="body">
+    <div class="stage">
+      <div class="viewer">
+        <div class="frame-pic r169" data-c="picture"><div class="ft f-room dim70"></div>
+          
+          <div class="hud" style="left:12px;bottom:12px"><span class="glass">00:52:16</span></div>
+        </div>
+      </div>
+      <div class="transport" data-c="transport">
+        <span class="btn icon" data-c="play"><svg class="ico"><use href="#i-play"/></svg></span>
+        <span class="tc" data-c="timecode">00:52:16 <i>/ 3:40</i></span>
+        <div class="strip" data-c="scene-strip"><div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div><div class="sc cur" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div><div class="sc" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div><div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div><div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div><div class="marks"><span class="mk pin" style="left:8.2%"></span><span class="mk pin" style="left:21%"></span><span class="mk pin" style="left:32.7%"></span><span class="mk pin" style="left:47%"></span></div><div class="ph" style="left:23.8%"></div></div>
+        <span class="btn ghost icon" data-c="mark-button" title="Mark (N)"><svg class="ico" style="color:var(--director)"><use href="#i-mark"/></svg></span>
+      </div>
+    </div>
+    <div class="sheet" data-c="notes-sheet">
+      <div class="sheet-head">
+        <div class="row"><h2 class="brand-m">Notes on Cut 3</h2><span class="sp"></span><span class="btn ghost icon sm"><svg class="ico"><use href="#i-more"/></svg></span></div>
+        <p class="t-small">Turned over · the editor is cutting Cut 4</p>
+      </div>
+      <div class="sheet-tabs" data-c="sheet-tabs"><span>Sheet <span class="count">7</span></span><span class="on">Questions <span class="count">1</span></span><span>Outside <span class="count">0</span></span></div>
+      <div class="qwrap">
+        <div class="question" data-c="question">
+          <div class="row t-small"><span class="mk gem"></span><span style="color:var(--agent);font-weight:500">Editor asks</span><span class="sp"></span><span class="faint">2 min ago</span></div>
+          <p style="font-size:13.5px;line-height:1.5">Line 12 has two good readings. T2 is warmer; T5 sounds more tired, which fits note 2. Which one?</p>
+          <div class="row" style="gap:5px"><span class="chip ui">Holds</span><span class="chip d">2</span><span class="t-caption">Everything else keeps cutting.</span></div>
+          <div class="choices" data-c="choices">
+            <div class="choice" data-c="choice"><span class="radio"></span><div class="th"><div class="ft f-room warm"></div></div><div style="min-width:0"><b style="font-weight:500">Use T2</b><div class="t-caption">2A · “Editing was the part nobody wanted.”</div></div><span class="sp"></span><svg class="ico s" style="color:var(--text-3)"><use href="#i-play"/></svg></div>
+            <div class="choice on" data-c="choice-selected"><span class="radio on"></span><div class="th"><div class="ft f-room dim70"></div></div><div style="min-width:0"><b style="font-weight:500">Use T5</b><div class="t-caption">2A · slower, a breath before “nobody”</div></div><span class="sp"></span><svg class="ico s" style="color:var(--text-3)"><use href="#i-play"/></svg></div>
+            <div class="choice" data-c="choice"><span class="radio"></span><div class="th" style="display:grid;place-items:center;background:var(--sunken)"><svg class="ico" style="color:var(--text-3)"><use href="#i-split"/></svg></div><div><b style="font-weight:500">Cut both ways</b><div class="t-caption">You pick in Changes</div></div></div>
+          </div>
+          <div class="input ph" data-c="answer-field">Or tell me in your words…</div>
+          <div class="row"><span class="sp"></span><span class="btn steel" data-c="primary">Answer <kbd>↩</kbd></span></div>
+        </div>
+        <p class="t-caption" style="text-align:center">Answered questions stay here, under the note they belong to.</p>
+      </div>
+      <div class="sheet-foot" data-c="cutting-status">
+        <div class="row t-small"><span class="mk gem"></span><span>Cutting Cut 4 · 3 of 7 notes</span><span class="sp"></span><span class="faint">about 2 min</span></div>
+        <div class="progress agent"><i style="width:42%"></i></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

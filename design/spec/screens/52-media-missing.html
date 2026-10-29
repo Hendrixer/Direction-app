@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>52 Footage missing</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/system.css">
+<style>
+  .app { grid-template-rows: var(--titlebar-h) 36px minmax(0, 1fr); }
+  .slate { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 10px; text-align: center; background-color: var(--sunken); }
+  .modal { top: 88px; width: 620px; }
+  .fl { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 36px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+  .fl:first-child { border-top: 0; }
+  .fl .p { font: 11.5px var(--f-tc); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Launch film<svg class="ico"><use href="#i-down"/></svg></span><span class="sl">/</span><span class="seg-btn cut">Cut 3<svg class="ico"><use href="#i-down"/></svg></span></div>
+    <div class="rooms" data-c="rooms"><span class="">Dailies</span><span class="">Script</span><span class="">Screening</span><span class="on">Notes<span class="badge d">6</span></span><span class="">Changes</span><span class="off">Finish</span></div>
+    <div class="tb-right">
+      <span class="agent blocked" data-c="agent-pill"><span class="mk gem"></span>Waiting for footage</span>
+      <span class="btn ghost icon" data-c="share"><svg class="ico"><use href="#i-share"/></svg></span>
+      <span class="btn steel" data-c="primary"><svg class="ico"><use href="#i-turn"/></svg>Turn over <span class="n">6</span></span>
+    </div>
+  </div>
+  <div class="banner bad" data-c="missing-banner"><svg class="ico" style="color:var(--alert)"><use href="#i-warn"/></svg><span><b style="font-weight:600">14 takes are missing.</b> <span style="color:var(--text-2)">The drive “Shoot SSD” isn’t connected. The editor can’t cut scenes that use them.</span></span><span class="sp"></span><span class="btn sm">Find footage…</span></div>
+  <div class="body">
+    <div class="stage">
+      <div class="viewer"><div class="frame-pic r169" data-c="picture"><div class="slate hatch" data-c="missing-slate"><svg class="ico xl" style="color:var(--text-3)"><use href="#i-disk"/></svg><p class="brand-m">2A T2 is offline</p><p class="t-small">Shoot SSD/Day 1/A001_C002.mov</p></div></div></div>
+      <div class="transport">
+        <span class="btn icon"><svg class="ico"><use href="#i-play"/></svg></span><span class="tc">00:46:12 <i>/ 3:40</i></span>
+        <div class="strip" data-c="scene-strip"><div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div><div class="sc cur" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div><div class="sc" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div><div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div><div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div><div class="marks"><span class="mk pin" style="left:8%"></span><span class="mk pin" style="left:21%"></span><span class="mk pin" style="left:33%"></span><span class="mk pin" style="left:47%"></span><span class="mk pin" style="left:52%"></span><span class="mk pin" style="left:62%"></span></div><div class="ph" style="left:21%"></div></div>
+      </div>
+    </div>
+    <div class="sheet"><div class="sheet-head"><h2 class="brand-m">Notes on Cut 3</h2><p class="t-small">6 written · ready to turn over</p></div><div class="sheet-tabs"><span class="on">Sheet <span class="count">6</span></span><span>Questions <span class="count">0</span></span><span>Outside <span class="count">0</span></span></div><div class="notes"><div class="nt" data-c="note-row"><span class="no">1</span><div class="meta"><span class="chip d">00:18:04</span><span class="chip k">Pace</span></div><p class="txt">Cold open takes too long to get to her face.</p></div><div class="nt sel" data-c="note-row"><span class="no">2</span><div class="meta"><span class="chip d">00:46:00–00:58:12</span><span class="chip k">Feeling</span></div><p class="txt">I want to feel how tired she was here. Let it sit.</p></div><div class="nt" data-c="note-row"><span class="no">3</span><div class="meta"><span class="chip d">01:12:08</span><span class="chip ui"><svg class="ico"><use href="#i-region"/></svg>Region</span><span class="chip k">Picture</span></div><p class="txt">Tighter on her. The sky is winning.</p></div><div class="nt" data-c="note-row"><span class="no">4</span><div class="meta"><span class="chip d">01:43:20</span><span class="chip k">Sound</span></div><p class="txt">Music is too sure of itself here.</p></div><div class="nt" data-c="note-row"><span class="no">5</span><div class="meta"><span class="chip d"><svg class="ico"><use href="#i-script"/></svg>Line 14</span><span class="chip k">Story</span></div><p class="txt">Lose “and that’s when everything changed.”</p></div><div class="nt" data-c="note-row"><span class="no">6</span><div class="meta"><span class="chip d">02:20:00–02:41:00</span><span class="chip k">Pace</span></div><p class="txt">The building montage is one beat too long.</p></div></div><div></div></div>
+  </div>
+</div>
+<div class="scrim" style="top:88px"></div>
+<div class="modal" data-c="relink-sheet">
+  <div class="modal-head"><h2 class="brand-m">Find missing footage</h2><p class="t-small">Point to the folder or drive with the original files. Direction matches them by name, length and timecode, and finds the rest on its own.</p></div>
+  <div class="modal-body">
+    <div class="row"><div class="input" style="flex:1"><svg class="ico s" style="color:var(--text-3)"><use href="#i-folder"/></svg>/Volumes/Shoot SSD backup</div><span class="btn">Choose…</span></div>
+    <div class="row t-small"><span class="spinner"></span><span>Searching Day 3… 12 of 14 found</span><span class="sp"></span><div class="progress" style="width:160px"><i style="width:86%"></i></div></div>
+    <div class="well" style="padding:4px 14px"><div class="fl"><svg class="ico s" style="color:var(--approve)"><use href="#i-check"/></svg><div style="min-width:0"><b style="font-weight:500">2A T1</b><div class="p">Shoot SSD/Day 1/A001_C001.mov</div></div><span class="chip ok ui">Found</span></div><div class="fl"><svg class="ico s" style="color:var(--approve)"><use href="#i-check"/></svg><div style="min-width:0"><b style="font-weight:500">2A T2</b><div class="p">Shoot SSD/Day 1/A001_C002.mov</div></div><span class="chip ok ui">Found</span></div><div class="fl"><svg class="ico s" style="color:var(--approve)"><use href="#i-check"/></svg><div style="min-width:0"><b style="font-weight:500">2A T3</b><div class="p">Shoot SSD/Day 1/A001_C003.mov</div></div><span class="chip ok ui">Found</span></div><div class="fl"><svg class="ico s" style="color:var(--approve)"><use href="#i-check"/></svg><div style="min-width:0"><b style="font-weight:500">2B T1</b><div class="p">Shoot SSD/Day 1/B001_C014.mov</div></div><span class="chip ok ui">Found</span></div><div class="fl"><svg class="ico s" style="color:var(--alert)"><use href="#i-warn"/></svg><div style="min-width:0"><b style="font-weight:500">4C T2</b><div class="p">Shoot SSD/Day 3/C004_C031.mov</div></div><span class="chip bad ui">Not in this folder</span></div><div class="fl"><svg class="ico s" style="color:var(--alert)"><use href="#i-warn"/></svg><div style="min-width:0"><b style="font-weight:500">4C T3</b><div class="p">Shoot SSD/Day 3/C004_C032.mov</div></div><span class="chip bad ui">Not in this folder</span></div></div>
+  </div>
+  <div class="modal-foot"><span class="t-small" style="margin-right:auto">Unmatched takes stay offline. Notes on them are kept.</span><span class="btn ghost">Cancel</span><span class="btn steel">Relink 12 takes</span></div>
+</div>
+</body></html>

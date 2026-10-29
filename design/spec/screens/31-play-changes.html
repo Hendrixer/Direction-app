@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>31 Play changes</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/changes.css">
+<style>body { background: var(--canvas); }
+  .scope { position: absolute; left: 0; right: 0; top: 149px; height: 602px; overflow: hidden; }
+  .dock { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); width: 1000px; border-radius: 16px; padding: 10px 12px 8px 14px; display: grid; gap: 6px; z-index: 10; }
+  .dock-top { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); padding-left: 4px; }
+  .dock-top b { color: var(--text-1); font-weight: 500; }
+  .dock-row { display: flex; align-items: center; gap: 10px; }</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="tb over" data-c="titlebar-overlay" style="background:linear-gradient(180deg, oklch(0 0 0 / .7), transparent)">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="crumb"><span class="seg-btn">Launch film</span><span class="sl">/</span><span class="seg-btn cut">Cut 4</span><span class="sl">/</span><span class="seg-btn cut" style="color:var(--text-3)">Changes</span></div>
+  <div class="tb-right"><span class="agent" data-c="agent-pill"><span class="mk gem"></span>Ready</span><span class="btn ghost" data-c="end"><svg class="ico"><use href="#i-exit"/></svg>Stop <kbd>esc</kbd></span></div>
+</div>
+<div class="scope" data-c="picture"><div class="ft f-dusk" style="transform:scale(1.6);transform-origin:40% 62%"></div></div>
+<div class="hud" style="left:24px;top:76px" data-c="change-tag"><span class="glass" style="display:flex;gap:7px;align-items:center"><span style="width:14px;height:2px;background:var(--prism);display:inline-block"></span>CHANGED · NOTE 3</span></div>
+<div class="dock glass" data-c="changes-dock">
+  <div class="dock-top">
+    <span class="chip d">3</span><span class="dk-t"><b>The ridge.</b> Reframed to 1.6× on Maya; sky is now a third of the frame.</span><span class="sp"></span>
+    <span class="reel-dots" data-c="reel-progress"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i><i></i><i></i></span><span class="t-small mono">3 of 7</span>
+  </div>
+  <div class="dock-row">
+    <span class="btn ghost icon" data-c="prev-change"><svg class="ico"><use href="#i-back"/></svg></span>
+    <span class="btn ghost icon" data-c="play"><svg class="ico l"><use href="#i-pause"/></svg></span>
+    <span class="btn ghost icon" data-c="next-change"><svg class="ico"><use href="#i-fwd"/></svg></span>
+    <span class="tc">01:13:02 <i>/ 0:46</i></span>
+    <div class="cstrip" data-c="change-strip"><div class="cs handle" style="flex:2"><div class="ft f-dusk"></div></div><div class="cs chg" style="flex:5"><div class="ft f-dusk"></div></div><div class="cs handle" style="flex:2"><div class="ft f-dusk"></div></div><div class="ph" style="left:48%"></div></div>
+    <span class="t-small" style="white-space:nowrap">2 s handles</span>
+    <span class="btn ghost sm"><svg class="ico s"><use href="#i-reply"/></svg>Reply</span>
+    <span class="btn steel" data-c="accept"><svg class="ico"><use href="#i-check"/></svg>Accept</span>
+  </div>
+</div>
+</body></html>

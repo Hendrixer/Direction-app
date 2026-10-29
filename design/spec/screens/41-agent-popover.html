@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>41 Editor popover</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/system.css">
+<style>
+  .pop.ed { right: 126px; top: 46px; width: 360px; padding: 0; }
+  .pop.ed::before { content: ""; position: absolute; top: -6px; right: 86px; width: 12px; height: 12px; background: var(--panel); transform: rotate(45deg); box-shadow: -1px -1px 0 var(--line-2); }
+  .ed-sec { padding: 14px 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+  .ed-sec:first-child { border-top: 0; }
+  .lat-r { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; font-size: 13px; }
+  .lat-r small { display: block; color: var(--text-3); font-size: 11.5px; }
+  .lat-r .radio { margin-top: 2px; }
+  .act { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 8px; font-size: 12.5px; color: var(--text-2); align-items: start; }
+  .act .mk { margin-top: 4px; }
+  .act time { font: 11px var(--f-tc); color: var(--text-4); white-space: nowrap; }
+</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Launch film<svg class="ico"><use href="#i-down"/></svg></span><span class="sl">/</span><span class="seg-btn cut">Cut 3<svg class="ico"><use href="#i-down"/></svg></span></div>
+    <div class="rooms" data-c="rooms"><span class="">Dailies</span><span class="">Script</span><span class="">Screening</span><span class="on">Notes<span class="badge d">6</span></span><span class="">Changes</span><span class="off">Finish</span></div>
+    <div class="tb-right">
+      <span class="agent ready s-hover" data-c="agent-pill" style="background:var(--hover)"><span class="mk gem"></span>Ready</span>
+      <span class="btn ghost icon" data-c="share"><svg class="ico"><use href="#i-share"/></svg></span>
+      <span class="btn steel" data-c="primary"><svg class="ico"><use href="#i-turn"/></svg>Turn over <span class="n">6</span></span>
+    </div>
+  </div>
+  <div class="body">
+    <div class="stage">
+      <div class="viewer">
+        <div class="frame-pic r169" data-c="picture"><div class="ft f-room"></div>
+          <div class="hud" style="left:12px;bottom:12px"><span class="glass">00:46:12</span></div>
+        </div>
+      </div>
+      <div class="transport" data-c="transport">
+        <span class="btn icon" data-c="play"><svg class="ico"><use href="#i-play"/></svg></span>
+        <span class="tc" data-c="timecode">00:46:12 <i>/ 3:40</i></span>
+        <div class="strip" data-c="scene-strip"><div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div><div class="sc cur" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div><div class="sc" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div><div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div><div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div><div class="marks"><span class="mk pin" style="left:8%"></span><span class="mk pin" style="left:21%"></span><span class="mk pin" style="left:33%"></span><span class="mk pin" style="left:47%"></span><span class="mk pin" style="left:52%"></span><span class="mk pin" style="left:62%"></span></div><div class="ph" style="left:21%"></div></div>
+        <span class="btn ghost icon" data-c="mark-button"><svg class="ico" style="color:var(--director)"><use href="#i-mark"/></svg></span>
+      </div>
+    </div>
+    <div class="sheet" data-c="notes-sheet">
+      <div class="sheet-head">
+        <div class="row"><h2 class="brand-m">Notes on Cut 3</h2><span class="sp"></span><span class="btn ghost icon sm"><svg class="ico"><use href="#i-more"/></svg></span></div>
+        <p class="t-small">6 written · ready to turn over</p>
+      </div>
+      <div class="sheet-tabs" data-c="sheet-tabs"><span class="on">Sheet <span class="count">6</span></span><span>Questions <span class="count">0</span></span><span>Outside <span class="count">0</span></span></div>
+      <div class="notes"><div class="nt" data-c="note-row"><span class="no">1</span><div class="meta"><span class="chip d">00:18:04</span><span class="chip k">Pace</span></div><p class="txt">Cold open takes too long to get to her face.</p></div><div class="nt sel" data-c="note-row"><span class="no">2</span><div class="meta"><span class="chip d">00:46:00–00:58:12</span><span class="chip k">Feeling</span></div><p class="txt">I want to feel how tired she was here. Let it sit.</p></div><div class="nt" data-c="note-row"><span class="no">3</span><div class="meta"><span class="chip d">01:12:08</span><span class="chip ui"><svg class="ico"><use href="#i-region"/></svg>Region</span><span class="chip k">Picture</span></div><p class="txt">Tighter on her. The sky is winning.</p></div><div class="nt" data-c="note-row"><span class="no">4</span><div class="meta"><span class="chip d">01:43:20</span><span class="chip k">Sound</span></div><p class="txt">Music is too sure of itself here.</p></div><div class="nt" data-c="note-row"><span class="no">5</span><div class="meta"><span class="chip d"><svg class="ico"><use href="#i-script"/></svg>Line 14</span><span class="chip k">Story</span></div><p class="txt">Lose “and that’s when everything changed.”</p></div><div class="nt" data-c="note-row"><span class="no">6</span><div class="meta"><span class="chip d">02:20:00–02:41:00</span><span class="chip k">Pace</span></div><p class="txt">The building montage is one beat too long.</p></div></div>
+      <div class="sheet-foot" data-c="composer">
+        <div class="row t-small"><svg class="ico s"><use href="#i-clock"/></svg><span>At</span><span class="chip d">00:46:12</span><span class="sp"></span><span class="select">Moment<svg class="ico"><use href="#i-down"/></svg></span></div>
+        <div class="field area ph">What should it feel like?</div>
+        <div class="row"><div class="kinds"><span class="kind">Feeling</span><span class="kind">Story</span><span class="kind">Pace</span><span class="kind">Picture</span><span class="kind">Sound</span></div><span class="sp"></span><span class="btn disabled">Add <kbd>↩</kbd></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="pop ed" data-c="editor-popover">
+  <div class="ed-sec">
+    <div class="row"><span class="mk gem"></span><h3 class="brand-s">Editor</h3><span class="sp"></span><span class="chip ok">Ready</span></div>
+    <p class="t-small" style="color:var(--text-2)">Nothing in progress. Your 6 notes on Cut 3 are waiting. Turn them over when you’re done.</p>
+  </div>
+  <div class="ed-sec" data-c="latitude">
+    <span class="label">How much freedom</span>
+    <div>
+      <div class="lat-r"><span class="radio"></span><span>Do what I wrote<small>Changes only what each note names. Asks when unclear.</small></span></div>
+      <div class="lat-r"><span class="radio on"></span><span>Read between the lines<small>Interprets intent. Cuts Feeling notes two ways.</small></span></div>
+      <div class="lat-r"><span class="radio"></span><span>Take a pass<small>May suggest changes you didn’t ask for, marked Unasked.</small></span></div>
+    </div>
+  </div>
+  <div class="ed-sec" data-c="activity">
+    <span class="label">Recent</span>
+    <div class="act"><span class="mk gem"></span><span><b style="font-weight:500;color:var(--text-1)">Cut 3 is ready.</b> Answered 5 notes, −12 s.</span><time>Oct 26 14:20</time></div>
+    <div class="act"><span class="mk gem solid"></span><span>Read back 5 notes. You approved all of them.</span><time>Oct 26 13:58</time></div>
+    <div class="act"><span class="mk gem solid"></span><span>Logged and transcribed 214 takes.</span><time>Oct 20 10:04</time></div>
+  </div>
+  <div class="ed-sec" style="grid-auto-flow:column;justify-content:space-between;padding:10px 12px">
+    <span class="btn ghost sm"><svg class="ico s"><use href="#i-pause"/></svg>Pause editor</span>
+    <span class="btn ghost sm"><svg class="ico s"><use href="#i-gear"/></svg>Editor settings…</span>
+  </div>
+</div>
+</body></html>

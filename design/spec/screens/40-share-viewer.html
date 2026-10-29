@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>40 Screening link in a browser</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/system.css">
+<style>
+  .page { position: absolute; top: 44px; left: 0; right: 0; bottom: 0; display: grid; grid-template-rows: 56px minmax(0, 1fr); background: var(--ground); }
+  .wh { display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line); }
+  .wh img { width: 22px; height: 22px; }
+  .wb { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+  .side2 { border-left: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; }
+  .nt .no { color: var(--text-2); }
+</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="bx-bar" data-c="browser-chrome">
+  <div class="lights mac"><i></i><i></i><i></i></div>
+  <span class="btn ghost icon sm"><svg class="ico s"><use href="#i-left"/></svg></span><span class="btn ghost icon sm"><svg class="ico s"><use href="#i-right"/></svg></span>
+  <div class="bx-url"><svg class="ico s"><use href="#i-lock"/></svg>direction.film/s/launch-film-c3-8kq2</div>
+  <span style="width:120px"></span>
+</div>
+<div class="page">
+  <div class="wh" data-c="viewer-header">
+    <img src="../assets/brand/app-icon.png" alt="">
+    <span class="brand-s">Launch film</span><span class="sl faint">/</span><span style="font-weight:500;color:var(--text-2)">Cut 3</span>
+    <span class="chip k">3:40 · shared with you until Nov 4</span>
+    <span class="sp"></span>
+    <span class="t-small">Watching as</span><span class="av s">TR</span><span style="font-size:13px">Tom Reyes</span>
+  </div>
+  <div class="wb">
+    <div class="stage">
+      <div class="viewer"><div class="frame-pic r169" data-c="picture"><div class="ft f-dusk"></div>
+        <div class="hud" style="right:12px;top:12px"><span class="glass">TOM REYES · NOT FOR DISTRIBUTION</span></div>
+        <div class="hud" style="left:12px;bottom:12px"><span class="glass">01:30:00</span></div></div></div>
+      <div class="transport" data-c="transport">
+        <span class="btn icon"><svg class="ico"><use href="#i-play"/></svg></span>
+        <span class="tc">01:30:00 <i>/ 3:40</i></span>
+        <div class="strip" data-c="scene-strip">
+          <div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div>
+          <div class="sc" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div>
+          <div class="sc cur" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div>
+          <div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div>
+          <div class="sc" style="flex:20"><div class="ft f-day"></div><span class="nm">5 Launch day</span></div>
+          <div class="marks"><span class="mk pin out" style="left:41%"></span><span class="mk pin out" style="left:95.6%"></span></div>
+          <div class="ph" style="left:41%"></div>
+        </div>
+        <span class="btn ghost icon"><svg class="ico"><use href="#i-full"/></svg></span>
+      </div>
+    </div>
+    <div class="side2" data-c="viewer-notes">
+      <div class="sheet-head"><h2 class="brand-m">Your notes</h2><p class="t-small">The director reads every note and decides what goes to the edit. Others can’t see your notes.</p></div>
+      <div class="notes">
+        <div class="nt"><span class="av s" style="margin-top:1px">TR</span><div class="meta"><span class="chip">01:30:00</span><span class="chip k">Sent today 09:10</span></div><p class="txt">Love the ridge shot.</p></div>
+        <div class="nt"><span class="av s" style="margin-top:1px">TR</span><div class="meta"><span class="chip">03:31:00</span><span class="chip k">Sent today 09:12</span></div><p class="txt">Can the logo be bigger at the end?</p></div>
+      </div>
+      <div class="sheet-foot" data-c="viewer-composer">
+        <div class="row t-small"><span>At</span><span class="chip">01:30:00</span><span class="sp"></span><span class="t-caption">Press N to pick this moment</span></div>
+        <div class="field area focus">The light here is gorgeous. Could it hold a beat longer?<span class="caret"></span></div>
+        <div class="row"><span class="t-caption">Notes are sent as Tom Reyes</span><span class="sp"></span><span class="btn steel">Send note <kbd>⌘↩</kbd></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

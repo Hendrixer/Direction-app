@@ -1,0 +1,62 @@
+/* Shared styles for frames 39–53 (Share, Settings, System). Candidates for gate.css are marked PROMOTE. */
+
+/* Notes room body (same layout as frame 17), used under overlays */
+
+/* PROMOTE: avatar for outside people (neutral steel, initials) */
+
+/* PROMOTE: list row inside a modal or popover */
+.lrow { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.lrow:first-child { border-top: 0; }
+.lrow .lbl { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.lrow .lbl small { font-size: 11.5px; color: var(--text-3); }
+
+/* PROMOTE: command menu (⌘K) */
+.cmd { position: absolute; left: 50%; top: 120px; transform: translateX(-50%); width: 640px; z-index: 115; background: var(--panel); border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--line-2), inset 0 1px 0 oklch(1 0 0 / .06), 0 40px 100px -16px oklch(0 0 0 / .95); overflow: hidden; }
+.cmd-in { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid var(--line); font-size: 16px; }
+.cmd-list { padding: 6px; display: grid; gap: 1px; }
+.cmd-list .hd { padding: 10px 12px 5px; }
+.cmd-it { height: 36px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+.cmd-it .ico { color: var(--text-3); }
+.cmd-it.on { background: var(--hover); }
+.cmd-it .r { margin-left: auto; display: flex; gap: 4px; align-items: center; color: var(--text-4); font-size: 12px; }
+.cmd-it mark { background: none; color: var(--text-1); font-weight: 600; }
+.cmd-it .sub { color: var(--text-3); }
+.cmd-foot { height: 36px; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--text-3); }
+.cmd-foot span { display: inline-flex; gap: 6px; align-items: center; }
+.kbd.s { min-width: 18px; height: 18px; padding: 0 4px; font-size: 10.5px; border-radius: 5px; }
+
+/* Settings window helpers */
+body.settings { background: var(--ground); }
+.set-row .ctl { display: flex; align-items: center; gap: 8px; flex: none; }
+.set-note { font-size: 11.5px; color: var(--text-3); padding: 8px 2px 0; line-height: 1.45; }
+.lat { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 12px 14px 14px; }
+.lat .o { border-radius: var(--r-card); padding: 12px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 6px; align-content: start; }
+.lat .o b { font-weight: 600; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.lat .o p { font-size: 11.5px; color: var(--text-3); line-height: 1.4; }
+.lat .o.on { box-shadow: inset 0 0 0 1.5px var(--text-1); background: var(--hover); }
+.order { display: grid; }
+.order .it { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 12px 0 8px; border-top: 1px solid var(--line); font-size: 13px; }
+.order .it:first-child { border-top: 0; }
+.order .it .ico { color: var(--text-4); }
+.order .it .n { font: 600 11px var(--f-tc); color: var(--text-4); width: 14px; }
+.order .it small { margin-left: auto; color: var(--text-3); font-size: 11.5px; }
+.stepper { display: inline-flex; align-items: center; height: 28px; border-radius: var(--r-control); background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line-2); }
+.stepper span { padding: 0 10px; font: 500 12px var(--f-tc); }
+.stepper i { width: 22px; height: 100%; display: grid; place-items: center; color: var(--text-3); font-style: normal; border-left: 1px solid var(--line); }
+.meter-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--hover); gap: 1px; }
+.meter-bar i { display: block; height: 100%; }
+
+/* Shortcut overlay */
+.keys-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 36px; }
+.kgrp { display: grid; gap: 2px; align-content: start; }
+.kgrp .label { padding: 0 0 8px; }
+.kr { display: flex; align-items: center; gap: 4px; height: 28px; font-size: 13px; color: var(--text-2); }
+.kr span:first-child { flex: 1; }
+
+/* Browser chrome for frame 40 */
+.bx-bar { height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: oklch(0.22 0.004 265); border-bottom: 1px solid oklch(0 0 0 / .6); }
+.bx-url { flex: 1; max-width: 560px; margin: 0 auto; height: 28px; border-radius: 8px; background: oklch(0.15 0.004 265); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+body.settings .set-group { padding: 2px 0 6px; }
+body.settings .set-group > .label { padding: 14px 0 7px; }
+body.settings .set-body { padding: 4px 28px 22px; }

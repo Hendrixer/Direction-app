@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>24 Read-back · adjusting a line</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/notes.css">
+<style></style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Launch film<svg class="ico"><use href="#i-down"/></svg></span><span class="sl">/</span><span class="seg-btn cut">Cut 3<svg class="ico"><use href="#i-down"/></svg></span></div>
+    <div class="rooms" data-c="rooms"><span>Dailies</span><span>Script</span><span>Screening</span><span class="on">Notes</span><span>Changes</span><span class="off">Finish</span></div>
+    <div class="tb-right">
+      <span class="agent ready" data-c="agent-pill"><span class="mk gem"></span>Read-back ready</span>
+      <span class="btn ghost icon" data-c="share"><svg class="ico"><use href="#i-share"/></svg></span><span class="btn steel" data-c="primary">Start cutting <kbd>⌘↩</kbd></span>
+    </div>
+  </div>
+  <div class="body">
+    <div class="stage">
+      <div class="viewer">
+        <div class="frame-pic r169" data-c="picture"><div class="ft f-dusk "></div>
+          
+          <div class="hud" style="left:12px;bottom:12px"><span class="glass">01:12:08</span></div>
+        </div>
+      </div>
+      <div class="transport" data-c="transport">
+        <span class="btn icon" data-c="play"><svg class="ico"><use href="#i-play"/></svg></span>
+        <span class="tc" data-c="timecode">01:12:08 <i>/ 3:40</i></span>
+        <div class="strip" data-c="scene-strip"><div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div><div class="sc" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div><div class="sc cur" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div><div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div><div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div><div class="marks"><span class="mk pin" style="left:8.2%"></span><span class="mk pin" style="left:21%"></span><span class="mk pin" style="left:32.7%"></span><span class="mk pin" style="left:47%"></span></div><div class="ph" style="left:32.7%"></div></div>
+        <span class="btn ghost icon" data-c="mark-button" title="Mark (N)"><svg class="ico" style="color:var(--director)"><use href="#i-mark"/></svg></span>
+      </div>
+    </div>
+    <div class="sheet" data-c="notes-sheet">
+      <div class="sheet-head">
+        <div class="row"><h2 class="brand-m">Read-back for Cut 4</h2><span class="sp"></span><span class="btn ghost icon sm"><svg class="ico"><use href="#i-more"/></svg></span></div>
+        <p class="t-small">7 notes turned over just now · waiting for your OK</p>
+      </div>
+      <div class="sheet-tabs" data-c="sheet-tabs"><span class="on">Sheet <span class="count">7</span></span><span>Questions <span class="count">0</span></span><span>Outside <span class="count">0</span></span></div>
+      <div class="rb-wrap scroll-fade">
+        <div class="readback" data-c="readback">
+          <div class="rb-head"><span class="mk gem"></span><span style="color:var(--text-1);font-weight:500">Here’s what I’ll do</span><span class="sp"></span><span class="faint">Read between the lines</span></div>
+          <div class="rb-line " data-c="readback-line"><span class="no">1</span><div><b>Drop the second street wide. On her face by 0:09.</b><span class="src">“Cold open takes too long to get to her face.”</span></div><span class="delta">−4.2 s</span></div>
+          <div class="rb-line " data-c="readback-line"><span class="no">2</span><div><b>Two ways: hold on her (+1.6 s), or cut to the window and back.</b><span class="src">“I want to feel how tired she was here.”</span></div><span class="chip a">2 ways</span></div>
+          <div class="conflict" data-c="conflict"><svg class="ico s"><use href="#i-warn"/></svg><div><b>Notes 2 and 1 overlap at 00:25–00:46.</b> Following 2 (Feeling) over 1 (Pace) there. <span style="color:var(--text-1);text-decoration:underline;text-underline-offset:2px">Flip it</span></div></div>
+          <div class="rb-line edit" data-c="readback-line"><span class="no">3</span><div><b>Reframe to about 1.6× on Maya; sky down to a third.</b><span class="src">“Tighter on her. The sky is winning.”</span>
+            <div class="field area focus" style="margin-top:8px;min-height:52px" data-c="readback-correction">Not that tight. Keep the horizon, just lose some of the sky<span class="caret"></span></div>
+            <p class="t-caption" style="margin-top:6px">The editor rewrites this line. Nothing is cut yet.</p><div class="row" style="margin-top:8px"><span class="sp"></span><span class="btn ghost sm">Cancel</span><span class="btn sm">Update line <kbd>↩</kbd></span></div></div></div>
+          <div class="rb-line " data-c="readback-line"><span class="no">4</span><div><b>Music down 6 dB under her line, back up at the cut.</b><span class="src">“Music is too sure of itself here.”</span></div><span class="delta">−6 dB</span></div>
+          <div class="rb-line " data-c="readback-line"><span class="no">5</span><div><b>Strike line 14.</b><span class="src">“Lose ‘and that’s when everything changed.’”</span></div><span class="delta">−3.1 s</span></div>
+          <div class="rb-line " data-c="readback-line"><span class="no">6</span><div><b>Drop the second whiteboard shot.</b><span class="src">“The building montage is one beat too long.”</span></div><span class="delta">−2.0 s</span></div>
+          <div class="rb-line " data-c="readback-line"><span class="no" style="color:var(--text-2)">7</span><div><b>Open scene 4 on the team. The best team shot is in Launch day, which is locked; I’ll look for another.</b><span class="src">“Show the team earlier.” · Priya Shah</span></div></div>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <div class="row"><span class="t-small">About 3:31 after these changes. Target 3:00–4:00.</span></div>
+        <div class="row"><span class="btn ghost" data-c="adjust"><svg class="ico"><use href="#i-reply"/></svg>Adjust a line</span><span class="sp"></span><span class="t-caption">Click any line to correct it</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

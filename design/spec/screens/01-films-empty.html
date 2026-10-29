@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>01 Films · first launch</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/start.css">
+<style>
+  body { background: var(--canvas); }
+  .stage { position: relative; display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; background: radial-gradient(ellipse 50% 45% at 50% 42%, oklch(0.19 0.006 265), var(--canvas) 70%); }
+  .hero { display: grid; justify-items: center; gap: 22px; text-align: center; margin-top: -40px; }
+  .hero img { width: 168px; filter: drop-shadow(0 34px 44px oklch(0 0 0 / .85)); }
+  .hero h1 { font: 800 56px/.95 var(--f-brand); font-stretch: 125%; letter-spacing: -.025em; }
+  .hero p.l { font-size: 15px; color: var(--text-2); max-width: 52ch; line-height: 1.5; }
+  .acts { display: flex; gap: 10px; margin-top: 6px; }
+  .how { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); display: grid; grid-template-columns: repeat(4, 220px); gap: 1px; background: var(--line); border-radius: var(--r-panel); overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+  .how div { background: var(--ground); padding: 16px 18px; display: grid; gap: 6px; }
+  .how .k { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+  .how .k i { font: 600 10.5px/1 var(--f-tc); font-style: normal; color: var(--text-4); }
+  .how p { font-size: 12px; color: var(--text-3); line-height: 1.4; }
+</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar" style="background:transparent;border-bottom-color:transparent">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Films</span></div>
+    <div class="tb-right">
+      <span class="agent" data-c="agent-pill"><span class="mk gem"></span>Ready</span>
+      <span class="btn" data-c="titlebar-new-film"><svg class="ico"><use href="#i-plus"/></svg>New film <kbd>⌘N</kbd></span>
+    </div>
+  </div>
+  <div class="stage" data-c="empty-state">
+    <div class="hero">
+      <img src="../assets/brand/mark-chrome.png" alt="" data-c="brand-mark">
+      <h1>Start a film</h1>
+      <p class="l">Tell the editor what you're making, bring your footage, and it will build a first cut for you to watch. You direct. It cuts.</p>
+      <div class="acts">
+        <span class="btn steel lg" data-c="new-film"><svg class="ico"><use href="#i-plus"/></svg>New film</span>
+        <span class="btn lg" data-c="open-folder"><svg class="ico"><use href="#i-folder"/></svg>Start from a folder…</span>
+      </div>
+    </div>
+    <div class="how" data-c="how-it-works">
+      <div><span class="k"><i>1</i>Brief</span><p>A few sentences on how it should feel.</p></div>
+      <div><span class="k"><i>2</i>Footage</span><p>The editor logs and transcribes every take.</p></div>
+      <div><span class="k"><i>3</i>First look</span><p>It assembles a cut. You see it before anyone.</p></div>
+      <div><span class="k"><i>4</i>Notes</span><p>Watch, mark, give notes. It recuts.</p></div>
+    </div>
+  </div>
+</div>
+</body></html>

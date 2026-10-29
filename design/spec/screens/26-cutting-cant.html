@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>26 Editor can't do a note</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/changes.css">
+<style></style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Launch film<svg class="ico"><use href="#i-down"/></svg></span><span class="sl">/</span><span class="seg-btn cut">Cut 3<svg class="ico"><use href="#i-down"/></svg></span></div>
+    <div class="rooms" data-c="rooms"><span class="">Dailies</span><span class="">Script</span><span class="">Screening</span><span class="on">Notes</span><span class="">Changes</span><span class="off">Finish</span></div>
+    <div class="tb-right">
+      <span class="agent blocked" data-c="agent-pill"><span class="mk gem"></span>Can’t do 1</span>
+      <span class="btn ghost icon" data-c="share"><svg class="ico"><use href="#i-share"/></svg></span>
+      <span class="btn steel" data-c="primary"><svg class="ico"><use href="#i-play"/></svg>Screen Cut 3</span>
+    </div>
+  </div>
+  <div class="body">
+    <div class="stage">
+      <div class="viewer">
+        <div class="frame-pic r169" data-c="picture"><div class="ft f-hands"></div>
+          <div class="hud" style="left:12px;bottom:12px"><span class="glass">02:04:16</span></div>
+        </div>
+      </div>
+      <div class="transport" data-c="transport">
+        <span class="btn icon" data-c="play"><svg class="ico"><use href="#i-play"/></svg></span>
+        <span class="tc" data-c="timecode">02:04:16 <i>/ 3:40</i></span>
+        <div class="strip" data-c="scene-strip">
+          <div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div><div class="sc" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div><div class="sc" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div><div class="sc cur" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div><div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div>
+          <div class="marks"><span class="mk pin" style="left:8%"></span><span class="mk pin" style="left:21%"></span><span class="mk pin" style="left:33%"></span><span class="mk pin" style="left:47%"></span><span class="mk pin" style="left:64%"></span></div>
+          <div class="ph" style="left:56%"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-c="cutting-panel">
+      <div class="panel-head">
+        <div class="row"><h2 class="brand-m">Cut 4 in progress</h2><span class="sp"></span><span class="btn ghost icon sm"><svg class="ico"><use href="#i-more"/></svg></span></div>
+        <p class="t-small">Cutting 4 of 7 · 1 note waiting on you</p>
+      </div>
+      <div class="panel-body"><div class="notice cant" data-c="cant-notice">
+  <div class="notice-head"><svg class="ico s" style="color:var(--alert)"><use href="#i-lock"/></svg><b>I can’t do note 7 yet</b><span class="sp"></span><span class="chip d">7</span></div>
+  <p>The best team shot, 5A T3, is in Launch day, which you locked. I’ve left the rest of the cut moving.<small>Note 7 · Priya Shah · “Show the team earlier.”</small></p>
+  <div class="choices" data-c="choices">
+    <div class="choice" data-c="choice"><div class="th"><div class="ft f-day"></div></div><span style="flex:1">Unlock Launch day and use 5A T3</span><svg class="ico s" style="color:var(--text-3)"><use href="#i-unlock"/></svg></div>
+    <div class="choice on" data-c="choice-selected"><div class="th"><div class="ft f-hands"></div></div><span style="flex:1">Use 4C T2 instead<small style="display:block;color:var(--text-3);font-size:11.5px">Team at the table, already in scene 4</small></span><span class="chip a ui">I’d pick this</span></div>
+    <div class="choice" data-c="choice"><span style="flex:1;padding-left:2px">Skip note 7 for this cut</span></div>
+  </div>
+  <div class="acts"><span class="btn" data-c="answer">Answer <kbd>↩</kbd></span><span class="btn ghost">Show me 5A T3</span></div>
+</div><div class="steps"><div class="step done" data-c="progress-step"><span class="no">1</span><p class="txt">Cold open takes too long to get to her face.</p><span class="st done"><svg class="ico s"><use href="#i-check"/></svg>Done</span></div><div class="step done" data-c="progress-step"><span class="no">5</span><p class="txt">Lose “and that’s when everything changed.”</p><span class="st done"><svg class="ico s"><use href="#i-check"/></svg>Done</span></div><div class="step done" data-c="progress-step"><span class="no">3</span><p class="txt">Tighter on her. The sky is winning.</p><span class="st done"><svg class="ico s"><use href="#i-check"/></svg>Done</span></div><div class="step blocked" data-c="progress-step"><span class="no">7</span><p class="txt">Show the team earlier.</p><span class="st bad"><svg class="ico s"><use href="#i-lock"/></svg>Needs you</span></div><div class="step working" data-c="progress-step"><span class="no">2</span><p class="txt">I want to feel how tired she was here. Let it sit.</p><span class="st work"><span class="mk gem"></span>Cutting</span></div><div class="step queued" data-c="progress-step"><span class="no">4</span><p class="txt">Music is too sure of itself here.</p><span class="st">Queued</span></div><div class="step queued" data-c="progress-step"><span class="no">6</span><p class="txt">The building montage is one beat too long.</p><span class="st">Queued</span></div></div></div>
+      <div class="panel-foot" data-c="panel-foot"><span class="t-small">You can keep watching Cut 3. Nothing changes in it.</span></div>
+    </div>
+  </div>
+</div>
+</body></html>

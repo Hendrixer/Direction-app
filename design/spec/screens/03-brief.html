@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>03 Start · the brief</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/start.css">
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Films</span><span class="sl">/</span><span class="seg-btn cut">New film</span></div>
+    <div class="steps" data-c="stepper"><span class="st on"><i>1</i>Brief</span><span class="bar"></span><span class="st"><i>2</i>Footage</span><span class="bar"></span><span class="st"><i>3</i>First look</span></div>
+    <div class="tb-right">
+      <span class="agent" data-c="agent-pill"><span class="mk gem"></span>Ready</span>
+      <span class="btn steel" data-c="primary">Continue <kbd>⌘↩</kbd></span>
+    </div>
+  </div>
+  <div class="brief-wrap">
+    <div class="brief-main">
+      <div class="brief-col" data-c="brief-form">
+        <div class="brief-q"><span class="label">Title</span><div class="title-input" data-c="title-field">Launch film</div></div>
+        <div class="brief-q"><span class="q">What is it, in one sentence? <small>Required</small></span>
+          <div class="field big" data-c="logline">Maya spent two years building the part nobody wanted to build.</div></div>
+        <div class="brief-q"><span class="q">How should it feel? <small>Required</small></span>
+          <div class="field big area focus" data-c="feeling" style="min-height:88px">Tired, then proud. Quiet, not triumphant. Let her face do the work.<span class="caret"></span></div>
+          <p class="help">Talk the way you'd talk to an editor. Feelings are better than instructions.</p></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="brief-q"><span class="q">Length</span>
+            <div class="row"><div class="input mono" style="width:76px" data-c="length-min">3:00</div><span class="faint">to</span><div class="input mono" style="width:76px" data-c="length-max">4:00</div></div></div>
+          <div class="brief-q"><span class="q">Who's it for? <small>Optional</small></span>
+            <div class="input" data-c="audience">People who make things</div></div>
+        </div>
+        <div class="brief-q"><span class="q">Must keep <small>The editor will never cut these</small></span>
+          <div class="tagset" data-c="must-keep"><span class="tag"><svg class="ico" style="color:var(--text-3)"><use href="#i-quote"/></svg>Editing was the part nobody wanted.<svg class="ico"><use href="#i-x"/></svg></span><span class="tag"><svg class="ico" style="color:var(--text-3)"><use href="#i-film"/></svg>Final shot of the empty office<svg class="ico"><use href="#i-x"/></svg></span><span class="tag add"><svg class="ico" style="width:11px;height:11px"><use href="#i-plus"/></svg>Add</span></div></div>
+        <div class="brief-q"><span class="q">References <small>Drop clips, stills or links. Say why.</small></span>
+          <div style="display:grid;gap:8px" data-c="references">
+            <div class="ref-card"><div class="th"><div class="ft f-night"></div></div><div><b>Jiro Dreams of Sushi, opening</b><small>For the pace. Patient, then it moves.</small></div><span class="btn ghost icon sm"><svg class="ico"><use href="#i-more"/></svg></span></div>
+            <div class="ref-card"><div class="th"><div class="ft f-room"></div></div><div><b>Window light still</b><small>For the look. Warm, one source, a lot of shadow.</small></div><span class="btn ghost icon sm"><svg class="ico"><use href="#i-more"/></svg></span></div>
+          </div></div>
+        <div class="brief-q"><span class="q">Avoid <small>Optional</small></span><div class="input" data-c="avoid">Stock music swells</div></div>
+      </div>
+    </div>
+    <aside class="aside" data-c="brief-aside">
+      <div class="who" style="display:flex;gap:8px;align-items:center;color:var(--agent);font:500 10.5px var(--f-tc);letter-spacing:.07em;text-transform:uppercase"><span class="mk gem"></span>How the editor uses this</div>
+      <h4>Your brief is the first thing it reads, and the last thing it checks.</h4>
+      <div class="uses">
+        <div class="say"><span class="mk gem"></span><p>It picks takes for the assembly with this feeling in mind.<small>Suggestions in Dailies say which part of the brief they serve.</small></p></div>
+        <div class="say"><span class="mk gem"></span><p>When a note seems to fight the brief, it asks you before cutting.<small>"Note 6 shortens the scene you asked to keep quiet. Still do it?"</small></p></div>
+        <div class="say"><span class="mk gem"></span><p>Must-keeps are never cut, by anyone but you.</p></div>
+      </div>
+      <div class="divider"></div>
+      <p class="t-small">You can change the brief any time from Film › Brief (⌘B). Changes apply from the next cut.</p>
+    </aside>
+  </div>
+</div>
+</body></html>

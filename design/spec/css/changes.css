@@ -1,0 +1,151 @@
+/* Layouts and blocks for Cutting (25–28), Changes (29–33) and Finish (34–38).
+   Candidates for gate.css are marked PROMOTE. */
+
+/* Room body: picture stage + right panel */
+.panel { background: var(--ground); border-left: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
+.panel-head { padding: 16px 16px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+.panel-body { overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; min-height: 0; }
+.panel-foot { border-top: 1px solid var(--line); padding: 12px 16px 14px; display: flex; gap: 8px; align-items: center; }
+
+/* PROMOTE: per-note progress list while the editor cuts */
+.steps { display: grid; }
+.step { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 4px 10px; padding: 11px 16px 11px 14px; border-bottom: 1px solid var(--line); align-items: start; }
+.step .no { font: 600 14px/1.25 var(--f-tc); color: var(--director); }
+.step .txt { font-size: 13px; line-height: 1.4; color: var(--text-1); }
+.step .plan { grid-column: 2 / 4; font-size: 12px; color: var(--text-3); display: flex; gap: 8px; align-items: center; }
+.step .st { font: 500 11px/1.6 var(--f-tc); color: var(--text-4); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.step .st.done { color: var(--approve); }
+.step .st.work { color: var(--text-1); }
+.step .st.bad { color: var(--alert); }
+.step.queued .txt { color: var(--text-3); }
+.step.working { background: var(--panel); position: relative; }
+.step.working::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--prism); }
+.step.blocked { background: oklch(0.70 0.17 25 / .06); }
+.step.blocked::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--alert); }
+.step { position: relative; }
+.chip.a.ui, .chip.ui { font-family: var(--f-ui); }
+
+/* PROMOTE: notice blocks inside a panel (editor voice, can't, error) */
+.notice { min-width: 0; margin: 12px 16px; padding: 14px; border-radius: var(--r-card); background: var(--panel); display: grid; gap: 12px; box-shadow: inset 0 0 0 1px var(--line); }
+.notice.voice { border: 1px solid transparent; box-shadow: none; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--prism) border-box; }
+.notice.cant { box-shadow: inset 0 0 0 1px oklch(0.70 0.17 25 / .45); }
+.notice.err { box-shadow: inset 0 0 0 1px oklch(0.70 0.17 25 / .45); background: oklch(0.70 0.17 25 / .07); }
+.notice-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); }
+.notice-head b { color: var(--text-1); font-weight: 600; font-size: 13px; }
+.notice p { font-size: 13px; color: var(--text-1); line-height: 1.45; }
+.notice p small { display: block; font-size: 12px; color: var(--text-3); margin-top: 4px; }
+.notice .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Changes: answers panel */
+.ans { grid-template-columns: 24px 96px minmax(0, 1fr) auto; padding: 10px 14px; }
+.ans .acts { display: flex; gap: 6px; align-items: center; }
+.ans .what { font-size: 12.5px; line-height: 1.4; }
+.ans .what .meta { display: flex; gap: 6px; align-items: center; }
+.ans .delta { justify-self: end; }
+.ans .ans-r { display: grid; gap: 8px; justify-items: end; }
+.ans.unasked .no { color: var(--agent); }
+.status-ok { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; color: var(--approve); white-space: nowrap; }
+
+/* Thread on a note (32) */
+.thread { display: grid; gap: 12px; padding: 4px 14px 14px 52px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.msg { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 9px; font-size: 12.5px; line-height: 1.45; }
+.msg .mk { margin-top: 4px; }
+.msg .who { font-size: 11px; color: var(--text-4); display: block; margin-bottom: 2px; }
+
+/* A/B options stage (30) */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 24px 24px 10px; align-content: center; }
+.split .opt { background: var(--steel-1); }
+.split-foot { display: flex; align-items: center; gap: 12px; padding: 4px 24px 6px; }
+.split-foot p { flex: 1; font-size: 13px; color: var(--text-2); }
+.split-foot p b { color: var(--text-1); font-weight: 500; }
+.sync { display: inline-flex; gap: 6px; align-items: center; font: 500 11px var(--f-tc); color: var(--text-3); }
+
+/* PROMOTE: change strip in Play changes: handles hatched, changed span prism-edged */
+.cstrip { position: relative; display: flex; height: 30px; flex: 1; gap: 2px; align-items: stretch; padding: 3px 0; }
+.cstrip .cs { position: relative; border-radius: 3px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.cstrip .cs .ft { opacity: .5; }
+.cstrip .cs.handle::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(135deg, oklch(0 0 0 / .45) 0 2px, transparent 2px 5px); }
+.cstrip .cs.chg { box-shadow: inset 0 0 0 1px var(--line-2); }
+.cstrip .cs.chg .ft { opacity: .85; }
+.cstrip .cs.chg::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--prism); z-index: 1; }
+.cstrip .ph { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-1); border-radius: 1px; box-shadow: 0 0 0 1px oklch(0 0 0 / .6); }
+.reel-dots { display: flex; gap: 4px; align-items: center; }
+.reel-dots i { width: 18px; height: 3px; border-radius: 2px; background: var(--hover); }
+.reel-dots i.done { background: var(--steel-7); }
+.reel-dots i.on { background: var(--text-1); }
+
+/* History (33) */
+.hist { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; }
+.cutlist { border-right: 1px solid var(--line); padding: 10px 8px; display: grid; align-content: start; gap: 2px; }
+.cutit { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 2px 8px; padding: 10px 10px; border-radius: 8px; position: relative; }
+.cutit.on { background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); }
+.cutit .node { width: 9px; height: 9px; margin: 4px 0 0 5px; transform: rotate(45deg); border-radius: 1.5px; background: var(--text-4); }
+.cutit.latest .node { background: var(--prism); }
+.cutit .rail { position: absolute; left: 19px; top: 26px; bottom: -14px; width: 1px; background: var(--line-2); }
+.cutit .nm { font: 700 14px/1.3 var(--f-brand); font-stretch: 112%; }
+.cutit .when { font: 11px/1.9 var(--f-tc); color: var(--text-4); }
+.cutit .sum { grid-column: 2 / 4; font-size: 12px; color: var(--text-3); }
+.log { display: grid; align-content: start; min-width: 0; }
+.log-head { padding: 18px 22px 14px; display: grid; gap: 6px; border-bottom: 1px solid var(--line); }
+.logrow { display: grid; grid-template-columns: 30px 120px minmax(0, 1fr) 160px 64px 160px; gap: 14px; align-items: center; padding: 11px 22px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.logrow > :last-child { justify-self: end; }
+.logrow .no { font: 600 13px var(--f-tc); color: var(--director); }
+.logrow .mini { position: relative; height: 40px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.logrow .what { color: var(--text-1); min-width: 0; }
+.logrow .what small { display: block; color: var(--text-3); font-size: 12px; }
+.logrow .rng { font: 11px/1.5 var(--f-tc); color: var(--text-3); }
+.logrow .rng i { font-style: normal; color: var(--text-4); }
+.logrow.reverted .what, .logrow.reverted .mini { opacity: .45; }
+.logrow.sel { background: var(--panel); }
+
+/* Lock bar (34): large scene tiles */
+.lockbar { display: flex; gap: 3px; padding: 0 24px; }
+.lockbar .tile { position: relative; height: 84px; border-radius: 6px; overflow: hidden; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); display: grid; align-content: space-between; padding: 8px 9px; min-width: 0; }
+.lockbar .tile .ft { opacity: .6; }
+.lockbar .tile > :not(.ft) { position: relative; z-index: 2; }
+.lockbar .tile .nm { font: 500 11px/1.2 var(--f-tc); text-shadow: 0 1px 3px oklch(0 0 0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 5px; align-items: center; }
+.lockbar .tile .ft2 { display: flex; justify-content: space-between; align-items: center; font: 500 10.5px var(--f-tc); color: var(--text-2); text-shadow: 0 1px 3px oklch(0 0 0); }
+.lockbar .tile.lk { box-shadow: inset 0 0 0 1px var(--line-2); }
+.lockbar .tile.lk .ft { filter: grayscale(1); opacity: .28; }
+.lockbar .tile.lk::before { content: ""; position: absolute; inset: 0; z-index: 1; background: repeating-linear-gradient(135deg, oklch(1 0 0 / .08) 0 1px, transparent 1px 6px); }
+.lockbar .tile.hov { box-shadow: inset 0 0 0 1.5px var(--text-1); }
+.lockbar-head { display: flex; align-items: center; gap: 10px; padding: 14px 24px 10px; }
+
+/* Checklist (35, 36) */
+.checks { display: grid; gap: 0; }
+.chk { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.chk:first-child { border-top: 0; }
+.chk .ic { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; margin-top: 0; }
+.chk .ic.ok { background: var(--approve-wash); color: var(--approve); }
+.chk .ic.no { background: var(--alert-wash); color: var(--alert); }
+.chk .ic.info { background: var(--raised); color: var(--text-2); }
+.chk small { display: block; color: var(--text-3); font-size: 12px; }
+
+/* Finish list (36, 38) */
+.fin { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: start; }
+.fin .fi { width: 32px; height: 32px; border-radius: 8px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--text-2); }
+.fin h4 { font-size: 13.5px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.fin p { font-size: 12.5px; color: var(--text-3); line-height: 1.45; grid-column: 2; }
+.fin .who { font: 500 10px/1 var(--f-tc); letter-spacing: .07em; text-transform: uppercase; display: inline-flex; gap: 6px; align-items: center; color: var(--text-4); }
+.fin .who.d { color: var(--director); }
+.fin .who.a { color: var(--agent); }
+.fin .right { display: grid; gap: 8px; justify-items: end; grid-row: 1 / 3; grid-column: 3; align-self: center; }
+.fin .bar { grid-column: 2; display: flex; gap: 10px; align-items: center; }
+.fin .bar .progress { flex: 1; max-width: 220px; }
+.fin.sel { background: var(--panel); }
+
+/* Deliver sheet (37) */
+.out { display: grid; grid-template-columns: 18px 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.out:first-child { border-top: 0; }
+.out .oi { width: 40px; height: 40px; border-radius: 8px; position: relative; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.out b { font-weight: 600; font-size: 13px; display: block; }
+.out small { color: var(--text-3); font-size: 12px; display: block; font-variant-numeric: tabular-nums; }
+.out .sz { font: 500 11.5px var(--f-tc); color: var(--text-3); }
+.out.off b, .out.off small, .out.off .oi { opacity: .5; }
+
+/* Delivered (38) */
+.done-hero { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 34px 24px 26px; }
+.done-hero .ok { width: 48px; height: 48px; border-radius: 50%; background: var(--approve-wash); color: var(--approve); display: grid; place-items: center; }
+.file { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 18px; border-top: 1px solid var(--line); font-size: 13px; }
+.file .oi { width: 36px; height: 36px; border-radius: 7px; position: relative; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.file small { display: block; color: var(--text-3); font-size: 12px; font-family: var(--f-tc); font-variant-numeric: tabular-nums; }
