@@ -33,6 +33,7 @@ struct EditorPopover: View {
     private var chip: (String, ChipStyle) {
         switch pill {
         case .ready: ("Ready", .ok)
+        case .cutReady: ("Cut ready", .agent)
         case .waiting: ("Turned over", .agent)
         case .readingBack: ("Reading back", .agent)
         case .readBackReady: ("Waiting for you", .agent)
@@ -40,6 +41,7 @@ struct EditorPopover: View {
         case .asks(let n): (n == 1 ? "1 question" : "\(n) questions", .agent)
         case .cant(let n): ("Can\u{2019}t do \(n)", .bad)
         case .stopped: ("Stopped", .bad)
+        case .needsFootage: ("Waiting for footage", .bad)
         case .paused: ("Paused", .plain)
         case .offline: ("Offline", .plain)
         }
@@ -52,6 +54,9 @@ struct EditorPopover: View {
             if model.cuts.isEmpty { return model.circledCount > 0 ? "Nothing in progress. Ask for the assembly when your circles are in." : "Nothing in progress. Circle takes in Dailies, then ask for the assembly." }
             let n = model.readyNotes.count, cut = model.watchedCut?.name ?? "this cut"
             return n == 0 ? "Nothing in progress. Write notes on \(cut) and turn them over when you\u{2019}re done." : "Nothing in progress. Your \(n == 1 ? "note" : "\(n) notes") on \(cut) \(n == 1 ? "is" : "are") waiting. Turn them over when you\u{2019}re done."
+        case .cutReady:
+            let n = model.unreviewedAnswers.count, cut = model.latestCut?.name ?? "The new cut"
+            return "\(cut) is ready. \(n == 1 ? "1 answer is" : "\(n) answers are") waiting in Changes."
         case .waiting:
             return model.openTurnover?.kind == "assembly" ? "You asked for the assembly. It starts when your editor picks it up." : "You turned over \(notes == 1 ? "1 note" : "\(notes) notes"). They\u{2019}re waiting for your editor to pick them up."
         case .readingBack: return "Reading your \(notes) notes. A plan will be ready in a moment."
@@ -65,6 +70,7 @@ struct EditorPopover: View {
         case .cant: return model.openQuestions.first { $0.kind == "cant" }?.text ?? "I can\u{2019}t do one of your notes as written."
         case .stopped: return model.openTurnover?.message ?? "I stopped before finishing. Your notes are safe; try again when you\u{2019}re ready."
         case .paused: return "Paused. Nothing will change until you resume."
+        case .needsFootage: return "\(model.missingTakes == 1 ? "1 take is" : "\(model.missingTakes) takes are") missing. I can\u{2019}t cut scenes that use them until you find the footage."
         case .offline: return "You\u{2019}re offline. An editor that works online picks up when you\u{2019}re back."
         }
     }

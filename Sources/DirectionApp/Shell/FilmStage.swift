@@ -23,6 +23,7 @@ struct FilmStage<Overlay: View>: View {
                     overlay(size)
                 }
                 .frame(width: size.width, height: size.height)
+                .contextMenu { PictureContextMenu(model: model) }
                 .overlay(alignment: .bottomLeading) { HUDTag(hudPrefix.map { "\($0) · \(Timecode.format(model.position, fps: model.fps))" } ?? Timecode.format(model.position, fps: model.fps)).padding(12) }
                 .overlay { if model.isPreparing { HStack(spacing: 8) { GateSpinner(); Text("Preparing picture").font(Gate.Font.small) }.padding(12).gateGlass(10) } }
                 .position(x: g.size.width / 2, y: 28 + avail.height / 2)

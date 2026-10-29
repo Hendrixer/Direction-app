@@ -154,5 +154,5 @@ extension View {
 
 /// Reduce Motion aware animation.
 @MainActor func gateAnimation(_ animation: Animation) -> Animation? {
-    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? Gate.Motion.reduced : animation
+    SettingsKey.reducesMotion ? Gate.Motion.reduced : animation
 }

@@ -69,6 +69,8 @@ final class FilmModel {
     /// Increments once when a new cut arrives; the window runs the prism sweep.
     var sweepToken = 0
     var offline = false
+    /// Takes whose files can't be reached; set by the footage-missing banner.
+    var missingTakes = 0
 
     // MARK: Watching
     /// The cut on screen. nil follows the latest cut.
@@ -134,6 +136,8 @@ final class FilmModel {
         isPreview = preview
         guard !preview else { return }
         player.automaticallyWaitsToMinimizeStalling = false
+        let output = UserDefaults.standard.string(forKey: "audioOutput") ?? ""
+        player.audioOutputDeviceUniqueID = output.isEmpty ? nil : output
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1 / 24, preferredTimescale: 600), queue: .main) { [weak self] time in
             MainActor.assumeIsolated { guard let self, time.seconds.isFinite, !self.isPreparing else { return }; self.position = time.seconds; self.playing = self.player.rate > 0; self.keepAwake(self.playing) }
         }
@@ -319,6 +323,7 @@ final class FilmModel {
     var pill: EditorPillState {
         if offline { return .offline }
         if directing.editorPaused { return .paused }
+        if missingTakes > 0, openTurnover != nil || isLogging { return .needsFootage }
         let cants = openQuestions.filter { $0.kind == "cant" }.count, asks = openQuestions.filter { $0.kind == "question" }.count
         if let t = openTurnover {
             let total = max(1, t.noteIDs.count), done = t.progress.values.filter { $0 == .done }.count

@@ -17,6 +17,8 @@ import AppKit
         return true
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    /// Asks before quitting in the middle of a delivery.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply { QuitGuard.shouldTerminate(app) }
 }
 
 @main struct DirectionApplication: App {
@@ -36,6 +38,6 @@ import AppKit
         .windowResizability(.contentMinSize)
         .commands { DirectionCommands(app: app) }
 
-        Settings { SettingsView().preferredColorScheme(.dark) }
+        Settings { SettingsView(app: app).preferredColorScheme(.dark) }
     }
 }

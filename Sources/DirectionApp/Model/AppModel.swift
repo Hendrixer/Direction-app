@@ -20,7 +20,7 @@ final class AppModel {
         reloadFilms()
         if let index = CommandLine.arguments.firstIndex(of: "--project"), CommandLine.arguments.count > index + 1 { open(URL(fileURLWithPath: CommandLine.arguments[index + 1])) }
         else if whenOpening == "lastFilm", !lastFilm.isEmpty, FileManager.default.fileExists(atPath: lastFilm) { open(URL(fileURLWithPath: lastFilm)) }
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        else if whenOpening == "newFilm" { newFilm() }
     }
 
     func reloadFilms() { films = (try? ProjectLibrary().list()) ?? [] }
@@ -61,12 +61,8 @@ final class AppModel {
         NSApp.dockTile.badgeLabel = waiting > 0 ? String(waiting) : nil
     }
 
-    func notify(_ title: String, _ body: String, key: String) {
-        guard UserDefaults.standard.object(forKey: key) as? Bool ?? true else { return }
-        if UserDefaults.standard.bool(forKey: "holdDuringScreening"), film?.room == .screening { return }
-        let content = UNMutableNotificationContent(); content.title = title; content.body = body
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
-    }
+    /// Settings decide whether it shows, waits for the end of a screening, or becomes a toast while the app is in front.
+    func notify(_ title: String, _ body: String, key: String) { SystemNotifications.post(title, body, key: key, film: film) }
 }
 
 /// A row in the Films grid.

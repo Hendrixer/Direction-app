@@ -128,7 +128,7 @@ struct EmptyStateView<Actions: View>: View {
 // MARK: Editor pill
 
 enum EditorPillState: Equatable {
-    case ready, waiting, readingBack(String), readBackReady, working(String, Double?), asks(Int), cant(Int), stopped, offline, paused, assembling(String, Double?), cutReady(String)
+    case ready, waiting, readingBack(String), readBackReady, working(String, Double?), asks(Int), cant(Int), stopped, offline, paused, assembling(String, Double?), cutReady(String), needsFootage
     var text: String {
         switch self {
         case .ready: "Ready"
@@ -139,6 +139,7 @@ enum EditorPillState: Equatable {
         case .asks(let n): n == 1 ? "1 question" : "\(n) questions"
         case .cant(let n): "Can't do \(n)"
         case .stopped: "Stopped"
+        case .needsFootage: "Waiting for footage"
         case .offline: "Offline"
         case .paused: "Paused"
         }
@@ -152,7 +153,7 @@ struct EditorPill: View {
         HStack(spacing: 8) {
             switch state {
             case .offline: Image(systemName: "wifi.slash").font(.system(size: 10, weight: .semibold))
-            case .stopped, .cant: GemMark(size: 7, color: Gate.State.alert)
+            case .stopped, .cant, .needsFootage: GemMark(size: 7, color: Gate.State.alert)
             case .ready, .paused, .waiting: GemMark(size: 7, color: Gate.Text.disabled)
             default: GemMark(size: 7)
             }
@@ -173,7 +174,7 @@ struct EditorPill: View {
         switch state {
         case .asks, .readBackReady: Gate.Voice.agent
         case .cutReady: Gate.Text.primary
-        case .cant, .stopped: Gate.State.alert
+        case .cant, .stopped, .needsFootage: Gate.State.alert
         case .working, .assembling, .readingBack: Gate.Text.primary
         case .offline, .paused: Gate.Text.tertiary
         default: Gate.Text.secondary
@@ -187,7 +188,7 @@ struct EditorPill: View {
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Voice.agent.opacity(0.45), lineWidth: 1))
         case .cutReady:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Line.strong, lineWidth: 1))
-        case .cant, .stopped:
+        case .cant, .stopped, .needsFootage:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.State.alert.opacity(0.45), lineWidth: 1))
         default:
             Capsule().fill(Gate.Surface.panel).overlay(Capsule().strokeBorder(Gate.Line.subtle, lineWidth: 1))
@@ -198,7 +199,7 @@ struct EditorPill: View {
 /// The prism border that slides while the editor works (2.4 s loop). Static under Reduce Motion.
 struct ShimmerBorder: View {
     var body: some View {
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        if SettingsKey.reducesMotion {
             Capsule().strokeBorder(Gate.Voice.prism, lineWidth: 1)
         } else {
             TimelineView(.animation(minimumInterval: 1 / 30)) { context in

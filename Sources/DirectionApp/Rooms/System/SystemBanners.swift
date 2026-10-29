@@ -28,7 +28,7 @@ struct SystemBanners: View {
         .onChange(of: model.room) { old, _ in if old == .screening { SystemNotifications.releaseHeld(film: model) } }
         .onChange(of: model.turnovers.count) { _, n in if n > 0 { SystemNotifications.requestPermissionIfNeeded() } }
         .background { if !model.isPreview { SceneTracker(model: model) } }
-        .onChange(of: missing.count, initial: true) { _, n in if !model.isPreview { MenuState.shared.missingCount = n } }
+        .onChange(of: missing.count, initial: true) { _, n in if !model.isPreview { MenuState.shared.missingCount = n; model.missingTakes = n } }
         .onAppear { if !model.isPreview { keys.install(model) } }
         .onDisappear { keys.remove(); if !model.isPreview { MenuState.shared.sceneID = nil; MenuState.shared.missingCount = 0 } }
     }
