@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>57 The editor at work</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/changes.css">
+<link rel="stylesheet" href="../css/editor.css">
+<style></style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Launch film<svg class="ico"><use href="#i-down"/></svg></span><span class="sl">/</span><span class="seg-btn cut">Cut 3<svg class="ico"><use href="#i-down"/></svg></span></div>
+    <div class="rooms" data-c="rooms"><span class="">Dailies</span><span class="">Script</span><span class="">Screening</span><span class="on">Notes</span><span class="">Changes</span><span class="off">Finish</span></div>
+    <div class="tb-right">
+      <span class="agent working open" data-c="agent-pill"><span class="mk gem"></span>Cutting 3 of 7<span class="meter"><i style="width:34%"></i></span></span>
+      <span class="btn ghost icon" data-c="share"><svg class="ico"><use href="#i-share"/></svg></span>
+      <span class="btn steel" data-c="primary"><svg class="ico"><use href="#i-play"/></svg>Screen Cut 3</span>
+    </div>
+  </div>
+  <div class="body">
+    <div class="stage">
+      <div class="viewer">
+        <div class="frame-pic r169" data-c="picture"><div class="ft f-room"></div>
+          <div class="hud" style="left:12px;bottom:12px"><span class="glass">00:46:12</span></div>
+        </div>
+      </div>
+      <div class="transport" data-c="transport">
+        <span class="btn icon" data-c="play"><svg class="ico"><use href="#i-play"/></svg></span>
+        <span class="tc" data-c="timecode">00:46:12 <i>/ 3:40</i></span>
+        <div class="strip" data-c="scene-strip">
+          <div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div><div class="sc cur" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div><div class="sc" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div><div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div><div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div>
+          <div class="marks"><span class="mk pin" style="left:calc((100% - 8px) * .1018)"></span><span class="mk pin" style="left:calc((100% - 8px) * .2555 + 2px)"></span><span class="mk pin" style="left:calc((100% - 8px) * .3893 + 4px)"></span><span class="mk pin" style="left:calc((100% - 8px) * .5153 + 4px)"></span><span class="mk pin" style="left:calc((100% - 8px) * .6582 + 6px)"></span></div>
+          <div class="ph" style="left:calc((100% - 8px) * .2583 + 2px)"></div>
+          <div class="eph" data-c="editor-playhead" style="left:calc((100% - 8px) * .3893 + 4px)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-c="cutting-panel">
+      <div class="panel-head">
+        <div class="row"><h2 class="brand-m">Cut 4 in progress</h2><span class="sp"></span><span class="btn ghost icon sm"><svg class="ico"><use href="#i-more"/></svg></span></div>
+        <p class="t-small">Turned over 7 notes at 14:02 · started 14:03 · about 4 min left</p>
+      </div>
+      <div class="panel-body"><div class="steps"><div class="step done" data-c="progress-step"><span class="no">1</span><p class="txt">Cold open takes too long to get to her face.</p><span class="st done"><svg class="ico s"><use href="#i-check"/></svg>Done</span></div><div class="step done" data-c="progress-step"><span class="no">5</span><p class="txt">Lose “and that’s when everything changed.”</p><span class="st done"><svg class="ico s"><use href="#i-check"/></svg>Done</span></div><div class="step working" data-c="progress-step"><span class="no">3</span><p class="txt">Tighter on her. The sky is winning.</p><span class="st work"><span class="mk gem"></span>Cutting</span><p class="plan">Reframe to 1.6× on Maya; sky to a third of frame.</p></div><div class="step queued" data-c="progress-step"><span class="no">2</span><p class="txt">I want to feel how tired she was here. Let it sit.</p><span class="st">Queued</span></div><div class="step queued" data-c="progress-step"><span class="no">4</span><p class="txt">Music is too sure of itself here.</p><span class="st">Queued</span></div><div class="step queued" data-c="progress-step"><span class="no">6</span><p class="txt">The building montage is one beat too long.</p><span class="st">Queued</span></div><div class="step queued" data-c="progress-step"><span class="no">7</span><p class="txt">Show the team earlier.</p><span class="st">Queued</span></div></div></div>
+      <div class="panel-foot" data-c="panel-foot"><span class="t-small">You can keep watching Cut 3. Nothing changes in it.</span></div>
+    </div>
+  </div>
+</div>
+<div class="window-edge" data-c="window-edge"></div>
+<div class="pop act-pop" data-c="editor-activity" style="left:1018px;top:46px">
+  <div class="ap-sec">
+    <div class="ap-head"><span class="mk gem"></span>Cutting Cut 4</div>
+    <p class="ap-sub">Claude Code · Claude Opus 5.5 · 4 min</p>
+  </div>
+  <div class="ap-sec ap-list" data-c="activity-list">
+    <div class="arow now" data-c="activity-row"><time>now</time><span><b>Watching</b> <span class="tc">01:12:08–01:14:00</span></span></div>
+    <div class="arow" data-c="activity-row"><time>12 s</time><span><b>Reframed</b> 3B T2 to 1.6× · note 3</span></div>
+    <div class="arow" data-c="activity-row"><time>40 s</time><span><b>Trimmed</b> scene 1 · −4.2 s · note 1</span></div>
+    <div class="arow" data-c="activity-row"><time>1 min</time><span><b>Listening to</b> 2A T5 · note 2</span></div>
+    <div class="arow" data-c="activity-row"><time>3 min</time><span><b>Read back</b> 7 notes · you said OK</span></div>
+  </div>
+  <div class="ap-sec" style="padding:10px 16px 12px">
+    <div class="ap-spend" data-c="spend"><span>Spent so far</span><span class="tc">$0.84</span></div>
+    <div class="ap-acts"><span class="btn" data-c="pause"><svg class="ico"><use href="#i-pause"/></svg>Pause</span><span class="btn ghost danger" data-c="stop"><svg class="ico"><use href="#i-stop"/></svg>Stop</span></div>
+  </div>
+  <div class="ap-sec ap-foot"><span class="btn ghost sm" data-c="editor-settings"><svg class="ico s"><use href="#i-gear"/></svg>Editor settings…</span></div>
+</div>
+</body></html>

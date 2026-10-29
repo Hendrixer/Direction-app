@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>59 Dailies · a take's shots</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/start.css">
+<link rel="stylesheet" href="../css/editor.css">
+<style>
+  .viewer { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; padding: 0; place-items: stretch; }
+  .pv { background: var(--canvas); display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto; min-width: 0; min-height: 0; }
+  .pv-head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; }
+  .pv-pic { padding: 0 20px; display: grid; place-items: center; min-height: 0; }
+  .pv-pic .frame-pic { height: 100%; width: auto; max-width: 100%; }
+  .reel { display: flex; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--line); }
+  .reel .take { width: 150px; }
+  .reel .take .cap, .reel .take .sub { display: none; }
+  .reel .take.on .th { box-shadow: 0 0 0 2px var(--text-1); }
+  .info { border-left: 1px solid var(--line); background: var(--ground); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; }
+  .info .hd { padding: 16px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+  .tr { padding: 14px 16px; display: grid; gap: 10px; align-content: start; overflow: hidden; }
+  .tr p { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; font-size: 13px; line-height: 1.45; }
+  .tr p .tc { color: var(--text-4); font-size: 11px; line-height: 19px; }
+  .tr p.now { color: var(--text-1); }
+  .tr p.now .tc { color: var(--text-1); }
+  .tr p.past { color: var(--text-3); }
+  .tr p.fut { color: var(--text-2); }
+  .info .ft2 { padding: 14px 16px 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+  .circ-btn { height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 600; font-size: 13px; color: var(--director); box-shadow: inset 0 0 0 1.5px oklch(0.82 0.13 72 / .55); }
+  .circ-btn svg { width: 26px; height: 20px; }
+</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Launch film<svg class="ico"><use href="#i-down"/></svg></span><span class="sl">/</span><span class="seg-btn cut">No cuts yet</span></div>
+    <div class="rooms" data-c="rooms"><span class="on">Dailies</span><span>Script</span><span class="off">Screening</span><span class="off">Notes</span><span class="off">Changes</span><span class="off">Finish</span></div>
+    <div class="tb-right">
+      <span class="agent" data-c="agent-pill"><span class="mk gem"></span>Ready</span>
+      <span class="btn ghost icon" data-c="share"><svg class="ico"><use href="#i-share"/></svg></span>
+      <span class="btn steel" data-c="primary">Assemble from circles <span class="n">7</span></span>
+    </div>
+  </div>
+  <div class="dailies">
+    <div class="side scene-nav" data-c="scene-sidebar">
+      <div class="side-head"><span class="label">Scenes</span><span class="sp"></span><span class="btn ghost icon sm"><svg class="ico"><use href="#i-plus"/></svg></span></div>
+      <div class="nav">
+        <div class="it"><span class="num">1</span><span>Cold open</span><span class="count d">2</span></div>
+        <div class="it on"><span class="num">2</span><span>Maya, the problem</span><span class="count d">1</span></div>
+        <div class="it"><span class="num">3</span><span>The ridge</span><span class="count d">2</span></div>
+        <div class="it"><span class="num">4</span><span>Building it</span><span class="count d">2</span></div>
+        <div class="it"><span class="num">5</span><span>Launch day</span><span class="count">0</span></div>
+        <div class="grp label">Not in a scene</div>
+        <div class="it"><svg class="ico"><use href="#i-folder"/></svg><span>Unsorted</span><span class="count">14</span></div>
+        <div class="it"><svg class="ico"><use href="#i-trash"/></svg><span>Not usable</span><span class="count">9</span></div>
+      </div>
+      <div style="padding:12px 16px 16px;border-top:1px solid var(--line);display:grid;gap:6px">
+        <div class="row t-small"><svg class="ico s"><use href="#i-film"/></svg>214 takes · 3 h 12 m</div>
+        <div class="row t-small"><span class="mk ring" style="transform:scale(.8)"></span>7 circled · <span class="mk gem" style="transform:rotate(45deg) scale(.8)"></span>6 suggested</div>
+      </div>
+    </div>
+    <div class="viewer">
+      <div class="pv">
+        <div class="pv-head"><span class="btn ghost sm"><svg class="ico"><use href="#i-left"/></svg>All takes</span><span class="vdivider" style="height:16px"></span><span class="t-title">2A T3</span><span class="t-small">Wide, window light · A011_C002_1021.mov</span><span class="sp"></span><span class="chip a"><span class="mk gem" style="transform:rotate(45deg) scale(.8)"></span>Suggested</span></div>
+        <div class="pv-pic"><div class="frame-pic r169" data-c="take-player"><div class="ft f-room dim85"></div><div class="hud" style="right:12px;bottom:12px"><span class="glass">00:19:02 / 0:46</span></div></div></div>
+        <div class="transport" style="padding:12px 20px 4px" data-c="take-transport">
+          <span class="btn icon"><svg class="ico"><use href="#i-pause"/></svg></span>
+          <span class="tc">00:19:02 <i>/ 0:46</i></span>
+          <div class="strip take-strip" data-c="take-scrubber"><div class="sc"><div class="ft f-room dim85"></div></div>
+            <i class="tick" data-c="shot-tick" style="left:20.65%"></i><i class="tick" data-c="shot-tick" style="left:49.64%"></i><i class="tick" data-c="shot-tick" style="left:78.62%"></i>
+            <div class="sounds" data-c="sound-lane"><i class="speech" style="left:4.35%;width:6.5%"></i><i class="speech" style="left:15.2%;width:7.6%"></i><i class="speech" style="left:26.1%;width:8.7%"></i><i class="speech" style="left:41.3%;width:7.6%"></i><i class="speech" style="left:67.4%;width:7.6%"></i><i class="speech" style="left:82.6%;width:5.4%"></i><i class="laugh" style="left:89.1%;width:5.5%"></i></div>
+            <div class="ph" style="left:41.5%"></div>
+          </div>
+          <span class="btn ghost icon"><svg class="ico"><use href="#i-speaker"/></svg></span>
+        </div>
+        <div class="shots" data-c="shots-row">
+          <div class="shots-h"><span class="mk gem"></span><span class="label">Shots · logged by the editor</span><span class="sp"></span><span class="btn" data-c="contact-sheet-button"><svg class="ico"><use href="#i-grid"/></svg>Contact sheet</span></div>
+          <div class="shots-row">
+            <div class="shot" data-c="shot-card"><div class="kf"><div class="ft f-room"></div></div><span class="rng">00:00:00–00:09:12</span><p class="desc">Wide on Maya at the window. She settles in.</p><div class="chips"><span class="chip ui">Wide</span></div></div>
+            <div class="shot on" data-c="shot-card"><div class="kf"><div class="ft f-room dim85" style="transform:scale(1.45);transform-origin:68% 42%"></div></div><span class="rng">00:09:12–00:22:20</span><p class="desc">Push in to a medium. Window light on her face.</p><div class="chips"><span class="chip ui">Medium</span></div></div>
+            <div class="shot" data-c="shot-card"><div class="kf"><div class="ft f-room dim85" style="transform:scale(1.75);transform-origin:70% 40%"></div></div><span class="rng">00:22:20–00:36:04</span><p class="desc">Medium on Maya. She looks down, then out the window.</p><div class="chips"><span class="chip ui">Medium</span></div></div>
+            <div class="shot" data-c="shot-card"><div class="kf"><div class="ft f-room dim85" style="transform:scale(1.75);transform-origin:70% 40%;filter:brightness(.85) blur(1px)"></div></div><span class="rng">00:36:04–00:46:00</span><p class="desc">Medium on Maya. She laughs and looks away.</p><div class="chips"><span class="chip ui">Medium</span><span class="chip ui">Soft at 0:42</span></div></div>
+          </div>
+        </div>
+        <div class="reel" data-c="setup-reel">
+<div class="take " data-c="take-card"><div class="th"><div class="ft f-room"></div><span class="tn">T1</span><svg class="circle" viewBox="0 0 38 30"><use href="#i-circle"/></svg><span class="du glass">0:48</span></div><p class="cap"></p><p class="sub "></p></div>
+<div class="take circled" data-c="take-card"><div class="th"><div class="ft f-room"></div><span class="tn">T2</span><svg class="circle" viewBox="0 0 38 30"><use href="#i-circle"/></svg><span class="du glass">0:44</span></div><p class="cap"></p><p class="sub "></p></div>
+<div class="take suggested on" data-c="take-card"><div class="th"><div class="ft f-room dim85"></div><span class="tn">T3</span><svg class="circle" viewBox="0 0 38 30"><use href="#i-circle"/></svg><span class="sug"><span class="mk gem"></span></span><span class="du glass">0:46</span></div><p class="cap"></p><p class="sub "></p></div>
+<div class="take dim" data-c="take-card"><div class="th"><div class="ft f-room dim70"></div><span class="tn">T4</span><svg class="circle" viewBox="0 0 38 30"><use href="#i-circle"/></svg><span class="du glass">0:12</span></div><p class="cap"></p><p class="sub "></p></div>
+          <span class="sp"></span><span class="t-caption" style="align-self:center">← → takes · ↑ ↓ setups</span>
+        </div>
+      </div>
+      <aside class="info" data-c="take-info">
+        <div class="hd">
+          <div class="say"><span class="mk gem"></span><p>Warmest read of the line, and she holds the look after it for two seconds.<small>Fits "tired, then proud." T2, your circle, is a little faster.</small></p></div>
+        </div>
+        <div class="tr" data-c="take-transcript">
+          <span class="label">Transcript</span>
+          <p class="past"><span class="tc">00:02</span>So we started with the edit.</p>
+          <p class="past"><span class="tc">00:07</span>Everyone said, start with the camera.</p>
+          <p class="past"><span class="tc">00:12</span>But the camera was never the hard part.</p>
+          <p class="now"><span class="tc">00:19</span>Editing was the part nobody wanted.</p>
+          <p class="fut"><span class="tc">00:24</span><span class="muted"><i>(pause, looks to the window)</i></span></p>
+          <p class="fut"><span class="tc">00:31</span>Sitting with eight hours of yourself.</p>
+          <p class="fut"><span class="tc">00:38</span>Because somebody has to.</p>
+        </div>
+        <div class="ft2">
+          <div class="circ-btn" data-c="circle-button"><svg viewBox="0 0 38 30"><use href="#i-circle" style="stroke:var(--director)"/></svg>Circle this take <span class="kbd" style="margin-left:4px">C</span></div>
+          <div class="row t-small"><span class="btn ghost sm"><svg class="ico"><use href="#i-trash"/></svg>Not usable <kbd>X</kbd></span><span class="sp"></span><span class="btn ghost sm"><svg class="ico"><use href="#i-script"/></svg>Open in Script</span></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,104 @@
+/* The editor at work (56–58) and looking at footage (59–60). Uses only gate.css tokens.
+   Candidates to promote into gate.css are marked PROMOTE. */
+
+/* ============ 56 · Who's editing? (setup sheet) ============ */
+.setup-title { font: 800 22px/1.1 var(--f-brand); font-stretch: 120%; letter-spacing: -.01em; }
+.setup-lede { font-size: 13px; line-height: 1.5; color: var(--text-2); max-width: 60ch; }
+/* Program card: the Freedom card recipe (frame 43), side by side */
+.progs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.prog { display: grid; gap: 7px; align-content: start; padding: 14px; border-radius: var(--r-card); background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); min-width: 0; }
+.prog.on { background: var(--hover); box-shadow: inset 0 0 0 1.5px var(--text-1); }
+.prog b { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.prog .st { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.prog .st.none { color: var(--text-3); }
+.prog .st .ok-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--approve); flex: none; }
+/* PROMOTE: copyable command line (install command, request to copy) */
+.cmdline { display: flex; align-items: center; gap: 6px; height: 26px; margin: 3px -8px 0; padding: 0 3px 0 8px; border-radius: var(--r-chip); background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); font: 400 11.5px/1 var(--f-tc); color: var(--text-2); white-space: nowrap; min-width: 0; }
+.cmdline span { overflow: hidden; text-overflow: ellipsis; }
+.cmdline .cp { margin-left: auto; width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; color: var(--text-3); flex: none; }
+.cmdline .cp .ico { width: 13px; height: 13px; }
+.sheet-card .set-row { min-height: 48px; }
+/* Text link in a sheet footer */
+.tlink { font-size: 12px; color: var(--text-2); display: inline-flex; align-items: center; gap: 4px; }
+.tlink .ico { width: 10px; height: 10px; color: var(--text-4); }
+
+/* ============ 57 · The editor at work ============ */
+/* Pill while its popover is open: hover fill, prism edge kept */
+.agent.working.open { background: linear-gradient(var(--hover), var(--hover)) padding-box, var(--prism) border-box; background-size: 100% 100%, 300% 100%; }
+/* PROMOTE: window edge. 1 pt prism line inside the content, under the titlebar hairline, while a run works */
+.window-edge { position: absolute; left: 0; right: 0; top: var(--titlebar-h); bottom: 0; z-index: 40; pointer-events: none;
+  border: 1px solid transparent; background: var(--prism) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0) border-box; -webkit-mask-composite: xor; mask-composite: exclude; }
+/* PROMOTE: the editor's playhead on a scene strip. 9 pt prism diamond on the scenes' top edge, 1 pt prism line down */
+.strip .eph { position: absolute; top: 8px; height: 26px; width: 1px; margin-left: -.5px; z-index: 4; pointer-events: none;
+  background: linear-gradient(180deg, var(--prism-1), var(--prism-2) 34%, var(--prism-3) 66%, var(--prism-4)); }
+.strip .eph::before { content: ""; position: absolute; left: .5px; top: 0; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; transform: rotate(45deg); border-radius: 1.5px; background: var(--prism); box-shadow: 0 0 0 1px oklch(0 0 0 / .6); }
+
+/* PROMOTE: editor activity popover (57); the Editor popover recipe from frame 41 */
+.pop.act-pop { width: 320px; padding: 0; }
+.pop.act-pop::before { content: ""; position: absolute; top: -6px; left: 50%; margin-left: -6px; width: 12px; height: 12px; background: var(--panel); transform: rotate(45deg); box-shadow: -1px -1px 0 var(--line-2); }
+.ap-sec { padding: 12px 14px; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+.ap-sec:first-child { border-top: 0; padding: 14px 16px 12px; }
+.ap-head { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: var(--text-1); }
+.ap-sub { font-size: 11.5px; color: var(--text-3); padding-left: 19px; }
+.ap-list { padding: 6px 8px; gap: 0; }
+.arow { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 7px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.arow > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.arow time { font: 400 11px/1 var(--f-tc); color: var(--text-4); }
+.arow b { font-weight: 500; color: var(--text-1); }
+.arow .tc { font-size: 11.5px; color: var(--text-2); }
+/* The row the editor is on now: a 1 pt prism edge that shimmers like the pill (drawn here at rest, as with Reduce Motion) */
+.arow.now { border: 1px solid transparent; padding: 0 7px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--prism) border-box; }
+.ap-spend { display: flex; align-items: center; height: 22px; font-size: 12.5px; color: var(--text-3); }
+.ap-spend .tc { margin-left: auto; color: var(--text-1); font-size: 12px; }
+.ap-acts { display: flex; justify-content: flex-end; gap: 6px; padding-top: 8px; }
+.ap-foot { padding: 8px 10px; justify-items: start; }
+
+/* ============ 58 · The editor stopped ============ */
+.agent.blocked.wash { background: var(--alert-wash); }
+.notice-head.wrap { align-items: flex-start; }
+.notice-head.wrap .ico { margin-top: 2.5px; }
+.notice-head.wrap b { line-height: 1.35; }
+.notice-head.wrap .mono { line-height: 17.5px; }
+.notice p code { font: 400 12px var(--f-tc); color: var(--text-1); }
+
+/* ============ 59 · A take's shots ============ */
+/* Take scrubber with shot ticks and the sounds lane under it */
+.strip.take-strip { height: 38px; padding: 3px 0 11px; }
+.strip.take-strip .sc { flex: 1; height: 24px; }
+.strip.take-strip .ph { top: 0; height: 36px; }
+.strip .tick { position: absolute; top: 3px; height: 24px; width: 1px; margin-left: -.5px; background: var(--text-4); z-index: 2; }
+/* PROMOTE: sounds lane (4 pt): speech steel-7, laughter steel-9, music steel-8, silence empty */
+.sounds { position: absolute; left: 0; right: 0; top: 30px; height: 4px; }
+.sounds i { position: absolute; top: 0; bottom: 0; border-radius: 1px; }
+.sounds i.speech { background: var(--steel-7); }
+.sounds i.laugh { background: var(--steel-9); }
+.sounds i.music { background: var(--steel-8); }
+/* Shots row */
+.shots { padding: 4px 20px 16px; display: grid; gap: 10px; justify-content: start; }
+.shots-h { display: flex; align-items: center; gap: 8px; }
+.shots-h .mk.gem { width: 7px; height: 7px; }
+.shots-row { display: flex; gap: 10px; }
+/* PROMOTE: shot card */
+.shot { width: 168px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.shot .kf { position: relative; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.shot.on .kf { box-shadow: 0 0 0 1px var(--text-1); }
+.shot .rng { font: 400 11px/1.2 var(--f-tc); color: var(--text-3); white-space: nowrap; margin-top: 2px; }
+.shot .desc { font-size: 12px; line-height: 1.35; color: var(--text-2); height: 32.4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.shot .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+
+/* ============ 60 · Search footage ============ */
+.search-in { width: 300px; }
+.search-in .ico { color: var(--text-3); }
+.search-in .clr { margin-left: auto; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; background: var(--steel-6); color: var(--steel-2); flex: none; }
+.search-in .clr .ico { width: 9px; height: 9px; color: inherit; }
+.results-head { display: grid; gap: 8px; }
+.results-head p { font-size: 13px; color: var(--text-2); }
+.results-head small { font-size: 12px; color: var(--text-3); }
+.results-head small .mono { font-size: 11.5px; color: var(--text-2); }
+/* PROMOTE: search result: a take card showing the matching shot */
+.result .tn { width: 44px; }
+.result .circle { width: 56px; }
+.result .cap { color: var(--text-3); -webkit-line-clamp: 1; }
+.result .cap mark { background: none; color: var(--text-1); font-weight: 500; }
+.result .why { font-size: 11px; color: var(--text-4); margin-top: -4px; }
