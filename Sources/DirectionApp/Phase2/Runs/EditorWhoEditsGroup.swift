@@ -62,7 +62,7 @@ struct EditorWhoEditsGroup: View {
                 Text("Looking for \(p.name)\u{2026}").font(detail).foregroundStyle(Gate.Text.tertiary).cssLineHeight(1.4, size: 11.5)
             }
         } else {
-            (Text("Run Claude Code or Codex yourself. Direction shows what it does but can\u{2019}t start or pause it. ") + Text("How to connect").foregroundColor(Gate.Text.secondary))
+            Text("Run Claude Code or Codex yourself. Direction shows what it does but can\u{2019}t start or pause it. \(Text("How to connect").foregroundColor(Gate.Text.secondary))")
                 .font(detail).foregroundStyle(Gate.Text.tertiary).cssLineHeight(1.4, size: 11.5).fixedSize(horizontal: false, vertical: true)
                 .onTapGesture { EditorConnection.presentAlert() }
                 .accessibilityAction(named: "How to connect") { EditorConnection.presentAlert() }

@@ -173,11 +173,11 @@ import DirectionTools
     /// Start (Ask me first, or after you stopped it).
     func start(_ film: FilmModel) {
         guard let store = film.store else { return }
-        if let h = held { try? store.updateRun(h.id) { $0.held = false }; refresh(film); return }
+        if let h = held { _ = try? store.updateRun(h.id) { $0.held = false }; refresh(film); return }
         // A turnover you stopped waits for Start: it gets a new run.
         if let t = film.openTurnover, let program = EditorSetup.runsOn.program, run(for: t)?.state == .stopped {
             create(t.kind == "assembly" ? .assemble : .turnover, program: program, turnoverID: t.id, store: store)
-            if let r = runs.last { try? store.updateRun(r.id) { $0.held = false } }
+            if let r = runs.last { _ = try? store.updateRun(r.id) { $0.held = false } }
             refresh(film)
         }
     }
@@ -201,7 +201,7 @@ import DirectionTools
         // Not installed: look again, and start once the search is done (pump waits for it).
         if r.reason == .notInstalled {
             EditorPrograms.shared.refresh()
-            try? store.updateRun(r.id) { $0.state = .queued; $0.held = false; $0.reason = nil }
+            _ = try? store.updateRun(r.id) { $0.state = .queued; $0.held = false; $0.reason = nil }
             film.refresh(force: true); return
         }
         if r.reason == .notSignedIn, let p = EditorProgram(rawValue: r.program) { EditorSetup.setSignedIn(p, nil); EditorPrograms.shared.checkSignIn(p) }
@@ -264,7 +264,7 @@ import DirectionTools
     /// The banner after a quit: Resume, or Not now (it stays paused).
     func dismissQuitBanner(_ film: FilmModel) {
         guard let store = film.store, let r = pausedByQuit else { return }
-        try? store.updateRun(r.id) { $0.pausedByQuit = false; $0.reason = nil }
+        _ = try? store.updateRun(r.id) { $0.pausedByQuit = false; $0.reason = nil }
         film.refresh(force: true)
     }
 }

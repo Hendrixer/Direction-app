@@ -152,11 +152,9 @@ struct ActivityRow: View {
         let rest = [a.detail, suffix].compactMap { $0 }
         HStack(spacing: 8) {
             Text(now ? "now" : ago).font(.system(size: 11, design: .monospaced)).foregroundStyle(Gate.Text.disabled).frame(width: 42, alignment: .leading)
-            (Text(verb).foregroundColor(Gate.Text.primary).fontWeight(.medium)
-             + Text(" ")
-             + Text(a.object).font(a.mono ? .system(size: 11.5, design: .monospaced) : .system(size: 12.5)).foregroundColor(Gate.Text.secondary)
-             + Text(rest.isEmpty ? "" : " \u{00B7} " + rest.joined(separator: " \u{00B7} ")).foregroundColor(Gate.Text.secondary))
-                .font(.system(size: 12.5)).lineLimit(1).truncationMode(.tail)
+            let tail = rest.isEmpty ? "" : " \u{00B7} " + rest.joined(separator: " \u{00B7} ")
+            Text("\(Text(verb).foregroundColor(Gate.Text.primary).fontWeight(.medium)) \(Text(a.object).font(a.mono ? .system(size: 11.5, design: .monospaced) : .system(size: 12.5)))\(Text(tail))")
+                .font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, now ? 7 : 8).frame(height: 30)

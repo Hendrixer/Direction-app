@@ -138,7 +138,7 @@ struct EditorStopBody: View {
         let command = program == .claudeCode ? "claude" : "codex login"
         guard let r = text.range(of: "run \(command),") else { return Text(text) }
         let before = String(text[..<r.lowerBound]) + "run ", after = String(text[text.index(r.upperBound, offsetBy: -1)...])
-        return Text(before) + Text(command).font(.system(size: 12, design: .monospaced)) + Text(after)
+        return Text("\(before)\(Text(command).font(.system(size: 12, design: .monospaced)))\(after)")
     }
 }
 
