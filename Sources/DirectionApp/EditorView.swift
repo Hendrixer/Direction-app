@@ -5,78 +5,126 @@ import DirectionCore
 
 struct EditorView: View {
     @Bindable var model: EditorModel
+    @State private var screening = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         VStack(spacing: 0) {
             header
             DirectionDivider()
             if model.project == nil { welcome }
             else {
-                HStack(spacing: 0) {
-                    reviewStage
-                    DirectionDivider(vertical: true)
-                    InspectorView(model: model).frame(width: Metrics.sidebar)
+                if screening { screeningStage }
+                else {
+                    HStack(spacing: 0) {
+                        reviewStage
+                        DirectionDivider(vertical: true)
+                        InspectorView(model: model).frame(width: Metrics.sidebar)
+                    }
                 }
             }
         }
-        .background(Palette.background).foregroundStyle(Palette.text).tint(Palette.accent)
+        .background { Gate.Surface.ground.overlay { GrainOverlay() } }
+        .foregroundStyle(Gate.Text.primary).tint(Gate.Text.primary)
+        .onChange(of: model.commentFocusRequest) { _, _ in screening = false }
+        .onChange(of: model.notesNavigationRequest) { _, _ in screening = false }
+        .onChange(of: model.selectedCommentID) { _, id in if id != nil { screening = false } }
+        .onChange(of: model.projectURL) { _, _ in screening = false }
+        .onExitCommand { screening = false }
         .frame(minWidth: 980, minHeight: 660)
+        .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $model.showTools) { AgentToolsSheet(model: model) }
         .sheet(isPresented: $model.showExport) { ExportSheet(model: model) }
         .sheet(isPresented: $model.showActivity) { ActivitySheet(model: model) }
-        .overlay(alignment: .bottom) {
+        .overlay(alignment: .bottomTrailing) {
             if let error = model.error {
                 HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "exclamationmark.circle").foregroundStyle(Palette.marker)
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(Gate.State.alert)
                     Text(error).textSelection(.enabled).font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
                     IconButton(symbol: "xmark", label: "Dismiss error") { model.error = nil }
-                }.padding(14).directionSurface(elevated: true).shadow(color: .black.opacity(0.4), radius: 16, y: 8).padding(22)
+                }.padding(16).background { GateGlassSurface() }.frame(maxWidth: 480).padding(24)
             }
         }
     }
 
     private var header: some View {
-        HStack(spacing: 18) {
-            HStack(spacing: 8) {
-                BrandIcon(size: 30)
-                Text("Direction").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
-            }.padding(.leading, 76)
+        HStack(spacing: 12) {
+            projectMenu.padding(.leading, 76)
             if model.project != nil {
-                projectMenu
-                if (model.project?.sequences.count ?? 0) > 1 {
-                    Menu {
-                        ForEach(model.project?.sequences ?? []) { sequence in Button(sequence.name) { model.selectSequence(sequence.id) } }
-                    } label: {
-                        Text(model.sequence?.name ?? "Edit").font(.system(size: 11)).foregroundStyle(Palette.muted)
-                    }.menuStyle(.borderlessButton).fixedSize()
+                Text("/").foregroundStyle(Gate.Text.disabled)
+                Text(model.cutLabel).font(Gate.Font.caption).foregroundStyle(Gate.Text.secondary).lineLimit(1)
+                Spacer(minLength: 12)
+                roomSwitcher
+                Spacer(minLength: 12)
+                if let job = model.activeJobs.first {
+                    HStack(spacing: 6) {
+                        Image(systemName: "diamond.fill").font(.system(size: 7)).foregroundStyle(Gate.Voice.agent)
+                        Text(job.phase).font(Gate.Font.caption).lineLimit(1)
+                    }.foregroundStyle(Gate.Voice.agent)
+                } else if model.busyCount > 0 { ProgressView().controlSize(.small) }
+                else if model.pendingUpdate {
+                    Button("Cut ready", action: model.followWorkingCut).buttonStyle(GhostButton())
+                        .foregroundStyle(Gate.Voice.director)
                 }
                 if !model.isWorkingCut {
-                    Button("Back to latest") { model.followWorkingCut() }.buttonStyle(QuietButton())
+                    Button("Latest cut", action: model.followWorkingCut).buttonStyle(GhostButton())
                 }
-            }
-            Spacer(minLength: 8)
-            if let job = model.activeJobs.first {
-                ProgressView().controlSize(.small)
-                Text(job.phase).font(.system(size: 11)).foregroundStyle(Palette.muted).lineLimit(1)
-            } else if model.busyCount > 0 { ProgressView().controlSize(.small) }
-            if model.project != nil {
-                Button(action: model.chooseMedia) { Label("Add media", systemImage: "plus") }.buttonStyle(QuietButton())
                 Menu {
+                    Button("Bring footage…", action: model.chooseMedia)
+                    Button("Transcript") { screening = false; model.panel = .transcript }
+                    if (model.project?.sequences.count ?? 0) > 1 {
+                        Menu("Sequences") {
+                            ForEach(model.project?.sequences ?? []) { sequence in
+                                Button(sequence.name) { model.selectSequence(sequence.id) }
+                            }
+                        }
+                    }
+                    Divider()
                     Button("Agent tools…") { model.showTools = true }
                     Button("Activity…") { model.showActivity = true }
                     Divider()
                     Button("Save cut", action: model.saveCut).disabled(model.duration == 0)
-                    if model.pinnedRevision != nil { Button("Restore this edit", action: model.restoreDisplayed) }
+                    if model.pinnedRevision != nil { Button("Restore this cut", action: model.restoreDisplayed) }
                 } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 15)).frame(width: 28, height: 34)
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Project actions").accessibilityLabel("Project actions")
+                    Image(systemName: "ellipsis").font(.system(size: 15)).frame(width: 28, height: 30)
+                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .help("Project actions").accessibilityLabel("Project actions")
                 Button { model.showExport = true } label: {
                     Label("Export", systemImage: "arrow.up.right")
-                }.buttonStyle(QuietButton(prominent: true)).disabled(model.duration == 0)
+                }.buttonStyle(QuietButton()).disabled(model.duration == 0)
             } else {
-                Button("Open project", action: model.chooseProject).buttonStyle(QuietButton())
+                Spacer()
+                Button("Open project", action: model.chooseProject).buttonStyle(GhostButton())
             }
-        }.padding(.trailing, 24).frame(height: 56)
-            .background(Palette.background)
+        }.padding(.trailing, 16).frame(height: 48)
+            .background { Gate.Surface.ground.overlay { GrainOverlay() } }
+    }
+
+    private var roomSwitcher: some View {
+        HStack(spacing: 2) {
+            roomButton("Dailies", selected: !screening && model.panel == .media) {
+                screening = false; model.panel = .media
+            }
+            roomButton("Screening", selected: screening) {
+                screening = true; model.annotating = false
+            }
+            roomButton("Notes", selected: !screening && model.panel != .media) {
+                screening = false; model.panel = .feedback
+            }
+        }.padding(2).background(Gate.Surface.canvas, in: RoundedRectangle(cornerRadius: 9))
+            .overlay { RoundedRectangle(cornerRadius: 9).strokeBorder(Gate.Line.subtle, lineWidth: 1) }
+            .accessibilityElement(children: .contain).accessibilityLabel("Room")
+    }
+
+    private func roomButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(reduceMotion ? nil : Gate.Motion.glide) { action() }
+        } label: {
+            Text(title).font(Gate.Font.control).foregroundStyle(selected ? Gate.Text.primary : Gate.Text.tertiary)
+                .padding(.horizontal, 10).frame(height: 26)
+                .background(selected ? Gate.Surface.raised : .clear, in: RoundedRectangle(cornerRadius: 7))
+                .overlay { if selected { RoundedRectangle(cornerRadius: 7).strokeBorder(Gate.Line.subtle, lineWidth: 1) } }
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private var projectMenu: some View {
@@ -91,39 +139,46 @@ struct EditorView: View {
             }
             if let url = model.projectURL { Divider(); Button("Reveal Project") { NSWorkspace.shared.activateFileViewerSelecting([url]) } }
         } label: {
-            Text(model.project?.name ?? "Direction").font(.system(size: 16, weight: .medium)).foregroundStyle(Palette.text).lineLimit(1)
-        }.menuStyle(.borderlessButton).frame(maxWidth: 220, alignment: .leading).fixedSize(horizontal: true, vertical: false)
+            Text(model.project?.name ?? "Direction").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.text).lineLimit(1)
+        }.menuStyle(.borderlessButton).frame(maxWidth: 200, alignment: .leading).fixedSize(horizontal: true, vertical: false)
     }
 
     private var reviewStage: some View {
         VStack(spacing: 16) {
             HStack(spacing: 8) {
-                Text(model.cutLabel).font(.system(size: 12, weight: .medium))
-                Text("·").foregroundStyle(Palette.faint)
-                Text("Revision \(model.displayedProject?.editRevision ?? 0)").font(.system(size: 11)).foregroundStyle(Palette.muted)
+                Text(model.sequence?.name ?? model.cutLabel).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
                 Spacer()
                 if let sequence = model.sequence {
-                    Text("\(sequence.width) × \(sequence.height)").font(.system(size: 11, design: .monospaced)).foregroundStyle(Palette.muted)
+                    Text("\(sequence.width) × \(sequence.height)").font(Gate.Font.caption).foregroundStyle(Gate.Text.disabled)
                 }
                 IconButton(symbol: "viewfinder", label: "Mark a frame region", selected: model.annotating) {
-                    model.annotating.toggle()
-                    model.panel = .feedback
-                    model.player.pause(); model.playing = false
+                    model.toggleRegionAnnotation()
                 }.disabled(model.duration == 0)
-            }.frame(height: 28).padding(.horizontal, 4)
+            }.frame(height: 24)
             VideoReviewView(model: model)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Gate.Radius.frame))
             ReviewTimeline(model: model)
-        }.padding(24).frame(minWidth: 450)
+        }.padding(Gate.Space.s6).frame(minWidth: 450)
+            .background(Gate.Surface.canvas)
+    }
+
+    private var screeningStage: some View {
+        ZStack(alignment: .bottom) {
+            VideoReviewView(model: model, showsAnnotations: false)
+                .padding(.top, Gate.Space.s14).padding(.bottom, 148)
+            ReviewTimeline(model: model, steelPlayback: true)
+                .background { GateGlassSurface(cornerRadius: 14) }
+                .frame(maxWidth: 880).padding(.horizontal, 32).padding(.bottom, 20)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Gate.Surface.canvas)
     }
 
     private var welcome: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 24)
             BrandIcon(size: 140).shadow(color: .black.opacity(0.6), radius: 25, y: 14)
-            Text("Your next cut.").font(.system(size: 38, weight: .light)).tracking(-1.6).foregroundStyle(Palette.silver).padding(.top, 20)
-            Text("Start a project. Bring it into focus.").font(.system(size: 13)).foregroundStyle(Palette.muted).padding(.top, 10)
+            Text("What are we making?").font(Gate.Font.room).foregroundStyle(Gate.Text.primary).padding(.top, 20)
+            Text("Start a project, then bring the footage.").font(.system(size: 13)).foregroundStyle(Palette.muted).padding(.top, 10)
             HStack(spacing: 10) {
                 Button(action: model.createProject) { Label("New project", systemImage: "plus") }.buttonStyle(QuietButton(prominent: true))
                 Button("Open project", action: model.chooseProject).buttonStyle(QuietButton())
@@ -148,12 +203,7 @@ struct EditorView: View {
             }
             Spacer(minLength: 24)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                ZStack {
-                    Palette.background
-                    RadialGradient(colors: [Color(white: 0.10), Palette.background], center: .init(x: 0.5, y: 0.38), startRadius: 0, endRadius: 500)
-                }
-            }
+            .background { Gate.Surface.ground.overlay { GrainOverlay() } }
     }
 }
 
@@ -165,6 +215,7 @@ struct NativePlayerView: NSViewRepresentable {
 
 struct VideoReviewView: View {
     @Bindable var model: EditorModel
+    var showsAnnotations = true
     var body: some View {
         ZStack {
             Color.black
@@ -172,10 +223,10 @@ struct VideoReviewView: View {
                 ZStack {
                     NativePlayerView(player: model.player).allowsHitTesting(false)
                     GeometryReader { proxy in
-                        if let region = model.commentRegion {
-                            RoundedRectangle(cornerRadius: 3).stroke(Palette.accent, lineWidth: 2).background(Palette.accent.opacity(0.06)).frame(width: proxy.size.width * region.width, height: proxy.size.height * region.height).position(x: proxy.size.width * (region.x + region.width / 2), y: proxy.size.height * (region.y + region.height / 2)).allowsHitTesting(false)
+                        if showsAnnotations, let region = model.commentRegion {
+                            RoundedRectangle(cornerRadius: Gate.Radius.frame).stroke(Gate.Voice.director, lineWidth: 2).frame(width: proxy.size.width * region.width, height: proxy.size.height * region.height).position(x: proxy.size.width * (region.x + region.width / 2), y: proxy.size.height * (region.y + region.height / 2)).allowsHitTesting(false)
                         }
-                        if model.annotating {
+                        if showsAnnotations, model.annotating {
                             Color.clear.contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 1).onChanged { value in
                                 let a = value.startLocation, b = value.location, size = proxy.size
                                 let x = max(0, min(1, min(a.x,b.x) / size.width)), y = max(0, min(1, min(a.y,b.y) / size.height))
@@ -183,12 +234,12 @@ struct VideoReviewView: View {
                             })
                         }
                     }
-                }.aspectRatio(CGFloat(model.sequence?.width ?? 1920) / CGFloat(model.sequence?.height ?? 1080), contentMode: .fit).padding(16)
+                }.aspectRatio(CGFloat(model.sequence?.width ?? 1920) / CGFloat(model.sequence?.height ?? 1080), contentMode: .fit)
             } else {
                 VStack(spacing: 14) {
                     Image(systemName: "rectangle.stack.badge.plus").font(.system(size: 30, weight: .ultraLight)).foregroundStyle(Palette.silver)
-                    Text("Bring your footage into the frame").font(.system(size: 15, weight: .medium))
-                    Text("Import video, audio, or stills to start this cut.").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                    Text("Bring the footage").font(Gate.Font.room)
+                    Text("Your originals stay where they are.").font(.system(size: 12)).foregroundStyle(Palette.muted)
                     Button(action: model.chooseMedia) { Label("Add media", systemImage: "plus") }
                         .buttonStyle(QuietButton()).padding(.top, 4).accessibilityLabel("Add media to empty project")
                 }
@@ -198,8 +249,7 @@ struct VideoReviewView: View {
                     .padding(16).directionSurface(elevated: true)
             }
         }.overlay(alignment: .topLeading) {
-            if model.pendingUpdate { Button("Updated edit available") { model.followWorkingCut() }.buttonStyle(QuietButton(prominent: true)).padding(20) }
-            else if model.annotating { Text("Drag over the frame to mark your feedback").font(.system(size: 11)).padding(10).directionSurface(elevated: true).padding(20) }
+            if showsAnnotations, model.annotating { Text("Drag over the frame to place your note").font(Gate.Font.caption).padding(10).background { GateGlassSurface(cornerRadius: 8) }.padding(20) }
         }
     }
 }

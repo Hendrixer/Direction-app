@@ -1,0 +1,10 @@
+Archivo variable font, unmodified from Google Fonts.
+Copyright 2020 The Archivo Project Authors.
+License: SIL Open Font License 1.1; see Archivo-OFL.txt in this bundle.
+
+Source: https://github.com/google/fonts/tree/main/ofl/archivo
+Downloaded: https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/Archivo%5Bwdth%2Cwght%5D.ttf
+Google Fonts blob SHA: cc64253d36665a5ca0d6719cdf1e32b3de453b51
+
+Direction uses the font's actual wdth=125 and wght=800 axes for brand and room names.
+All registration is process-scoped. Direction does not install the font system-wide.

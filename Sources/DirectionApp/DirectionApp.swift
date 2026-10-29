@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 @MainActor final class DirectionAppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) { NSApplication.shared.setActivationPolicy(.regular); NSApplication.shared.activate(ignoringOtherApps: true) }
+    func applicationDidFinishLaunching(_ notification: Notification) { BrandAssets.registerFonts(); NSApplication.shared.setActivationPolicy(.regular); NSApplication.shared.activate(ignoringOtherApps: true) }
 }
 
 @main struct DirectionApplication: App {

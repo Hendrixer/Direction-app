@@ -8,4 +8,6 @@ Direction uses the following relevant open-source libraries, resolved in Package
 
 The MCP SDK also brings Swift NIO, Swift Atomics, Swift Collections, Swift System, Swift Log, and EventSource as transitive dependencies. Their complete source and license notices are in the corresponding SwiftPM checkouts. The packaging script copies their upstream license files into the app's resources.
 
+The interface bundles [Archivo](https://github.com/google/fonts/tree/main/ofl/archivo), a variable typeface by Omnibus-Type, under the SIL Open Font License 1.1. The original font and license are included in the app's resource bundle; registration is limited to the app process.
+
 Apple system frameworks perform media decoding, Metal/Core Image rendering, audio processing, and local speech recognition. FFmpeg is not an application or test dependency.

@@ -7,18 +7,18 @@ struct MediaSidebar: View {
     @State private var query = ""
     private var assets: [MediaAsset] { (model.project?.assets ?? []).filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) } }
     var body: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+        VStack(spacing: Gate.Space.s4) {
+            HStack(spacing: Gate.Space.s2) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Gate.Text.tertiary)
                 TextField("Search media", text: $query).textFieldStyle(.plain).accessibilityLabel("Search media")
                 if !query.isEmpty {
                     Button { query = "" } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.muted)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Gate.Text.tertiary)
                     }.buttonStyle(.plain).help("Clear search").accessibilityLabel("Clear media search")
                 }
-            }.font(.system(size: 12)).padding(11).directionField(cornerRadius: 9)
+            }.font(Gate.Font.control).padding(Gate.Space.s3).directionField(cornerRadius: Gate.Radius.control)
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 18) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Gate.Space.s4) {
                     ForEach(assets) { asset in
                         MediaAssetCard(asset: asset)
                     }
@@ -28,13 +28,13 @@ struct MediaSidebar: View {
                         symbol: query.isEmpty ? "square.stack" : "magnifyingglass",
                         title: query.isEmpty ? "No media yet" : "No matching files",
                         detail: query.isEmpty ? "Add video, images, or audio to begin." : "Try another filename."
-                    ).padding(.top, 48)
+                    ).padding(.top, Gate.Space.s14)
                 }
             }
             Button(action: model.chooseMedia) {
-                Label("Add media", systemImage: "plus").frame(maxWidth: .infinity)
-            }.buttonStyle(QuietButton()).disabled(model.busyCount > 0)
-        }.padding(.horizontal, 20).padding(.bottom, 20)
+                Label("Bring footage", systemImage: "plus").frame(maxWidth: .infinity)
+            }.buttonStyle(QuietButton(prominent: true)).disabled(model.busyCount > 0)
+        }.padding(.horizontal, Gate.Space.s4).padding(.bottom, Gate.Space.s4)
     }
 }
 
@@ -42,23 +42,23 @@ private struct MediaAssetCard: View {
     let asset: MediaAsset
     private var symbol: String { asset.isImage ? "photo" : (asset.video.isEmpty ? "waveform" : "film") }
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: Gate.Space.s2) {
             ZStack(alignment: .bottomTrailing) {
                 GeometryReader { geometry in
                     if let path = asset.thumbnailPath, let image = NSImage(contentsOfFile: path) {
                         Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
                             .frame(width: geometry.size.width, height: geometry.size.height).clipped()
                     } else {
-                        Palette.inset.overlay {
-                            Image(systemName: symbol).font(.system(size: 23, weight: .light)).foregroundStyle(Palette.muted)
+                        Gate.Surface.sunken.overlay {
+                            Image(systemName: symbol).font(.system(size: 23, weight: .light)).foregroundStyle(Gate.Text.tertiary)
                         }
                     }
                 }
-                Text(timecode(asset.duration.seconds)).font(.system(size: 9, design: .monospaced))
+                Text(timecode(asset.duration.seconds, frames: false)).font(Gate.Font.timecode)
                     .padding(.horizontal, 5).padding(.vertical, 4)
-                    .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 4)).padding(6)
-            }.frame(height: 86).clipShape(RoundedRectangle(cornerRadius: 7))
-            Text(asset.name).font(.system(size: 11, weight: .regular)).lineLimit(2)
+                    .background(Gate.Surface.canvas.opacity(0.8), in: RoundedRectangle(cornerRadius: Gate.Radius.frame)).padding(Gate.Space.s1)
+            }.frame(height: 86).clipShape(RoundedRectangle(cornerRadius: Gate.Radius.frame))
+            Text(asset.name).font(Gate.Font.caption).foregroundStyle(Gate.Text.secondary).lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading).frame(minHeight: 28, alignment: .top)
         }
             .contextMenu {

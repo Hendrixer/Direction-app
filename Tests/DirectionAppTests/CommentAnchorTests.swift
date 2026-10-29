@@ -211,4 +211,56 @@ struct CommentAnchorTests {
         #expect(model.commentDraft == "An unfinished thought.")
         #expect(model.error == nil)
     }
+
+    @Test func openingNotesIsSignaledEvenWhenTheAnchorHasNotChanged() {
+        let model = model()
+        let comment = ReviewComment(id: "moment", cutID: nil, editRevision: 1, sequenceID: "main",
+                                    scope: "moment", range: nil, time: .init(seconds: 6), region: nil,
+                                    text: "Hold this frame.", author: "Director", status: "open",
+                                    anchors: [], transcriptContext: [], replies: [], createdAt: 0, cursor: 1)
+        model.beginMomentComment(at: 6)
+        let focus = model.commentFocusRequest
+        let navigation = model.notesNavigationRequest
+        model.seekComment(comment)
+        model.seekComment(comment)
+        #expect(model.notesNavigationRequest == navigation + 2)
+        #expect(model.commentFocusRequest == focus) // Viewing a saved note does not steal text focus.
+        model.markIn()
+        model.markOut()
+        #expect(model.notesNavigationRequest == navigation + 4)
+    }
+
+    @Test func regionAnnotationLeavesWholeCutScopeAndKeepsTheDraft() {
+        let model = model()
+        model.selectCommentRange(from: 2, to: 4)
+        model.setWholeVideoComment(true)
+        model.commentDraft = "Tighter on her here."
+        model.playing = true
+        model.toggleRegionAnnotation()
+        #expect(model.commentScope == "range")
+        #expect(model.selectionStart == 2 && model.selectionEnd == 4)
+        #expect(model.annotating && !model.playing)
+        #expect(model.commentDraft == "Tighter on her here.")
+        model.toggleRegionAnnotation()
+        #expect(!model.annotating)
+        model.beginMomentComment(at: 6)
+        model.setWholeVideoComment(true)
+        model.toggleRegionAnnotation()
+        #expect(model.commentScope == "moment" && model.position == 6)
+    }
+
+    @Test func cutLabelsUseSavedNamesRatherThanInternalEditNumbers() {
+        let model = model()
+        model.pinnedRevision = 1
+        #expect(model.cutLabel == "Earlier cut")
+        model.cuts = [
+            ReviewCut(id: "cut-2", name: "Cut 02", editRevision: 1, sequenceID: "main", createdAt: 0),
+            ReviewCut(id: "other-sequence", name: "Other film", editRevision: 1, sequenceID: "short", createdAt: 1),
+        ]
+        #expect(model.cutLabel == "Cut 02")
+        model.pinnedRevision = nil
+        #expect(model.cutLabel == "Working cut")
+        model.selectedCutID = "cut-2"
+        #expect(model.cutLabel == "Cut 02")
+    }
 }

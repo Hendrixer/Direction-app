@@ -8,7 +8,7 @@ import DirectionCore
 import DirectionMedia
 import DirectionTools
 
-enum InspectorTab: String, CaseIterable { case feedback = "Comments", transcript = "Transcript", media = "Media" }
+enum InspectorTab: String, CaseIterable { case feedback = "Notes", transcript = "Transcript", media = "Footage" }
 
 @MainActor @Observable
 final class EditorModel {
@@ -34,6 +34,7 @@ final class EditorModel {
     var commentScope = "moment"
     var commentFocusRequest = 0
     var commentFocusPending = false
+    var notesNavigationRequest = 0
     var commentDraft = ""
     var commentRegion: FrameRegion?
     var annotating = false
@@ -68,7 +69,13 @@ final class EditorModel {
     var canEdit: Bool { isWorkingCut && busyCount == 0 && project != nil }
     var selectedAsset: MediaAsset? { let visible = displayedProject ?? project; return visible?.assets.first { $0.id == selectedAssetID } ?? selectedClip?.assetID.flatMap { id in visible?.assets.first { $0.id == id } } ?? visible?.assets.first }
     var selectedClip: Clip? { sequence?.clips.first { $0.id == selectedClipID } ?? sequence?.clips.first { $0.kind == .video } }
-    var cutLabel: String { if let id = selectedCutID, let cut = cuts.first(where: { $0.id == id }) { return cut.name }; return pinnedRevision.map { "Revision \($0)" } ?? "Working cut" }
+    var cutLabel: String {
+        if let id = selectedCutID, let cut = cuts.first(where: { $0.id == id }) { return cut.name }
+        guard let revision = pinnedRevision else { return "Working cut" }
+        let noteCutID = comments.first(where: { $0.id == selectedCommentID })?.cutID
+        let matching = cuts.filter { $0.editRevision == revision && $0.sequenceID == sequence?.id }
+        return matching.first(where: { $0.id == noteCutID })?.name ?? matching.last?.name ?? "Earlier cut"
+    }
     var activeJobs: [JobRecord] { jobs.filter { !$0.isTerminal } }
     var cliPath: String { let bundled = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/direction").path; return FileManager.default.fileExists(atPath: bundled) ? bundled : URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("direction").path }
 
@@ -209,8 +216,20 @@ final class EditorModel {
     func seek(_ seconds: Double) { guard seconds.isFinite else { return }; position = max(0, min(seconds, duration)); if isPreparing { previewSeekPosition = position; return }; player.seek(to: CMTime(seconds: position, preferredTimescale: 600_000), toleranceBefore: .zero, toleranceAfter: .zero) }
     func togglePlayback() { if player.rate > 0 { player.pause(); playing = false } else { if position >= duration - 0.03 { seek(0) }; player.play(); playing = true } }
     func frameStep(_ direction: Double) { player.pause(); playing = false; seek(position + direction / (sequence?.frameRate.value ?? 30)) }
-    func markIn() { panel = .feedback; selectionStart = min(position, max(0, duration - 0.01)); selectionEnd = max(selectionEnd, min(duration, selectionStart + 1)); commentScope = "range" }
-    func markOut() { panel = .feedback; selectionEnd = max(0.01, min(position, duration)); selectionStart = min(selectionStart, max(0, selectionEnd - 0.01)); commentScope = "range" }
+    func markIn() { showNotes(); selectionStart = min(position, max(0, duration - 0.01)); selectionEnd = max(selectionEnd, min(duration, selectionStart + 1)); commentScope = "range" }
+    func markOut() { showNotes(); selectionEnd = max(0.01, min(position, duration)); selectionStart = min(selectionStart, max(0, selectionEnd - 0.01)); commentScope = "range" }
+
+    /// Navigation is an event even when the requested note and anchor are unchanged.
+    func showNotes() { panel = .feedback; notesNavigationRequest += 1 }
+
+    func toggleRegionAnnotation() {
+        guard duration > 0 else { return }
+        if annotating { annotating = false; return }
+        if commentScope == "cut" { setWholeVideoComment(false) }
+        selectedCommentID = nil; commentRegion = nil; annotating = true
+        player.pause(); playing = false
+        showNotes()
+    }
 
     /// Seeking chooses the temporal anchor; the composer never needs raw time fields.
     func beginMomentComment(at seconds: Double) {
@@ -271,7 +290,7 @@ final class EditorModel {
     func seekComment(_ comment: ReviewComment) {
         if displayedProject?.editRevision != comment.editRevision || selectedSequenceID != comment.sequenceID { showRevision(comment.editRevision, sequenceID: comment.sequenceID) }
         selectedCommentID = comment.id
-        player.pause(); playing = false; panel = .feedback; commentRegion = comment.region
+        player.pause(); playing = false; showNotes(); commentRegion = comment.region
         commentScope = comment.scope
         if let range = comment.range { selectionStart = range.start.seconds; selectionEnd = range.end.seconds }
         seek(comment.range?.start.seconds ?? comment.time?.seconds ?? 0)

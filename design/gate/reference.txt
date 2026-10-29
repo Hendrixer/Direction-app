@@ -1,0 +1,1490 @@
+Gate Design Language
+
+Gate
+
+Direction design language
+
+Why
+
+01
+The relationship
+
+02
+Principles
+
+What
+
+03
+The rooms
+
+How
+
+04
+Color
+
+05
+Marks & materials
+
+06
+Type
+
+07
+Space
+
+08
+Motion
+
+09
+Components
+
+10
+Voice
+
+11
+Tokens
+
+12
+Sources
+
+Direction
+
+·
+
+Design language 2.0
+
+·
+
+Proposal
+
+Ga
+t
+e
+
+You direct.
+
+It cuts.
+The interface keeps the two straight.
+
+For a century, films have been finished by two people in a dark room: a director who knows what it should feel like, and an editor who knows how to make it so. Direction gives the editor's chair to an agent. Gate is the visual language for that room: black for the picture, amber for the director's hand, prism light for the agent's work, and steel for everything you touch.
+
+Launch film
+
+/
+
+Cut 3
+
+/
+
+Screening
+
+3 marks
+
+End screening 
+Esc
+
+Mark 3 at 01:12:08
+Keep watching. Write it after.
+
+01:12 
+/ 3:40
+
+1 Cold open
+
+2 Maya, the problem
+
+3 The ridge
+
+4 Building it
+
+5 Launch day
+
+N to mark
+
+Director's mark, dropped without pausing
+
+Scene the agent changed in this cut
+
+Scene locked. The agent can't touch it
+
+01
+
+The relationship
+
+How directors and editors actually work
+
+Before drawing a single control, we studied how films get finished. The director–editor partnership has a century of conventions, union rules and hard-won etiquette. Direction should feel familiar to anyone who has sat in that room, and teach the room to anyone who hasn't.
+
+The stages of post, and what Direction turns them into
+
+1
+
+Dailies
+
+Each day's footage is logged. The script supervisor circles the takes the director liked.
+
+In Direction
+Agent logs and transcribes. You circle takes; it suggests.
+
+2
+
+Assembly
+
+The editor builds a first cut alone. The director has the right to see it first.
+
+In Direction
+Agent assembles from your circles. First look is always yours.
+
+3
+
+Screening
+
+Watch it through, cold. Don't stop, don't fix, just feel it.
+
+In Direction
+Full-screen. Press N to mark a moment without pausing.
+
+4
+
+Notes session
+
+The director talks; the editor listens and leaves with a numbered list.
+
+In Direction
+Marks become numbered notes. You turn them over.
+
+5
+
+Recut
+
+The editor executes, often trying a note two ways.
+
+In Direction
+Agent reads back its plan, cuts, and offers options.
+
+6
+
+Lock
+
+Picture lock. No more changes to the edit; finishing begins.
+
+In Direction
+Lock scenes as you go, then the whole picture.
+
+Directors talk in feelings. Editors translate them into frames.
+
+"It drags" is a complete note. Working out that it means trimming three pauses and a reaction shot is the editor's craft.
+
+Notes are written in plain intent, never in editing mechanics. The agent replies with a 
+read-back
+: its translation, in numbers, before it cuts.
+
+Watch it through before you say anything.
+
+Editors advise screening a cut once without pausing or taking notes, then giving notes after.
+
+The 
+Screening
+room has no sidebar and no edit controls. Marks drop without stopping playback; you write them up after.
+
+Good editors show you options, not just answers.
+
+Directors circle more than one take, and editors want coverage marked, not only the "golden" take.
+
+For subjective notes, the agent cuts it 
+two ways
+. You pick A or B, side by side, synced.
+
+The director's cut is protected.
+
+The DGA guarantees features at least ten weeks for a director's cut, and no one may "cut behind" the director during it.
+
+Anything you 
+lock
+is off-limits to the agent. Nothing changes that you didn't ask for, and every change is shown.
+
+Notes arrive as a numbered list with timecode.
+
+Editors leave a notes session with a list to implement, each item tied to a moment.
+
+The 
+notes sheet
+is numbered and addressed by timecode, and stays numbered across cuts so "note 4" always means the same thing.
+
+When notes conflict, emotion wins.
+
+Walter Murch ranks what a cut must serve: emotion first, then story, then rhythm, with eye trace and screen geometry last.
+
+Every note has a 
+kind
+. When two notes pull against each other, the agent resolves them in Murch's order and tells you it did.
+
+Murch's Rule of Six: the agent's tiebreaker, from In the Blink of an Eye
+
+Emotion
+
+51%
+
+Story
+
+23%
+
+Rhythm
+
+10%
+
+Eye trace
+
+7%
+
+2D plane
+
+5%
+
+3D space
+
+4%
+
+In the app, these map to five note kinds a director actually uses: 
+Feeling, Story, Pace, Picture, Sound
+. The order of the first three is the priority.
+
+02
+
+Principles
+
+Six rules that come from the room
+
+The picture is the brightest thing on screen
+
+Interface lightness stays between 13% and 30%. Nothing glows beside the frame.
+
+Screening hides everything but a glass dock.
+
+Two hands, two colors, two shapes
+
+Amber and round for the director. Prism and diamond for the agent. You never have to read a label to know who did something.
+
+Shape carries the meaning too, for color-blind viewers.
+
+Intent in, mechanics out
+
+You speak in feelings. The agent answers in frames, seconds and decibels, so you can check its reading.
+
+Every note gets a read-back before the cut.
+
+Nothing behind your back
+
+Every change is visible, attributable and reversible. Locked scenes are untouchable.
+
+The changes reel plays only what moved.
+
+One room, one job
+
+Each stage of the work has its own room with one primary action. No screen tries to do everything.
+
+One steel button per room.
+
+Speak the trade
+
+Cuts, takes, circles, marks, turnover, lock. Real post vocabulary, explained the first time it appears.
+
+Never "revision", "AI" or "generate".
+
+03
+
+The rooms
+
+Four rooms, in the order the work happens
+
+The window changes shape with the stage of the work. A small switcher in the titlebar names the room. Screening is shown at the top of this page; here are the other three.
+
+Director leads
+
+Dailies
+
+Every take, grouped by scene and setup. Circle the ones you like, the way a script supervisor would on set. The agent suggests circles from performance and transcript; your circle always wins.
+
+Launch film
+
+Dailies
+
+Screening
+
+Notes
+
+Compare
+
+Assemble from circles 
+7
+
+1 Cold open
+
+2○
+
+2 Maya, the problem
+
+1○
+
+3 The ridge
+
+2○
+
+4 Building it
+
+2○
+
+5 Launch day
+
+0
+
+Unsorted
+
+14
+
+2 · Maya, the problem
+
+2 setups · 7 takes · transcribed
+
+2A · Wide, window light
+
+T1
+
+0:48
+
+"So we started with the edit, and…"
+flubbed line 0:31
+
+T2
+
+0:44
+
+"Editing was the part nobody wanted."
+circled by you
+
+T3
+
+0:46
+
+"Editing was the part nobody wanted."
+suggested: warmest read
+
+T4
+
+0:12
+
+Breakdown, laughs
+not usable as a take
+
+2B · Close, over shoulder
+
+T1
+
+0:21
+
+Hands on keyboard
+B-roll
+
+T2
+
+0:19
+
+Hands, slower push
+suggested: steadier
+
+T3
+
+0:20
+
+Hands, rack focus
+soft at 0:06
+
+1
+
+Circle to choose
+Click a take to circle it in pencil. Circles are the agent's first source when it assembles.
+
+2
+
+Suggestions stay suggestions
+A diamond means the agent recommends a take. It never circles for you.
+
+3
+
+One action
+"Assemble from circles" hands the agent the job and opens Screening when the first cut is ready.
+
+Director leads
+
+Notes session
+
+Your marks from the screening wait here as numbered drafts. Write each one up in a sentence, give it a kind, and turn the whole sheet over to the agent at once, as you would hand notes to an editor.
+
+Launch film
+
+/
+
+Cut 3
+
+Dailies
+
+Screening
+
+Notes
+
+Compare
+
+Turn over 
+4
+
+3 · region
+
+01:12:08
+
+01:12:08 
+/ 3:40
+
+1 Cold open
+
+2 Maya
+
+3 The ridge
+
+4 Building it
+
+5 Launch
+
+Notes on Cut 3
+
+4 notes · 1 draft
+
+1
+
+00:18:04
+
+Pace
+
+Cold open takes too long to get to her face.
+
+2
+
+00:46 – 00:58
+
+Feeling
+
+I want to feel how tired she was here. Let it sit.
+
+3
+
+01:12:08
+
+Region
+
+Picture
+
+Tighter on her. The sky is winning.
+
+4
+
+01:43:20
+
+Mark from screening. Add a note, or press ⌫ to drop it.
+
+Music is too sure of itself here
+
+Feeling
+
+Story
+
+Pace
+
+Picture
+
+Sound
+
+1
+
+Numbered for life
+Note 3 stays note 3 across every cut, so you and the agent can refer to it.
+
+2
+
+Kinds, not categories
+Feeling, Story, Pace, Picture, Sound. The order of the first three tells the agent what wins a conflict.
+
+3
+
+Turnover is deliberate
+Notes don't trickle to the agent one by one. You hand over the sheet when you're done, like a real session.
+
+Agent hands back
+
+Compare
+
+The agent returns Cut 4 with its answers. Watch only what changed, with two seconds of handle on each side, or pick between two versions of a subjective note. Accept, reply or lock, one note at a time.
+
+Launch film
+
+/
+
+Cut 4
+
+Dailies
+
+Screening
+
+Notes
+
+Compare
+
+Play changes 
+0:46
+
+2
+
+Option A
+
+Hold on her, +1.6 s
+
+A
+
+2
+
+Option B
+
+Cut to window, then back
+
+agent prefers
+
+B
+
+Note 2 · Feeling.
+"I want to feel how tired she was." I tried it two ways. B keeps the length the same and lets the silence do it.
+
+Use A
+
+Use B
+
+Neither, reply
+
+1
+
+Cold open.
+Cut the second street wide; we're on her face by 0:09.
+
+−4.2 s
+
+Accept
+
+3
+
+The ridge.
+Reframed to 1.6× on Maya; sky now a third of frame.
+
+crop
+
+Accept
+
+5
+
+Building it.
+Music down 6 dB under her line, back up at the cut.
+
+−6 dB
+
+Accept
+
+1
+
+Play changes
+A reel of only the passages that moved, with handles. A 3:40 film reviews in 46 seconds.
+
+2
+
+Two ways
+Options are synced side by side. The agent may say which it prefers, and why, but never picks.
+
+3
+
+Answers by number
+Every change points back to the note that asked for it. Nothing appears without a note.
+
+04
+
+Color
+
+Steel, pencil and prism
+
+One neutral ramp, built in OKLCH so each step looks evenly spaced, with a trace of the chrome D's cold blue. Two voice colors. Two status colors that never stand in for brand. Values below are measured from the live tokens.
+
+Primitive · steel ramp
+
+Director · amber
+
+Grease pencil
+
+Editors once marked film by hand with a china marker. Amber is the one warm, hand-made thing in a cold steel room.
+
+Marks, note numbers, ranges, regions
+
+Circled takes
+
+"Your turn" status
+
+01:12:08
+
+Cut 4 ready
+
+Agent · prism
+
+Split light
+
+The rainbow that breaks off the chrome D. It means light passed through here: the agent touched this. Gradients appear only as strokes of 2 px or less; text uses the solid ion blue.
+
+Changed scenes, the working shimmer
+
+Suggestion diamonds, read-backs
+
+Never as a fill or behind text
+
+agent prefers
+
+Cutting notes 1–4
+
+Semantic · surfaces & text
+
+Semantic · voices & status
+
+05
+
+Marks & materials
+
+Shape says who. Material says what.
+
+Color is never the only signal. Each actor has a mark shape that holds up in grayscale and for color-blind viewers. Each surface is one of three materials with one job.
+
+Pin · director
+
+A mark at a moment. Points down at the frame it means.
+
+Circle · director
+
+A chosen take. Hand-drawn, slightly open, like a pencil on a log.
+
+Diamond · agent
+
+A suggestion or a change. A cut facet of the prism.
+
+Lock · both
+
+Hatched and desaturated scene. Off-limits until you unlock it.
+
+Black
+
+For watching. The picture and the Screening room. No grain, no tint.
+
+Steel
+
+For touching. Brushed gradient with a bright top lip. One steel button per room.
+
+01:12:08
+
+Glass
+
+For floating over the picture: the dock, HUDs, toasts. Blur 18, saturation 1.4.
+
+Elevation is lightness plus a 1 px top highlight, never drop shadows, until something truly floats. Grain sits at 3.5% on the window and 18% on steel, from one cached 192 px tile. It never touches the picture or the export.
+
+06
+
+Type
+
+Native for the work, wide for the name
+
+The app speaks SF Pro at Apple's macOS sizes, because a Mac tool should read like one and system text respects accessibility settings. Archivo at 125% width carries the brand and the names of things that matter: rooms, cuts, options. Its heavy, extruded shapes echo the D.
+
+Room
+Room and cut names
+
+Notes on Cut 3
+
+Archivo 22 · 800 · 118% wide
+
+Title
+Sheets, dialogs
+
+Lock the picture?
+
+SF Pro 17/22 · 600
+
+Body
+Notes, read-backs
+
+I want to feel how tired she was here. Let it sit.
+
+SF Pro 13/18 · 400
+
+Control
+Buttons, switches
+
+Turn over
+
+SF Pro 12.5/16 · 500
+
+Caption
+Meta, helper text
+
+circled by you · 2 setups · 7 takes
+
+SF Pro 11.5/14 · 400
+
+Timecode
+Times, numbers
+
+01:12:08 · −4.2 s · −6 dB
+
+SF Mono 12/16 · 500 · tnum
+
+Note number
+The sheet's index
+
+1 2 3 4
+
+SF Mono 15 · 600 · amber
+
+Timecode, the house numeral
+
+00
+hr
+
+:
+
+01
+min
+
+:
+
+12
+sec
+
+:
+
+08
+frame
+
+Hours drop when the film is under one. Frames show when paused or in a note and drop during playback. Always tabular, so digits never jitter.
+
+Brand · Archivo 125%, 800, −2.5% tracking
+
+Direction
+
+Never below 14 px. Never for running text.
+
+07
+
+Space & shape
+
+Four-point steps, concentric corners
+
+Spacing steps by 4. Corners nest, as on macOS windows: an inner radius equals the outer radius minus the padding between them, so a button in a card in a window looks cut from one block.
+
+Spacing
+
+s1
+
+4
+
+Icon to label, chip gap
+
+s2
+
+8
+
+Between controls, card padding inset
+
+s3
+
+12
+
+Note row padding
+
+s4
+
+16
+
+Sheet gutter
+
+s6
+
+24
+
+Viewer margin
+
+s8
+
+32
+
+Dialog padding
+
+s14
+
+56
+
+Screening letterbox
+
+Concentric radius
+
+outer 
+16
+− pad 
+8
+= 
+8
+
+Turn over
+
+window 16
+
+panel 12
+
+card 10
+
+control 8
+
+frame 2
+
+08
+
+Motion
+
+Still while it plays, light when it lands
+
+During playback only the playhead and timecode move. A new cut never swaps in under a playing picture. When the agent hands back a cut, a single prism sweep crosses the scenes it changed: one deliberate moment, then stillness. Click each tile.
+
+Snap 
+120
+
+Hover, press, circle a take.
+
+Settle 
+220
+
+A mark drops, a note expands.
+
+Glide 
+360
+
+Changing rooms, opening a sheet.
+
+Sweep 
+900
+
+A cut arrives. Once, over changed scenes.
+
+Shimmer 
+2.4 s
+
+Agent working. Stops when work does.
+
+With Reduce Motion on, movement becomes a 120 ms crossfade, the sweep becomes a static prism edge, and the shimmer holds still.
+
+09
+
+Components
+
+A small kit for watching, pointing and deciding
+
+No timeline lanes, no inspector, no sliders. The agent does that work. The kit is only what a director needs.
+
+Button
+
+Steel is the room's one next step. Raised is everything else. Ghost is for quiet and rare actions.
+
+Labels are verbs from the trade
+
+A count rides inside when it helps
+
+Rest
+
+Hover
+
+Pressed
+
+Focus
+
+Disabled
+
+Steel
+
+Turn over
+
+Turn over
+
+Turn over
+
+Turn over
+
+Turn over
+
+Raised
+
+Use A
+
+Use A
+
+Use A
+
+Use A
+
+Use A
+
+Ghost
+
+Reply
+
+Reply
+
+Reply
+
+Reply
+
+Reply
+
+Scene strip
+
+The film as its scenes, at true proportion. It replaces the seek bar: you navigate by scene, not by pixel.
+
+Click to drop a mark here
+
+Prism top edge: changed in this cut
+
+Hatching: locked
+
+00:48 
+/ 3:40
+
+Click the strip to mark
+
+1 Cold open
+
+2 Maya, the problem
+
+3 The ridge
+
+4 Building it
+
+5 Launch day
+
+Take
+
+A take in Dailies. Circle it with a click. A diamond is the agent's suggestion.
+
+Circle is hand-drawn, not a checkbox
+
+Caption is the first line spoken
+
+T1
+
+0:32
+
+"We shipped it on a Tuesday."
+rest
+
+T2
+
+0:30
+
+"We shipped it on a Tuesday."
+circled
+
+T3
+
+0:29
+
+"We shipped it on a Tuesday."
+suggested
+
+T4
+
+0:31
+
+"We shipped it on a Tuesday."
+both agree
+
+Read-back
+
+Before cutting, the agent restates each note as a plan with numbers. You can correct it before any frame moves.
+
+Prism border while awaiting your OK
+
+Auto-proceeds after 10 s if you allow it
+
+Read-back · 4 notes
+
+est. 2 min
+
+1
+
+Pace.
+Drop the second street wide and trim the walk-in, so her face lands by 0:09.
+
+≈ −4 s
+
+2
+
+Feeling.
+Two ways: hold on her 1.6 s longer, or cut to the window and back.
+
+A / B
+
+3
+
+Picture.
+Reframe to 1.6× around Maya; sky to a third of frame.
+
+crop
+
+5
+
+Sound.
+Duck music 6 dB under her line. Wins over note 1 if they collide: story before pace.
+
+−6 dB
+
+Change plan
+
+Go ahead
+
+Options
+
+When a note is about feeling, the agent may cut it two ways. Synced playback; you choose.
+
+Never more than two
+
+"Agent prefers" is allowed, picking isn't
+
+A
+Hold on her 
++1.6 s
+
+B
+Window, then back 
+agent prefers
+
+Lock
+
+Lock scenes you're happy with. Locked scenes are hatched and the agent can't change them. Lock them all and you have picture lock.
+
+Click a scene to toggle
+
+1
+
+2 Maya
+
+3 Ridge
+
+4 Building
+
+5 Launch
+
+3 of 5 scenes locked
+
+Lock picture
+
+Agent status
+
+Lives in the titlebar. Plain words for what the agent is doing, and amber when it's your turn.
+
+Agent idle
+
+Reading notes
+
+Cutting 
+
+62%
+
+Cut 4 ready
+
+All notes accepted
+
+Picture locked
+
+Cuts
+
+Every pass is a named cut, as in a real edit: Assembly, Cut 2, Cut 3, Lock. Any cut can be screened again.
+
+Cut 4
+
+Answers notes 1–4 from Cut 3
+
+−4.2 s
+
+2 options
+
+new
+
+just now
+
+Cut 3
+
+Answers 6 notes from Cut 2
+
+3:44
+
+screened
+
+Tue
+
+Assembly
+
+Built from 7 circled takes
+
+4:20
+
+Mon
+
+Toasts
+
+Glass, bottom-right, never over the picture during playback. Each one has one action at most.
+
+Cut 4 is ready
+Answers 4 notes · 46 s of changes
+
+Compare
+
+Scene 5 is locked
+Note 6 points into it. Unlock to let the agent change it.
+
+Unlock
+
+Keys
+
+J-K-L transport, the convention every editor already knows. Notes and circles get single keys.
+
+Play or pause
+
+Space
+
+Back, stop, forward
+
+J
+
+K
+
+L
+
+Mark, without pausing
+
+N
+
+Range in and out
+
+I
+
+O
+
+Circle take
+
+C
+
+Option A or B
+
+1
+
+2
+
+Turn over notes
+
+⌘
+
+↩
+
+Change room
+
+⌘
+
+1–4
+
+First run
+
+The only place the chrome mark appears at size. It starts with a brief, like the first conversation with an editor.
+
+What are we making?
+
+Tell the agent what this film is for and how it should feel. Then bring the footage.
+
+A 3-minute launch film. Quiet, honest, a little tired, then hopeful at the end.
+
+Originals stay where they are.
+
+Bring footage
+
+10
+
+Voice
+
+The agent talks like a good assistant editor
+
+First person, brief, specific. It says what it did in frames, seconds and decibels, names the note it's answering, and admits when it made a judgment call. It never performs enthusiasm and never calls itself AI.
+
+Moment
+
+Write
+
+Not
+
+Answering a note
+
+Note 1: cut the second street wide. We're on her face by 0:09.
+
+I've optimized the pacing of your intro! ✨
+
+Offering options
+
+I tried it two ways. B keeps the length and lets the silence do it.
+
+Here are some AI-generated variations
+
+A conflict
+
+Notes 1 and 5 collide at 0:52. I kept the music dip: story before pace.
+
+Some feedback could not be applied
+
+A blocked note
+
+Note 6 points into scene 5, which is locked. Unlock it, or I'll leave it.
+
+Error: target segment is immutable
+
+Handing back
+
+Cut 4 is ready. 46 seconds of changes.
+
+Your new revision has been generated
+
+11
+
+Tokens
+
+Three tiers, so meaning stays separate from paint
+
+Primitives are raw values. Semantic tokens say what a color is for. Component tokens bind a part to a semantic token. Designs and code refer only to the last two, so the palette can be retuned without touching a component.
+
+Primitive
+
+Raw values. Never used directly by a component.
+
+steel.0–9
+· OKLCH ramp
+
+amber.5
+· 0.82 0.13 72
+
+prism.1–4
+· 200 268 330 62
+
+ion.5
+· green.5 · red.5
+
+Semantic
+
+What it means. The layer designers choose from.
+
+surface.canvas
+→ steel.0
+
+text.secondary
+→ steel.8
+
+voice.director
+→ amber.5
+
+voice.agent.stroke
+→ prism
+
+state.locked
+→ steel.9
+
+Component
+
+Where it goes. Bound once, in one place.
+
+noteNumber.color
+→ voice.director
+
+strip.changed.edge
+→ voice.agent.stroke
+
+button.primary
+→ material.steel
+
+take.circle
+→ voice.director
+
+Swift
+
+CSS
+
+Copy
+
+// Gate 2.0 · Direction design tokens
+
+enum
+Gate {
+
+enum
+Steel {   
+// primitive · OKLCH lightness, hue 265
+
+static let ramp: [Color] = [0, 0.13, 0.165, 0.20, 0.245, 0.295, 0.43, 0.58, 0.76, 0.96]
+.enumerated().map { i, l in Color(oklch: l, i == 0 ? 0 : 0.003 + 0.0006 * Double(i), 265) }
+}
+
+enum
+Surface { static let canvas = Steel.ramp[0], sunken = Steel.ramp[1], ground = Steel.ramp[2],
+panel = Steel.ramp[3], raised = Steel.ramp[4], hover = Steel.ramp[5] }
+
+enum
+Text    { static let primary = Steel.ramp[9], secondary = Steel.ramp[8],
+tertiary = Steel.ramp[7], disabled = Steel.ramp[6] }
+
+enum
+Voice {
+static let director    = Color(oklch: 0.82, 0.13, 72)
+static let directorInk = Color(oklch: 0.26, 0.06, 60)
+static let agent       = Color(oklch: 0.78, 0.11, 250)               
+// text and icons
+
+static let agentStroke = [200, 268, 330, 62].map { Color(oklch: 0.78, 0.15, $0) } 
+// ≤ 2 px only
+
+}
+
+enum
+State   { static let locked = Steel.ramp[9], approve = Color(oklch: 0.79, 0.13, 155),
+alert = Color(oklch: 0.70, 0.17, 25) }
+
+enum
+NoteKind: Int, CaseIterable { case feeling, story, pace, picture, sound } 
+// order = priority
+
+enum
+Space   { static let s1 = 4.0, s2 = 8.0, s3 = 12.0, s4 = 16.0, s6 = 24.0, s8 = 32.0, s14 = 56.0 }
+
+enum
+Radius  { static let window = 16.0, panel = 12.0, card = 10.0, control = 8.0, chip = 6.0, frame = 2.0 }
+
+enum
+Motion {
+static let snap   = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.12)
+static let settle = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.22)
+static let glide  = Animation.timingCurve(0.6, 0.0, 0.2, 1, duration: 0.36)
+static let sweep  = Animation.timingCurve(0.6, 0.0, 0.2, 1, duration: 0.90)  
+// once per handed-back cut
+
+static let shimmerPeriod = 2.4
+}
+
+enum
+Font {
+static let room     = SwiftUI.Font.custom("Archivo", size: 22).weight(.heavy).width(.expanded)
+static let title    = SwiftUI.Font.system(size: 17, weight: .semibold)
+static let body     = SwiftUI.Font.system(size: 13)
+static let control  = SwiftUI.Font.system(size: 12.5, weight: .medium)
+static let caption  = SwiftUI.Font.system(size: 11.5)
+static let timecode = SwiftUI.Font.system(size: 12, weight: .medium, design: .monospaced).monospacedDigit()
+}
+static let grain = (window: 0.035, steel: 0.18)
+}
+
+/* Gate 2.0 · Direction design tokens */
+
+:root {
+
+/* primitive */
+
+--steel-0: oklch(0 0 0);            --steel-1: oklch(0.13 0.003 265);
+--steel-2: oklch(0.165 0.004 265);  --steel-3: oklch(0.20 0.005 265);
+--steel-4: oklch(0.245 0.006 265);  --steel-5: oklch(0.295 0.007 265);
+--steel-6: oklch(0.43 0.008 265);   --steel-7: oklch(0.58 0.008 265);
+--steel-8: oklch(0.76 0.006 265);   --steel-9: oklch(0.96 0.003 265);
+--amber-5: oklch(0.82 0.13 72);     --ion-5: oklch(0.78 0.11 250);
+--prism-1: oklch(0.82 0.12 200);    --prism-2: oklch(0.70 0.16 268);
+--prism-3: oklch(0.72 0.20 330);    --prism-4: oklch(0.84 0.13 62);
+--green-5: oklch(0.79 0.13 155);    --red-5: oklch(0.70 0.17 25);
+
+/* semantic */
+
+--surface-canvas: var(--steel-0);   --surface-ground: var(--steel-2);
+--surface-panel: var(--steel-3);    --surface-raised: var(--steel-4);
+--text-primary: var(--steel-9);     --text-secondary: var(--steel-8);
+--text-tertiary: var(--steel-7);    --text-disabled: var(--steel-6);
+--voice-director: var(--amber-5);   --voice-agent: var(--ion-5);
+--voice-agent-stroke: linear-gradient(100deg, var(--prism-1), var(--prism-2) 34%, var(--prism-3) 66%, var(--prism-4));
+--state-locked: var(--steel-9);     --state-approve: var(--green-5);  --state-alert: var(--red-5);
+
+/* component */
+
+--note-number: var(--voice-director);
+--strip-changed-edge: var(--voice-agent-stroke);
+--take-circle: var(--voice-director);
+
+/* space, radius, motion */
+
+--s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px; --s8: 32px; --s14: 56px;
+--r-window: 16px; --r-panel: 12px; --r-card: 10px; --r-control: 8px; --r-chip: 6px; --r-frame: 2px;
+--t-snap: 120ms; --t-settle: 220ms; --t-glide: 360ms; --t-sweep: 900ms;
+--e-out: cubic-bezier(.2, .8, .2, 1); --e-inout: cubic-bezier(.6, 0, .2, 1);
+}
+
+SwiftUI has no OKLCH initializer; 
+Color(oklch:)
+is a small extension that converts to Display P3 once at launch.
+
+12
+
+Sources
+
+What we read
+
+The cutting room
+
+Stages of post, notes sessions, the editor's habits with directors, circled takes and lined scripts.
+
+Frame.io: Editing stages
+
+Frame.io: How not to break up with your director
+
+Filmmaker: Note this!
+
+Script supervisor
+
+Creative rights
+
+The DGA's director's cut: ten weeks minimum on features, first look at the assembly, no cutting behind the director.
+
+DGA: Creative rights, features
+
+DGA: Television checklist
+
+Walter Murch
+
+The Rule of Six from In the Blink of an Eye: emotion, story, rhythm, eye trace, 2D plane, 3D space.
+
+No Film School: Murch's six rules
+
+Interface craft
+
+Apple: glass for floating controls, never content. Linear: themes generated in LCH with a contrast control. Spotify: dark first, content supplies the color. Figma UI3: the work at the center, tools at the edges, and don't hide state behind icons.
+
+Apple: Liquid Glass
+
+Linear: How we redesigned the UI
+
+Figma: Behind UI3
+
+Gate 2.0 · Direction design language
+
+·
+
+A proposal. Nothing here is applied to the app.
