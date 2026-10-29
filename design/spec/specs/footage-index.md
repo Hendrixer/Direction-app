@@ -73,7 +73,7 @@ Speed targets are for the sample film (214 takes, 3 h 12 min, about 1,900 shots)
 The stage line under the progress reads, in order as each starts: "Reading 214 takes" → "Finding shots" → "Looking at footage · 88 of 214" → "Listening · 120 of 214" → "Sorting into scenes". The counts are SF Mono.
 
 ### 54 · Settings, Footage
-Frame: `screens/54-settings-footage.html` · 720 × 780. See `settings.md › 54`.
+Frame: `screens/54-settings-footage.html` · 720 × 724. See `settings.md › 54`.
 
 ### 59 · Dailies, a take's shots
 Frame: `screens/59-dailies-shots.html` · 1440 × 900.

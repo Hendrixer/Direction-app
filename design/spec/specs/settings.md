@@ -7,7 +7,7 @@ Frames 42–48, 54 and 55. Opens with Direction › Settings… (`⌘,`). It's a
 | Part | Spec |
 |---|---|
 | Width | 720 pt, fixed. |
-| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 860, Footage 780, Cutting 650, Services 700, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
+| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 682, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
 | Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. |
 | Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘9` switch tabs while Settings is key. |
 | Body | Padding 4/28/22. Each group is a label (`.label`, 14 above and 7 below) plus a `.set-card` (`--panel`, radius 10, hairline). |
@@ -178,7 +178,7 @@ Frame: `screens/48-settings-sharing.html` · Render: `renders/48-settings-sharin
 Note under the links card: "These are defaults. Each link can be changed in its Share sheet."
 
 ## 54 · Settings, Footage
-Frame: `screens/54-settings-footage.html` · Render: `renders/54-settings-footage@2x.png` · 720 × 780. Tab icon: `film.stack`.
+Frame: `screens/54-settings-footage.html` · Render: `renders/54-settings-footage@2x.png` · 720 × 724. Tab icon: `film.stack`.
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
@@ -201,9 +201,9 @@ Note under Looking at footage: "The editor reads what's found here to log takes,
 ---
 
 ## 55 · Settings, Services
-Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 700. Tab icon: `key`.
+Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 682. Tab icon: `key`.
 
-**Service rows** (`.set-row`, min 56): a 28 rounded-square monogram (steel-3 fill, the service's initial in 12/700 text-2; no brand logos), the name (13/600) with what it's for under it (11.5 text-3), and on the right the state: a chip "Ready" (ok style) with "$4.20 this month" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`).
+**Service rows** (`.set-row`, min 56): a 28 rounded-square monogram (`--raised` fill, hairline border, radius 8, the service's initial in 12/700 text-2; no brand logos), the name (13/600) with what it's for under it (11.5 text-3), and on the right the state: a chip "Ready" (ok style) with "$4.20 this month" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`).
 
 | Service | Sub-label | State in the frame |
 |---|---|---|

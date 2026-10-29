@@ -97,9 +97,9 @@ Consecutive calls with the same verb and object merge into one row with the late
 ---
 
 ## 43 · Settings, Editor (updated)
-Frame: `screens/43-settings-editor.html` · 720 × 860.
+Frame: `screens/43-settings-editor.html` · 720 × 853.
 
-A new first group, **Who edits**, above Freedom. The Follow the brief row and the conflict list are compacted so the pane stays under 860.
+A new first group, **Who edits**, above Freedom. The Follow the brief row and the conflict list are compacted so the pane stays under 860 (it is 853).
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|

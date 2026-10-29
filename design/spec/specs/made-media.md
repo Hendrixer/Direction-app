@@ -52,7 +52,7 @@ The month resets on the 1st. "Spent this month" sums Direction's own record of e
 ---
 
 ## 55 · Settings, Services
-Frame: `screens/55-settings-services.html` · 720 × 700. See `settings.md › 55`.
+Frame: `screens/55-settings-services.html` · 720 × 682. See `settings.md › 55`.
 
 ## 61 · Changes, made music
 Frame: `screens/61-changes-made.html` · 1440 × 900.
