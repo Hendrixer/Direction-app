@@ -63,7 +63,14 @@ public enum SequenceRenderer {
             }
             guard let asset = assets.first(where: { $0.id == clip.assetID }) else { throw DirectionError("missing_asset", "Missing source for \(clip.name).") }
             let url = try MediaInspector.checkedURL(asset)
-            let lut = asset.cameraLUT.flatMap { $0.hasSuffix(".cube") ? CameraLUTFile.load($0) : nil }
+            // A take's own camera LUT wins; "auto" (or nothing set) uses the one the looks area matched to
+            // its log footage (looks.md › Where color happens, step 1); "none" turns it off.
+            let lutPath: String? = switch asset.cameraLUT {
+            case let path? where path.hasSuffix(".cube"): path
+            case "none": nil
+            default: looks?.cameraLUTs[asset.id]
+            }
+            let lut = lutPath.flatMap(CameraLUTFile.load)
             if asset.isImage {
                 guard let image = CIImage(contentsOf: url, options: [.applyOrientationProperty: true]) else { throw DirectionError("image_decode_failed", "Cannot load \(asset.name).") }
                 layers.append(layer(nil, image, .identity, lut))

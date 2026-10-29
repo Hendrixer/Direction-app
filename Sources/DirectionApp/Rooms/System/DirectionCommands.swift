@@ -140,6 +140,7 @@ private struct FilmMenuItems: View {
         Button("Brief\u{2026}") { film?.sheet = .brief }.shortcut(.brief).disabled(film == nil)
         Button("Editor\u{2026}") { film?.showEditorPopover = true }.shortcut(.editor).disabled(film == nil || film?.onboardingStep != nil)
         // ⇧⌘L is Lock Picture (system.md, finish.md), so the Look sheet takes ⌥⌘L.
+        Button("Look at Footage") { if let film { film.index.lookAtFootage(film) } }.disabled(film?.project?.assets.isEmpty ?? true)
         Button("Look\u{2026}") { film?.openLook() }.keyboardShortcut("l", modifiers: [.command, .option]).disabled(film.map { $0.cuts.isEmpty || $0.sheet != nil } ?? true)
         Divider()
         Picker("How Much Freedom", selection: Binding(get: { film?.directing.latitude ?? LatitudeSetting.current }, set: { LatitudeSetting.set($0, film: film) })) {

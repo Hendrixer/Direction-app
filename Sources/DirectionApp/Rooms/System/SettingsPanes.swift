@@ -322,7 +322,8 @@ struct CuttingPane: View {
     @AppStorage(SettingsKey.frameRate) private var frameRate = "match"
     @AppStorage(SettingsKey.loudness) private var loudness = -14.0
     @AppStorage(SettingsKey.ducking) private var ducking = 6.0
-    @AppStorage(SettingsKey.transitions) private var transitions = "hard"
+    // Shared, so the editor's tools see whether it may add transitions without a note.
+    @AppStorage(SettingsKey.transitions, store: SharedSettings.defaults) private var transitions = "hard"
     @AppStorage(SettingsKey.keepCuts) private var keepCuts = "all"
     @AppStorage(SettingsKey.playFromProxies) private var proxies = true
 

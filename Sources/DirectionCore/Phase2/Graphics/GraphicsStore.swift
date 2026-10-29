@@ -172,7 +172,7 @@ extension ProjectStore {
             let p = try read(), existingID = try graphic(name)?.assetID
             if let id = existingID, let old = p.assets.first(where: { $0.id == id }), old.duration == asset.duration, old.video == asset.video { return (id, p.editRevision) }
             let id = existingID.flatMap { id in p.assets.contains { $0.id == id } ? id : nil } ?? asset.id
-            var fresh = asset; fresh.id = id; fresh.bookmark = nil
+            var fresh = asset; fresh.id = id; fresh.bookmark = nil; fresh.graphic = name
             let entry = fresh
             let request = try JSONEncoder.direction.encode(["graphic": name, "path": asset.path, "duration": String(asset.duration.seconds)])
             do {

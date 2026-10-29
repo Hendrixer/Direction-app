@@ -17,6 +17,26 @@ private struct ChoiceInput: Decodable { var id: String?; var label: String; var 
 private struct FinishingInput: Decodable { var id: String; var title: String?; var detail: String?; var state: String?; var by: [String]?; var progress: Double? }
 
 extension ToolRuntime {
+    /// Check your work (footage-index.md › What the editor gets): a notes turnover is delivered only
+    /// once every passage its edits changed has been watched with `direction_watch` at or after the
+    /// revision that changed it. Ranges get a half-second of slack, since later edits can shift them.
+    func checkWatched(turnoverID: String, revision: Int?) throws {
+        guard let t = try store.turnovers().first(where: { $0.id == turnoverID }), t.kind == "notes" else { return }
+        let final = try revision ?? store.read().editRevision
+        let watched = try store.watchedRanges(since: t.createdAt)
+        var missing: [JSONValue] = []
+        for record in try store.editRecords(after: t.baseRevision, through: final) where record.committed {
+            for change in record.operations.flatMap(\.changes) {
+                let start = change.new.start - 0.5, end = change.new.end + 0.5
+                guard !watched.contains(where: { $0.revision >= record.editRevision && $0.start < end && $0.end > start }) else { continue }
+                missing.append(.object(["start": .number(change.new.start), "end": .number(change.new.end), "revision": .number(Double(record.editRevision))]))
+            }
+        }
+        guard missing.isEmpty else {
+            throw DirectionError("not_watched", "Watch every passage you changed with direction_watch before delivering. Not watched: \(missing.count) passage\(missing.count == 1 ? "" : "s"), starting \(missing.compactMap { $0["start"].double }.map { String(format: "%.1f s", $0) }.prefix(4).joined(separator: ", ")).")
+        }
+    }
+
     func invokeDirecting(_ name: String, _ a: JSONValue) throws -> ToolResponse? {
         switch name {
         case "direction_brief":
@@ -105,6 +125,7 @@ extension ToolRuntime {
             return ToolResponse(.object(["questions": try .wrapping(store.questions())]))
 
         case "direction_turnover_complete":
+            try checkWatched(turnoverID: a.requiredString("turnoverID"), revision: a["revision"].int)
             let answers = try (a["answers"].array ?? []).map { try $0.decode(AnswerInput.self) }
             let (turnover, cut) = try store.completeTurnover(id: a.requiredString("turnoverID"), revision: a["revision"].int, sequenceID: a["sequenceID"].string, answers: answers)
             return ToolResponse(.object(["turnover": try .wrapping(turnover), "cut": try .wrapping(cut)]))

@@ -209,7 +209,7 @@ public struct OpenRouterDescriber: ShotDescriber {
 
     public func describe(_ request: DescribeRequest) async throws -> DescribeResult {
         try await DescribePrompt.run(words: request.words) { prompt in
-            let reply = try await OpenRouter.chat(try body(request, prompt: prompt), key: key)
+            let reply = try await OpenRouter.chat(try body(request, prompt: prompt), key: key, spend: .looking)
             let content = reply["choices"].array?.first?["message"]["content"]
             // Content is a string, or a list of text parts from some versions.
             let text = content?.string ?? content?.array?.compactMap { $0["text"].string }.joined() ?? ""
