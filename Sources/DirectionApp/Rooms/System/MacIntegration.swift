@@ -1,0 +1,278 @@
+import SwiftUI
+import AppKit
+import UserNotifications
+import DirectionCore
+
+// Mac integration from specs/mac.md that lives outside any one room: user notifications,
+// the quit guard while a delivery runs, the editor connection, and film actions shared by
+// the menu bar, the command menu and the context menus.
+
+// MARK: Notifications
+
+/// User notifications for a cut ready, a question, a can't-do and a delivery, honoring
+/// Settings › Notifications. Held during a screening when asked, and shown as a toast
+/// instead when Direction is frontmost in the room the notification is about.
+@MainActor
+enum SystemNotifications {
+    private static var held: [(String, String, String)] = []
+    private static var delegate: NotificationRouter?
+
+    /// The room a notification opens.
+    static func room(for key: String) -> Room {
+        switch key {
+        case NotificationKey.cutReady: .changes
+        case NotificationKey.delivery: .finish
+        default: .notes
+        }
+    }
+
+    /// Posts one notification. Call from AppModel.notify(_:_:key:).
+    static func post(_ title: String, _ body: String, key: String, film: FilmModel?) {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: key) as? Bool ?? true else { return }
+        if let film, defaults.object(forKey: SettingsKey.holdDuringScreening) as? Bool ?? true, film.room == .screening {
+            held.append((title, body, key)); return
+        }
+        let room = room(for: key)
+        if let film, NSApp.isActive, NSApp.keyWindow?.frameAutosaveName == "DirectionMainWindow", film.room == room {
+            if film.toast == nil || key != NotificationKey.cutReady { film.toast = Toast(title: title, detail: body, editor: key != NotificationKey.delivery) }
+            return
+        }
+        guard SystemSupport.isBundledApp else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title; content.body = body
+        content.userInfo = ["key": key, "room": room.rawValue, "film": film?.url?.path ?? ""]
+        content.threadIdentifier = film?.url?.path ?? "direction"
+        if defaults.string(forKey: SettingsKey.notificationSound) != "none" { content.sound = .default }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+    }
+
+    /// Delivers what was held during a screening. Call when Screening ends.
+    static func releaseHeld(film: FilmModel?) {
+        let queue = held; held = []
+        for (title, body, key) in queue { post(title, body, key: key, film: film) }
+    }
+
+    /// Asks once, after the first turnover rather than at launch (Settings › Notifications).
+    static func requestPermissionIfNeeded() {
+        guard SystemSupport.isBundledApp else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    }
+
+    /// Clicking a notification opens its film in the right room. Call once at launch.
+    static func install(app: AppModel) {
+        guard SystemSupport.isBundledApp, delegate == nil else { return }
+        let router = NotificationRouter(app: app)
+        delegate = router
+        UNUserNotificationCenter.current().delegate = router
+    }
+
+    static func openSystemSettings() {
+        let id = Bundle.main.bundleIdentifier ?? "dev.direction.editor"
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(id)") { NSWorkspace.shared.open(url) }
+    }
+}
+
+final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
+    weak var app: AppModel?
+    init(app: AppModel) { self.app = app }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        let path = info["film"] as? String ?? "", room = (info["room"] as? String).flatMap(Room.init(rawValue:))
+        await MainActor.run {
+            guard let app else { return }
+            NSApp.activate()
+            NSApp.windows.first { $0.frameAutosaveName == "DirectionMainWindow" }?.makeKeyAndOrderFront(nil)
+            if !path.isEmpty, app.film?.url?.path != path, FileManager.default.fileExists(atPath: path) { app.open(URL(fileURLWithPath: path)) }
+            guard let film = app.film, let room else { return }
+            if room == .notes, !film.openQuestions.isEmpty { film.notesTab = .questions }
+            film.go(room)
+        }
+    }
+}
+
+/// "Launch film is delivered" / "4 files, 2.1 GB.": one notification when every export of a
+/// delivery has finished. Screening copies from the Share sheet don't count.
+@MainActor
+enum DeliveryWatch {
+    private static var running: Set<String> = []
+    private static var finished: [String] = []
+
+    /// Call whenever the film's jobs change (SystemBanners does).
+    static func check(_ film: FilmModel) {
+        let exports = film.jobs.filter { $0.kind == "export" && !ScreeningCopy.jobIDs.contains($0.id) }
+        for job in exports where !job.isTerminal { running.insert(job.id) }
+        for job in exports where job.isTerminal && running.contains(job.id) {
+            running.remove(job.id)
+            if job.status == "completed", let path = job.result?["path"].string { finished.append(path) }
+        }
+        guard running.isEmpty, !finished.isEmpty else { return }
+        let files = finished; finished = []
+        let bytes = files.compactMap { (try? FileManager.default.attributesOfItem(atPath: $0))?[.size] as? Int64 }.reduce(0, +)
+        let body = "\(files.count) \(files.count == 1 ? "file" : "files"), \(SystemSupport.bytes(bytes))."
+        film.onNotify?("\(film.filmName) is delivered", body, NotificationKey.delivery)
+    }
+}
+
+// MARK: Quit
+
+@MainActor
+enum QuitGuard {
+    /// Running exports this process owns (a delivery or a screening copy).
+    static func runningDeliveries(_ film: FilmModel?) -> [JobRecord] {
+        (film?.jobs ?? []).filter { $0.kind == "export" && !$0.isTerminal && $0.ownerPID == getpid() }
+    }
+
+    /// "Quit and stop delivering?" Call from applicationShouldTerminate(_:).
+    static func shouldTerminate(_ app: AppModel?) -> NSApplication.TerminateReply {
+        guard !runningDeliveries(app?.film).isEmpty else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "Quit and stop delivering?"
+        alert.informativeText = "\(app?.film?.filmName ?? "The film") is still being delivered. If you quit now, the files won\u{2019}t be finished. You can deliver again later."
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Keep Delivering")
+        alert.buttons.first?.hasDestructiveAction = true
+        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+    }
+}
+
+// MARK: The editor connection
+
+/// How an outside agent connects to Direction: the bundled CLI as an MCP server.
+enum EditorConnection {
+    static var cliPath: String { Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/direction").path }
+    static var isBundled: Bool { FileManager.default.isExecutableFile(atPath: cliPath) }
+
+    static var mcpConfig: String {
+        let escaped = cliPath.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        return """
+        {
+          "mcpServers": {
+            "direction": {
+              "command": "\(escaped)",
+              "args": ["mcp"]
+            }
+          }
+        }
+        """
+    }
+
+    static var claudeCommand: String { "claude mcp add direction -- \"\(cliPath)\" mcp" }
+
+    /// Help › Connect an Editor… when no film window is showing the popover.
+    @MainActor static func presentAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Connect an editor"
+        alert.informativeText = "Your editor is an agent like Claude Code or Codex. Add Direction to it as an MCP server, then ask it to open your film.\(isBundled ? "" : "\n\nThis copy of Direction runs outside its app bundle, so the path below may not exist. Build the app with scripts/build-app.sh.")"
+        let text = NSTextView(frame: NSRect(x: 0, y: 0, width: 420, height: 150))
+        text.string = mcpConfig; text.isEditable = false; text.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        text.textContainerInset = NSSize(width: 6, height: 6); text.drawsBackground = true; text.backgroundColor = .textBackgroundColor
+        let scroll = NSScrollView(frame: text.frame); scroll.documentView = text; scroll.hasVerticalScroller = true; scroll.borderType = .bezelBorder
+        alert.accessoryView = scroll
+        alert.addButton(withTitle: "Copy Configuration")
+        alert.addButton(withTitle: "Copy Claude Code Command")
+        alert.addButton(withTitle: "Done")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: SystemSupport.copy(mcpConfig)
+        case .alertSecondButtonReturn: SystemSupport.copy(claudeCommand)
+        default: break
+        }
+    }
+}
+
+// MARK: Film actions shared by menus, the command menu and context menus
+
+/// Actions the menu bar, the command menu and the context menus share. A separate type
+/// (not a FilmModel extension) so these names can't collide with room code.
+@MainActor
+struct FilmActions {
+    let m: FilmModel
+    init(_ model: FilmModel) { m = model }
+
+    /// The scene under the playhead, as a Dailies scene (lockable).
+    var currentScene: DailiesScene? { m.stripScene(at: m.position).flatMap { s in m.dailies.scenes.first { $0.id == s.id } } }
+
+    var lockSceneUnavailableReason: String? {
+        if currentScene == nil { return m.dailies.scenes.isEmpty ? "No scenes logged yet" : "No scene under the playhead" }
+        if m.isPictureLocked { return "Picture is locked" }
+        return nil
+    }
+    func toggleCurrentSceneLock() {
+        guard let s = currentScene else { return }
+        m.lockScene(s.id, !s.locked)
+    }
+
+    var lockPictureUnavailableReason: String? {
+        if m.isPictureLocked { return "Picture is already locked" }
+        if m.cuts.isEmpty { return "No cut yet" }
+        return m.picturelockBlockers.first
+    }
+
+    var timecode: String { Timecode.format(m.position, fps: m.fps) }
+    func copyTimecode() { SystemSupport.copy(timecode); m.toast = Toast(title: "Copied \(timecode)") }
+
+    /// ↑ / ↓: the previous scene's start (or this scene's, if well into it), or the next scene's.
+    func jumpScene(_ delta: Int) {
+        let scenes = m.stripScenes
+        guard !scenes.isEmpty else { return }
+        let i = scenes.firstIndex { m.position >= $0.start && m.position < $0.end } ?? (delta > 0 ? -1 : scenes.count)
+        var target = max(0, min(scenes.count - 1, i + delta))
+        if delta < 0, scenes.indices.contains(i), m.position - scenes[i].start > 1 { target = i }
+        m.pause(); m.seek(scenes[target].start)
+    }
+
+    func setRangeIn() { let end = m.rangeSelection.map { max($0.upperBound, m.position) } ?? min(m.duration, m.position + 1); m.rangeSelection = m.position...max(m.position, end); m.anchorMode = .range }
+    func setRangeOut() { let start = m.rangeSelection.map { min($0.lowerBound, m.position) } ?? max(0, m.position - 1); m.rangeSelection = start...max(start, m.position); m.anchorMode = .range }
+    func clearRange() { m.rangeSelection = nil; if m.anchorMode == .range { m.anchorMode = .moment } }
+
+    /// A new note at the playhead: Notes, composer focused, optionally pre-filled.
+    func startNote(text: String = "", anchor: NoteAnchorMode = .moment) {
+        m.anchorMode = anchor
+        if !text.isEmpty { m.draftText = text }
+        m.notesTab = .sheet
+        m.go(.notes); m.composerFocus += 1
+    }
+
+    /// Go to Timecode… (⌃G): asks for MM:SS:FF and seeks.
+    func askForTimecode() {
+        let alert = NSAlert(); alert.messageText = "Go to timecode"; alert.informativeText = "MM:SS:FF, or seconds."
+        let field = NSTextField(string: timecode); field.frame = NSRect(x: 0, y: 0, width: 200, height: 24); field.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        alert.accessoryView = field; alert.addButton(withTitle: "Go"); alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn, let t = Self.parseTimecode(field.stringValue, fps: m.fps) else { return }
+        m.pause(); m.seek(t)
+    }
+
+    static func parseTimecode(_ text: String, fps: Double) -> Double? {
+        let parts = text.trimmingCharacters(in: .whitespaces).split(separator: ":").map(String.init)
+        if parts.count == 1 { return Double(parts[0]).flatMap { $0.isFinite && $0 >= 0 ? $0 : nil } }
+        let n = parts.compactMap(Int.init)
+        guard n.count == parts.count, (2...4).contains(n.count), n.allSatisfy({ $0 >= 0 }) else { return nil }
+        switch n.count {
+        case 2: return Double(n[0] * 60 + n[1])
+        case 3: return Double(n[0] * 60 + n[1]) + Double(n[2]) / fps
+        default: return Double(n[0] * 3600 + n[1] * 60 + n[2]) + Double(n[3]) / fps
+        }
+    }
+
+    func revealInFinder() {
+        if let url = m.url { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        else { NSWorkspace.shared.open(URL(fileURLWithPath: UserDefaults.standard.string(forKey: SettingsKey.libraryFolder) ?? SettingsKey.defaultLibrary)) }
+    }
+
+    func confirmUnlockPicture() {
+        let alert = NSAlert(); alert.messageText = "Unlock picture?"
+        alert.informativeText = "The editor can change timing again, and finishing work may need redoing. This is logged in History."
+        alert.addButton(withTitle: "Unlock Picture"); alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+        if alert.runModal() == .alertFirstButtonReturn { m.unlockPicture() }
+    }
+
+    /// Plays from a moment.
+    func play(from time: Double) { m.pause(); m.seek(time); m.togglePlayback() }
+}
