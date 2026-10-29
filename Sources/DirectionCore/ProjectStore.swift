@@ -63,7 +63,8 @@ public final class ProjectStore: Sendable {
         try database.read { db in
             let data = try revision.map { try Data.fetchOne(db, sql: "SELECT payload FROM revisions WHERE revision = ?", arguments: [$0]) } ?? Data.fetchOne(db, sql: "SELECT payload FROM state WHERE id = 1")
             guard let data else { throw DirectionError("revision_not_found", "Project revision not found.") }
-            return try JSONDecoder().decode(Project.self, from: data)
+            // Graphics play their current render in every revision (Phase2/Graphics/GraphicsStore.swift).
+            return try Self.withCurrentGraphics(db, JSONDecoder().decode(Project.self, from: data))
         }
     }
 

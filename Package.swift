@@ -17,7 +17,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "DirectionCore", dependencies: [.product(name: "GRDB", package: "GRDB.swift")]),
-        .target(name: "DirectionMedia", dependencies: ["DirectionCore"]),
+        .target(name: "DirectionMedia", dependencies: ["DirectionCore"], resources: [.copy("Graphics/Web")]),
         .target(name: "DirectionTools", dependencies: ["DirectionCore", "DirectionMedia", .product(name: "MCP", package: "swift-sdk")]),
         .executableTarget(name: "DirectionApp", dependencies: ["DirectionTools"], resources: [.process("Resources")]),
         .executableTarget(name: "DirectionCLI", dependencies: ["DirectionTools", .product(name: "ArgumentParser", package: "swift-argument-parser")]),
