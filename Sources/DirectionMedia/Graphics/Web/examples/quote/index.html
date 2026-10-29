@@ -1,0 +1,53 @@
+<!doctype html>
+<!--
+  Quote. A line someone said, set large on the left third, with who said it underneath.
+  Curly quotes are drawn by the layout, so the director types only the words.
+
+  - The quote wraps inside a fixed measure (about 22 words at this size); `max` keeps it there.
+  - A dark backing behind the text keeps it readable over any shot and gives the contrast check
+    a color to measure against.
+  - The layout adds the quote marks and the dash, so each element says which word it shows with
+    data-word; without it the check would report the marks as words that aren't in words.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  #panel { position: absolute; left: calc(144 * var(--u)); top: 50%; transform: translateY(-50%); width: calc(1040 * var(--u)); padding: calc(56 * var(--u)) calc(64 * var(--u)); background: rgb(10 11 13 / 0.78); border-radius: calc(6 * var(--u)); font-family: 'Archivo', sans-serif; color: #fff; }
+  #quote { margin: 0; font-weight: 600; font-size: calc(54 * var(--u)); line-height: 1.18; letter-spacing: -0.005em; text-indent: -0.42em; }
+  #by { margin-top: calc(30 * var(--u)); font-weight: 500; font-size: calc(28 * var(--u)); color: rgb(255 255 255 / 0.75); }
+</style>
+</head>
+<body>
+<div id="panel">
+  <p id="quote" data-word="quote"></p>
+  <div id="by" data-word="by"></div>
+</div>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const u = innerHeight / 1080;
+  const { ease, clamp } = direction;
+  const duration = 6;
+
+  direction.graphic({
+    duration,
+    words: {
+      quote: { label: 'Quote', text: 'Editing was the part nobody wanted.', max: 120 },
+      by: { label: 'Who said it', text: 'Maya Chen', max: 40 },
+    },
+    render(t, words) {
+      quote.textContent = `“${words.quote}”`;
+      by.textContent = words.by ? `— ${words.by}` : '';
+      const gone = ease.inOut(clamp((t - (duration - 0.8)) / 0.6));
+      const p = ease.out(clamp((t - 0.1) / 0.6)), q = ease.out(clamp((t - 0.4) / 0.9)), b = ease.out(clamp((t - 1.2) / 0.7));
+      panel.style.opacity = p * (1 - gone);
+      quote.style.opacity = q;
+      quote.style.transform = `translateY(${(1 - q) * 10 * u}px)`;
+      by.style.opacity = b;
+    },
+  });
+</script>
+</body>
+</html>

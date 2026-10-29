@@ -69,7 +69,7 @@ public enum GraphicResources {
     }
 
     /// Every file in a folder, relative paths sorted, skipping hidden files.
-    static func files(in folder: URL) throws -> [String] {
+    public static func files(in folder: URL) throws -> [String] {
         let base = folder.standardizedFileURL.resolvingSymlinksInPath().path
         guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { return [] }
         var out: [String] = []

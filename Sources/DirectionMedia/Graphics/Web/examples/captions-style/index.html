@@ -1,0 +1,56 @@
+<!doctype html>
+<!--
+  Captions style. One caption at a time, low and centered on a soft backing, each held for a
+  share of the graphic's length that follows how long it is to read.
+
+  - The captions are one word field, a line each, so the director can fix a word in place.
+  - For captions timed to speech, give each line its own start in `cues` (seconds from the
+    graphic's start) from direction_transcript; without cues, lines share the time by length.
+  - 40 px at 1080p on a backing that keeps contrast over bright and dark shots alike.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  #caption { position: absolute; left: 50%; bottom: calc(108 * var(--u)); transform: translateX(-50%); max-width: calc(1400 * var(--u));
+             padding: calc(10 * var(--u)) calc(22 * var(--u)) calc(12 * var(--u)); border-radius: calc(6 * var(--u)); background: rgb(10 11 13 / 0.72);
+             font: 500 calc(40 * var(--u)) / 1.3 'Archivo', sans-serif; color: rgb(255 255 255 / 0.95); text-align: center; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="caption" data-word="lines"></div>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const { ease, clamp } = direction;
+  const duration = 9;
+
+  // Optional starts, in seconds, one per line. Empty: share the time by each line's length.
+  const cues = [];
+
+  const timing = (lines) => {
+    if (cues.length === lines.length) return lines.map((text, i) => ({ text, start: cues[i], end: cues[i + 1] ?? duration }));
+    const total = lines.reduce((n, l) => n + l.length + 12, 0);
+    let at = 0;
+    return lines.map((text) => { const start = at; at += (text.length + 12) / total * duration; return { text, start, end: at }; });
+  };
+
+  direction.graphic({
+    duration,
+    words: {
+      lines: { label: 'Captions', text: 'So we started with the edit.\nAnd everyone said, start with the camera.\nEditing was the part nobody wanted.', max: 600 },
+    },
+    render(t, words) {
+      const lines = words.lines.split('\n').map((l) => l.trim()).filter(Boolean);
+      const cue = timing(lines).find((c) => t >= c.start && t < c.end);
+      caption.textContent = cue ? cue.text : '';
+      // A quick fade at each change, so captions don't flash.
+      const fade = cue ? Math.min(ease.out(clamp((t - cue.start) / 0.12)), ease.out(clamp((cue.end - t) / 0.12))) : 0;
+      caption.style.opacity = fade;
+      caption.style.visibility = cue ? 'visible' : 'hidden';
+    },
+  });
+</script>
+</body>
+</html>

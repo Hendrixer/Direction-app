@@ -1,0 +1,70 @@
+<!doctype html>
+<!--
+  Logo sting. A steel ring turns to face the camera and settles, and the name comes up under it.
+  Uses three.js (direction:lib/three.js, the global THREE) on a transparent WebGL canvas.
+
+  - render draws the scene for time t itself: renderer.render() once per frame, never
+    renderer.setAnimationLoop, so every frame is exactly the frame for t.
+  - preserveDrawingBuffer keeps the canvas's pixels until Direction takes the frame.
+  - The ring is a stand-in for a mark. For a real logo, put its SVG or PNG in the folder and
+    draw it in place of the ring; the name stays a word.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<script src="direction:lib/three.js"></script>
+<style>
+  :root { --u: 1px; }
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #brand { position: absolute; left: 0; right: 0; top: calc(770 * var(--u)); margin: 0; text-align: center; font: 700 calc(52 * var(--u)) / 1 'Archivo', sans-serif; font-stretch: 112%;
+          letter-spacing: 0.02em; color: #fff; }
+</style>
+</head>
+<body>
+<h1 id="brand"></h1>
+<script>
+  document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const u = innerHeight / 1080, W = innerWidth, H = innerHeight;
+  const { ease, clamp, lerp } = direction;
+  const duration = 4;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H, false);
+  renderer.setClearColor(0x000000, 0);
+  document.body.prepend(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
+  camera.position.set(0, 0.55, 10);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.12, 48, 160), new THREE.MeshStandardMaterial({ color: 0xdfe3ea, metalness: 0.85, roughness: 0.28, transparent: true }));
+  ring.position.y = 1.25;
+  scene.add(ring);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x30343c, 1.6));
+  const key = new THREE.DirectionalLight(0xffffff, 2.4);
+  key.position.set(3, 4, 6);
+  scene.add(key);
+
+  direction.graphic({
+    duration,
+    words: {
+      name: { label: 'Name', text: 'Northwind', max: 24 },
+    },
+    render(t, words) {
+      brand.textContent = words.name;
+      const turn = ease.out(clamp((t - 0.1) / 1.6));
+      const gone = ease.inOut(clamp((t - (duration - 0.8)) / 0.6));
+      ring.rotation.x = lerp(1.25, 0, turn);
+      ring.rotation.y = lerp(-0.6, 0, turn);
+      ring.scale.setScalar(lerp(0.86, 1, ease.spring(clamp((t - 0.1) / 1.6))));
+      ring.material.opacity = clamp(t / 0.5) * (1 - gone);
+      renderer.render(scene, camera);
+      const n = ease.out(clamp((t - 1.1) / 0.8));
+      brand.style.opacity = n * (1 - gone);
+      brand.style.transform = `translateY(${(1 - n) * 12 * u}px)`;
+    },
+  });
+</script>
+</body>
+</html>
