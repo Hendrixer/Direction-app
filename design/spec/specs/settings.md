@@ -1,15 +1,15 @@
 # Settings
 
-Frames 42–48. Opens with Direction › Settings… (`⌘,`). It's a standard macOS Settings window with toolbar-style tabs, and it is not a sheet. In SwiftUI use a `Settings { TabView { … } }` scene with `.tabViewStyle(.automatic)` and the Gate styling below.
+Frames 42–48, 54 and 55. Opens with Direction › Settings… (`⌘,`). It's a standard macOS Settings window with toolbar-style tabs, and it is not a sheet. In SwiftUI use a `Settings { TabView { … } }` scene with `.tabViewStyle(.automatic)` and the Gate styling below.
 
 ## Window
 
 | Part | Spec |
 |---|---|
 | Width | 720 pt, fixed. |
-| Height | Fits the selected pane. It animates between panes in Glide (360 ms) and is instant with Reduce Motion. Frame heights: General 600, Editor 830, Cutting 650, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
+| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 860, Footage 780, Cutting 650, Services 700, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
 | Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. |
-| Tabs | 76 wide each, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Cutting, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘7` switch tabs while Settings is key. |
+| Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘9` switch tabs while Settings is key. |
 | Body | Padding 4/28/22. Each group is a label (`.label`, 14 above and 7 below) plus a `.set-card` (`--panel`, radius 10, hairline). |
 | Row | `.set-row`: min 44 tall, padding 10/14, hairline between rows. The label is 13/400, with an optional 11.5 text-3 sub-label under it. The control sits on the right. |
 | Notes | `.set-note`: 11.5 text-3, padding 8/2/0, under a card. |
@@ -41,6 +41,9 @@ Footer, centered 11.5 text-3: "Direction 1.0 (214) · Check for updates". The se
 ---
 
 ## 43 · Settings, Editor
+
+The **Who edits** group and the compact conflict row are specified in `editor.md › 43`. Everything below still applies to the Freedom and Before cutting groups; the conflict list moves into a popover opened by **Change…**.
+
 Frame: `screens/43-settings-editor.html` · Render: `renders/43-settings-editor@2x.png`
 
 **Freedom card:**
@@ -173,6 +176,60 @@ Frame: `screens/48-settings-sharing.html` · Render: `renders/48-settings-sharin
 | Outside notes | Show who wrote each note to the editor | Switch | On | When on, accepted outside notes keep their author in what the editor receives ("from Priya Shah, producer"). Off: they read as the director's own. |
 
 Note under the links card: "These are defaults. Each link can be changed in its Share sheet."
+
+## 54 · Settings, Footage
+Frame: `screens/54-settings-footage.html` · Render: `renders/54-settings-footage@2x.png` · 720 × 780. Tab icon: `film.stack`.
+
+| Group | Setting | Control | Default | What it changes |
+|---|---|---|---|---|
+| Transcription | Transcribe with | Seg: Apple / Whisper | Apple | Apple: "Fast and built into macOS. Runs on this Mac." Whisper: "Slower, with tighter word times for cutting on a single word. Runs on this Mac." Stored in the `dev.direction.shared` defaults suite, so the editor's tools use it too. |
+| Transcription | Whisper version | Select: Large v3 Turbo / Large v3 | Large v3 Turbo | Sub-label: "Fast. Nearly as accurate as Large v3. Downloaded · 1.6 GB." or "Slower, and a little more accurate. Downloads 3.1 GB the first time it's used." Disabled while Apple is chosen. |
+| Transcription | mlx-whisper (only while Whisper is chosen) | Chip "Ready", or **Copy Command** | — | Ready shows the path (`~/.local/bin/mlx_whisper`). Missing: "mlx-whisper isn't installed" / "Install it in Terminal with pip install mlx-whisper. Until then, Apple transcribes." Missing ffmpeg: "Whisper needs ffmpeg" / "brew install ffmpeg". |
+| Looking at footage | Look with | Seg: This Mac / Gemini | This Mac | This Mac: "Private and free. Footage never leaves this Mac." Gemini: "Sees motion across whole takes. Footage is uploaded to Google at low resolution. Needs a key in Services." |
+| Looking at footage | Detail | Select: Quick · 1.4 GB / Standard · 5.8 GB / Best · 17 GB | Standard | Sub-label names the version and state: "Qwen3-VL 8B. Downloaded." Disabled for Gemini. When free space is short: "Only 13 GB free on Macintosh HD. Standard needs 5.8 GB." in alert text, with Quick offered. |
+| Looking at footage | Look at new footage automatically | Switch | On | Off: footage is indexed only when the editor asks or you choose Film › Look at Footage. |
+| Color | Looks folder | Path field (read-only, folder icon) with **Change…** and **Show in Finder** | `~/Movies/Direction/Looks` | LUTs here appear in the Look sheet (frame 63). Subfolders become groups. |
+| Color | Convert log footage automatically | Switch | On | Sub-label: "Apple Log, S-Log3, LogC and V-Log become normal video before any look. Camera LUTs live in the Camera folder." |
+
+Note under Transcription: "Takes already transcribed keep their words. New footage uses this engine."
+Note under Looking at footage: "The editor reads what's found here to log takes, and you can search it in Dailies with ⌘F."
+
+**Acceptance:**
+- [ ] Choosing Whisper in Settings makes the next `direction_transcribe` call from the editor use Whisper, without restarting the editor.
+- [ ] A download in progress shows its percent in the Detail row's sub-label and can be cancelled from the row's context menu.
+
+---
+
+## 55 · Settings, Services
+Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 700. Tab icon: `key`.
+
+**Service rows** (`.set-row`, min 56): a 28 rounded-square monogram (steel-3 fill, the service's initial in 12/700 text-2; no brand logos), the name (13/600) with what it's for under it (11.5 text-3), and on the right the state: a chip "Ready" (ok style) with "$4.20 this month" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`).
+
+| Service | Sub-label | State in the frame |
+|---|---|---|
+| ElevenLabs | Music, sound effects and voice | Ready · $4.20 this month |
+| Runway | Changing shots you have | Editing a key (below) |
+| Higgsfield | New shots | Ready · $8.60 this month |
+| Gemini | Looking at footage, if chosen in Footage | Add Key… |
+
+**Editing a key** (Runway in the frame): the row grows to show a secure `.input` (placeholder "Paste your Runway key"), a text link "Get a key" with an arrow-up-right icon (opens the service's key page), and Cancel (plain) / **Save** (`.btn`, not steel; the window has no steel button). After Save, the row tests the key and shows Ready or "That key didn't work: <the service's message>".
+
+Each saved row's context menu has Replace Key…, Remove Key, and Show Terms.
+
+| Group | Setting | Control | Default | What it changes |
+|---|---|---|---|---|
+| Spending | Ask before spending more than | Select: $1.00 / $5.00 / $10.00 / $25.00 per turnover | $5.00 per turnover | Over this, the editor asks a spend question (frame 62). |
+| Spending | Stop for the month at | Select: $25.00 / $50.00 / $100.00 / $250.00 / No limit | $50.00 | Nothing is made past this. |
+| Spending | Spent this month | Meter (like Storage's), one segment per service, with a legend: ElevenLabs $4.20, Higgsfield $8.60 | — | Read-only. "$12.80 of $50.00" in SF Mono on the right of the row. |
+
+Note under Services: "Keys are kept in your Mac's keychain. The editor never sees them; Direction makes every request."
+Note under Spending: "Check each service's terms before you release a film. Some don't cover film or TV."
+
+**Acceptance:**
+- [ ] A key is never written to UserDefaults, the film package, logs or the editor's tools.
+- [ ] Removing a key leaves made clips playable and stops new requests at once.
+
+---
 
 ## Accessibility (all panes)
 - Each tab is a toolbar item labeled with its name.

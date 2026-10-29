@@ -82,3 +82,10 @@ The rendering mode is monochrome and the color is inherited (`.foregroundStyle(.
 | star | (unused; reserved) | `star` |
 
 For `hold`, use **`curlybraces`**. It reads as a bracketed passage at 13 pt, and the text-3 tint keeps it quiet.
+| stack | Settings, Footage tab | `film.stack` |
+| key | Settings, Services tab; Add Key… | `key` |
+| grid | Contact sheet button (frame 59) | `square.grid.2x2` |
+| cursor | Words button on a graphic answer (frame 64) | `character.cursor.ibeam` |
+| terminal | Open Terminal (frames 56, 58) | `apple.terminal` |
+| stop | Stop the editor (frame 57) | `stop.fill` |
+| out | Get a key (opens a web page) | `arrow.up.right.square` |

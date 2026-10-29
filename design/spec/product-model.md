@@ -32,10 +32,20 @@ Direction is a Mac app where a human **director** makes a film with an AI **edit
 | Outside note | A note from someone else (producer, client) via a share link. | Guest comment |
 | Question | The agent asking the director to decide something. | Prompt, alert |
 | Latitude | How much freedom the agent has to interpret notes. | Creativity, temperature |
+| Shot | One continuous stretch of picture inside a take, found when footage is logged. | Segment, clip |
+| Search footage | Finding shots by what's in them ("Maya laughing"). | Semantic search, query |
+| Look | The film's color and texture: a LUT at a strength plus filters. The director chooses it. | Preset, style, grade |
+| Filter | One texture or lens quality inside a look: Grain, Halation, Vignette … | Effect, FX |
+| Graphic | Words or shapes the editor draws over the picture: titles, lower thirds, end cards. | Motion graphic, template, overlay |
+| Made | Picture or sound the editor made with a service instead of finding it in the footage. | Generated, synthetic, AI |
+| Service | An outside company the editor can use to make picture or sound, with your key. | Provider, API, integration |
+| Spend | Money a service charges for something made. Shown before it's spent. | Credits, tokens |
 
 The director is never named in the UI; it's "you". The agent speaks in first person as the editor.
 
 Never show the words "AI", "generate", "prompt", "model", "revision", "comment", "task", or "magic".
+
+**Program names.** Settings › Editor, Settings › Services, the editor setup sheet (frame 56), the Editor popover (frames 41, 57) and a stopped editor's message (frame 58) may name the programs and services the director installs and pays for: Claude Code, Codex, ElevenLabs, Runway, Higgsfield, Gemini, and each one's version ("Claude Opus 5.5"). Provenance of made media names its service ("Made with ElevenLabs"). Nowhere else. A version is a "version", never a "model". What the editor asked a service for is "What the editor asked for", never a prompt.
 
 ## Objects
 
@@ -100,6 +110,39 @@ Change   range in new cut, range in old cut, scene, note, revertible: Bool
 Question  id, asked: Date, text, choices: [Choice] (2–4, each may show a still or take), freeText: Bool, blocks: [Note]?
 OutsideNote  from: Person, cut, anchor, text, state: .inbox | .accepted (becomes Note) | .edited | .declined
 ShareLink  cut, url, canNote: Bool, expires: Date?, password: Bool, viewers: [Person]
+
+// The editor's working life (specs/editor.md)
+EditorSetup   // app-wide, Settings › Editor
+  program: .claudeCode | .codex           // the program that runs the editor on this Mac
+  version: String                         // "claude-opus-5-5" → "Claude Opus 5.5"
+  start: .rightAway | .askFirst           // when work is waiting for the editor
+  connection: .direction | .yourOwn       // Direction starts the editor, or you run your own session that connects over MCP
+Run           // one stretch of the editor's work. Internal word; the UI says what the editor is doing.
+  job: .logFootage | .assemble | .turnover(Turnover) | .question(Question) | .look(Note) | .graphic(Note) | .finish
+  state: .starting | .working | .waitingForYou | .paused | .stopped(reason) | .failed(reason) | .done
+  activity: [Activity], startedAt, endedAt?, spend: Money?, session: String   // to resume
+Activity  at: Date, verb: "Watching" | "Listening to" | "Trimming" | "Moving" | "Making" | "Reading" …, object: "scene 2" | "note 4" | "01:12:08–01:14:00",
+          time: Timecode?    // where in the cut or take; drives the editor's playhead on the strip
+
+// What the editor can see (specs/footage-index.md)
+Shot      take, range (source), keyframes: [Still], description: "Medium on Maya at the window. She looks down.",
+          size: .wide | .medium | .close | .insert, movement: .static | .pan | .tilt | .push | .handheld,
+          people: [String], flags: [.soft | .shaky | .overexposed | .underexposed | .noAudio]
+Sound     take, range, kind: .speech | .laughter | .music | .applause | .wind | .traffic | .silence
+Index     per take: .waiting | .looking | .done | .failed, engine: .thisMac(version) | .gemini(version)
+
+// What the editor can make (specs/agent-timeline.md, looks.md, graphics.md, made-media.md)
+Look      name, lut: LUT?, strength: 0–1, filters: [Filter], by: .you | .editor | .folder
+          film has one look; a scene may have its own. The director chooses; the editor only proposes.
+Filter    kind: .grain | .halation | .bloom | .vignette | .gateWeave | .chromaticAberration | .soften | .letterbox | .blackAndWhite | .splitTone | .fade
+          amount: 0–1, option?   // e.g. letterbox ratio
+LUT       file (.cube), use: .camera | .look, size: 17–65, from: .folder | .film | .editor
+Graphic   name: "Title · Launch day", source: folder in the film (HTML + JavaScript), duration, words: [GraphicWord], note: Note?
+GraphicWord  key, label: "Title", text, maxLength?    // the director may change words directly
+Made      kind: .music | .soundEffect | .voice | .shot | .changedShot, service, version, asked: String, from: (Take, range)?,
+          spend: Money, note: Note?, file      // appears in Dailies under Made, and in History with its provenance
+Service   name, uses: [Made.kind], key (Keychain), state: .notSet | .ready | .failing(reason), spentThisMonth: Money
+Spending  askAbove: Money per turnover, stopAt: Money per month
 ```
 
 ## Lifecycles
@@ -166,6 +209,12 @@ These notes appear in the Notes sheet like any other, with a script icon. They d
 - Every change in a new cut points to exactly one note number (or "Unasked").
 - Always writes in first person, short, concrete: "Trimmed three pauses. −2.4 s." Never apologises twice, never says "Great note".
 - Questions carry 2–4 concrete choices; free text is optional.
+- Uses the footage first. Makes picture or sound with a service only when a note asks for something the footage doesn't have, or with latitude "free" (then labeled "Unasked").
+- Never spends past the turnover's limit without a spend question (frame 62), and never past the monthly cap at all.
+- Every made thing shows where it came from: service, what the editor asked for, spend.
+- Never changes the look. It may propose looks as Options or in a question.
+- Never changes a graphic's words after the director has changed them, unless a note asks.
+- Watches every passage it changed before delivering a cut.
 
 ## Rooms (top-level navigation)
 Titlebar segmented control, `⌘1`–`⌘6`:
@@ -181,15 +230,29 @@ The agent status pill in the titlebar is always visible and clickable (opens the
 ## Windows
 - Main window, min 1180 × 740 pt, design size 1440 × 900 pt. Full-screen supported (Screening defaults to full-screen when the window is already full-screen).
 - Films window (project list), 1080 × 720.
-- Settings window, 720 pt wide, height fits pane, toolbar-style tabs.
+- Settings window, 720 pt wide, height fits pane, toolbar-style tabs (9: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing).
 - Sheets attach to the main window titlebar.
 
 ## Menus
 See `specs/system.md` for the full menu bar.
 
+## The editor's side (phase 2)
+
+The director's side stays simple: no timeline, no effect controls. Everything below lives in the editor's tools, and the director sees only results, provenance and choices.
+
+| Spec | What it covers | Frames |
+|---|---|---|
+| `specs/editor.md` | Direction starts the editor (Claude Code or Codex), shows what it's doing, and lets you pause or stop it. | 43, 56–58, 41 |
+| `specs/footage-index.md` | Shots, contact sheets, descriptions, sounds and search, made when footage is logged. | 05, 54, 59, 60 |
+| `specs/agent-timeline.md` | The full timeline the editor reads and writes, as OpenTimelineIO, with effects, layers and keyframes. | — |
+| `specs/looks.md` | LUTs, filters, the Look sheet. | 54, 63 |
+| `specs/graphics.md` | Graphics written in JavaScript, rendered by Direction, words the director can fix. | 64 |
+| `specs/made-media.md` | Services (ElevenLabs, Runway, Higgsfield, Gemini), keys, spend, provenance. | 55, 61, 62 |
+
 ## Formats
 - Timecode: `MM:SS:FF` under an hour (`01:12:08` = 1 min 12 s frame 8), `H:MM:SS:FF` over. Always SF Mono, tabular.
 - Ranges: `00:46:00–00:58:12` (en dash, no spaces).
 - Durations: `3:40`, `0:46`, deltas `−4.2 s` (true minus sign U+2212), `+1.6 s`, `−6 dB`.
+- Money: `$0.40`, `$12.80`, always two decimals, SF Mono. Estimates are "about $3.20".
 - Cut names: `Assembly`, `Cut 2`, `Cut 3`. Scene: `3 The ridge`. Setup: `2A`. Take: `T3`, or `2A T3` out of context.
 - Times of day: `Today 14:20`, `Yesterday`, `Oct 12`.

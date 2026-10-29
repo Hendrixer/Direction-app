@@ -52,7 +52,7 @@ window.FRAMES = [
   { id: "41-agent-popover", group: "Share", title: "Editor popover", spec: "share.md" },
 
   { id: "42-settings-general", group: "Settings", title: "Settings, General", spec: "settings.md", size: "720x600" },
-  { id: "43-settings-editor", group: "Settings", title: "Settings, Editor", spec: "settings.md", size: "720x830" },
+  { id: "43-settings-editor", group: "Settings", title: "Settings, Editor", spec: "editor.md", size: "720x860" },
   { id: "44-settings-cutting", group: "Settings", title: "Settings, Cutting", spec: "settings.md", size: "720x650" },
   { id: "45-settings-notifications", group: "Settings", title: "Settings, Notifications", spec: "settings.md", size: "720x530" },
   { id: "46-settings-shortcuts", group: "Settings", title: "Settings, Shortcuts", spec: "settings.md", size: "720x690" },
@@ -64,4 +64,19 @@ window.FRAMES = [
   { id: "51-offline", group: "System", title: "Offline", spec: "system.md" },
   { id: "52-media-missing", group: "System", title: "Footage missing", spec: "system.md" },
   { id: "53-menus", group: "System", title: "Context menus", spec: "system.md" }
+
+  { id: "54-settings-footage", group: "Settings", title: "Settings, Footage", spec: "settings.md", size: "720x780" },
+  { id: "55-settings-services", group: "Settings", title: "Settings, Services", spec: "settings.md", size: "720x700" },
+
+  { id: "56-editor-setup", group: "Editor", title: "Who's editing? (setup)", spec: "editor.md" },
+  { id: "57-editor-working", group: "Editor", title: "The editor at work", spec: "editor.md" },
+  { id: "58-editor-stopped", group: "Editor", title: "The editor stopped", spec: "editor.md" },
+
+  { id: "59-dailies-shots", group: "Footage", title: "Dailies, a take's shots", spec: "footage-index.md" },
+  { id: "60-dailies-search", group: "Footage", title: "Dailies, search footage", spec: "footage-index.md" },
+
+  { id: "61-changes-made", group: "Made", title: "Changes, made music", spec: "made-media.md" },
+  { id: "62-notes-spend", group: "Made", title: "Notes, a spend question", spec: "made-media.md" },
+  { id: "63-look", group: "Looks", title: "The Look sheet", spec: "looks.md" },
+  { id: "64-changes-graphic", group: "Graphics", title: "Changes, a title's words", spec: "graphics.md" },
 ];

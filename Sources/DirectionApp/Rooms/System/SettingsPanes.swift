@@ -293,7 +293,7 @@ struct FootagePane: View {
                 SettingsRow(label: "Transcribe with", detail: engineDetail, first: true) {
                     GateSegmented(options: [(SharedSettings.TranscriptionEngine.apple.rawValue, "Apple"), (SharedSettings.TranscriptionEngine.whisper.rawValue, "Whisper")], selection: $engine)
                 }
-                SettingsRow(label: "Whisper model", detail: modelDetail) {
+                SettingsRow(label: "Whisper version", detail: modelDetail) {
                     GateSelect(options: SharedSettings.whisperModels.map { ($0.id, $0.name) }, selection: $model)
                 }
                 .disabled(!usesWhisper)
