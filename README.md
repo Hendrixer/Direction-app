@@ -28,16 +28,17 @@ Use the project menu for **New Project**, **Open Project**, and recent projects;
 
 ## What works
 
-- Jet-black native viewer, one seek bar with clickable comment markers, and Comments / Transcript / Media panels. No manual layer timeline, color, audio, or export controls in the director UI.
+- A director's app built on the Gate design language (`design/spec/`): six rooms in the order the work happens. **Dailies** (circle takes; the editor only suggests), **Script** (strike, hold, move or pick another reading of a line, each becoming a note), **Screening** (full-bleed, press N to mark without stopping), **Notes** (numbered notes, regions, the editor's questions, outside notes, turnover and read-back), **Changes** (answers per note, A/B options, play only what changed, history) and **Finish** (scene and picture lock, finishing checklist, delivery). No timeline; the director never edits.
+- The director–editor protocol: brief, numbered notes that stay private until turned over, read-backs the director approves, questions with concrete choices, cuts named Assembly, Cut 2, Cut 3…, and locks enforced on every edit.
 - Atomic programmatic insert, trim, split, move, remove, speed, layering, title, framing, canvas, color, and audio edits.
 - Metal/Core Image compositing shared by playback, frame sampling, and export. Native H.264, HEVC, and ProRes export.
 - Moment, range, whole-cut, and frame-region feedback pinned to an immutable edit revision. Agents can fetch inline PNG frames and WAV audio through MCP.
-- Local Apple SpeechAnalyzer transcription. In **Transcript**, select words to remove their footage, or delete text and apply the change. Ambiguous repeated words require exact word selection.
+- Local Apple SpeechAnalyzer transcription. Agents can cut by transcript; the director directs from the Script room. Ambiguous repeated words require exact word selection.
 - Agent tools for independent mute/gain on every embedded source audio track, plus per-clip overrides. Native EQ, compression, limiter, and fades.
 - Landscape, portrait, and square sequences; supplied B-roll, still images, titles, and separate audio. Source-timed transcript cuts ripple across all layers.
 - The app observes external edits. A playing review stays on its current revision until you load the update; paused playback refreshes automatically.
 
-In-app feedback does not wake an agent. On the next request, the agent reads `direction_feedback` and uses `direction_feedback_context` to inspect the original footage before editing.
+Turning notes over in the app does not wake an agent. The editor pill shows "Waiting for the editor" and offers a request to paste into Claude Code or Codex; the agent then follows the take-turnover skill (`direction_turnovers`, read-back, cut, `direction_turnover_complete`).
 
 ## Connect an agent
 
