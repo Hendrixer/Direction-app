@@ -178,6 +178,18 @@ Frame: `screens/52-media-missing.html` · Render: `renders/52-media-missing@2x.p
 
 ---
 
+## Deleting a film
+
+**Move to Trash** (Films, ⌘⌫), or leaving a new film you never put anything into, moves the film's `.direction` package to the Trash. Finder's Put Back brings it back.
+
+- **In the package, so in the Trash:** the cuts and their history, notes, transcripts, Dailies, the footage index, made media, graphics, looks and the editor's folder.
+- **Never touched:** the footage. Direction links to files where they are and never copies them. Deliveries in `~/Movies/<Film>/Delivery/` are the director's too.
+- **Goes at once:** the film's cache in `~/Library/Caches/dev.direction.editor/<film id>/` (decoded audio, contact sheets, frames, thumbnails, sync curves), and its entry in the library. Everything in the cache can be made again; opening a put-back film registers it again.
+- **At launch:** the cache of any film that isn't in the library, or whose package has been missing, goes once it hasn't been touched for a week (a film deleted in Finder). A missing film stays listed as "Can't find this film" so it can be found; only its cache goes. Library entries for trashed films that are gone are forgotten.
+- **While working:** decoded audio is most of a cache (about 70 MB per three minutes of stereo). It goes each time the film is idle (nothing transcribing, listening, syncing or cutting) and is decoded again in seconds when something needs it.
+- **Stays, on purpose:** spending history (the month's limit counts it) and the editor program's own session logs.
+- Tests and the command-line checks never use the real cache, library or log (`DIRECTION_CACHE_DIR`, `DIRECTION_LIBRARY_PATH`, `DIRECTION_LOG_DIR`).
+
 ## 53 · Context menus
 Frame: `screens/53-menus.html` · Render: `renders/53-menus@2x.png`
 

@@ -20,6 +20,13 @@ final class AppModel {
     func start() {
         let info = Bundle.main.infoDictionary
         DirectionLog.info("Direction \(info?["CFBundleShortVersionString"] as? String ?? "dev") (\(info?["CFBundleVersion"] as? String ?? "?")) started on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        // Caches of films that are gone: trashed in Finder, or old tests (system.md › Deleting a film).
+        let trashed = FilmLibraryIndex.trashed
+        Task.detached(priority: .background) {
+            let (folders, bytes) = CacheCleanup.prune(trashed: trashed)
+            if folders > 0 { DirectionLog.info("Cleared the cache of \(folders) film\(folders == 1 ? "" : "s") that aren\u{2019}t here anymore (\(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)))", "cache") }
+            await MainActor.run { self.reloadFilms() }
+        }
         reloadFilms()
         if let index = CommandLine.arguments.firstIndex(of: "--project"), CommandLine.arguments.count > index + 1 { open(URL(fileURLWithPath: CommandLine.arguments[index + 1])) }
         else if whenOpening == "lastFilm", !lastFilm.isEmpty, FileManager.default.fileExists(atPath: lastFilm) { open(URL(fileURLWithPath: lastFilm)) }
@@ -56,10 +63,11 @@ final class AppModel {
     func leaveFilm() {
         guard let film, let url = film.url else { closeFilm(); return }
         let pristine = film.isUntitled && !film.hasFootage && film.brief.logline.isEmpty && film.brief.feeling.isEmpty && film.notes.isEmpty && film.cuts.isEmpty
+        let projectID = film.project?.id
         closeFilm()
         guard pristine else { return }
         NSWorkspace.shared.recycle([url]) { _, error in
-            MainActor.assumeIsolated { if error == nil { FilmLibraryIndex.noteTrashed(url.path); self.reloadFilms() } }
+            MainActor.assumeIsolated { if error == nil { FilmLibraryIndex.noteTrashed(url.path); CacheCleanup.forget(film: url, projectID: projectID); self.reloadFilms() } }
         }
     }
 

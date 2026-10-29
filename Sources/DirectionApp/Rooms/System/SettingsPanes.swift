@@ -677,7 +677,7 @@ struct StorageUsage: Sendable {
     var renderCache: Int64
     var used: Int64 { slices.reduce(0) { $0 + $1.bytes } }
 
-    static var cacheRoot: URL { FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("dev.direction.editor") }
+    static var cacheRoot: URL { DirectionPaths.caches }
     /// Rebuildable renders. Thumbnails stay: takes show them in Dailies.
     static let clearable = ["Frames", "Previews", "Feedback", "Render", "Audio"]
 

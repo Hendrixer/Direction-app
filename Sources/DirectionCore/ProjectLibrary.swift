@@ -7,6 +7,8 @@ public struct ProjectEntry: Codable, Sendable, Identifiable {
     public var path: String
     public var lastOpened: Double
     public var available: Bool
+    /// The film's id, which names its cache folder.
+    public var projectID: String?
 }
 
 /// A local index of explicitly opened projects, shared safely across app and agent processes.
@@ -36,8 +38,17 @@ public final class ProjectLibrary: Sendable {
         try database.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM projects ORDER BY last_opened DESC LIMIT 100").map { row in
                 let path: String = row["path"]
-                return ProjectEntry(id: path, name: row["name"], path: path, lastOpened: row["last_opened"], available: FileManager.default.fileExists(atPath: URL(fileURLWithPath: path).appendingPathComponent("manifest.json").path))
+                return ProjectEntry(id: path, name: row["name"], path: path, lastOpened: row["last_opened"], available: FileManager.default.fileExists(atPath: URL(fileURLWithPath: path).appendingPathComponent("manifest.json").path), projectID: row["project_id"])
             }
         }
+    }
+    /// The film went to the Trash: it leaves the list. Opening it again puts it back.
+    public func forget(path: String) throws {
+        try database.write { db in try db.execute(sql: "DELETE FROM projects WHERE path = ?", arguments: [path]) }
+    }
+    /// A film package's id, from its manifest, without opening its database.
+    public static func projectID(at url: URL) -> String? {
+        guard let data = try? Data(contentsOf: url.appendingPathComponent("manifest.json")) else { return nil }
+        return (try? JSONDecoder().decode(JSONValue.self, from: data))?["projectID"].string
     }
 }

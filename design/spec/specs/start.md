@@ -75,7 +75,7 @@ Status line rules: room/stage first, then what's waiting, then the last-opened t
 - Search with no results: grid replaced by centered 13 pt `--text-3` "No films match "night"." with a ghost "Clear search" button.
 - Editor pill shows the most urgent cross-film activity (here "Cutting Night shift" with a meter). Several: "Cutting 2 films".
 
-**Interactions:** Arrow keys move selection; `↩` opens; `⌘⌫` moves to Trash after a confirm sheet ("Move Launch film to the Trash? Your footage stays where it is."). Context menu on a card: Open, Open in New Window, Rename, Duplicate Brief, Show Footage in Finder, Move to Trash. Drag a folder onto the grid = New film from folder.
+**Interactions:** Arrow keys move selection; `↩` opens; `⌘⌫` moves to Trash after a confirm sheet ("Move Launch film to the Trash? Your footage stays where it is."). See system.md › Deleting a film for what goes with it. Context menu on a card: Open, Open in New Window, Rename, Duplicate Brief, Show Footage in Finder, Move to Trash. Drag a folder onto the grid = New film from folder.
 
 **Motion:** Selection ring Snap (120 ms). New film card appears with Settle.
 

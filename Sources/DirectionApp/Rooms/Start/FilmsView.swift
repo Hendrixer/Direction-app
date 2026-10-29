@@ -202,10 +202,12 @@ struct FilmsView: View {
     private func trash(_ film: FilmSummary) {
         trashing = nil
         guard app.previewFilms == nil else { return }
-        NSWorkspace.shared.recycle([URL(fileURLWithPath: film.path)]) { _, error in
+        let url = URL(fileURLWithPath: film.path), projectID = ProjectLibrary.projectID(at: url)
+        NSWorkspace.shared.recycle([url]) { _, error in
             Task { @MainActor in
                 if let error { app.error = error.localizedDescription; return }
-                FilmLibraryIndex.noteTrashed(film.path); app.reloadFilms()
+                // Its cache goes with it, and the library forgets it (system.md › Deleting a film).
+                FilmLibraryIndex.noteTrashed(film.path); CacheCleanup.forget(film: url, projectID: projectID); app.reloadFilms()
             }
         }
     }

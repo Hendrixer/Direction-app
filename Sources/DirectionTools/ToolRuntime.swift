@@ -17,7 +17,7 @@ public actor ToolRuntime {
 
     public init(store: ProjectStore) throws {
         self.store = store
-        cacheDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("dev.direction.editor").appendingPathComponent(try store.read().id)
+        cacheDirectory = DirectionPaths.cache(forFilm: try store.read().id)
         try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 

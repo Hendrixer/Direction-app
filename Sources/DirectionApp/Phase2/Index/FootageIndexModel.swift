@@ -42,6 +42,8 @@ import DirectionMedia
     @ObservationIgnored private var startingTranscription = false
     @ObservationIgnored private var transcribeAttempts: [String: Int] = [:]
     @ObservationIgnored private var startingSync = false
+    /// Opening a film counts as work having finished, so its old decoded audio goes too.
+    @ObservationIgnored private var workedSinceAudioDrop = true
     @ObservationIgnored private var syncAttempts = 0
     /// Takes with sound whose sound hasn't been compared with the others yet.
     var unsynced = 0
@@ -66,6 +68,7 @@ import DirectionMedia
             autoStart(film, assets: assets)
             listen(film, assets: assets)
             sync(film, assets: assets)
+            dropAudioWhenIdle(film)
             // "Results will grow": search again as takes are looked at, every few seconds at most.
             if searching, !searchedQuery.isEmpty, job != nil, Date().timeIntervalSince(lastGrow) > 3 { lastGrow = Date(); search(film, now: true) }
         } catch { film.error = error.localizedDescription }
@@ -83,6 +86,21 @@ import DirectionMedia
     /// Direction is still looking at or listening to footage that arrived, so logging waits. A take
     /// that just arrived counts as waiting before its index job exists.
     var busy: Bool { looking != nil || listening != nil || unsynced > 0 || (SharedSettings.lookAutomatically && states.values.contains(.waiting)) }
+
+    /// Once nothing is transcribing, listening or cutting, the decoded audio goes: it's most of the
+    /// cache, and anything that needs it again decodes it again in seconds. On opening the film, and
+    /// again each time work finishes.
+    private func dropAudioWhenIdle(_ film: FilmModel) {
+        guard !film.isPreview, let id = film.project?.id else { return }
+        let idle = !busy && !film.isLogging && film.runs.active == nil && !film.jobs.contains { !$0.isTerminal }
+        guard idle else { workedSinceAudioDrop = true; return }
+        guard workedSinceAudioDrop else { return }
+        workedSinceAudioDrop = false
+        Task.detached(priority: .background) {
+            let bytes = CacheCleanup.dropDecodedAudio(projectID: id)
+            if bytes > 0 { DirectionLog.info("Dropped \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)) of decoded audio from the cache of \(id)", "cache") }
+        }
+    }
 
     /// Takes that recorded the same moment are found by their sound before logging, so the editor
     /// logs them as angles of one moment (footage-index.md › Sync). Seconds of work on this Mac;

@@ -17,7 +17,7 @@ public enum DirectionLog {
     public static var directory: URL {
         let env = ProcessInfo.processInfo.environment
         if let dir = env["DIRECTION_LOG_DIR"], !dir.isEmpty { return URL(fileURLWithPath: dir) }
-        if isTesting { return FileManager.default.temporaryDirectory.appendingPathComponent("DirectionTestLogs") }
+        if DirectionPaths.isTesting { return FileManager.default.temporaryDirectory.appendingPathComponent("DirectionTestLogs") }
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Direction")
     }
     public static var file: URL { directory.appendingPathComponent("Direction.log") }
@@ -45,10 +45,6 @@ public enum DirectionLog {
     private static let lock = NSLock()
     private static let loggers = OSAllocatedUnfairLock(initialState: [String: Logger]())
 
-    private static var isTesting: Bool {
-        let p = ProcessInfo.processInfo
-        return p.environment["XCTestConfigurationFilePath"] != nil || p.processName == "xctest" || p.processName.hasSuffix("PackageTests") || p.processName.contains("swiftpm-testing-helper")
-    }
 
     /// "app" for Direction.app, the program's name for anything else (the `direction` helper).
     private static let process: String = {
