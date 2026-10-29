@@ -149,6 +149,41 @@ struct IndexTests {
         #expect(try store.watchedRanges().last.map { $0.start == 1 && $0.end == 5 } == true)
     }
 
+    struct StandIn: ShotDescriber {
+        var broken = false
+        var engine: String { "stand-in" }
+        var concurrency: Int { 4 }
+        func describe(_ request: DescribeRequest) async throws -> DescribeResult {
+            if broken { throw DirectionError("vision_helper_failed", "mlx-vlm couldn't load the version.") }
+            #expect(request.images.count == 3 && request.images.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+            return DescribeResult(look: ShotLook(description: "Wide on a test pattern \(request.images[0].lastPathComponent).", size: "wide"))
+        }
+        func finish() async {}
+    }
+
+    @Test func describesEveryShotAndSkipsDescriptionsWhenTheEngineBreaks() async throws {
+        let folder = try Self.temp("describe"); defer { try? FileManager.default.removeItem(at: folder) }
+        guard let clip = try Self.cuts(in: folder) else { return }
+        let (store, runtime) = try Self.project(folder)
+        let asset = try await MediaInspector.inspect(url: clip)
+        _ = try store.addAsset(asset, append: false, expectedRevision: try store.revision())
+        let options = FootageIndexer.Options(cacheDirectory: runtime.cacheDirectory, describer: StandIn())
+        let summary = try await FootageIndexer.run(store: store, options: options) { _ in }
+        #expect(summary["described"].int == 5)
+        let take = try #require(try store.takeIndex(asset.id))
+        #expect(take.state == .done && take.described == 5 && take.triedEngine == "stand-in")
+        #expect(try FootageSearch.search("test pattern", store: store).count == 5)
+        // The 672 px frames the describer read are gone; the small keyframes stay with the film.
+        #expect(!FileManager.default.fileExists(atPath: runtime.cacheDirectory.appendingPathComponent("IndexFrames/\(asset.id)").path))
+
+        // Looked at again with an engine that can't run: shots stand, the take is done, and says why.
+        let broken = FootageIndexer.Options(cacheDirectory: runtime.cacheDirectory, force: true, describer: StandIn(broken: true))
+        _ = try await FootageIndexer.run(store: store, options: broken) { _ in }
+        let again = try #require(try store.takeIndex(asset.id))
+        #expect(again.state == .done && again.shotCount == 5 && again.described == 0)
+        #expect(again.describeSkipped?.contains("couldn't load") == true)
+    }
+
     // MARK: Search
 
     /// A film with three takes of shots and lines, made searchable the way the index does it.

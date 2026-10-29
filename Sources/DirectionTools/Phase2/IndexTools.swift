@@ -279,8 +279,10 @@ enum IndexJobs {
     nonisolated(unsafe) private static var running: [String: (id: String, task: Task<Void, Never>)] = [:]
     nonisolated(unsafe) private static var attempts: [String: Date] = [:]
 
-    static func started(_ key: String, _ id: String, _ task: Task<Void, Never>) { lock.withLock { running[key] = (id, task) } }
-    static func finished(_ key: String, _ id: String) { lock.withLock { if running[key]?.id == id { running[key] = nil } } }
+    nonisolated(unsafe) private static var early: Set<String> = []
+    /// A job can finish before it's registered (nothing to look at); it isn't registered then.
+    static func started(_ key: String, _ id: String, _ task: Task<Void, Never>) { lock.withLock { if early.remove(id) == nil { running[key] = (id, task) } } }
+    static func finished(_ key: String, _ id: String) { lock.withLock { if running[key]?.id == id { running[key] = nil } else { early.insert(id) } } }
     static func current(_ key: String) -> String? { lock.withLock { running[key]?.id } }
     static func cancel(_ key: String) -> Bool { lock.withLock { running[key]?.task.cancel(); return running[key] != nil } }
     /// Waits for the film's index job in this process (tests, and the CLI before it exits).

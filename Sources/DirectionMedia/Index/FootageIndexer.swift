@@ -134,13 +134,23 @@ public enum FootageIndexer {
         }
         var described = 0
         if let describer {
+            // A describer that can't run (the helper won't load, the key is refused) skips
+            // descriptions; the take's shots, sheet and sounds still stand.
+            var broken: String?
             for await id in ready {
                 try Task.checkCancellation()
                 guard let asset = todo.first(where: { $0.id == id }) else { continue }
                 report(Progress(step: "Looking at footage", done: counter.value, total: total, fraction: Double(counter.value) / Double(max(1, total))))
-                do { described += try await describe(asset, store: store, describer: describer, options: options) }
-                catch is CancellationError { first.cancel(); throw CancellationError() }
-                catch { if Task.isCancelled { first.cancel(); throw CancellationError() }; try? fail(asset, error, store: store) }
+                if let broken { try? skip(asset, broken, store: store) }
+                else {
+                    do { described += try await describe(asset, store: store, describer: describer, options: options) }
+                    catch is CancellationError { first.cancel(); throw CancellationError() }
+                    catch {
+                        if Task.isCancelled { first.cancel(); throw CancellationError() }
+                        if let e = error as? DirectionError, ["vision_helper_failed", "vision_helper_missing", "mlx_vlm_missing", "no_openrouter_key"].contains(e.code) || e.message.contains("(401)") { broken = e.message }
+                        try? skip(asset, error.localizedDescription, store: store)
+                    }
+                }
                 counter.add()
             }
         }
@@ -159,6 +169,14 @@ public enum FootageIndexer {
         init(done: Int) { n = done }
         var value: Int { lock.withLock { n } }
         func add() { lock.withLock { n += 1 } }
+    }
+
+    /// Done without (some) descriptions, and why. The next job tries again.
+    private static func skip(_ asset: MediaAsset, _ reason: String, store: ProjectStore) throws {
+        guard var t = try store.takeIndex(asset.id) else { return }
+        t.state = .done; t.step = nil; t.describeSkipped = reason
+        t.described = try store.shots(assetID: asset.id).filter { $0.look != nil }.count
+        try store.saveTakeIndex(t, summary: "Looked at \(asset.name)")
     }
 
     private static func fail(_ asset: MediaAsset, _ error: Error, store: ProjectStore) throws {
