@@ -48,8 +48,9 @@ import DirectionTools
 
     /// Starts queued runs where there's room: one per film, two films at once.
     func pump() {
-        // Not while programs are being looked for: a run would fail as not installed.
-        guard !EditorPrograms.shared.checking || !programOverride.isEmpty else { return }
+        // Not until programs have been looked for: a run would fail as not installed.
+        let programs = EditorPrograms.shared
+        guard (programs.checked && !programs.checking) || !programOverride.isEmpty else { return }
         for store in stores.values {
             guard live.count < Self.maxConcurrent, let runs = try? store.runs() else { continue }
             guard !runs.contains(where: { $0.state.isActive && isLive($0.id) }) else { continue }
@@ -63,7 +64,8 @@ import DirectionTools
     /// Starts the program for a run: its first job text, or `continuation` on the saved session.
     func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil) {
         register(store)
-        var run = run
+        // The store's copy: the session or state may have moved since the caller read it.
+        var run = (try? store.run(run.id)) ?? run
         // A run that never started takes the editor chosen now (Choose another editor…, a new Version).
         if run.invocations == 0, let p = EditorSetup.runsOn.program, programOverride.isEmpty, p.rawValue != run.program || EditorSetup.version(p) != run.version {
             run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = EditorSetup.version(p) }) ?? run

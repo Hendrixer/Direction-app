@@ -365,6 +365,37 @@ struct EditorRunnerTests {
         #expect(a[1].hasPrefix("Continue where you stopped."))
     }
 
+    /// The film finds the work itself: Ask me first holds it for Start, a run that ends without
+    /// delivering stops the turnover (frame 58), and Take the turnover back returns the notes.
+    @Test func aFilmHoldsWorkForStartThenShowsTheStop() async throws {
+        // Every take is logged, so the assembly is the only work waiting.
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1")],
+                                         values: [EditorSetupKey.runsOn: "claudeCode", EditorSetupKey.startWork: "askFirst", EditorSetupKey.signedIn(.claudeCode): true])
+        EditorRunner.shared.programOverride = [:]
+        try scenario("unfinished", dir)
+        var b = Brief(); b.logline = "One sentence."; b.feeling = "Quiet."; try store.saveBrief(b)
+        let m = FilmModel()
+        m.runtime = try ToolRuntime(store: store)
+        defer { m.close() }
+        let t = try store.turnOver(noteIDs: [], kind: "assembly", latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
+        m.refresh(force: true)
+        #expect(m.runs.held?.turnoverID == t.id)
+        #expect(m.pill == .readyToCut("Ready to cut"))
+        #expect(m.primaryAction?.title == "Start the editor")
+        m.runs.start(m)
+        let run = try #require(m.runs.runs.last)
+        let r = try await ended(store, run.id)
+        m.refresh(force: true)
+        #expect(r.state == .failed && r.reason == .stoppedWithoutFinishing)
+        #expect(m.pill == .stopped)
+        #expect(m.runs.stopBody(r, film: m) == "It ended without delivering the assembly.")
+        #expect(try store.turnover(t.id).state == .failed)
+        m.runs.takeTurnoverBack(m)
+        #expect(try store.turnover(t.id).state == .cancelled)
+        EditorRunner.shared.programOverride = [.claudeCode: Self.fake]
+    }
+
     @Test func stopEndsTheRun() async throws {
         let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
         try scenario("slow", dir)

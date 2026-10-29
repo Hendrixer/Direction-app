@@ -57,8 +57,11 @@ enum EditorSetup {
     static func setSignedIn(_ p: EditorProgram, _ on: Bool?) { put(EditorSetupKey.signedIn(p), on) }
     /// Direction starts the editor (not your own session).
     static var directionStarts: Bool { runsOn != .yourOwn }
-    /// Chosen, and the program it starts is on this Mac.
-    static var ready: Bool { isChosen && runsOn.program.map { EditorPrograms.shared.install($0) != nil } ?? false }
+    /// Chosen, and the program it starts is on this Mac (or the first look hasn't finished yet).
+    static var ready: Bool {
+        let p = EditorPrograms.shared
+        return isChosen && runsOn.program.map { !p.checked || p.install($0) != nil } ?? false
+    }
 }
 
 /// Programs found on this Mac. Looked for once at launch, and again on Check again.

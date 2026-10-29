@@ -123,7 +123,7 @@ import DirectionTools
         }
         // Answering a question or approving a read-back continues the same session (one run at a time).
         for r in runs where r.state == .waitingForYou && !EditorRunner.shared.isLive(r.id) && active == nil {
-            if let answer = continuation(for: r, film: film) { EditorRunner.shared.launch(r, store: store, continuation: EditorJobs.continuation(answer, job: r.job)) }
+            if let answer = continuation(for: r, film: film) { EditorRunner.shared.launch(r, store: store, continuation: EditorJobs.continuation(answer, job: r.job)); break }
         }
     }
 
