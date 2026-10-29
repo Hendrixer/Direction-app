@@ -95,7 +95,8 @@ struct Thumbnail: View {
     var path: String?
     var art: FootageArt = .room
     var body: some View {
-        if let path, let image = ThumbnailCache.image(path) { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill) }
+        // Fill the space it's given, never grow past it.
+        if let path, let image = ThumbnailCache.image(path) { Color.clear.overlay { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill) }.clipped() }
         else { FootageArtView(art: art) }
     }
 }

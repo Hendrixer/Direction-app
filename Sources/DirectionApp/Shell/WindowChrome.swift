@@ -37,9 +37,11 @@ final class WindowObserverView: NSView {
     func layoutTrafficLights() {
         guard let window, !window.styleMask.contains(.fullScreen) else { return }
         let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-        guard let close = window.standardWindowButton(.closeButton), let container = close.superview else { return }
+        // close → titlebar view → titlebar container (in the theme frame, origin bottom-left).
+        guard let close = window.standardWindowButton(.closeButton), let titlebar = close.superview, let container = titlebar.superview else { return }
         let height = Gate.Size.titlebar, spacing: CGFloat = 20
-        container.frame = NSRect(x: 0, y: window.frame.height - height, width: container.frame.width, height: height)
+        container.frame = NSRect(x: 0, y: window.frame.height - height, width: window.frame.width, height: height)
+        titlebar.frame = container.bounds
         for (i, type) in buttons.enumerated() {
             guard let b = window.standardWindowButton(type) else { continue }
             b.setFrameOrigin(NSPoint(x: Gate.Size.trafficLightsX + CGFloat(i) * spacing, y: (height - b.frame.height) / 2))
