@@ -12,9 +12,9 @@
   <key>LSMinimumSystemVersion</key><string>26.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.video</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSSpeechRecognitionUsageDescription</key><string>Direction transcribes your selected footage locally so you can edit video by editing its transcript.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Direction transcribes your footage on this Mac so you can direct from the script and find every reading of a line.</string>
   <key>CFBundleDocumentTypes</key><array><dict>
-    <key>CFBundleTypeName</key><string>Direction Project</string>
+    <key>CFBundleTypeName</key><string>Direction Film</string>
     <key>CFBundleTypeRole</key><string>Editor</string>
     <key>LSHandlerRank</key><string>Owner</string>
     <key>LSItemContentTypes</key><array><string>dev.direction.project</string></array>
@@ -22,7 +22,7 @@
   </dict></array>
   <key>UTExportedTypeDeclarations</key><array><dict>
     <key>UTTypeIdentifier</key><string>dev.direction.project</string>
-    <key>UTTypeDescription</key><string>Direction Project</string>
+    <key>UTTypeDescription</key><string>Direction Film</string>
     <key>UTTypeConformsTo</key><array><string>com.apple.package</string></array>
     <key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>direction</string></array></dict>
   </dict></array>
