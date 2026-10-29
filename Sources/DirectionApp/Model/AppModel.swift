@@ -29,6 +29,7 @@ final class AppModel {
         do {
             film?.close()
             let model = try FilmModel(url: url)
+            model.onNotify = { [weak self] title, body, key in self?.notify(title, body, key: key); self?.updateDockBadge() }
             model.startPolling()
             film = model
             lastFilm = url.path

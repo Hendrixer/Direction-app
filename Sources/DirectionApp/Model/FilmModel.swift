@@ -119,6 +119,9 @@ final class FilmModel {
     /// Set by the window. Director actions register their inverse here for ⌘Z.
     @ObservationIgnored weak var undoManager: UndoManager?
     @ObservationIgnored private var playbackActivity: NSObjectProtocol?
+    /// Posts a user notification: (title, body, settings key). Set by the app.
+    @ObservationIgnored var onNotify: ((String, String, String) -> Void)?
+    @ObservationIgnored private var knownQuestions: Set<String> = []
 
     var store: ProjectStore? { runtime?.store }
     var url: URL? { store?.url }
@@ -146,6 +149,7 @@ final class FilmModel {
         runtime = try ToolRuntime(store: store)
         refresh(force: true)
         knownDelivered = Set(turnovers.filter { $0.state == .delivered }.map(\.id))
+        knownQuestions = Set(questions.map(\.id))
         room = defaultRoom
     }
 
@@ -179,6 +183,7 @@ final class FilmModel {
             let newEvents = try store.events(since: max(0, cursor)); events = Array((events + newEvents).suffix(200))
             cursor = latest
             announceDeliveredCuts()
+            announceQuestions()
             loadDisplayed()
         } catch { self.error = error.localizedDescription }
     }
@@ -191,6 +196,16 @@ final class FilmModel {
             let answers = notes.filter { $0.latestAnswer?.cutID == cut.id }.count
             toast = Toast(title: "\(cut.name) is ready", detail: "\(answers) answers · \(Timecode.duration(changesDuration(in: cut))) of changes to watch", editor: true, actionTitle: "Watch changes")
             if watchedCutID == nil { loadDisplayed(force: true) }
+            onNotify?("\(cut.name) is ready", "\(filmName) · \(answers) answers to review", NotificationKey.cutReady)
+        }
+    }
+
+    private func announceQuestions() {
+        let fresh = openQuestions.filter { !knownQuestions.contains($0.id) }
+        defer { knownQuestions.formUnion(questions.map(\.id)) }
+        guard cursor >= 0, !knownQuestions.isEmpty || !questions.isEmpty, pollTask != nil else { return }
+        for q in fresh {
+            onNotify?(q.kind == "cant" ? "The editor can't do note \(q.noteIDs.first.map(noteNumber) ?? "")" : "The editor has a question", q.text, q.kind == "cant" ? NotificationKey.cant : NotificationKey.question)
         }
     }
 
@@ -594,4 +609,9 @@ final class FilmModel {
         guard let store else { return }
         do { try body(store); refresh(force: true) } catch { self.error = error.localizedDescription; refresh(force: true) }
     }
+}
+
+/// UserDefaults keys for Settings › Notifications. Default on.
+enum NotificationKey {
+    static let cutReady = "notifyCutReady", question = "notifyQuestion", cant = "notifyCant", delivery = "notifyDelivery"
 }
