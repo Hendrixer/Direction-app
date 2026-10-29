@@ -25,9 +25,9 @@ extension SharedSettings {
     }
 
     public static let lookDetails: [LookDetail] = [
-        .init(id: "quick", name: "Qwen2.5-VL 3B", repo: "mlx-community/Qwen2.5-VL-3B-Instruct-4bit", label: "Quick \u{00B7} 2.4 GB", bytes: 3_090_000_000, minimumMemory: 8 << 30),
+        .init(id: "quick", name: "Qwen2.5-VL 3B", repo: "mlx-community/Qwen2.5-VL-3B-Instruct-4bit", label: "Quick \u{00B7} 3.1 GB", bytes: 3_090_000_000, minimumMemory: 8 << 30),
         .init(id: "standard", name: "Qwen3-VL 8B", repo: "mlx-community/Qwen3-VL-8B-Instruct-4bit", label: "Standard \u{00B7} 5.8 GB", bytes: 5_780_000_000, minimumMemory: 16 << 30),
-        .init(id: "best", name: "Qwen3-VL 30B-A3B", repo: "mlx-community/Qwen3-VL-30B-A3B-Instruct-4bit", label: "Best \u{00B7} 17 GB", bytes: 18_270_000_000, minimumMemory: 32 << 30),
+        .init(id: "best", name: "Qwen3-VL 30B-A3B", repo: "mlx-community/Qwen3-VL-30B-A3B-Instruct-4bit", label: "Best \u{00B7} 18 GB", bytes: 18_270_000_000, minimumMemory: 32 << 30),
     ]
 
     /// OpenRouter vision versions offered in the Detail select, default first.

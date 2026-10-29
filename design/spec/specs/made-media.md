@@ -20,7 +20,7 @@ Every service goes through **OpenRouter**: one key, one bill, many versions. Dir
 | New shots | shot | `POST /videos` (async: `pending` → `in_progress` → `completed`), poll `GET /videos/{id}`, download `GET /videos/{id}/content` | Veo 3.1 | Text to video, or from a frame (`frame_images` with `first_frame`/`last_frame`) and `input_references`. |
 | A shot from one you have | changedShot | `POST /videos` with a frame of the take as `first_frame` and the ask | Veo 3.1 | OpenRouter's video API takes images, not video, so "change the sky" makes a new shot that starts on that take's frame. |
 | Stills | still | `POST /images`, or chat completions with image output | Nano Banana 2 | Backgrounds and plates for graphics. |
-| Looking at footage | — | `POST /chat/completions` with keyframes as `image_url` parts and `response_format: {type: "json_schema"}` | Gemini 3.1 Flash | Only when Settings › Footage › Look with is OpenRouter. |
+| Looking at footage | — | `POST /chat/completions` with keyframes as `image_url` parts and `response_format: {type: "json_schema"}` | Gemini 3.1 Flash Lite | Only when Settings › Footage › Look with is OpenRouter. |
 
 - Versions come from OpenRouter's model lists (`GET /models?output_modalities=audio|image|video`, `GET /videos/models`), cached for a day. Settings › Services shows the version used for each kind, with the defaults above.
 - **Estimates** come from each version's listed pricing (per second of video, per clip, per token). **Spend** is what OpenRouter reports for the request: `usage.cost` on video jobs and chat responses. The month's total is Direction's own record of those.
@@ -61,7 +61,7 @@ The month resets on the 1st. "Spent this month" sums Direction's own record of e
 ---
 
 ## 55 · Settings, Services
-Frame: `screens/55-settings-services.html` · 720 × 682. See `settings.md › 55`.
+Frame: `screens/55-settings-services.html` · 720 × 722. See `settings.md › 55`.
 
 ## 61 · Changes, made music
 Frame: `screens/61-changes-made.html` · 1440 × 900.

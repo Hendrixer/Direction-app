@@ -40,10 +40,10 @@ Both engines decode greedily (temperature 0) into this JSON with a 160-token lim
 
 | Engine | Detail | Runs | Size | Speed target (M4 Max) | Notes |
 |---|---|---|---|---|---|
-| This Mac | Quick | Qwen2.5-VL 3B, 4-bit, through `mlx-vlm` | 2.4 GB | ~0.4 s a shot | Shorter, plainer lines |
+| This Mac | Quick | Qwen2.5-VL 3B, 4-bit, through `mlx-vlm` | 3.1 GB | ~0.4 s a shot | Shorter, plainer lines |
 | This Mac | **Standard** (default) | Qwen3-VL 8B, 4-bit, through `mlx-vlm` | 5.8 GB | ~1 s a shot | Best balance |
-| This Mac | Best | Qwen3-VL 30B-A3B, 4-bit, through `mlx-vlm` | 17 GB | ~1.5 s a shot | Needs 32 GB of memory or more |
-| OpenRouter | a vision version (default Gemini 3.1 Flash) | OpenRouter chat completions with your key | — | ~1 s a shot, in parallel | Three 672 px keyframes per shot leave this Mac; nothing else does |
+| This Mac | Best | Qwen3-VL 30B-A3B, 4-bit, through `mlx-vlm` | 18 GB | ~1.5 s a shot | Needs 32 GB of memory or more |
+| OpenRouter | a vision version (default Gemini 3.1 Flash Lite) | OpenRouter chat completions with your key | — | ~1 s a shot, in parallel | Three 672 px keyframes per shot leave this Mac; nothing else does |
 
 - **On this Mac**, Direction runs a small Python helper shipped in the app (`Resources/Vision/describe.py`) with the Python from `uv tool install mlx-vlm` (found like mlx-whisper: `~/.local/share/uv/tools/mlx-vlm/bin/python`, or any `python3` that can `import mlx_vlm`). The helper loads the version once and answers JSON lines on stdin/stdout: `{"images": [paths], "prompt": "…"}` → `{"text": "…"}`. It's stopped 60 s after the last shot. Apple's MLX library for Swift isn't used because `swift build` can't compile its GPU code.
 - Weights download on first use to the Hugging Face cache (`~/.cache/huggingface/hub`), with progress in Settings › Footage, and show in Settings › Storage.

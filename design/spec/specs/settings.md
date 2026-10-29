@@ -7,7 +7,7 @@ Frames 42–48, 54 and 55. Opens with Direction › Settings… (`⌘,`). It's a
 | Part | Spec |
 |---|---|
 | Width | 720 pt, fixed. |
-| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 682, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
+| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 722, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
 | Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. |
 | Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘9` switch tabs while Settings is key. |
 | Body | Padding 4/28/22. Each group is a label (`.label`, 14 above and 7 below) plus a `.set-card` (`--panel`, radius 10, hairline). |
@@ -186,7 +186,7 @@ Frame: `screens/54-settings-footage.html` · Render: `renders/54-settings-footag
 | Transcription | Whisper version | Select: Large v3 Turbo / Large v3 | Large v3 Turbo | Sub-label: "Fast. Nearly as accurate as Large v3. Downloaded · 1.6 GB." or "Slower, and a little more accurate. Downloads 3.1 GB the first time it's used." Disabled while Apple is chosen. |
 | Transcription | mlx-whisper (only while Whisper is chosen) | Chip "Ready", or **Copy Command** | — | Ready shows the path (`~/.local/bin/mlx_whisper`). Missing: "mlx-whisper isn't installed" / "Install it in Terminal with pip install mlx-whisper. Until then, Apple transcribes." Missing ffmpeg: "Whisper needs ffmpeg" / "brew install ffmpeg". |
 | Looking at footage | Look with | Seg: This Mac / OpenRouter | This Mac | This Mac: "Private and free. Footage never leaves this Mac." OpenRouter: "Sends three small frames of each shot to a vision version through OpenRouter. Needs your key in Services." |
-| Looking at footage | Detail | Select: Quick · 2.4 GB / Standard · 5.8 GB / Best · 17 GB (This Mac); or a select of OpenRouter vision versions, default Gemini 3.1 Flash | Standard | Sub-label names the version and state: "Qwen3-VL 8B. Downloaded." Needs mlx-vlm: when it isn't installed, the row reads "mlx-vlm isn't installed" / "Install it in Terminal with uv tool install mlx-vlm. Until then, nothing is described; shots and sounds are still found." with **Copy Command**. |
+| Looking at footage | Detail | Select: Quick · 3.1 GB / Standard · 5.8 GB / Best · 18 GB (This Mac); or a select of OpenRouter vision versions, default Gemini 3.1 Flash Lite | Standard | Sub-label names the version and state: "Qwen3-VL 8B. Downloaded." Needs mlx-vlm: when it isn't installed, the row reads "mlx-vlm isn't installed" / "Install it in Terminal with uv tool install mlx-vlm. Until then, nothing is described; shots and sounds are still found." with **Copy Command**. |
 | Looking at footage | Look at new footage automatically | Switch | On | Off: footage is indexed only when the editor asks or you choose Film › Look at Footage. |
 | Color | Looks folder | Path field (read-only, folder icon) with **Change…** and **Show in Finder** | `~/Movies/Direction/Looks` | LUTs here appear in the Look sheet (frame 63). Subfolders become groups. |
 | Color | Convert log footage automatically | Switch | On | Sub-label: "Apple Log, S-Log3, LogC and V-Log become normal video before any look. Camera LUTs live in the Camera folder." |
@@ -201,7 +201,7 @@ Note under Looking at footage: "The editor reads what's found here to log takes,
 ---
 
 ## 55 · Settings, Services
-Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 682. Tab icon: `key`.
+Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 722. Tab icon: `key`.
 
 **The OpenRouter row** (`.set-row`, min 56): a 28 rounded-square monogram "O" (`--raised` fill, hairline border, radius 8, 12/700 text-2; no brand logo), "OpenRouter" (13/600) with "Music, voice, sound effects, new shots and stills" under it (11.5 text-3), and on the right a chip "Ready" (ok style) with "$37.20 left" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`, key icon).
 
