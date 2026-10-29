@@ -21,7 +21,7 @@ extension ToolRuntime {
         switch name {
         case "direction_brief":
             let state = try store.directingState()
-            return ToolResponse(.object(["brief": try .wrapping(store.brief()), "latitude": .string(state.latitude.rawValue), "pictureLocked": .bool(state.pictureLocked), "editorPaused": .bool(state.editorPaused)]))
+            return ToolResponse(.object(["brief": try .wrapping(store.brief()), "latitude": .string(state.latitude.rawValue), "pictureLocked": .bool(state.pictureLocked), "editorPaused": .bool(state.editorPaused), "preferences": try .wrapping(state.preferences ?? EditorPreferences())]))
 
         case "direction_dailies":
             let p = try store.read()
@@ -69,7 +69,7 @@ extension ToolRuntime {
                     "mayStartCutting": .bool(!t.waitForOK || t.readBackApproved || t.kind == "assembly"),
                 ])
             }
-            return ToolResponse(.object(["turnovers": .array(items), "brief": try .wrapping(store.brief())]))
+            return ToolResponse(.object(["turnovers": .array(items), "brief": try .wrapping(store.brief()), "preferences": try .wrapping(store.directingState().preferences ?? EditorPreferences())]))
 
         case "direction_turnover_update":
             let readBack: [ReadBackLine]? = try a["readBack"].array.map { lines in

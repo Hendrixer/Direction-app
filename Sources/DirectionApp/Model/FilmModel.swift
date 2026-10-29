@@ -524,12 +524,22 @@ final class FilmModel {
 
     @AppStorage("defaultLatitude") @ObservationIgnored var defaultLatitude = Latitude.faithful.rawValue
     @AppStorage("waitForReadBack") @ObservationIgnored var waitForReadBack = true
+    /// Settings › Editor as the editor will read them with the turnover.
+    var editorPreferences: EditorPreferences {
+        let d = UserDefaults.standard
+        let order = (d.string(forKey: "conflictOrder") ?? "").split(separator: ",").compactMap { NoteKind(rawValue: String($0)) }
+        return EditorPreferences(twoWaysForFeeling: d.object(forKey: "cutFeelingTwoWays") as? Bool ?? true, askBeforeGuessing: d.object(forKey: "askBeforeGuessing") as? Bool ?? true,
+                                 conflictOrder: order.count == NoteKind.allCases.count ? order : NoteKind.allCases, handleSeconds: handleSeconds)
+    }
     func turnOver(latitude: Latitude, waitForOK: Bool) {
-        let ids = readyNotes.map(\.id)
+        let ids = readyNotes.map(\.id), prefs = editorPreferences
+        perform { _ = try $0.updateDirectingState(summary: "Updated the editor's instructions") { $0.preferences = prefs; $0.latitude = latitude; $0.waitForOK = waitForOK } }
         perform { _ = try $0.turnOver(noteIDs: ids, latitude: latitude, waitForOK: waitForOK, cutID: self.watchedCut?.id, sequenceID: self.sequence?.id) }
         sheet = nil
     }
     func assembleFromCircles() {
+        let prefs = editorPreferences
+        perform { _ = try $0.updateDirectingState(summary: "Updated the editor's instructions") { $0.preferences = prefs } }
         perform { _ = try $0.turnOver(noteIDs: [], kind: "assembly", latitude: Latitude(rawValue: self.defaultLatitude) ?? .faithful, waitForOK: false, cutID: nil, sequenceID: self.sequence?.id) }
     }
     func approveReadBack() { guard let t = openTurnover else { return }; perform { _ = try $0.approveReadBack(turnoverID: t.id) } }

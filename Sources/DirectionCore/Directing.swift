@@ -275,7 +275,23 @@ public struct DirectingState: Codable, Hashable, Sendable {
     public var deliveredAt: Double?
     public var deliveredPaths: [String]?
     public var editorPaused: Bool = false
+    /// The director's standing instructions to the editor (Settings › Editor).
+    public var preferences: EditorPreferences?
     public init() {}
+}
+
+public struct EditorPreferences: Codable, Hashable, Sendable {
+    /// Cut Feeling notes two ways when latitude allows.
+    public var twoWaysForFeeling = true
+    /// Ask instead of choosing when a note could mean two things.
+    public var askBeforeGuessing = true
+    /// Which kind wins a conflict, strongest first.
+    public var conflictOrder: [NoteKind] = NoteKind.allCases
+    /// Seconds of untouched picture either side of a change in Play changes.
+    public var handleSeconds: Double = 2
+    public init(twoWaysForFeeling: Bool = true, askBeforeGuessing: Bool = true, conflictOrder: [NoteKind] = NoteKind.allCases, handleSeconds: Double = 2) {
+        self.twoWaysForFeeling = twoWaysForFeeling; self.askBeforeGuessing = askBeforeGuessing; self.conflictOrder = conflictOrder; self.handleSeconds = handleSeconds
+    }
 }
 
 extension ReviewComment {
