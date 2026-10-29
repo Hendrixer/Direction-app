@@ -31,12 +31,13 @@ Frame: `screens/01-films-empty.html` · Render: `renders/01-films-empty@2x.png`
 
 **Motion:** On first launch the mark fades in and rises 8 pt over Glide (360 ms, ease-out), the text follows after 80 ms. Reduce Motion: fade only.
 
-**The mark's light** (`ChromeMark` in the app): the rainbow reflection at the lower left of the stem travels around the letter, as if the light moved, and comes home.
-- The art isn't recolored. The rainbow is lifted out of the mark once at launch: a soft spot (radius 70–135 of the 1024 art, centered at x 180, y 700) becomes its own image, and the mark under it goes grey there.
-- The rainbow is laid back with color blending, so wherever it goes it takes the chrome's own light and shade. A second copy of only its colored pixels, with screen blending, carries its light onto darker chrome. It fades out as the rainbow nears home, so at rest the mark matches the art exactly.
-- The path is a closed curve over the letter's face: up the stem, across the top, around the bowl, along the bottom, home.
-- **Timing:** each pass is 5.2 s on `cubic-bezier(0.72, 0, 0.14, 1)` (slow out of rest, quick through the middle, a long eased stall coming home), then a 2.6 s rest at home.
-- Reduce Motion: the still mark. The `zz-chrome-mark` and `zz-chrome-mark-close` snapshots render moments of one pass.
+**The mark's light** (`ChromeMark` in the app): a light circles the letter and the chrome reacts to it.
+- **The surface.** The bevel is rebuilt from the mark's silhouette: the alpha blurred wide (σ ≈ 2% of the mark) and re-ranged, so every pixel near an edge knows which way it faces. Fine relief comes from the chrome's own flecks.
+- **The light.** A point light orbits just outside the letter, low. Chrome near it brightens and chrome far from it dims a little; edges turned away fall into shade.
+- **The lit edge.** The stretch of bevel facing the light glows, white where it faces it squarely. Seven wavelengths, red to violet, are each aimed a step apart, so the ends of every lit edge split into a spectrum, as chrome and glass disperse light.
+- **The art's rainbow** shows where the light reaches and fades to near grey where it doesn't, so it follows the light too.
+- **Timing:** the light goes once around per pass, 5.6 s on `cubic-bezier(0.72, 0, 0.14, 1)` (slow out of rest, quick through the middle, a long eased stall), then rests 2.4 s up and to the left.
+- It's a Metal compute shader compiled from source at first use (no build-time Metal tools), rendered at the view's pixel size. Reduce Motion, or no Metal, shows the still mark. The `zz-chrome-mark` and `zz-chrome-mark-close` snapshots render moments of one pass.
 
 **Accessibility:** Mark is decorative (no label). Focus order: New film, Start from a folder…, titlebar New film. The strip is static text read as a list "How it works, 4 items".
 

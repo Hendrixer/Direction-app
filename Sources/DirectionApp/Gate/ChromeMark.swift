@@ -1,32 +1,37 @@
 import SwiftUI
 import AppKit
-import CoreImage
+import Metal
+import MetalKit
 
-/// The chrome D, with its rainbow reflection travelling around the letter as if the light moved.
-/// The rainbow lives at the lower left of the stem. Each pass carries it up the stem, across the top,
-/// around the bowl and back along the bottom to where it started: slowly at first, then quicker,
-/// then easing into a stall at home, where it rests before the next pass. Reduce Motion shows the still mark.
+/// The chrome D lit by a light that circles it. The letter's bevel is rebuilt from its silhouette, so
+/// the edges turned toward the light catch it and the far edges fall off; red, green and blue each see
+/// the light from a slightly different angle, so the highlights split into rainbows the way chrome
+/// and glass disperse light. The light moves slowly, gathers speed, eases into a stall, then rests.
+/// Reduce Motion, or a Mac without Metal, shows the still mark.
 struct ChromeMark: View {
     var size: CGFloat = 168
     /// Pins the moment, in seconds, for snapshots. Nil follows the clock.
     var at: Double? = nil
+    @Environment(\.displayScale) private var displayScale
 
-    static let pass = 5.2, rest = 2.6
-    /// Slow out of the rest, quick through the middle, a long eased stall on the way home.
+    static let pass = 5.6, rest = 2.4
+    /// Slow out of the rest, quick through the middle, a long eased stall.
     static let curve = UnitCurve.bezier(startControlPoint: UnitPoint(x: 0.72, y: 0), endControlPoint: UnitPoint(x: 0.14, y: 1))
+    /// Where the light rests: up and to the left, in image coordinates (y down).
+    static let restingAngle = 1.25 * Double.pi
 
-    /// 0…1 around the letter; holds at 0 (home) through the rest.
-    static func progress(_ time: Double) -> Double {
+    /// The light's direction around the letter: once around per pass, parked through the rest.
+    static func angle(_ time: Double) -> Double {
         let t = time.truncatingRemainder(dividingBy: pass + rest)
-        return t >= pass ? 0 : curve.value(at: t / pass)
+        return restingAngle + (t >= pass ? 0 : curve.value(at: t / pass)) * 2 * .pi
     }
 
     var body: some View {
         if let mark = BrandAssets.mark {
             Group {
-                if let layers = ChromeLight.layers, !(at == nil && SettingsKey.reducesMotion) {
-                    if let at { lit(layers, mark, Self.progress(at)) }
-                    else { TimelineView(.animation) { lit(layers, mark, Self.progress($0.date.timeIntervalSinceReferenceDate)) } }
+                if let renderer = ChromeLightRenderer.shared, !(at == nil && SettingsKey.reducesMotion) {
+                    if let at { lit(renderer, Self.angle(at), scale: 2) }
+                    else { TimelineView(.animation(minimumInterval: 1 / 60)) { lit(renderer, Self.angle($0.date.timeIntervalSinceReferenceDate), scale: displayScale) } }
                 } else {
                     Image(nsImage: mark).resizable().interpolation(.high).scaledToFit()
                 }
@@ -36,102 +41,175 @@ struct ChromeMark: View {
         }
     }
 
-    private func lit(_ layers: ChromeLight.Layers, _ mark: NSImage, _ p: Double) -> some View {
-        let k = size / ChromeLight.side, spot = ChromePath.point(at: p)
-        // The art already holds the rainbow's light at home; away from home the reflection brings it along.
-        let away = min(1, hypot(spot.x - ChromeLight.home.x, spot.y - ChromeLight.home.y) / 160)
-        return ZStack {
-            // The mark with its rainbow taken out, so the chrome is grey where the rainbow used to sit.
-            Image(nsImage: layers.base).resizable().interpolation(.high)
-            // The rainbow alone. Color blending gives the chrome under it the rainbow's hue and
-            // saturation while keeping the chrome's own light and shade, so it reads as a reflection.
-            Image(nsImage: layers.rainbow).resizable().interpolation(.high)
-                .frame(width: ChromeLight.patch * k, height: ChromeLight.patch * k)
-                .position(x: spot.x * k, y: spot.y * k)
-                .blendMode(.color)
-            Image(nsImage: layers.glow).resizable().interpolation(.high)
-                .frame(width: ChromeLight.patch * k, height: ChromeLight.patch * k)
-                .position(x: spot.x * k, y: spot.y * k)
-                .blendMode(.screen).opacity(0.7 * away * away * (3 - 2 * away))
+    @ViewBuilder private func lit(_ renderer: ChromeLightRenderer, _ angle: Double, scale: CGFloat) -> some View {
+        if let image = renderer.image(angle: angle, pixels: Int((size * scale).rounded())) {
+            Image(decorative: image, scale: scale).resizable().interpolation(.high)
         }
-        .frame(width: size, height: size)
-        .compositingGroup()
-        .mask(Image(nsImage: mark).resizable().interpolation(.high))
     }
 }
 
-/// The two images the light is made of, cut once from the mark.
-@MainActor private enum ChromeLight {
-    struct Layers { let base: NSImage; let rainbow: NSImage; let glow: NSImage }
-    /// The art's coordinates: a 1024 square, top-left origin.
-    static let side: CGFloat = 1024
-    /// Where the rainbow sits in the art, and how much of it travels.
-    static let home = CGPoint(x: 180, y: 700), inner: CGFloat = 70, outer: CGFloat = 135, patch: CGFloat = 300
+/// Renders the lit mark on the GPU. The shader is compiled from source at first use, so the app
+/// needs no build-time Metal tools.
+@MainActor final class ChromeLightRenderer {
+    static let shared = ChromeLightRenderer()
 
-    static let layers: Layers? = {
-        guard let mark = BrandAssets.mark, let cg = mark.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-        let image = CIImage(cgImage: cg), extent = image.extent, s = extent.width / side
-        let center = CGPoint(x: home.x * s, y: extent.height - home.y * s)
-        // Grey by the same luminance weights color blending uses, so the rainbow at home restores the art.
-        let weights = CIVector(x: 0.3, y: 0.59, z: 0.11, w: 0)
-        let grey = image.applyingFilter("CIColorMatrix", parameters: ["inputRVector": weights, "inputGVector": weights, "inputBVector": weights, "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1)])
-        guard let spot = CIFilter(name: "CIRadialGradient", parameters: [
-            "inputCenter": CIVector(cgPoint: center), "inputRadius0": inner * s, "inputRadius1": outer * s,
-            "inputColor0": CIColor.white, "inputColor1": CIColor.black,
-        ])?.outputImage?.cropped(to: extent) else { return nil }
-        let base = grey.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: spot])
-        let rainbow = image.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: CIImage(color: .clear).cropped(to: extent), kCIInputMaskImageKey: spot])
-        // Only the colored pixels, weighted by how saturated they are: the light the reflection carries.
-        let saturation = image.applyingFilter("CIMaximumComponent")
-            .applyingFilter("CIDifferenceBlendMode", parameters: [kCIInputBackgroundImageKey: image.applyingFilter("CIMinimumComponent")])
-            .applyingFilter("CIColorMatrix", parameters: ["inputRVector": CIVector(x: 2.2, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 2.2, z: 0, w: 0), "inputBVector": CIVector(x: 0, y: 0, z: 2.2, w: 0)])
-            .applyingFilter("CIColorClamp")
-        let glow = rainbow.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: CIImage(color: .clear).cropped(to: extent), kCIInputMaskImageKey: saturation])
-        let half = patch * s / 2
-        let patchRect = CGRect(x: center.x - half, y: center.y - half, width: half * 2, height: half * 2)
-        let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
-        let context = CIContext(options: [.workingColorSpace: sRGB, .outputColorSpace: sRGB])
-        guard let baseCG = context.createCGImage(base, from: extent, format: .RGBA8, colorSpace: sRGB),
-              let rainbowCG = context.createCGImage(rainbow, from: patchRect, format: .RGBA8, colorSpace: sRGB),
-              let glowCG = context.createCGImage(glow, from: patchRect, format: .RGBA8, colorSpace: sRGB) else { return nil }
-        let patchSize = NSSize(width: patch, height: patch)
-        return Layers(base: NSImage(cgImage: baseCG, size: mark.size), rainbow: NSImage(cgImage: rainbowCG, size: patchSize), glow: NSImage(cgImage: glowCG, size: patchSize))
-    }()
-}
+    private let device: MTLDevice, queue: MTLCommandQueue, pipeline: MTLComputePipelineState
+    private let art: MTLTexture, height: MTLTexture
+    private var output: MTLTexture?
+    private var last: (angle: Double, pixels: Int, image: CGImage)?
 
-/// The loop the rainbow follows over the letter's face, in the art's coordinates, from home and back.
-private enum ChromePath {
-    static let stops: [CGPoint] = [
-        CGPoint(x: 180, y: 700), CGPoint(x: 188, y: 470), CGPoint(x: 205, y: 230), CGPoint(x: 330, y: 140), CGPoint(x: 560, y: 150),
-        CGPoint(x: 740, y: 245), CGPoint(x: 850, y: 390), CGPoint(x: 885, y: 565), CGPoint(x: 820, y: 760), CGPoint(x: 640, y: 870),
-        CGPoint(x: 400, y: 890), CGPoint(x: 215, y: 860),
-    ]
+    /// How the light behaves. Tuned against the art; see design/spec/specs/start.md.
+    struct Params {
+        var light: SIMD2<Float> = .zero  // direction from the letter's center to the light
+        var elevation: Float = 0.32      // low, so edges catch it and the face mostly doesn't
+        var lod: Float = 0
+        var bevel: Float = 30            // how steeply the rim turns away from the face
+        var detail: Float = 1.4          // relief from the chrome's own flecks
+        var intensity: Float = 2.2
+        var spread: Float = 0.5         // radians between red, green and blue: the width of the rainbows
+        var orbit: Float = 0.78          // the light's distance from the center, in the mark's widths
+        var falloff: Float = 1.6         // how quickly the light fades across the letter
+        var saturation: Float = 0.2      // how much of the art's painted rainbow stays far from the light
+        var lobe: Float = 7              // how narrow the lit stretch of edge is
+    }
 
-    /// Catmull-Rom through the stops, sampled densely and indexed by distance so speed is even
-    /// along the curve; the timing curve alone decides how fast the rainbow moves.
-    private static let samples: [(CGPoint, CGFloat)] = {
-        var points: [CGPoint] = []
-        let n = stops.count
-        for i in 0..<n {
-            let p0 = stops[(i - 1 + n) % n], p1 = stops[i], p2 = stops[(i + 1) % n], p3 = stops[(i + 2) % n]
-            for step in 0..<40 {
-                let t = CGFloat(step) / 40, t2 = t * t, t3 = t2 * t
-                func axis(_ a: CGFloat, _ b: CGFloat, _ c: CGFloat, _ d: CGFloat) -> CGFloat {
-                    0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (3 * b - a - 3 * c + d) * t3)
+    private init?() {
+        guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue(),
+              let mark = BrandAssets.mark, let cg = mark.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let library = try? device.makeLibrary(source: Self.shader, options: nil),
+              let function = library.makeFunction(name: "chromeLight"),
+              let pipeline = try? device.makeComputePipelineState(function: function),
+              let art = try? MTKTextureLoader(device: device).newTexture(cgImage: cg, options: [.SRGB: false, .generateMipmaps: true, .textureStorageMode: MTLStorageMode.private.rawValue]),
+              let height = Self.heightTexture(cg, device: device) else { return nil }
+        self.device = device; self.queue = queue; self.pipeline = pipeline; self.art = art; self.height = height
+    }
+
+    func image(angle: Double, pixels: Int) -> CGImage? {
+        if let last, last.angle == angle, last.pixels == pixels { return last.image }
+        let pixels = max(32, min(pixels, 1024))
+        if output?.width != pixels {
+            let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: pixels, height: pixels, mipmapped: false)
+            d.usage = [.shaderWrite]; d.storageMode = .shared
+            output = device.makeTexture(descriptor: d)
+        }
+        guard let output, let buffer = queue.makeCommandBuffer(), let encoder = buffer.makeComputeCommandEncoder() else { return nil }
+        var params = Params()
+        params.light = SIMD2(Float(cos(angle)), Float(sin(angle)))
+        params.lod = log2(Float(art.width) / Float(pixels))
+        encoder.setComputePipelineState(pipeline)
+        encoder.setTexture(art, index: 0); encoder.setTexture(height, index: 1); encoder.setTexture(output, index: 2)
+        encoder.setBytes(&params, length: MemoryLayout<Params>.stride, index: 0)
+        let group = MTLSize(width: 16, height: 16, depth: 1)
+        encoder.dispatchThreadgroups(MTLSize(width: (pixels + 15) / 16, height: (pixels + 15) / 16, depth: 1), threadsPerThreadgroup: group)
+        encoder.endEncoding()
+        buffer.commit(); buffer.waitUntilCompleted()
+
+        var bytes = [UInt8](repeating: 0, count: pixels * pixels * 4)
+        output.getBytes(&bytes, bytesPerRow: pixels * 4, from: MTLRegionMake2D(0, 0, pixels, pixels), mipmapLevel: 0)
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
+              let image = CGImage(width: pixels, height: pixels, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: pixels * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue), provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
+        last = (angle, pixels, image)
+        return image
+    }
+
+    /// The bevel as a height field: 0 at the silhouette, rising to 1 about a bevel's width inside it.
+    /// It's the alpha blurred wide and re-ranged, an emboss that has no pixel steps to ripple the light.
+    private static func heightTexture(_ cg: CGImage, device: MTLDevice) -> MTLTexture? {
+        let side = 512, radius = 11
+        var alpha = [UInt8](repeating: 0, count: side * side)
+        guard let context = CGContext(data: &alpha, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue) else { return nil }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: side, height: side))
+        var field = alpha.map { Float($0) / 255 }
+        // Three separable box blurs approximate a Gaussian (σ ≈ 11 px here, about 2% of the mark).
+        func blur(_ index: (Int, Int) -> Int) {
+            var line = [Float](repeating: 0, count: side)
+            for row in 0..<side {
+                var sum: Float = 0
+                for k in -radius...radius { sum += field[index(row, min(max(k, 0), side - 1))] }
+                for col in 0..<side {
+                    line[col] = sum / Float(2 * radius + 1)
+                    sum += field[index(row, min(col + radius + 1, side - 1))] - field[index(row, max(col - radius, 0))]
                 }
-                points.append(CGPoint(x: axis(p0.x, p1.x, p2.x, p3.x), y: axis(p0.y, p1.y, p2.y, p3.y)))
+                for col in 0..<side { field[index(row, col)] = line[col] }
             }
         }
-        points.append(stops[0])
-        var out: [(CGPoint, CGFloat)] = [(points[0], 0)], total: CGFloat = 0
-        for i in 1..<points.count { total += hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y); out.append((points[i], total)) }
-        return out.map { ($0.0, $0.1 / total) }
-    }()
-
-    static func point(at p: Double) -> CGPoint {
-        let d = CGFloat(min(max(p, 0), 1))
-        guard let i = samples.firstIndex(where: { $0.1 >= d }), i > 0 else { return samples[0].0 }
-        let (a, da) = samples[i - 1], (b, db) = samples[i], f = db > da ? (d - da) / (db - da) : 0
-        return CGPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f)
+        for _ in 0..<3 { blur { $0 * side + $1 }; blur { $1 * side + $0 } }
+        // The rim sits just inside the silhouette, on the art's own chrome bevel; then the face.
+        let h = field.map { v -> Float in let t = min(max((v - 0.72) / 0.275, 0), 1); return 1 - (1 - t) * (1 - t) }
+        // Half floats: always filterable, unlike 32-bit floats on some GPUs.
+        let half = h.map(Float16.init)
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Float, width: side, height: side, mipmapped: false)
+        descriptor.usage = [.shaderRead]; descriptor.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
+        texture.replace(region: MTLRegionMake2D(0, 0, side, side), mipmapLevel: 0, withBytes: half, bytesPerRow: side * 2)
+        return texture
     }
+
+    private static let shader = """
+    #include <metal_stdlib>
+    using namespace metal;
+
+    struct Params { float2 light; float elevation; float lod; float bevel; float detail; float intensity; float spread; float orbit; float falloff; float saturation; float lobe; };
+
+    static float luma(float3 c) { return dot(c, float3(0.3, 0.59, 0.11)); }
+
+    kernel void chromeLight(texture2d<float> art [[texture(0)]], texture2d<float> height [[texture(1)]],
+                            texture2d<float, access::write> out [[texture(2)]], constant Params& p [[buffer(0)]],
+                            uint2 gid [[thread_position_in_grid]]) {
+        if (gid.x >= out.get_width() || gid.y >= out.get_height()) return;
+        constexpr sampler s(filter::linear, mip_filter::linear, address::clamp_to_edge);
+        float2 uv = (float2(gid) + 0.5) / float2(out.get_width(), out.get_height());
+        float4 c = art.sample(s, uv, level(p.lod));
+        if (c.a < 0.002) { out.write(float4(0.0), gid); return; }
+
+        // The surface: the rim's slope from the height field, plus fine relief from the chrome's flecks.
+        float2 hs = 1.0 / float2(height.get_width(), height.get_height());
+        float hc = height.sample(s, uv).r;
+        float hx = height.sample(s, uv + float2(hs.x, 0)).r - height.sample(s, uv - float2(hs.x, 0)).r;
+        float hy = height.sample(s, uv + float2(0, hs.y)).r - height.sample(s, uv - float2(0, hs.y)).r;
+        float2 as = exp2(p.lod) / float2(art.get_width(), art.get_height());
+        float lx = luma(art.sample(s, uv + float2(as.x, 0), level(p.lod)).rgb) - luma(art.sample(s, uv - float2(as.x, 0), level(p.lod)).rgb);
+        float ly = luma(art.sample(s, uv + float2(0, as.y), level(p.lod)).rgb) - luma(art.sample(s, uv - float2(0, as.y), level(p.lod)).rgb);
+        float3 n = normalize(float3(-hx * p.bevel - lx * p.detail, -hy * p.bevel - ly * p.detail, 1.0));
+        float rim = 1.0 - hc;
+
+        // A point light circling just outside the letter: near parts get more of it.
+        float2 toLight = float2(0.5) + p.light * p.orbit - uv;
+        float reach = 1.0 / (1.0 + p.falloff * dot(toLight, toLight) * 4.0);
+        // The art's painted rainbow is dispersion too: it shows where the light reaches and fades
+        // where it doesn't, so it follows the light instead of staying put.
+        c.rgb = mix(float3(luma(c.rgb)), c.rgb, mix(p.saturation, 1.0, saturate(reach * 1.5)));
+        // The lit edge: the part of the bevel whose slope faces the light glows. Red, green and blue
+        // are aimed a little apart, so where all three overlap the edge is white and at its ends the
+        // light splits into spectral fringes, the way chrome and glass disperse it.
+        float base = atan2(toLight.y, toLight.x);
+        // Which way the edge faces comes from the bevel alone; the flecks only make glints.
+        float2 slope = float2(-hx, -hy) / max(length(float2(hx, hy)), 1e-5);
+        float band = sin(3.14159 * saturate(rim));
+        // Seven wavelengths, red to violet, each aimed a step apart; their colors sum to white.
+        const float3 spectrum[7] = { float3(1.0, 0.0, 0.05), float3(1.0, 0.45, 0.0), float3(0.85, 0.85, 0.0), float3(0.1, 1.0, 0.2),
+                                     float3(0.0, 0.75, 1.0), float3(0.15, 0.25, 1.0), float3(0.6, 0.0, 1.0) };
+        float3 fringe = float3(0.0);
+        for (int i = 0; i < 7; i++) {
+            float a = base + (float(i) - 3.0) / 3.0 * p.spread;
+            fringe += spectrum[i] * pow(saturate(dot(slope, float2(cos(a), sin(a)))), p.lobe);
+        }
+        fringe /= float3(2.7, 3.3, 2.45);
+        float core = pow(saturate(dot(slope, float2(cos(base), sin(base)))), p.lobe * 2.5);
+        float3 edge = (float3(core) * 0.85 + fringe * 0.75) * band;
+        // Glints: the face's own flecks catch a mirror highlight near the light.
+        float3 l = normalize(float3(toLight, p.elevation));
+        float glint = pow(max(dot(n, normalize(l + float3(0, 0, 1))), 0.0), 60.0) * (1.0 - rim);
+        // The rim facing the light brightens; the rim facing away falls into shade.
+        float facing = dot(slope, normalize(toLight));
+        // The art's own lighting dims a little so the moving light reads: chrome near the light is
+        // brighter, chrome far from it a touch darker, and edges turned away fall into shade.
+        float ambient = 0.64 + 0.5 * reach;
+        float3 shaded = c.rgb * ambient * mix(1.0, 0.5 + 0.65 * saturate(facing), band);
+        float3 light = (edge * p.intensity + glint * 0.5) * reach;
+        float3 lit = shaded + light * c.a;
+        out.write(float4(min(lit, float3(c.a)), c.a), gid);
+    }
+    """
 }
