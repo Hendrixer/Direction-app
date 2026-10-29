@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>62 Notes, a spend question</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/notes.css">
+<link rel="stylesheet" href="../css/made.css">
+<style>.qwrap{padding:14px 12px;display:grid;gap:12px;align-content:start}</style>
+</head><body class="frame">
+<script src="../gate.js"></script>
+<div class="app">
+  <div class="tb" data-c="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="crumb"><span class="seg-btn">Launch film<svg class="ico"><use href="#i-down"/></svg></span><span class="sl">/</span><span class="seg-btn cut">Cut 3<svg class="ico"><use href="#i-down"/></svg></span></div>
+    <div class="rooms" data-c="rooms"><span>Dailies</span><span>Script</span><span>Screening</span><span class="on">Notes</span><span>Changes</span><span class="off">Finish</span></div>
+    <div class="tb-right">
+      <span class="agent asks" data-c="agent-pill"><span class="mk gem"></span>1 question</span>
+      <span class="btn ghost icon" data-c="share"><svg class="ico"><use href="#i-share"/></svg></span>
+    </div>
+  </div>
+  <div class="body">
+    <div class="stage">
+      <div class="viewer">
+        <div class="frame-pic r169" data-c="picture"><div class="ft f-dusk"></div>
+          <div class="hud" style="left:12px;bottom:12px"><span class="glass">01:12:08</span></div>
+        </div>
+      </div>
+      <div class="transport" data-c="transport">
+        <span class="btn icon" data-c="play"><svg class="ico"><use href="#i-play"/></svg></span>
+        <span class="tc" data-c="timecode">01:12:08 <i>/ 3:40</i></span>
+        <div class="strip" data-c="scene-strip"><div class="sc" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div><div class="sc" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div><div class="sc cur" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div><div class="sc" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div><div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div><div class="marks"><span class="mk pin" style="left:8.2%"></span><span class="mk pin" style="left:21%"></span><span class="mk pin" style="left:32.7%"></span><span class="mk pin" style="left:47%"></span></div><div class="ph" style="left:32.7%"></div></div>
+        <span class="btn ghost icon" data-c="mark-button" title="Mark (N)"><svg class="ico" style="color:var(--director)"><use href="#i-mark"/></svg></span>
+      </div>
+    </div>
+    <div class="sheet" data-c="notes-sheet">
+      <div class="sheet-head">
+        <div class="row"><h2 class="brand-m">Read-back for Cut 4</h2><span class="sp"></span><span class="btn ghost icon sm"><svg class="ico"><use href="#i-more"/></svg></span></div>
+        <p class="t-small">7 notes turned over just now · waiting for your OK</p>
+      </div>
+      <div class="sheet-tabs" data-c="sheet-tabs"><span>Sheet <span class="count">7</span></span><span class="on">Questions <span class="count">1</span></span><span>Outside <span class="count">0</span></span></div>
+      <div class="qwrap">
+        <div class="question" data-c="question">
+          <div class="row t-small"><span class="mk gem"></span><span style="color:var(--agent);font-weight:500">Editor asks</span><span class="sp"></span><span class="faint">just now</span></div>
+          <p style="font-size:13.5px;line-height:1.5">Note 3 wants less sky. Reframing to 1.6× gets the sky to a third of the frame. To change the sky itself to dusk cloud, I’d change the shot with Runway.</p>
+          <p class="spend" data-c="spend-line">About <span class="m">$3.20</span>. <span class="lim">This turnover would reach <span class="m">$6.10</span> of your <span class="m">$5.00</span> limit.</span></p>
+          <div class="row" style="gap:5px"><span class="chip ui">Holds</span><span class="chip d">3</span></div>
+          <div class="choices" data-c="choices">
+            <div class="choice" data-c="choice"><span class="radio"></span><div class="th"><div class="ft f-dusk" style="transform:scale(1.6);transform-origin:39% 60%"></div></div><div style="min-width:0"><b class="pick" style="font-weight:500">Reframe only<span class="mk gem" data-c="editor-pick" title="I’d pick this"></span></b><div class="t-caption">No spend</div></div></div>
+            <div class="choice on" data-c="choice-selected"><span class="radio on"></span><div class="th"><div class="ft f-dusk"></div></div><div style="min-width:0"><b style="font-weight:500">Change the shot with Runway</b><div class="t-caption">About <span class="m">$3.20</span></div></div></div>
+            <div class="choice" data-c="choice"><span class="radio"></span><div class="th icon"><svg class="ico"><use href="#i-search"/></svg></div><div style="min-width:0"><b style="font-weight:500">Find another take</b><div class="t-caption">I’ll search the ridge footage first</div></div></div>
+          </div>
+          <div class="input ph" data-c="answer-field">Or tell me in your words…</div>
+          <div class="row"><span class="sp"></span><span class="btn steel" data-c="primary">Answer <kbd>↩</kbd></span></div>
+        </div>
+        <p class="t-caption" style="text-align:center">Answered questions stay here, under the note they belong to.</p>
+      </div>
+      <div class="sheet-foot">
+        <div class="row"><span class="t-small">About 3:31 after these changes. Target 3:00–4:00.</span></div>
+        <div class="row"><span class="btn ghost" data-c="adjust"><svg class="ico"><use href="#i-reply"/></svg>Adjust a line</span><span class="sp"></span><span class="t-caption">Click any line to correct it</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

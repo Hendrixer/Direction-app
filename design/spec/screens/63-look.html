@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="frame" content="1440x900">
+<title>63 The Look sheet</title>
+<link rel="stylesheet" href="../gate.css">
+<link rel="stylesheet" href="../css/notes.css">
+<link rel="stylesheet" href="../css/made.css">
+<style>.look-panel { row-gap: 13px; } .look-sec { display: grid; gap: 7px; }</style>
+</head><body class="frame screening">
+<script src="../gate.js"></script>
+
+<div class="scope" data-c="picture"><div class="ft f-dusk"></div></div>
+
+<div class="tb over scrimmed" data-c="titlebar-overlay">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="crumb"><span class="seg-btn">Launch film</span><span class="sl">/</span><span class="seg-btn cut">Cut 4</span></div>
+  <div class="rooms" data-c="rooms"><span>Dailies</span><span>Script</span><span class="on">Screening</span><span>Notes</span><span>Changes</span><span class="off">Finish</span></div>
+  <div class="tb-right">
+    <span class="agent" data-c="agent-pill"><span class="mk gem"></span>Ready</span>
+    <span class="btn ghost" data-c="end-screening"><svg class="ico"><use href="#i-exit"/></svg>End screening <kbd>esc</kbd></span>
+  </div>
+</div>
+
+<div class="dock glass" data-c="dock">
+  <span class="btn ghost icon" data-c="play"><svg class="ico l"><use href="#i-play"/></svg></span>
+  <span class="tc" data-c="timecode">01:20:00 <i>/ 3:31</i></span>
+  <div class="strip" data-c="scene-strip">
+    <div class="sc chg" style="flex:14"><div class="ft f-night"></div><span class="nm">1 Cold open</span></div>
+    <div class="sc chg" style="flex:22"><div class="ft f-room"></div><span class="nm">2 Maya, the problem</span></div>
+    <div class="sc cur chg" style="flex:18"><div class="ft f-dusk"></div><span class="nm">3 The ridge</span></div>
+    <div class="sc chg" style="flex:26"><div class="ft f-hands"></div><span class="nm">4 Building it</span></div>
+    <div class="sc lk" style="flex:20"><div class="ft f-day"></div><span class="nm"><svg class="ico s"><use href="#i-lock"/></svg>5 Launch day</span></div>
+    <div class="ph" style="left:40%"></div>
+  </div>
+  <span class="chip k" data-c="mark-count">No marks</span>
+  <span class="btn ghost icon" data-c="volume"><svg class="ico"><use href="#i-speaker"/></svg></span>
+  <span class="btn ghost icon" data-c="fullscreen"><svg class="ico"><use href="#i-full"/></svg></span>
+</div>
+
+<div class="scrim"></div>
+<div class="modal look" data-c="look-sheet">
+  <div class="look-view" data-c="look-view">
+    <div class="look-pic lk-window vig-s" data-c="look-picture"><div class="ft f-dusk"></div><i class="lk-hal"></i><i class="lk-gr"></i></div>
+    <div class="look-hint" data-c="compare-hint">Hold <span class="kbd">\</span> to compare</div>
+    <div class="stills" data-c="look-stills">
+      <div class="still" data-c="look-still"><div class="look-pic lk-window vig-s"><div class="ft f-night"></div><i class="lk-hal"></i><i class="lk-gr"></i></div><span class="nm">1 Cold open</span></div>
+      <div class="still" data-c="look-still"><div class="look-pic lk-window vig-s"><div class="ft f-room"></div><i class="lk-hal"></i><i class="lk-gr"></i></div><span class="nm">2 Maya, the problem</span></div>
+      <div class="still" data-c="look-still"><div class="look-pic lk-window vig-s"><div class="ft f-dusk"></div><i class="lk-hal"></i><i class="lk-gr"></i></div><span class="nm">3 The ridge</span></div>
+      <div class="still" data-c="look-still"><div class="look-pic lk-window vig-s"><div class="ft f-hands"></div><i class="lk-hal"></i><i class="lk-gr"></i></div><span class="nm">4 Building it</span></div>
+      <div class="still" data-c="look-still"><div class="look-pic lk-window vig-s"><div class="ft f-day"></div><i class="lk-hal"></i><i class="lk-gr"></i></div><span class="nm">5 Launch day</span></div>
+    </div>
+  </div>
+
+  <div class="look-panel" data-c="look-panel">
+    <div class="look-head" data-c="look-strength"><span class="label">Looks</span><span class="sp"></span><span class="t">Strength</span><div class="slider"><div class="tr"><i style="width:100%"></i></div><span class="th" style="left:100%"></span></div><span class="val">100%</span></div>
+
+    <div class="look-sec" data-c="look-group">
+      <div class="look-grp"><span class="mk gem"></span><span class="label">Made by the editor</span></div>
+      <div class="tiles">
+        <div class="look-tile" data-c="look-tile"><div class="look-pic"><div class="ft f-dusk"></div><span class="chip ui" data-c="current-chip">Current</span></div><span class="nm">None</span></div>
+        <div class="look-tile on" data-c="look-tile-selected"><div class="look-pic lk-window vig-s"><div class="ft f-dusk"></div><i class="lk-hal"></i><i class="lk-gr"></i><span class="mk gem"></span></div><span class="nm">Window light</span></div>
+        <div class="look-tile" data-c="look-tile"><div class="look-pic lk-warmer vig-s"><div class="ft f-dusk"></div><i class="lk-hal"></i><i class="lk-gr"></i><span class="mk gem"></span></div><span class="nm">Window light, warmer</span></div>
+      </div>
+    </div>
+
+    <div class="look-sec" data-c="look-group">
+      <div class="look-grp"><span class="label">Your looks folder</span></div>
+      <div class="tiles">
+        <div class="look-tile" data-c="look-tile"><div class="look-pic lk-print"><div class="ft f-dusk"></div></div><span class="nm">Print film</span></div>
+        <div class="look-tile" data-c="look-tile"><div class="look-pic lk-soft"><div class="ft f-dusk"></div></div><span class="nm">Soft stock</span></div>
+        <div class="look-tile" data-c="look-tile"><div class="look-pic lk-bleach"><div class="ft f-dusk"></div></div><span class="nm">Bleach bypass</span></div>
+        <div class="look-tile" data-c="look-tile"><div class="look-pic lk-teal"><div class="ft f-dusk"></div></div><span class="nm">Teal &amp; amber</span></div>
+        <div class="look-tile" data-c="look-tile"><div class="look-pic lk-muted"><div class="ft f-dusk"></div></div><span class="nm">Muted</span></div>
+      </div>
+    </div>
+
+    <div class="look-sec" data-c="look-filters">
+      <span class="label">Filters</span>
+      <div class="filters">
+        <div class="filter-row" data-c="filter-row"><span class="switch"></span><span class="nm">Black and white</span></div>
+        <div class="filter-row" data-c="filter-row"><span class="switch"></span><span class="nm">Split tone</span></div>
+        <div class="filter-row" data-c="filter-row"><span class="switch"></span><span class="nm">Fade</span></div>
+        <div class="filter-row on" data-c="filter-row"><span class="switch on"></span><span class="nm">Halation</span><div class="slider"><div class="tr"><i style="width:30%"></i></div><span class="th" style="left:30%"></span></div><span class="val">30%</span></div>
+        <div class="filter-row" data-c="filter-row"><span class="switch"></span><span class="nm">Bloom</span></div>
+        <div class="filter-row" data-c="filter-row"><span class="switch"></span><span class="nm">Soften</span></div>
+        <div class="filter-row" data-c="filter-row"><span class="switch"></span><span class="nm">Chromatic aberration</span></div>
+        <div class="filter-row on" data-c="filter-row"><span class="switch on"></span><span class="nm">Vignette</span><div class="slider"><div class="tr"><i style="width:20%"></i></div><span class="th" style="left:20%"></span></div><span class="val">20%</span></div>
+        <div class="filter-row on" data-c="filter-row"><span class="switch on"></span><span class="nm">Grain</span><div class="slider"><div class="tr"><i style="width:40%"></i></div><span class="th" style="left:40%"></span></div><span class="val">40%</span></div>
+        <div class="filter-sub" data-c="grain-size"><div class="seg"><span class="on">Fine</span><span>Medium</span><span>Coarse</span></div></div>
+        <div class="filter-row" data-c="filter-row"><span class="switch"></span><span class="nm">Gate weave</span></div>
+        <div class="filter-row" data-c="filter-row"><span class="switch"></span><span class="nm">Letterbox</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-foot" data-c="look-foot">
+    <span class="t-small" style="color:var(--text-2);font-size:12.5px">Apply to</span>
+    <span class="select" data-c="apply-to">Whole film<svg class="ico"><use href="#i-down"/></svg></span>
+    <span class="sp"></span>
+    <span class="btn">Cancel</span>
+    <span class="btn steel" data-c="primary">Use This Look</span>
+  </div>
+</div>
+</body></html>
