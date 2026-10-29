@@ -23,6 +23,9 @@ public final class CompiledSequence: @unchecked Sendable {
 public enum SequenceRenderer {
     /// - looks: the director's look (`try? store.lookContext()`), applied over every layer that isn't above it.
     public static func compile(project: Project, sequenceID: String? = nil, cacheDirectory: URL, previewMaxDimension: Int? = nil, looks: LookContext? = nil) async throws -> CompiledSequence {
+        try await compile(project: project, sequenceID: sequenceID, cacheDirectory: cacheDirectory, previewMaxDimension: previewMaxDimension, looks: looks, look: nil)
+    }
+    static func compile(project: Project, sequenceID: String?, cacheDirectory: URL, previewMaxDimension: Int?, looks: LookContext?, look: (@Sendable (CIImage, String?, Int) -> CIImage)?) async throws -> CompiledSequence {
         try EditReducer.validate(project)
         let sequence = try project.sequence(sequenceID)
         guard sequence.duration > .zero else { throw DirectionError("empty_sequence", "Add footage to the sequence before playing or rendering.") }
@@ -119,7 +122,7 @@ public enum SequenceRenderer {
             }
         }
         if composition.duration < sequence.duration.cmTime { composition.insertEmptyTimeRange(.init(start: composition.duration, duration: CMTimeSubtract(sequence.duration.cmTime, composition.duration))) }
-        let settings = RenderSettings(looks: looks, fps: fps, size: CGSize(width: sequence.width, height: sequence.height))
+        let settings = RenderSettings(looks: looks, fps: fps, size: CGSize(width: sequence.width, height: sequence.height), look: look)
         // Instructions tile the cut exactly, so marks closer than a microsecond merge rather than leave a gap.
         let total = sequence.duration.seconds
         var marks: [Double] = []

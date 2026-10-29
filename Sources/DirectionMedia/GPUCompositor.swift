@@ -27,7 +27,9 @@ public final class RenderSettings: @unchecked Sendable {
     let looks: LookContext?
     let fps: Double
     let size: CGSize
-    init(looks: LookContext?, fps: Double, size: CGSize) { self.looks = looks; self.fps = fps; self.size = size }
+    /// Stands in for LookPipeline.apply, so tests can see what lands under the look and what over it.
+    let look: (@Sendable (CIImage, String?, Int) -> CIImage)?
+    init(looks: LookContext?, fps: Double, size: CGSize, look: (@Sendable (CIImage, String?, Int) -> CIImage)? = nil) { self.looks = looks; self.fps = fps; self.size = size; self.look = look }
 }
 
 public final class RenderInstruction: NSObject, AVVideoCompositionInstructionProtocol, @unchecked Sendable {
@@ -95,7 +97,7 @@ public final class GPUCompositor: NSObject, AVVideoCompositing, @unchecked Senda
                 let mode = top.clip.layer == 0 ? "normal" : top.clip.blend ?? "normal"
                 if top.aboveLook { above.append((track, mode)) } else { below = ClipRendering.blend(track, over: below, mode: mode).cropped(to: bounds) }
             }
-            var output = LookPipeline.apply(below, context: settings.looks, storyAssetID: story, frameIndex: frameIndex).cropped(to: bounds)
+            var output = (settings.look?(below, story, frameIndex) ?? LookPipeline.apply(below, context: settings.looks, storyAssetID: story, frameIndex: frameIndex)).cropped(to: bounds)
             for (image, mode) in above { output = ClipRendering.blend(image, over: output, mode: mode).cropped(to: bounds) }
             context.render(output, to: buffer, bounds: bounds, colorSpace: outputSpace)
             if current != generation.withLock({ $0 }) { request.finishCancelledRequest() } else { request.finish(withComposedVideoFrame: buffer) }
