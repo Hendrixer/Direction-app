@@ -82,7 +82,7 @@ public enum AudioProcessor {
         do {
             let destination = try AVAudioFile(forWriting: temp, settings: format.settings)
             guard let buffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: engine.manualRenderingMaximumFrameCount) else { throw DirectionError("audio_buffer_failed", "Cannot allocate DSP output.") }
-            player.scheduleFile(source, at: nil, completionHandler: nil)
+            schedule(source, on: player)
             try engine.start(); player.play()
             var attempts = 0
             while engine.manualRenderingSampleTime < source.length {
@@ -118,6 +118,10 @@ public enum AudioProcessor {
         if waveform.count > 400 { let stride = Int(ceil(Double(waveform.count) / 400)); waveform = Swift.stride(from: 0, to: waveform.count, by: stride).map { waveform[$0..<min($0+stride, waveform.count)].max() ?? 0 } }
         return .object(["assetID": .string(asset.id), "audioTrackID": .number(Double(trackID)), "samplePeakDBFS": .number(20 * log10(max(peak, 1e-12))), "rmsDBFS": .number(10 * log10(max(squares / Double(max(1, count)), 1e-24))), "waveformPeaks": .array(waveform.map(JSONValue.number)), "note": .string("Sample peak and RMS, not integrated LUFS or true peak.")])
     }
+
+    /// Offline rendering pulls the file through renderOffline on this same task, so the async scheduleFile
+    /// (which returns only once the file has played) would never return. Schedule it and move on.
+    private static func schedule(_ file: AVAudioFile, on player: AVAudioPlayerNode) { player.scheduleFile(file, at: nil, completionCallbackType: .dataConsumed, completionHandler: nil) }
 
     public static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
     private static func install(temp: URL, at target: URL) throws { if FileManager.default.fileExists(atPath: target.path) { try FileManager.default.removeItem(at: temp) } else { do { try FileManager.default.moveItem(at: temp, to: target) } catch { if FileManager.default.fileExists(atPath: target.path) { try? FileManager.default.removeItem(at: temp) } else { throw error } } } }

@@ -53,6 +53,12 @@ public struct MediaAsset: Codable, Hashable, Sendable, Identifiable {
     public var bookmark: Data?
     public var thumbnailPath: String?
     public var isImage: Bool = false
+    /// A camera LUT for this take (looks.md › Camera LUT): "auto", "none" or a .cube path. nil is "auto".
+    public var cameraLUT: String? = nil
+    /// A made clip (made-media.md): the made record it came from. The asset's own id also works as a madeID.
+    public var madeID: String? = nil
+    /// A checked graphic's name (graphics.md): its ProRes 4444 render, with alpha.
+    public var graphic: String? = nil
     public init(id: String = newID("asset"), name: String, path: String, duration: MediaTime, video: [VideoStream] = [], audio: [AudioStream] = [], fileSize: Int64 = 0, modifiedAt: Double = 0, bookmark: Data? = nil, thumbnailPath: String? = nil) {
         self.id = id; self.name = name; self.path = path; self.duration = duration; self.video = video; self.audio = audio; self.fileSize = fileSize; self.modifiedAt = modifiedAt; self.bookmark = bookmark; self.thumbnailPath = thumbnailPath
     }
@@ -92,14 +98,115 @@ public struct Clip: Codable, Hashable, Sendable, Identifiable {
     public var framing: Framing
     public var audioOverrides: [String: AudioSettings]
     public var title: String?
+    // The editor's timeline (agent-timeline.md). Every field is optional so older films decode unchanged.
+    /// The clip's effects, in render order (transform, mask, blur, sharpen, stabilize, filter.<kind>, shader).
+    public var effects: [ClipEffect]? = nil
+    /// normal, screen, multiply, overlay or add. Only V2 and above blend.
+    public var blend: String? = nil
+    /// Composited after the director's look. Graphics are above it by default.
+    public var aboveLook: Bool? = nil
+    /// The transition into this clip from the one before it on its track.
+    public var transition: ClipTransition? = nil
+    /// Sound: the clip's own gain over each stream's setting, and gain keys (dB, source seconds).
+    public var gainDB: Double? = nil
+    public var gainKeys: [Keyframe]? = nil
+    /// Written by `duck` (dB below the clip's level, source seconds), so ducking can be redone without touching gain.
+    public var duckKeys: [Keyframe]? = nil
+    /// Sound fades in seconds, over any stream fade.
+    public var fadeIn: Double? = nil
+    public var fadeOut: Double? = nil
+    /// J- and L-cuts, in cut seconds: the sound starts this much before the picture (negative: after),
+    /// and ends this much after it (negative: before).
+    public var soundLead: Double? = nil
+    public var soundTail: Double? = nil
+    /// A freeze: shows the frame at sourceRange.start for this long, without sound.
+    public var hold: MediaTime? = nil
     public init(id: String = newID("clip"), assetID: String?, name: String, kind: ClipKind = .video, layer: Int = 0, start: MediaTime = .zero, sourceRange: MediaRange, speed: Double = 1) {
         self.id = id; self.lineageID = id; self.assetID = assetID; self.name = name; self.kind = kind; self.layer = layer; self.start = start; self.sourceRange = sourceRange; self.speed = speed; self.grade = .init(); self.framing = .init(); self.audioOverrides = [:]
     }
-    public var duration: MediaTime { sourceRange.duration.scaled(by: 1 / speed) }
+    public var duration: MediaTime { hold ?? sourceRange.duration.scaled(by: 1 / speed) }
     public var end: MediaTime { start + duration }
     public var range: MediaRange { .init(start: start, duration: duration) }
-    public func sourceTime(at sequenceTime: MediaTime) -> MediaTime { sourceRange.start + (sequenceTime - start).scaled(by: speed) }
-    public func sequenceTime(at sourceTime: MediaTime) -> MediaTime { start + (sourceTime - sourceRange.start).scaled(by: 1 / speed) }
+    public func sourceTime(at sequenceTime: MediaTime) -> MediaTime { hold != nil ? sourceRange.start : sourceRange.start + (sequenceTime - start).scaled(by: speed) }
+    public func sequenceTime(at sourceTime: MediaTime) -> MediaTime { hold != nil ? start : start + (sourceTime - sourceRange.start).scaled(by: 1 / speed) }
+    /// V1, V2… for picture and titles (layer + 1); A1, A2… for sound-only clips. A1 also carries V1's own sound.
+    public var trackName: String { (kind == .audio ? "A" : "V") + String(layer + 1) }
+    /// Where the clip's sound plays in the cut, with any J- or L-cut.
+    public var soundRange: MediaRange { let s = start - MediaTime(seconds: soundLead ?? 0); return .init(start: s, duration: end + MediaTime(seconds: soundTail ?? 0) - s) }
+    public func effect(_ id: String) -> ClipEffect? { effects?.first { $0.id == id } }
+}
+
+/// A value at a time. Clip keys are kept in source seconds so they ride along with trims, splits and ripples;
+/// the editor reads and writes them in cut seconds. Track keys are in cut seconds.
+public struct Keyframe: Codable, Hashable, Sendable {
+    public var t: Double
+    public var v: Double
+    /// linear (default), hold or smooth, toward the next key.
+    public var ease: String?
+    public init(t: Double, v: Double, ease: String? = nil) { self.t = t; self.v = v; self.ease = ease }
+
+    /// The value at `t`: held before the first and after the last key.
+    public static func value(_ keys: [Keyframe], at t: Double) -> Double? {
+        guard let first = keys.first else { return nil }
+        if keys.count == 1 || t <= first.t { return first.v }
+        guard let i = keys.firstIndex(where: { $0.t > t }) else { return keys[keys.count - 1].v }
+        let a = keys[i - 1], b = keys[i], span = b.t - a.t
+        guard span > 0 else { return b.v }
+        var p = (t - a.t) / span
+        switch a.ease { case "hold": p = 0; case "smooth": p = p * p * (3 - 2 * p); default: break }
+        return a.v + (b.v - a.v) * p
+    }
+}
+
+/// One effect on a clip or a track (agent-timeline.md › Effects catalog). Parameters are numbers,
+/// text or small objects (crop `{l,r,t,b}`); keys are numbers by parameter name ("opacity", "crop.l").
+public struct ClipEffect: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var params: [String: JSONValue]
+    public var keys: [String: [Keyframe]]?
+    /// A shader's Metal source, kept with the effect so every revision renders the same.
+    public var source: String?
+    public init(id: String = newID("fx"), name: String, params: [String: JSONValue] = [:], keys: [String: [Keyframe]]? = nil, source: String? = nil) { self.id = id; self.name = name; self.params = params; self.keys = keys; self.source = source }
+
+    /// A numeric parameter at a time (source seconds for clips), keyed or not.
+    public func number(_ param: String, at t: Double?, default value: Double) -> Double {
+        if let t, let k = keys?[param], let v = Keyframe.value(k, at: t) { return v }
+        let parts = param.split(separator: ".", maxSplits: 1).map(String.init)
+        if parts.count == 2 { return params[parts[0]]?[parts[1]].double ?? value }
+        return params[param]?.double ?? (params[param]?.bool.map { $0 ? 1 : 0 }) ?? value
+    }
+}
+
+/// A transition at the cut before a clip: `before` seconds of it play before the cut and `after` after it
+/// (OTIO's in_offset and out_offset). A dissolve uses handles on both sides; dips don't need any.
+public struct ClipTransition: Codable, Hashable, Sendable {
+    /// dissolve, dipToBlack or dipToWhite.
+    public var type: String
+    public var frames: Int
+    public var before: Double
+    public var after: Double
+    public init(type: String, frames: Int, before: Double, after: Double) { self.type = type; self.frames = frames; self.before = before; self.after = after }
+}
+
+/// A track's own settings: effects over every clip on it, the above-look flag, gain and keys (cut seconds).
+public struct TrackSettings: Codable, Hashable, Sendable {
+    public var effects: [ClipEffect]?
+    public var aboveLook: Bool?
+    public var gainDB: Double?
+    public var gainKeys: [Keyframe]?
+    /// What `duck` did, for the outline: "ducked −6 dB under A1".
+    public var ducked: DuckSettings?
+    public init(effects: [ClipEffect]? = nil, aboveLook: Bool? = nil, gainDB: Double? = nil, gainKeys: [Keyframe]? = nil, ducked: DuckSettings? = nil) { self.effects = effects; self.aboveLook = aboveLook; self.gainDB = gainDB; self.gainKeys = gainKeys; self.ducked = ducked }
+    public var isEmpty: Bool { (effects ?? []).isEmpty && aboveLook == nil && gainDB == nil && (gainKeys ?? []).isEmpty && ducked == nil }
+}
+
+public struct DuckSettings: Codable, Hashable, Sendable {
+    public var under: String
+    public var dB: Double
+    public var attack: Double
+    public var release: Double
+    public init(under: String, dB: Double, attack: Double, release: Double) { self.under = under; self.dB = dB; self.attack = attack; self.release = release }
 }
 
 public struct Sequence: Codable, Hashable, Sendable, Identifiable {
@@ -109,10 +216,13 @@ public struct Sequence: Codable, Hashable, Sendable, Identifiable {
     public var height: Int
     public var frameRate: FrameRate
     public var clips: [Clip]
+    /// Per-track settings by name ("V2", "A2"). nil until the editor sets one.
+    public var tracks: [String: TrackSettings]? = nil
     public init(id: String = newID("sequence"), name: String = "Main edit", width: Int = 1920, height: Int = 1080, frameRate: FrameRate = .init(), clips: [Clip] = []) {
         self.id = id; self.name = name; self.width = width; self.height = height; self.frameRate = frameRate; self.clips = clips
     }
     public var duration: MediaTime { clips.map(\.end).max() ?? .zero }
+    public func track(_ name: String) -> TrackSettings { tracks?[name] ?? TrackSettings() }
 }
 
 public struct Project: Codable, Hashable, Sendable, Identifiable {

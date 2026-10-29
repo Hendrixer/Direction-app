@@ -11,17 +11,21 @@ private final class ExportSessionBox: @unchecked Sendable {
 
 public final class CompiledSequence: @unchecked Sendable {
     public let composition: AVMutableComposition
-    public let videoComposition: AVMutableVideoComposition
+    public let videoComposition: AVVideoComposition
     public let audioMix: AVMutableAudioMix
     public let sequence: Sequence
     public let revision: Int
     private let access: MediaAccess
-    init(composition: AVMutableComposition, video: AVMutableVideoComposition, audio: AVMutableAudioMix, sequence: Sequence, revision: Int, access: MediaAccess) { self.composition = composition; videoComposition = video; audioMix = audio; self.sequence = sequence; self.revision = revision; self.access = access }
+    init(composition: AVMutableComposition, video: AVVideoComposition, audio: AVMutableAudioMix, sequence: Sequence, revision: Int, access: MediaAccess) { self.composition = composition; videoComposition = video; audioMix = audio; self.sequence = sequence; self.revision = revision; self.access = access }
     @MainActor public func playerItem() -> AVPlayerItem { let item = AVPlayerItem(asset: composition); item.videoComposition = videoComposition; item.audioMix = audioMix; return item }
 }
 
 public enum SequenceRenderer {
-    public static func compile(project: Project, sequenceID: String? = nil, cacheDirectory: URL, previewMaxDimension: Int? = nil) async throws -> CompiledSequence {
+    /// - looks: the director's look (`try? store.lookContext()`), applied over every layer that isn't above it.
+    public static func compile(project: Project, sequenceID: String? = nil, cacheDirectory: URL, previewMaxDimension: Int? = nil, looks: LookContext? = nil) async throws -> CompiledSequence {
+        try await compile(project: project, sequenceID: sequenceID, cacheDirectory: cacheDirectory, previewMaxDimension: previewMaxDimension, looks: looks, look: nil)
+    }
+    static func compile(project: Project, sequenceID: String?, cacheDirectory: URL, previewMaxDimension: Int?, looks: LookContext?, look: (@Sendable (CIImage, String?, Int) -> CIImage)?) async throws -> CompiledSequence {
         try EditReducer.validate(project)
         let sequence = try project.sequence(sequenceID)
         guard sequence.duration > .zero else { throw DirectionError("empty_sequence", "Add footage to the sequence before playing or rendering.") }
@@ -38,29 +42,59 @@ public enum SequenceRenderer {
         let clockRange = try await clockSource.load(.timeRange)
         try clockTrack.insertTimeRange(clockRange, of: clockSource, at: .zero)
         clockTrack.scaleTimeRange(.init(start: .zero, duration: clockRange.duration), toDuration: sequence.duration.cmTime)
-        var layers: [(Clip, RenderLayer)] = [], audioParameters: [AVMutableAudioMixInputParameters] = []
+        let fps = sequence.frameRate.value
+        func cm(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: 600_000) }
+        // The transition into the next clip on the same track: a dissolve plays this clip's tail past its end.
+        let picture = Dictionary(grouping: sequence.clips.filter { $0.kind != .audio }, by: \.layer)
+        func outgoing(_ c: Clip) -> ClipTransition? { picture[c.layer]?.first { $0.id != c.id && abs($0.start.seconds - c.end.seconds) < 0.5 / fps }?.transition }
+        func trackSettings(_ c: Clip) -> [ClipEffect] { sequence.tracks?[c.trackName]?.effects ?? [] }
+        func above(_ c: Clip) -> Bool { c.aboveLook ?? sequence.tracks?[c.trackName]?.aboveLook ?? false }
+        var layers: [RenderLayer] = [], audioParameters: [AVMutableAudioMixInputParameters] = []
         for clip in sequence.clips.sorted(by: { ($0.layer, $0.start.seconds, $0.id) < ($1.layer, $1.start.seconds, $1.id) }) {
             try Task.checkCancellation()
+            let head = clip.transition?.type == "dissolve" ? clip.transition!.before : 0
+            let next = outgoing(clip), tail = next?.type == "dissolve" ? next!.after : 0
+            func layer(_ track: CMPersistentTrackID?, _ image: CIImage?, _ transform: CGAffineTransform, _ lut: CameraLUTFile?) -> RenderLayer {
+                .init(trackID: track, image: image, transform: transform, grade: clip.grade, framing: clip.framing, clip: clip, start: clip.start.seconds - head, end: clip.end.seconds + tail, outgoing: next, trackEffects: trackSettings(clip), aboveLook: above(clip), lut: lut)
+            }
             if clip.kind == .title {
-                let image = try titleImage(clip.title ?? clip.name, width: sequence.width, height: sequence.height)
-                layers.append((clip, .init(trackID: nil, image: image, transform: .identity, grade: clip.grade, framing: clip.framing)))
+                layers.append(layer(nil, try titleImage(clip.title ?? clip.name, width: sequence.width, height: sequence.height), .identity, nil))
                 continue
             }
             guard let asset = assets.first(where: { $0.id == clip.assetID }) else { throw DirectionError("missing_asset", "Missing source for \(clip.name).") }
             let url = try MediaInspector.checkedURL(asset)
+            let lut = asset.cameraLUT.flatMap { $0.hasSuffix(".cube") ? CameraLUTFile.load($0) : nil }
             if asset.isImage {
                 guard let image = CIImage(contentsOf: url, options: [.applyOrientationProperty: true]) else { throw DirectionError("image_decode_failed", "Cannot load \(asset.name).") }
-                layers.append((clip, .init(trackID: nil, image: image, transform: .identity, grade: clip.grade, framing: clip.framing)))
+                layers.append(layer(nil, image, .identity, lut))
                 continue
             }
             let source = AVURLAsset(url: url)
             if clip.kind == .video, let sourceTrack = try await source.loadTracks(withMediaType: .video).first {
-                guard let destination = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw DirectionError("track_allocation", "Cannot allocate video layer.") }
-                try destination.insertTimeRange(clip.sourceRange.cmRange, of: sourceTrack, at: clip.start.cmTime)
-                if clip.speed != 1 { destination.scaleTimeRange(CMTimeRange(start: clip.start.cmTime, duration: clip.sourceRange.duration.cmTime), toDuration: clip.duration.cmTime) }
-                layers.append((clip, .init(trackID: destination.trackID, image: nil, transform: try await sourceTrack.load(.preferredTransform), grade: clip.grade, framing: clip.framing)))
+                if clip.hold != nil {
+                    // A freeze is the one frame, held as a still.
+                    let generator = AVAssetImageGenerator(asset: source)
+                    generator.appliesPreferredTrackTransform = true; generator.requestedTimeToleranceBefore = .zero; generator.requestedTimeToleranceAfter = .zero
+                    layers.append(layer(nil, CIImage(cgImage: try await generator.image(at: clip.sourceRange.start.cmTime).image), .identity, lut))
+                } else {
+                    guard let destination = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw DirectionError("track_allocation", "Cannot allocate video layer.") }
+                    // Dissolve handles come along so both sides of the cut have picture.
+                    let start = CMTimeMaximum(.zero, CMTimeSubtract(clip.sourceRange.start.cmTime, cm(head * clip.speed)))
+                    let duration = CMTimeAdd(CMTimeSubtract(clip.sourceRange.end.cmTime, start), cm(tail * clip.speed))
+                    let at = CMTimeSubtract(clip.start.cmTime, cm(head))
+                    try destination.insertTimeRange(CMTimeRange(start: start, duration: duration), of: sourceTrack, at: at)
+                    if clip.speed != 1 { destination.scaleTimeRange(CMTimeRange(start: at, duration: duration), toDuration: CMTimeMultiplyByFloat64(duration, multiplier: 1 / clip.speed)) }
+                    layers.append(layer(destination.trackID, nil, try await sourceTrack.load(.preferredTransform), lut))
+                }
             }
+            guard clip.hold == nil else { continue }
             let sourceAudio = try await source.loadTracks(withMediaType: .audio)
+            // J- and L-cuts move where the sound starts and ends against the picture.
+            let lead = clip.soundLead ?? 0, carry = clip.soundTail ?? 0
+            let soundStart = CMTimeSubtract(clip.sourceRange.start.cmTime, cm(lead * clip.speed))
+            let soundRange = CMTimeRange(start: soundStart, duration: CMTimeAdd(clip.sourceRange.duration.cmTime, cm((lead + carry) * clip.speed)))
+            let soundAt = CMTimeSubtract(clip.start.cmTime, cm(lead))
+            let soundTrack = clip.kind == .audio ? clip.trackName : clip.layer == 0 ? "A1" : nil
             for stream in asset.audio {
                 let settings = clip.audioOverrides[String(stream.id)] ?? stream.settings
                 guard !settings.muted else { continue }
@@ -71,38 +105,43 @@ public enum SequenceRenderer {
                 } else { inputTrack = sourceAudio.first { $0.trackID == stream.id } }
                 guard let inputTrack, let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw DirectionError("audio_track_failed", "Cannot load source audio track \(stream.id).") }
                 let available = try await inputTrack.load(.timeRange)
-                let requested = CMTimeRangeGetIntersection(clip.sourceRange.cmRange, otherRange: available)
-                if requested.duration.seconds > 0 {
-                    let offset = CMTimeSubtract(requested.start, clip.sourceRange.start.cmTime)
-                    let insertAt = CMTimeAdd(clip.start.cmTime, CMTimeMultiplyByFloat64(offset, multiplier: 1 / clip.speed))
-                    try track.insertTimeRange(requested, of: inputTrack, at: insertAt)
-                    let duration = CMTimeMultiplyByFloat64(requested.duration, multiplier: 1 / clip.speed)
-                    if clip.speed != 1 { track.scaleTimeRange(CMTimeRange(start: insertAt, duration: requested.duration), toDuration: duration) }
-                    let mix = AVMutableAudioMixInputParameters(track: track)
-                    mix.audioTimePitchAlgorithm = .timeDomain
-                    let gain = Float(pow(10, settings.gainDB / 20)), d = duration.seconds
-                    let fadeIn = min(settings.fadeIn, d / 2), fadeOut = min(settings.fadeOut, d / 2)
-                    mix.setVolume(gain, at: insertAt)
-                    if fadeIn > 0 { mix.setVolumeRamp(fromStartVolume: 0, toEndVolume: gain, timeRange: .init(start: insertAt, duration: CMTime(seconds: fadeIn, preferredTimescale: 48_000))) }
-                    if fadeOut > 0 { mix.setVolumeRamp(fromStartVolume: gain, toEndVolume: 0, timeRange: .init(start: CMTimeAdd(insertAt, CMTime(seconds: d - fadeOut, preferredTimescale: 48_000)), duration: CMTime(seconds: fadeOut, preferredTimescale: 48_000))) }
-                    audioParameters.append(mix)
-                }
+                let requested = CMTimeRangeGetIntersection(soundRange, otherRange: available)
+                guard requested.duration.seconds > 0 else { continue }
+                let offset = CMTimeSubtract(requested.start, soundStart)
+                let insertAt = CMTimeMaximum(.zero, CMTimeAdd(soundAt, CMTimeMultiplyByFloat64(offset, multiplier: 1 / clip.speed)))
+                try track.insertTimeRange(requested, of: inputTrack, at: insertAt)
+                let duration = CMTimeMultiplyByFloat64(requested.duration, multiplier: 1 / clip.speed)
+                if clip.speed != 1 { track.scaleTimeRange(CMTimeRange(start: insertAt, duration: requested.duration), toDuration: duration) }
+                let mix = AVMutableAudioMixInputParameters(track: track)
+                mix.audioTimePitchAlgorithm = .timeDomain
+                let points = AudioEnvelope.points(clip: clip, streamDB: settings.gainDB, streamFadeIn: settings.fadeIn, streamFadeOut: settings.fadeOut, track: soundTrack.flatMap { sequence.tracks?[$0] }, from: insertAt.seconds, to: CMTimeAdd(insertAt, duration).seconds)
+                // A volume holds until the next ramp, so only changes need one.
+                if let first = points.first { mix.setVolume(first.gain, at: insertAt) }
+                for (a, b) in zip(points, points.dropFirst()) where b.t - a.t > 1e-6 && a.gain != b.gain { mix.setVolumeRamp(fromStartVolume: a.gain, toEndVolume: b.gain, timeRange: CMTimeRange(start: cm(a.t), end: cm(b.t))) }
+                audioParameters.append(mix)
             }
         }
         if composition.duration < sequence.duration.cmTime { composition.insertEmptyTimeRange(.init(start: composition.duration, duration: CMTimeSubtract(sequence.duration.cmTime, composition.duration))) }
-        let points = Set([MediaTime.zero, sequence.duration] + layers.flatMap { [$0.0.start, $0.0.end] }).sorted()
+        let settings = RenderSettings(looks: looks, fps: fps, size: CGSize(width: sequence.width, height: sequence.height), look: look)
+        // Instructions tile the cut exactly, so marks closer than a microsecond merge rather than leave a gap.
+        let total = sequence.duration.seconds
+        var marks: [Double] = []
+        for m in Set(layers.flatMap { [$0.start, $0.end] }).filter({ $0 > 1e-6 && $0 < total - 1e-6 }).sorted() where m - (marks.last ?? 0) > 1e-6 { marks.append(m) }
+        marks = [0] + marks + [total]
         var instructions: [RenderInstruction] = []
-        for i in points.indices.dropLast() {
-            let t = points[i]
-            let active = layers.filter { $0.0.range.contains(t) }.map(\.1)
-            instructions.append(.init(range: .init(start: t.cmTime, duration: (points[i + 1] - t).cmTime), layers: active, timingTrackID: clockTrack.trackID))
+        for (a, b) in zip(marks, marks.dropFirst()) {
+            let active = layers.filter { $0.start < b - 1e-9 && $0.end > a + 1e-9 }
+            instructions.append(.init(range: CMTimeRange(start: a == 0 ? .zero : cm(a), end: b == sequence.duration.seconds ? sequence.duration.cmTime : cm(b)), layers: active, timingTrackID: clockTrack.trackID, settings: settings))
         }
-        let video = AVMutableVideoComposition(); video.customVideoCompositorClass = GPUCompositor.self; video.instructions = instructions; video.frameDuration = sequence.frameRate.frameDuration
         let ratio = previewMaxDimension.map { min(1, Double($0) / Double(max(sequence.width, sequence.height))) } ?? 1
-        video.renderSize = .init(width: max(2, Int(Double(sequence.width) * ratio) / 2 * 2), height: max(2, Int(Double(sequence.height) * ratio) / 2 * 2))
-        video.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2; video.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2; video.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
+        var configuration = AVVideoComposition.Configuration()
+        configuration.customVideoCompositorClass = GPUCompositor.self
+        configuration.instructions = instructions
+        configuration.frameDuration = sequence.frameRate.frameDuration
+        configuration.renderSize = .init(width: max(2, Int(Double(sequence.width) * ratio) / 2 * 2), height: max(2, Int(Double(sequence.height) * ratio) / 2 * 2))
+        configuration.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2; configuration.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2; configuration.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
         let audio = AVMutableAudioMix(); audio.inputParameters = audioParameters
-        return .init(composition: composition, video: video, audio: audio, sequence: sequence, revision: project.editRevision, access: access)
+        return .init(composition: composition, video: AVVideoComposition(configuration: configuration), audio: audio, sequence: sequence, revision: project.editRevision, access: access)
     }
 
     private static func timingVideo(in directory: URL) async throws -> URL {

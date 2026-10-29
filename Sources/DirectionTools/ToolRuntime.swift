@@ -42,15 +42,7 @@ public actor ToolRuntime {
             let output = try store.addAsset(asset, append: a["append"].bool ?? false, sequenceID: a["sequenceID"].string, expectedRevision: a["baseEditRevision"].int ?? p.editRevision, key: a["idempotencyKey"].string ?? UUID().uuidString)
             let saved = try output.assets.first(where: { $0.path == asset.path }) ?? output.asset(asset.id)
             return ToolResponse(.object(["asset": try .wrapping(saved), "editRevision": .number(Double(output.editRevision))]))
-        case "direction_edit":
-            let batch = try a["batch"].decode(EditBatch.self)
-            if a["validateOnly"].bool == true {
-                let p = try store.read()
-                guard p.editRevision == batch.baseEditRevision else { throw DirectionError("revision_conflict", "The project has changed; inspect it again.") }
-                let proposed = try EditReducer.apply(batch, to: p)
-                return ToolResponse(.object(["valid": .bool(true), "proposedSequence": try .wrapping(proposed.sequence(batch.sequenceID)), "baseEditRevision": .number(Double(p.editRevision))]))
-            }
-            return ToolResponse(try .wrapping(store.apply(batch)))
+        case "direction_edit": return try await invokeEdit(a)
         case "direction_remove_range":
             let p = try store.read(), range = try secondsRange(a)
             var op = EditOperation("removeRange"); op.range = range; op.ripple = a["ripple"].bool ?? true
@@ -152,7 +144,7 @@ public actor ToolRuntime {
             let p = try store.read(revision: a["revision"].int)
             let seconds = a["time"].double ?? 0
             guard seconds.isFinite && seconds >= 0 else { throw DirectionError("invalid_time", "Frame time must be a nonnegative number.") }
-            let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory)
+            let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory, looks: try? store.lookContext())
             let output = cacheDirectory.appendingPathComponent("Frames").appendingPathComponent(newID("frame") + ".png")
             let value = try await SequenceRenderer.frame(compiled, at: .init(seconds: seconds), to: output, maxDimension: min(1920, max(160, a["maxDimension"].int ?? 1280)))
             return ToolResponse(value, imagePaths: [output.path])
@@ -165,7 +157,7 @@ public actor ToolRuntime {
             let range = preview ? try secondsRange(a) : nil
             if let range, range.duration.seconds > 30 { throw DirectionError("preview_too_long", "Preview samples are limited to 30 seconds; use export for a full cut.") }
             let job = try startJob(kind: preview ? "preview" : "export", revision: p.editRevision, phase: "Compiling pinned edit for \(preset)") {
-                let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequenceID, cacheDirectory: directory)
+                let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequenceID, cacheDirectory: directory, looks: try? self.store.lookContext())
                 return try await SequenceRenderer.export(compiled, to: output, preset: preset, range: range)
             }
             return ToolResponse(try .wrapping(job))
@@ -224,7 +216,7 @@ public actor ToolRuntime {
         var value: [String: JSONValue] = ["comment": try .wrapping(comment), "originalSequence": try .wrapping(originalSequence), "sourceAssets": try .wrapping(original.assets.filter { assetIDs.contains($0.id) }), "anchors": .array(anchors), "currentEditRevision": .number(Double(current.editRevision)), "coordinateSpace": .string("region: normalized rendered output frame, origin top-left; pinned to original editRevision"), "transcriptContext": try .wrapping(comment.transcriptContext)]
         var frames: [JSONValue] = [], imagePaths: [String] = [], audioPaths: [String] = []
         if includeMedia && originalSequence.duration > .zero {
-            let compiled = try await SequenceRenderer.compile(project: original, sequenceID: comment.sequenceID, cacheDirectory: cacheDirectory, previewMaxDimension: 1280)
+            let compiled = try await SequenceRenderer.compile(project: original, sequenceID: comment.sequenceID, cacheDirectory: cacheDirectory, previewMaxDimension: 1280, looks: try? store.lookContext())
             let frameStep = MediaTime(originalSequence.frameRate.frameDuration)
             let start = comment.range?.start ?? comment.time ?? .zero
             let duration = comment.range?.duration ?? MediaTime(seconds: min(6, max(0, originalSequence.duration.seconds - start.seconds)))

@@ -50,7 +50,10 @@ public struct FrameRate: Codable, Hashable, Sendable {
 public struct DirectionError: Error, Codable, Sendable, LocalizedError {
     public let code: String
     public let message: String
+    /// The operation that failed in an edit batch, so errors point at it (agent-timeline.md).
+    public var index: Int? = nil
     public init(_ code: String, _ message: String) { self.code = code; self.message = message }
+    public init(_ code: String, _ message: String, index: Int?) { self.code = code; self.message = message; self.index = index }
     public var errorDescription: String? { message }
 }
 

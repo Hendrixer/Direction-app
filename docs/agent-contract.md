@@ -6,7 +6,7 @@ The MCP server, JSON API, and `call` command now start without a project. Use:
 - `direction_create_project {"path":"/absolute/My edit.direction","name":"My edit"}`: create without overwriting.
 - `direction_open_project {"path":"/absolute/My edit.direction","showInApp":true}`: validate/register and optionally open the native review app.
 
-All other tools accept `projectPath`. It is required when no immutable `--project` default was supplied at launch. Opening a project never changes an implicit editing target. Each project's runtime and jobs remain separate. Existing fixed-project integrations continue to work. The schemas from `direction tools` are authoritative (28 tools).
+All other tools accept `projectPath`. It is required when no immutable `--project` default was supplied at launch. Opening a project never changes an implicit editing target. Each project's runtime and jobs remain separate. Existing fixed-project integrations continue to work. The schemas from `direction tools` are authoritative.
 
 The local project index is `~/Library/Application Support/Direction/projects.sqlite`. It contains only paths explicitly created/opened, never a filesystem scan. `DIRECTION_LIBRARY_PATH` overrides it for isolated testing. `shownInApp` reports whether macOS accepted the document-open request; a failed UI launch does not discard the project.
 
@@ -50,39 +50,31 @@ For a persistent local API, run `direction api --project PATH`. Write one JSON o
 
 Each response preserves `id` and contains `result` or `error: {code,message}`. API JSON returns local media paths; MCP additionally emits inline image/audio content. There is no HTTP listener. Local clients run with the user's file access; this is not a sandbox for untrusted agents.
 
-## Atomic editing
+## Reading and editing the cut
 
-Canonical times are rational values. All ranges are half-open. In the batch below, `range` is in **source time** for insert/trim and in **sequence time** for removeRange. `at` is always sequence time.
+The editor reads the cut as OpenTimelineIO and changes it only through named edit functions, which Direction carries out exactly. No tool accepts a timeline document. The full contract, with every operation, effect and error, is in `agent-timeline.md`; `direction_edit_catalog` returns the same vocabulary as data.
+
+| Tool | Purpose |
+|---|---|
+| `direction_timeline` | The cut as OTIO JSON (read-only) plus a one-row-per-clip outline. `cut` (a saved cut's name or id), `revision`, `range` `{start,end}`, `outlineOnly`. Items carry their ids in `metadata.direction.id`. |
+| `direction_edit_catalog` | Every edit function with its arguments, every effect and transition with ranges and defaults, the error codes, and the custom shaders in the film's `Effects/` folder that compile. |
+| `direction_edit` | A batch of edit functions, committed as one revision or not at all. |
 
 ```json
-{
-  "batch": {
-    "baseEditRevision": 3,
-    "sequenceID": "sequence-from-inspect",
-    "idempotencyKey": "request-42-broll",
-    "summary": "Add B-roll over the explanation",
-    "operations": [
-      {
-        "type": "insert",
-        "assetID": "asset-from-inspect",
-        "at": {"value": 12000, "timescale": 1000},
-        "range": {
-          "start": {"value": 4000, "timescale": 1000},
-          "duration": {"value": 3000, "timescale": 1000}
-        },
-        "layer": 1
-      }
-    ]
-  },
-  "validateOnly": true
-}
+{ "baseEditRevision": 41, "idempotencyKey": "t3-note1", "summary": "Get to her face sooner",
+  "notes": [1], "validateOnly": true,
+  "operations": [
+    { "op": "removeRange", "range": { "start": 4.2, "end": 8.4 }, "ripple": true },
+    { "op": "roll", "editPoint": "clip-12|clip-13", "frames": -6 } ] }
 ```
 
-Send this to `direction_edit`. Inspect validation output, then resend with `validateOnly: false` (or omitted) to commit. A batch contains 1–1,000 operations. Supported operation names and nested data shapes appear in the machine-readable schema. Color/framing/audio objects in low-level operations are complete values; inspect an existing clip/stream for defaults, modify them, then submit. `direction_audio` is the convenient partial-patch alternative.
+Times are cut seconds unless an argument says source (`sourceRange` is in the take's seconds); `frames` count frames at the cut's rate; every result snaps to whole frames. Clips are named by id from `direction_timeline`, and an edit point is `"<left clip>|<right clip>"`. `notes` lists the note numbers the batch answers; an operation may name its own `note`. During a notes turnover a batch must name a note unless latitude is free, and then its changes are labeled Unasked.
 
-The transaction checks `baseEditRevision`. On `revision_conflict`, inspect and deliberately replan; do not blindly resubmit with a new number. An exact committed EditBatch retry with the same key returns its original result. A changed batch with that key fails. Import keys are also stable across retries. Idempotency is not a universal retry guarantee for every convenience operation or feedback write.
+`validateOnly: true` checks everything and returns the predicted result without committing. The result lists, per operation, its summary, notes, delta (`"−4.2 s"`) and changed ranges in the new cut and the old cut with their scenes; Changes and Play changes are built from it, and the revision keeps it (`ProjectStore.editRecord(revision:)`). Errors are `{index, code, message}`, pointing at the operation that failed: `scene_locked`, `picture_locked`, `stale_revision`, `overlap`, `unknown_op`, `bad_argument`, `missing_media`, `no_words`, `look_is_yours`, `words_are_yours`, `shader_invalid`, `shader_too_slow`. On `stale_revision`, read the timeline again and deliberately replan; do not blindly resubmit with a new number. An exact committed retry with the same idempotency key returns its original result; a changed batch with that key fails.
 
-Same-kind clips cannot overlap within a layer. Use different layers for simultaneous cameras, B-roll overlays, and separate audio. A higher visual layer composites above a lower one. Source audio remains active unless muted, so explicitly mute unwanted B-roll/camera sound. `removeRange` removes the interval across all layers and ripples by default. This is a cut editor, not an automatic camera-sync service.
+V1 is the story; V2 and up are overlays (cutaways, graphics, made shots); A1 is V1's own sound plus any sound-only clips on A1, A2 music, A3 effects. Story operations keep every layer in sync. Same-track clips cannot overlap. Operations that need the footage itself (`reframe` with `follow`, `matchBalance`, `stabilize`, the quiet in `tightenPauses`, a shader's compile and speed check) are measured by Direction before the batch runs.
+
+Batches written before edit functions still work: send them as `{"batch": {…}}` with `type` naming each operation, `{value,timescale}` times, and the old shapes (insert places without rippling, trim takes a source `range`, move takes `at` and `layer`). `direction_remove_range`, `direction_audio` and `direction_edit_transcript` remain as shorthands for `removeRange`, `audio` and `removeWords`; they report `revision_conflict` on a stale revision as before.
 
 Convenience range removal:
 
@@ -177,7 +169,7 @@ The director's app adds a working relationship on top of editing. Notes are priv
 | `direction_add_outside_note` | Bring in a note from someone else; it waits in the director's Outside inbox and stays invisible to the editor until accepted. |
 | `direction_editor_status` | A one-line status for the app's editor pill. |
 
-Locks are enforced on every edit. A change to any clip from a locked scene fails with `scene_locked`; after picture lock any timing change fails with `picture_locked`, while color and audio still work. `direction_feedback` omits drafts, dropped notes and outside notes the director hasn't accepted. Notes carry `number` (permanent, never reused), `kind` (feeling, story, pace, picture, sound; earlier kinds win conflicts), `scriptAction` for notes made in the Script room, and `answers`.
+Locks are enforced on every edit, one operation at a time. Through `direction_edit`, anything that would change what plays over a locked scene, on any track, fails with `scene_locked` and its index (a change earlier in the cut may still move the scene whole); after picture lock any picture change fails with `picture_locked`, while color and sound still work. `direction_feedback` omits drafts, dropped notes and outside notes the director hasn't accepted. Notes carry `number` (permanent, never reused), `kind` (feeling, story, pace, picture, sound; earlier kinds win conflicts), `scriptAction` for notes made in the Script room, and `answers`.
 
 ## Verification
 

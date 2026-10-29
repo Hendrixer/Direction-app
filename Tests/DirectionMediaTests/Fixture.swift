@@ -55,7 +55,8 @@ struct MediaFixture: Sendable {
             let directory = URL(fileURLWithPath: artifacts)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let target = directory.appendingPathComponent("two-track-source.mov")
-            if !FileManager.default.fileExists(atPath: target.path) { try FileManager.default.copyItem(at: source, to: target) }
+            // Suites make fixtures in parallel; whichever copies first wins.
+            if !FileManager.default.fileExists(atPath: target.path) { do { try FileManager.default.copyItem(at: source, to: target) } catch { if !FileManager.default.fileExists(atPath: target.path) { throw error } } }
         }
         return .init(directory: directory, source: source, store: store, runtime: runtime)
     }
