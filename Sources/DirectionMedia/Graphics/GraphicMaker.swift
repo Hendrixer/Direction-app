@@ -105,10 +105,10 @@ public enum GraphicMaker {
     }
 
     /// Undo for a words change: the earlier words, and their render from the cache when it's still there.
-    public static func restoreWords(store: ProjectStore, _ before: Graphic) async throws {
+    public static func restoreWords(store: ProjectStore, _ before: Graphic, summary: String? = nil) async throws {
         var render = before.render
         if render.map({ !FileManager.default.fileExists(atPath: $0.path) }) ?? true { render = try await movie(store: store, graphic: before) }
-        try store.restoreDirectorWords(before.name, before.directorWords, changedAt: before.directorChangedAt, render: render)
+        try store.restoreDirectorWords(before.name, before.directorWords, changedAt: before.directorChangedAt, render: render, summary: summary)
     }
 
     /// The movie for a graphic as it stands, from the cache or rendered now.

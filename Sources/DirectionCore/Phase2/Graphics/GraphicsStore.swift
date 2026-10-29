@@ -151,7 +151,7 @@ extension ProjectStore {
     }
 
     /// Undo for a words change: the director's earlier words and their render, exactly as they were.
-    public func restoreDirectorWords(_ name: String, _ words: [String: String], changedAt: Double?, render: GraphicRender?) throws {
+    public func restoreDirectorWords(_ name: String, _ words: [String: String], changedAt: Double?, render: GraphicRender?, summary: String? = nil) throws {
         try database.write { db in
             guard let row = try Row.fetchOne(db, sql: "SELECT * FROM graphics WHERE name = ?", arguments: [name]) else { throw DirectionError("graphic_not_found", "There's no graphic called \(name).") }
             var g = try Self.graphic(from: row)
@@ -159,7 +159,7 @@ extension ProjectStore {
             if let render { g.render = render }
             g.updatedAt = Date().timeIntervalSince1970
             try Self.writeGraphic(db, g)
-            try Self.event(db, kind: "graphic.words", revision: try revisionNow(db), summary: "Put back the words of \(g.spokenName)")
+            try Self.event(db, kind: "graphic.words", revision: try revisionNow(db), summary: summary ?? "Put back the words of \(g.spokenName)")
         }
     }
 

@@ -50,6 +50,9 @@ struct ChangesRoom: View {
             OptionsStage(model: model, note: c)
         } else if model.showsLockBar {
             LockStage(model: model)
+        } else if let c = model.selectedAnswer, let g = model.graphics.graphic(for: c) {
+            // A graphic answer (64): the answer card under the picture carries Words (Phase2/Graphics).
+            GraphicAnswerStage(model: model, note: c, graphic: g)
         } else {
             FilmStage(model: model, marks: model.answerMarks, showsMarkButton: false, hudPrefix: model.reviewCut?.name)
         }
