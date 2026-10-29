@@ -39,8 +39,12 @@ import DirectionMedia
     struct Rendered { var picture: CGImage?; var plain: CGImage?; var stills: [String: CGImage] = [:]; var tiles: [String: CGImage] = [:] }
 
     @ObservationIgnored private var watcher: LooksWatcher?
+    /// Drops frames from an earlier opening of the sheet.
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var detectedFor = -1
+    @ObservationIgnored private var rendering = false
+    @ObservationIgnored private var pendingRender = false
+    @ObservationIgnored private var plainKey: String?
 
     /// Called from `FilmModel.refresh()` whenever the store changes.
     func refresh(_ film: FilmModel) {
@@ -159,13 +163,14 @@ import DirectionMedia
     // MARK: Frames
 
     /// The frame under the playhead and one still per scene (up to five), rendered without any look.
-    private func loadFrames(_ film: FilmModel) {
+    func loadFrames(_ film: FilmModel) {
         guard !film.isPreview, let runtime = film.runtime, let project = film.displayed ?? film.project, let sequence = film.sequence else { return }
         let fps = film.fps, at = min(film.position, max(0, film.duration - 1 / fps))
         let sceneFor = film.dailies.takes.compactMapValues(\.sceneID), dailies = film.dailies
         let picks = LookMaker.picks(sequence, sceneForAsset: sceneFor, count: 5)
         generation += 1
         let token = generation
+        current = nil; stills = []; rendered = Rendered(); plainKey = nil
         Task {
             do {
                 let compiled = try await SequenceRenderer.compile(project: project, sequenceID: sequence.id, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1440)
@@ -178,7 +183,8 @@ import DirectionMedia
                     guard let image = LookMaker.image(at: url), let cg = LookPreview.context.createCGImage(image, from: image.extent, format: .RGBA8, colorSpace: image.colorSpace ?? CGColorSpace(name: CGColorSpace.itur_709)!) else { return nil }
                     return CIImage(cgImage: cg)
                 }
-                if let image = try await plain(at, 1440), token == generation { current = Frame(image: image, frameIndex: Int(at * fps)) }
+                // The large picture and tiles first; the stills follow.
+                if let image = try await plain(at, 1440), token == generation { current = Frame(image: image, frameIndex: Int(at * fps)); renderTiles(); renderDraft() }
                 var loaded: [Still] = []
                 for p in picks {
                     guard let image = try await plain(p.time, 320) else { continue }
@@ -187,28 +193,36 @@ import DirectionMedia
                 }
                 guard token == generation else { return }
                 stills = loaded
-                renderTiles(); renderDraft()
+                renderDraft()
             } catch { film.error = error.localizedDescription }
         }
     }
 
     /// Fixtures and previews hand in their own frames.
-    func setFrames(current: Frame, stills: [Still]) { self.current = current; self.stills = stills }
+    func setFrames(current: Frame, stills: [Still]) { self.current = current; self.stills = stills; plainKey = nil }
 
     // MARK: Rendering
 
-    /// Renders the large picture and the stills with the draft. Off the main thread in the app,
-    /// at once in previews; a newer change drops an older render.
+    /// Renders the large picture and the stills with the draft: off the main thread in the app, at once
+    /// in previews. While a slider drags, one render runs and only the latest change waits behind it.
     func renderDraft(sync: Bool = false) {
         guard let current else { return }
-        generation += 1
-        let token = generation, look = draft, big = largeStill.flatMap { id in stills.first { $0.id == id }?.frame } ?? current
-        let stills = self.stills.map { ($0.id, $0.frame) }
-        if sync { let r = LookPreview.draft(big, stills, look); rendered.picture = r.picture; rendered.plain = r.plain; rendered.stills = r.stills; return }
+        let key = largeStill ?? "", look = draft, big = largeStill.flatMap { id in stills.first { $0.id == id }?.frame } ?? current
+        let stills = self.stills.map { ($0.id, $0.frame) }, plain = key != plainKey || rendered.plain == nil
+        if sync { apply(LookPreview.draft(big, stills, look, plain: plain), key: key); return }
+        if rendering { pendingRender = true; return }
+        rendering = true
         Task.detached(priority: .userInitiated) {
-            let r = LookPreview.draft(big, stills, look)
-            await MainActor.run { guard token == self.generation else { return }; self.rendered.picture = r.picture; self.rendered.plain = r.plain; self.rendered.stills = r.stills }
+            let r = LookPreview.draft(big, stills, look, plain: plain)
+            await MainActor.run {
+                self.apply(r, key: key); self.rendering = false
+                if self.pendingRender { self.pendingRender = false; self.renderDraft() }
+            }
         }
+    }
+    private func apply(_ r: (picture: CGImage?, plain: CGImage?, stills: [String: CGImage]), key: String) {
+        rendered.picture = r.picture; rendered.stills = r.stills
+        if let plain = r.plain { rendered.plain = plain; plainKey = key }
     }
 
     /// Each tile is the current frame with that tile's own look.
@@ -226,10 +240,10 @@ extension LooksModel.Frame: @unchecked Sendable {}
 enum LookPreview {
     nonisolated(unsafe) static let context = CIContext(options: [.cacheIntermediates: false])
 
-    nonisolated static func draft(_ big: LooksModel.Frame, _ stills: [(String, LooksModel.Frame)], _ look: LookSettings) -> (picture: CGImage?, plain: CGImage?, stills: [String: CGImage]) {
+    nonisolated static func draft(_ big: LooksModel.Frame, _ stills: [(String, LooksModel.Frame)], _ look: LookSettings, plain: Bool) -> (picture: CGImage?, plain: CGImage?, stills: [String: CGImage]) {
         var out: [String: CGImage] = [:]
         for (id, f) in stills { out[id] = render(f, look: look, width: 276) }
-        return (render(big, look: look), render(big, look: nil), out)
+        return (render(big, look: look), plain ? render(big, look: nil) : nil, out)
     }
 
     nonisolated static func tiles(_ frame: LooksModel.Frame, _ entries: [(String, LookSettings)]) -> [String: CGImage] {

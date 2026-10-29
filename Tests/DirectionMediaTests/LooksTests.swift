@@ -229,6 +229,26 @@ struct LookFilterTests {
         #expect(px(run(.letterbox, option: "1.85"), 100, 2) == .zero)
     }
 
+    /// The Look sheet previews under 100 ms at 1080p: a LUT and every filter, rendered to pixels.
+    @Test func aFullLookRendersA1080pFrameInUnder100Milliseconds() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-lut-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("warm.cube")
+        try CubeLUT.make(size: 33) { SIMD3($0.x * 0.95 + 0.04, $0.y * 0.92 + 0.02, $0.z * 0.85) }.text.write(to: url, atomically: true, encoding: .utf8)
+        let everything = Dictionary(uniqueKeysWithValues: LookFilter.allCases.filter { $0 != .blackAndWhite }.map { ($0.rawValue, 0.4) })
+        let look = LookSettings(name: "All", lut: url.path, strength: 0.8, filters: everything)
+        let frame = LookFrame.make(width: 1920, height: 1080), context = CIContext(options: [.cacheIntermediates: false])
+        func once(_ i: Int) -> Double {
+            let start = Date()
+            _ = context.createCGImage(LookPipeline.apply(look, to: frame, frameIndex: i), from: frame.extent)
+            return Date().timeIntervalSince(start)
+        }
+        _ = once(0)
+        let times = (1...5).map(once).sorted()
+        #expect(times[2] < 0.1, "median \(Int(times[2] * 1000)) ms")
+    }
+
     @Test func aLookRunsTheLUTThenFiltersInOrderAndPicksTheScenesOwn() {
         let warm = LookSettings(name: "Warm", filters: ["splitTone": 1, "grain": 0.4, "vignette": 0.2, "halation": 0.3], options: ["grain": "fine"])
         let mono = LookSettings(name: "Mono", filters: ["blackAndWhite": 1])
