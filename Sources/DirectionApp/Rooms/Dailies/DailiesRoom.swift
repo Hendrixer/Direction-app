@@ -1,13 +1,233 @@
 import SwiftUI
 import DirectionCore
 
-// Owner: Start agent. Frames 07–09. Replace this stub.
-
+/// Dailies: every take by scene and setup. The director circles; the editor only suggests.
+/// Sidebar of scenes and bins, then the scene's takes, Unsorted, Not usable, or one take open.
 struct DailiesRoom: View {
     @Bindable var model: FilmModel
-    var body: some View { Text("Dailies").frame(maxWidth: .infinity, maxHeight: .infinity) }
+    @Environment(\.dailiesPreview) private var preview
+    var body: some View {
+        HStack(spacing: 0) {
+            DailiesSidebar(model: model, current: currentBin).frame(width: Gate.Size.sidebar)
+            main.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Gate.Surface.ground)
+        .overlay(alignment: .topLeading) {
+            // A drag in flight, as frame 09 draws it (snapshots only; the system draws the real one).
+            if let target = preview.dropSceneID, let i = model.scenes.firstIndex(where: { $0.id == target }) {
+                DailiesDragGhost(model: model, takeID: preview.draggingTakeID, scene: model.scenes[i]).offset(x: 8, y: 50 + CGFloat(i) * 31)
+            }
+        }
+        .background {
+            // ⇧⌘1 jumps to Unsorted from anywhere in the room.
+            Button("Unsorted") { model.openTakeID = nil; model.selectedSceneID = DailiesBin.unsorted }
+                .keyboardShortcut("1", modifiers: [.command, .shift]).hidden()
+        }
+    }
+
+    /// The sidebar row on show: the chosen scene or bin, else the first scene.
+    private var currentBin: String? {
+        if let id = model.selectedSceneID, id == DailiesBin.unsorted || id == DailiesBin.unusable || model.scene(id) != nil { return id }
+        return model.scenes.first?.id ?? (model.dailiesUnsorted.isEmpty ? nil : DailiesBin.unsorted)
+    }
+
+    @ViewBuilder private var main: some View {
+        if let id = model.openTakeID, model.dailies.takes[id] != nil {
+            DailiesTakeViewer(model: model, takeID: id, bin: currentBin)
+        } else {
+            switch currentBin {
+            case DailiesBin.unsorted?: DailiesUnsortedView(model: model)
+            case DailiesBin.unusable?: DailiesUnusableView(model: model)
+            case let id?: DailiesSceneView(model: model, sceneID: id).id(id)
+            case nil:
+                EmptyStateView(art: nil, title: "No scenes yet", message: model.isLogging ? "The editor is still logging. Takes appear here as it places them in scenes." : "Bring footage and the editor will log it into scenes.") {
+                    Button { model.chooseFootage() } label: { Label("Bring Footage\u{2026}", systemImage: "folder") }.buttonStyle(.gate)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+}
+
+// MARK: Sidebar
+
+/// Scenes with their circle counts, then Unsorted and Not usable. Rows take dropped takes.
+struct DailiesSidebar: View {
+    @Bindable var model: FilmModel
+    var current: String?
+    @Environment(\.dailiesPreview) private var preview
+    @State private var dropTarget: String?
+    @State private var renaming: String?
+    @State private var renameText = ""
+    @FocusState private var renameFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                SectionLabel("Scenes")
+                Spacer(minLength: 0)
+                Button {} label: { Image(systemName: "plus") }
+                    .buttonStyle(.gate(.ghost, .small, icon: true)).disabled(true)
+                    .help("New scene: drag takes onto a scene for now")
+            }
+            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(model.scenes) { scene in sceneRow(scene) }
+                    SectionLabel("Not in a scene").frame(height: 11).padding(.horizontal, 9).padding(.top, 14).padding(.bottom, 6)
+                    binRow(DailiesBin.unsorted, icon: "folder", title: "Unsorted", count: model.dailiesUnsorted.count)
+                    binRow(DailiesBin.unusable, icon: "trash", title: "Not usable", count: model.dailiesUnusable.count)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+            }
+            .scrollIndicators(.never)
+            footer
+        }
+        .background(Gate.Surface.ground)
+        .hairlineBorder(.trailing)
+    }
+
+    private func sceneRow(_ scene: DailiesScene) -> some View {
+        let circles = model.dailiesCircles(inScene: scene.id)
+        return row(id: scene.id, accessibility: "Scene \(scene.number), \(scene.title). \(circles) circled\(scene.locked ? ". Locked" : "")") {
+            Text(String(scene.number)).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.disabled).frame(width: 12, alignment: .leading)
+            if renaming == scene.id {
+                TextField("Scene name", text: $renameText).textFieldStyle(.plain).font(.system(size: 13)).focused($renameFocused)
+                    .onSubmit { model.renameScene(scene.id, to: renameText); renaming = nil }
+                    .onExitCommand { renaming = nil }
+            } else {
+                Text(scene.title).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if scene.locked { Image(systemName: "lock.fill").font(.system(size: 9)).foregroundStyle(Gate.Text.tertiary) }
+            if circles > 0 {
+                HStack(spacing: 4) { Text(String(circles)); Circle().strokeBorder(Gate.Voice.director, lineWidth: 1.25).frame(width: 7, height: 7) }
+                    .font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Voice.director)
+            } else {
+                Text("0").font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.disabled)
+            }
+        }
+        .contextMenu {
+            Button("Open") { open(scene.id) }
+            Button("Rename\u{2026}") { renameText = scene.title; renaming = scene.id; renameFocused = true }
+            Button(scene.locked ? "Unlock Scene" : "Lock Scene") { model.lockScene(scene.id, !scene.locked) }
+            Divider()
+            Button("Circle Suggestions in This Scene") { model.toggleCircles(model.dailiesTakes(inScene: scene.id).filter { $0.suggestion != nil && !$0.circled }.map(\.assetID)) }
+                .disabled(!model.dailiesTakes(inScene: scene.id).contains { $0.suggestion != nil && !$0.circled })
+            Button("Open in Script") { model.go(.script) }
+        }
+    }
+
+    private func binRow(_ id: String, icon: String, title: String, count: Int) -> some View {
+        row(id: id, accessibility: "\(title), \(count) takes") {
+            Image(systemName: icon).font(.system(size: 12)).foregroundStyle(Gate.Text.tertiary).frame(width: 15)
+            Text(title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            Text(String(count)).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.disabled)
+        }
+    }
+
+    private func row<Content: View>(id: String, accessibility: String, @ViewBuilder content: () -> Content) -> some View {
+        let on = current == id
+        let target = dropTarget == id || preview.dropSceneID == id
+        return Button { open(id) } label: {
+            HStack(spacing: 9) { content() }
+                .font(.system(size: 13)).foregroundStyle(on || target ? Gate.Text.primary : Gate.Text.secondary)
+                .padding(.horizontal, 9).frame(height: 30)
+                .background {
+                    RoundedRectangle(cornerRadius: 7).fill(on || target ? Gate.Surface.raised : .clear)
+                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(target ? Gate.Text.primary : on ? Gate.Line.subtle : .clear, lineWidth: target ? 1.5 : 1))
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+                .dropDestination(for: String.self) { items, _ in drop(items, on: id) } isTargeted: { over in
+            if over { dropTarget = id } else if dropTarget == id { dropTarget = nil }
+        }
+        .accessibilityLabel(accessibility)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func open(_ id: String) {
+        model.openTakeID = nil
+        model.selectedSceneID = id
+    }
+
+    /// Takes dropped from a grid: onto a scene moves them there, onto Unsorted takes them out, onto Not usable sets them aside.
+    private func drop(_ items: [String], on id: String) -> Bool {
+        let ids = items.flatMap { $0.split(separator: "\n").map(String.init) }.filter { model.dailies.takes[$0] != nil }
+        guard !ids.isEmpty else { return false }
+        switch id {
+        case DailiesBin.unusable: model.toggleUnusable(ids.filter { model.dailies.takes[$0]?.unusable == false })
+        case DailiesBin.unsorted: model.moveTakes(ids, to: nil)
+        default: model.moveTakes(ids, to: id)
+        }
+        dropTarget = nil
+        return true
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "film").font(.system(size: 10.5)).frame(width: 12)
+                Text("\(DailiesFormat.count(model.project?.assets.count ?? 0, "take")) \u{00B7} \(DailiesFormat.hoursMinutes(model.dailiesTotalSeconds))")
+            }
+            HStack(spacing: 8) {
+                RingMark(size: 8)
+                Text("\(model.circledCount) circled \u{00B7}")
+                GemMark(size: 6.4).padding(.leading, -2)
+                Text("\(model.suggestedCount) suggested")
+            }
+        }
+        .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 16)
+        .hairlineBorder(.top)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The drawn drag in flight (frame 09): a tilted thumbnail and a "Move to" tip beside the target row.
+private struct DailiesDragGhost: View {
+    var model: FilmModel
+    var takeID: String?
+    var scene: DailiesScene
+    @Environment(\.dailiesPreview) private var preview
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if let id = takeID {
+                DailiesTakeThumb(asset: model.asset(id), art: preview.art[id] ?? model.dailiesArt(id), preview: model.isPreview)
+                    .frame(width: 168, height: 94.5).clipShape(RoundedRectangle(cornerRadius: 7))
+                    .rotationEffect(.degrees(-3)).opacity(0.92).shadow(color: .black.opacity(0.9), radius: 30, y: 30)
+                    .offset(x: 140, y: -3)
+            }
+            Text("Move to \(scene.label)").font(.system(size: 12)).foregroundStyle(Gate.Text.primary)
+                .padding(.horizontal, 9).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Gate.Steel.ramp[5]).overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Gate.Line.strong, lineWidth: 1)).shadow(color: .black.opacity(0.8), radius: 10, y: 8))
+                .fixedSize().offset(x: 164, y: 101)
+        }
+        .frame(width: 0, height: 0, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
 }
 
 extension FilmModel {
-    var dailiesPrimary: PrimaryAction? { PrimaryAction(title: "Assemble from circles", count: String(circledCount), enabled: circledCount > 0) { self.assembleFromCircles() } }
+    /// Before the first cut: build the assembly from the circles. After: hand new circles to the next turnover as a note.
+    var dailiesPrimary: PrimaryAction? {
+        if cuts.isEmpty {
+            let building = openTurnover?.kind == "assembly"
+            return PrimaryAction(title: building ? "Assembling\u{2026}" : "Assemble from circles", count: String(circledCount), enabled: circledCount > 0 && openTurnover == nil) {
+                self.assembleFromCircles()
+                // Show the first look even if Dailies was opened while the editor was still logging.
+                self.onboardingDismissed = false
+            }
+        }
+        let since = lastTurnover?.createdAt ?? 0
+        let fresh = dailiesLogged.filter { $0.circled && ($0.circledAt ?? 0) > since }
+        return PrimaryAction(title: "Use circles in next cut", count: String(fresh.count), enabled: !fresh.isEmpty) {
+            let numbers = Array(Set(fresh.compactMap { self.scene($0.sceneID)?.number })).sorted().map(String.init)
+            let scenes = numbers.isEmpty ? "" : numbers.count == 1 ? " in scene \(numbers[0])" : " in scenes \(numbers.dropLast().joined(separator: ", ")) and \(numbers.last!)"
+            self.addNote(text: "Use my new circles\(scenes).", kind: .story)
+            self.notesTab = .sheet
+            self.go(.notes)
+        }
+    }
 }
