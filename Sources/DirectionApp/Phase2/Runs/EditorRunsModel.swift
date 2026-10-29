@@ -113,7 +113,7 @@ import DirectionTools
             create(t.kind == "assembly" ? .assemble : .turnover, program: program, turnoverID: t.id, store: store)
         }
         // Footage arriving: once the index has looked and Direction has the words, log what isn't logged.
-        if film.isLogging, film.index.looking == nil, film.index.listening == nil {
+        if film.isLogging, !film.index.busy {
             let total = film.project?.assets.count ?? 0, last = latest(.logFootage)
             if last == nil || (last!.state == .done && (last!.assetCount ?? 0) < total) { create(.logFootage, program: program, assetCount: total, store: store) }
         }

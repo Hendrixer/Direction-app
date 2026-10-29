@@ -24,6 +24,24 @@ struct FilmModelTests {
         #expect(!FilmLibraryIndex.trashed.contains(path))
     }
 
+    @Test func openingTheFilmThatIsAlreadyOpenKeepsIt() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-open-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        // Never the real library.
+        if ProcessInfo.processInfo.environment["DIRECTION_LIBRARY_PATH"] == nil { setenv("DIRECTION_LIBRARY_PATH", dir.appendingPathComponent("library.sqlite").path, 1) }
+        let url = dir.appendingPathComponent("Film.direction")
+        _ = try ProjectStore.create(at: url, name: "Film")
+        let app = AppModel()
+        app.open(url)
+        let first = try #require(app.film)
+        // The editor's "show it in the app" opens the same film: it must not close and reopen,
+        // which would cancel its running jobs.
+        app.open(url)
+        #expect(app.film === first)
+        first.close()
+    }
+
     @Test func changingRoomsStopsTheCutWhereItIs() {
         let m = SampleFilm.make(room: .screening)
         m.playing = true

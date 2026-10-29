@@ -75,10 +75,14 @@ import DirectionMedia
         lookAtFootage(film)
     }
 
+    /// Direction is still looking at or listening to footage that arrived, so logging waits. A take
+    /// that just arrived counts as waiting before its index job exists.
+    var busy: Bool { looking != nil || listening != nil || (SharedSettings.lookAutomatically && states.values.contains(.waiting)) }
+
     /// Every take with sound gets its words before the editor logs it (footage-index.md › Listening).
-    /// The app transcribes them itself, one at a time, so the job outlives an editor run. A job whose
-    /// process exited, or a transcript stuck in a loop, is started again, twice at most; one that failed
-    /// (no speech, say) is left for Transcribe Takes in Script.
+    /// The app transcribes them itself, one at a time, so the job outlives an editor run. A job that
+    /// was cancelled or whose process exited, or a transcript stuck in a loop, is started again, twice
+    /// at most; one that failed (no speech, say) is left for Transcribe Again.
     private func listen(_ film: FilmModel, assets: [MediaAsset]) {
         let speaking = assets.filter { !$0.audio.isEmpty }
         let heard = Set(film.transcripts.filter { !$0.words.isEmpty && !$0.looksLooped }.map(\.assetID))
@@ -86,7 +90,7 @@ import DirectionMedia
         func settled(_ a: MediaAsset) -> Bool {
             if heard.contains(a.id) || transcribeAttempts[a.id, default: 0] >= 2 { return true }
             guard let last = jobs.first(where: { $0.assetID == a.id }) else { return false }
-            return last.status == "failed" || last.status == "cancelled"
+            return last.status == "failed"
         }
         let waiting = speaking.filter { !settled($0) }
         listening = waiting.isEmpty || film.isPreview ? nil : IndexProgress(done: speaking.count - waiting.count, total: speaking.count)

@@ -29,6 +29,13 @@ final class AppModel {
     func reloadFilms() { films = (try? ProjectLibrary().list()) ?? [] }
 
     func open(_ url: URL) {
+        // Already open (the editor asked to show it, a notification, Open Recent): bring it forward.
+        // Opening it again would close it first, and closing cancels its running jobs.
+        if let film, let open = film.url, open.standardizedFileURL.resolvingSymlinksInPath() == url.standardizedFileURL.resolvingSymlinksInPath() {
+            NSApp?.activate()
+            NSApp?.windows.first { $0.frameAutosaveName == "DirectionMainWindow" }?.makeKeyAndOrderFront(nil)
+            return
+        }
         do {
             film?.close()
             let model = try FilmModel(url: url)

@@ -204,7 +204,8 @@ final class FilmModel {
             announceDeliveredCuts()
             announceQuestions()
             loadDisplayed()
-            runs.refresh(self); index.refresh(self); looks.refresh(self); graphics.refresh(self); made.refresh(self)
+            // The index first: whether the editor may start logging depends on what it's still doing.
+            index.refresh(self); runs.refresh(self); looks.refresh(self); graphics.refresh(self); made.refresh(self)
         } catch { self.error = error.localizedDescription }
     }
 
