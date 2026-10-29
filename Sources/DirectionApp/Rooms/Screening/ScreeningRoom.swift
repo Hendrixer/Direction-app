@@ -265,7 +265,7 @@ struct ScreeningStage: View {
     }
 
     private func end() {
-        if model.position > 1 || !marks.isEmpty { model.endScreening() } else { model.go(.notes) }
+        if model.position > 1 || !marks.isEmpty { model.endScreening() } else { model.goBack() }
     }
 
     private func toggleFullScreen() { (window ?? NSApp.keyWindow)?.toggleFullScreen(nil) }

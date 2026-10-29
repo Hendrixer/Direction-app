@@ -62,6 +62,9 @@ struct Toast: Identifiable, Equatable {
     var editor = false
     var actionTitle: String?
     var glass = false
+    /// What the action button does. Without one, the window decides (a ready cut opens Changes).
+    var run: (@MainActor () -> Void)? = nil
+    static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }
 }
 
 struct ToastView: View {

@@ -61,6 +61,8 @@ final class FilmModel {
 
     // MARK: Navigation
     var room: Room = .notes
+    /// Where esc goes back to from Screening.
+    var previousRoom: Room?
     var sheet: ActiveSheet?
     var toast: Toast?
     var showEditorPopover = false
@@ -391,6 +393,7 @@ final class FilmModel {
         // Leaving the first look for a room: the assembly keeps building in the background.
         if onboardingStep == .firstLook { onboardingDismissed = true }
         if self.room == .screening && room != .screening { endScreening(showEndCard: false) }
+        if self.room != room { previousRoom = self.room }
         withAnimation(gateAnimation(Gate.Motion.glide)) { self.room = room }
         if room == .screening { startScreening() }
     }
@@ -430,6 +433,8 @@ final class FilmModel {
         if player.rate > 0 { player.pause(); playing = false } else { if position >= duration - 0.03 { seek(0) }; player.play(); playing = true }
     }
     func pause() { player.pause(); playing = false }
+    /// Back to the room before this one (esc out of Screening).
+    func goBack() { go(previousRoom.flatMap { isEnabled($0) && $0 != .screening ? $0 : nil } ?? .notes) }
     func step(frames: Double) { pause(); seek(position + frames / fps) }
     func shuttle(_ rate: Float) { guard !isPreview else { return }; if rate == 0 { pause() } else { player.rate = rate; playing = true } }
     /// Keeps the display awake while picture plays.

@@ -37,7 +37,8 @@ struct FilmWindow: View {
             if model.showCommandMenu { CommandMenuOverlay(model: model, app: app).zIndex(20) }
             if model.showShortcuts { ShortcutsOverlay(model: model).zIndex(20) }
             toast.zIndex(30)
-            GrainOverlay().ignoresSafeArea().zIndex(40)
+            // Grain sits on the chrome, never on a full-bleed picture.
+            if !screeningFullBleed { GrainOverlay().ignoresSafeArea().zIndex(40) }
         }
         .background(Gate.Surface.ground)
         .ignoresSafeArea()
@@ -99,8 +100,8 @@ struct FilmWindow: View {
     @ViewBuilder private var toast: some View {
         if let toast = model.toast {
             VStack {
-                if model.room == .screening { ToastView(toast: toast, action: nil) { model.toast = nil }.padding(.top, 70); Spacer() }
-                else { Spacer(); ToastView(toast: toast, action: toast.actionTitle == nil ? nil : { model.toast = nil; model.go(.changes) }) { model.toast = nil }.padding(.bottom, 96) }
+                if model.room == .screening { ToastView(toast: toast, action: toast.run.map { run in { model.toast = nil; run() } }) { model.toast = nil }.padding(.top, 70); Spacer() }
+                else { Spacer(); ToastView(toast: toast, action: toast.actionTitle == nil ? nil : { model.toast = nil; if let run = toast.run { run() } else { model.go(.changes) } }) { model.toast = nil }.padding(.bottom, 96) }
             }
             .frame(maxWidth: .infinity, alignment: model.room == .screening ? .topTrailing : .bottomLeading)
             .padding(.horizontal, model.room == .screening ? 20 : 24)
