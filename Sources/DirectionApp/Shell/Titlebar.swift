@@ -57,7 +57,7 @@ struct Titlebar: View {
                 if let app {
                     Button("Films…") { app.closeFilm() }
                     Divider()
-                    ForEach(app.films.prefix(8)) { f in Button(f.name) { app.open(URL(fileURLWithPath: f.path)) } }
+                    ForEach(app.openableFilms.prefix(8)) { f in Button(f.name) { app.open(URL(fileURLWithPath: f.path)) } }
                 }
                 Divider()
                 Button("Edit the Brief…") { model.sheet = .brief }

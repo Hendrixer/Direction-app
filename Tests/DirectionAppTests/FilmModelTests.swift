@@ -17,9 +17,12 @@ struct FilmModelTests {
         // The empty film that was trashed: gone from disk, so hidden.
         app.films = [try entry(available: false)]
         #expect(app.summaries.isEmpty)
+        // The film menu never offers a film that isn't on this Mac.
+        #expect(app.openableFilms.isEmpty)
         // A new film at the same path: shown.
         app.films = [try entry(available: true)]
-        #expect(app.summaries.map(\.path) == [path])
+        #expect(app.summaries.map(\.path) == [path] && app.openableFilms.map(\.path) == [path])
+        #expect(app.filmName(URL(fileURLWithPath: path)) == "AI, the last human invention")
         FilmLibraryIndex.noteRestored(path)
         #expect(!FilmLibraryIndex.trashed.contains(path))
     }

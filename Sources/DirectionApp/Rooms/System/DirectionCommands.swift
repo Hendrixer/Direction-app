@@ -61,8 +61,9 @@ private struct FileMenuItems: View {
         Button("Open\u{2026}") { app.chooseFilm() }.shortcut(.openFilm)
         Menu("Open Recent") {
             let _ = app.films.count
-            let recent = NSDocumentController.shared.recentDocumentURLs
-            ForEach(recent, id: \.self) { url in Button(url.deletingPathExtension().lastPathComponent) { app.open(url) } }
+            // Titles, not package names ("Untitled film" is often a titled film), and only films still here.
+            let recent = NSDocumentController.shared.recentDocumentURLs.filter { FileManager.default.fileExists(atPath: $0.appendingPathComponent("manifest.json").path) }
+            ForEach(recent, id: \.self) { url in Button(app.filmName(url)) { app.open(url) } }
             if !recent.isEmpty { Divider() }
             Button("Clear Menu") { NSDocumentController.shared.clearRecentDocuments(nil) }.disabled(recent.isEmpty)
         }

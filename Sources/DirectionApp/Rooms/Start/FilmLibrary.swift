@@ -133,6 +133,10 @@ extension AppModel {
         let trashed = FilmLibraryIndex.trashed
         return films.filter { !(trashed.contains($0.path) && !$0.available) }.map { FilmLibraryIndex.shared.summary(for: $0) }
     }
+    /// Films that are on this Mac to open, for the film menu: never one that was trashed or is missing.
+    var openableFilms: [ProjectEntry] { previewFilms != nil ? [] : films.filter(\.available) }
+    /// A film's name for a menu: its title from the library, else its package's name.
+    func filmName(_ url: URL) -> String { films.first { $0.path == url.path }?.name ?? url.deletingPathExtension().lastPathComponent }
     /// Films with something waiting on the director.
     var waitingCount: Int {
         if let previewFilms { return previewFilms.filter { $0.waiting != nil }.count }
