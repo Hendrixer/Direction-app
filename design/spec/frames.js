@@ -66,7 +66,7 @@ window.FRAMES = [
   { id: "53-menus", group: "System", title: "Context menus", spec: "system.md" },
 
   { id: "54-settings-footage", group: "Settings", title: "Settings, Footage", spec: "settings.md", size: "720x724" },
-  { id: "55-settings-services", group: "Settings", title: "Settings, Services", spec: "settings.md", size: "720x722" },
+  { id: "55-settings-services", group: "Settings", title: "Settings, Services", spec: "settings.md", size: "720x812" },
 
   { id: "56-editor-setup", group: "Editor", title: "Who's editing? (setup)", spec: "editor.md" },
   { id: "57-editor-working", group: "Editor", title: "The editor at work", spec: "editor.md" },

@@ -4,11 +4,12 @@ Sometimes a note needs something the footage doesn't have: music under the drive
 
 The director's UI never says "generate", "AI", "prompt" or "model". Things are **made**, you **asked for** something, and services have **versions**. Use the same words in read-backs, answers and questions.
 
-## Footage first
+## Footage first, then a plan
 
 1. Search the footage (`direction_search_footage`) before making anything. Make something only when a note asks for what the footage doesn't have, or with latitude `free` (then the answer is Unasked).
-2. Say it in the read-back, with the version and about what it costs: "Note 4: make a sparser piano bed with Lyria 3 Clip, about $0.04."
-3. When you use a sound effect, say in the read-back that quality varies.
+2. For picture, plan in steps with the `make-shot` skill: frames of the film as references, stills before motion, short shots with small motion, and change a take rather than replace it.
+3. Price the whole plan with one `direction_estimate` call. Under the director's limit, make it. Over it, ask one spend question for the plan.
+4. Say it in the read-back, with the version and about what it costs: "Note 3: change the sky to dusk cloud with Aleph 2.0, about $1.40." When you use a sound effect, say that quality varies.
 
 ## Tools
 
@@ -16,7 +17,8 @@ The director's UI never says "generate", "AI", "prompt" or "model". Things are *
 
 Returns:
 
-- `services[0]`: `{name: "OpenRouter", state: "ready" | "notSet", kinds: [{kind, version, versionName, price?, durations?}]}`. Each kind shows the version Settings › Services chose, or the default.
+- `services`: OpenRouter (`state: "ready" | "notSet"`) and This Mac (`kinds: ["slowMotion", "upscale"]`, `sharpening: "ready" | "downloadsOnFirstUse" | "downloading" | "unavailable"`).
+- `kinds`: `[{kind, label, version, versionName, service, price?, durations?, lastFrame?, others?}]`. Each kind shows the version Settings › Services chose, or the default; `others` lists up to 12 more you may name with `version`, each with its price, `lastFrame` and `takesVideo`.
 - `limits`: `{askAbovePerTurnover, stopAtPerMonth}`. `stopAtPerMonth` is null for no limit.
 - `turnover`: `{id, spent, left}` for the open turnover, or null.
 - `month`: `{spent, left}`.
@@ -25,35 +27,53 @@ Defaults:
 
 | Kind | Default version | Price |
 |---|---|---|
-| Music | Lyria 3 Clip | About $0.04 per 30 s clip |
-| Sound effects | Lyria 3 Clip | Same as music |
-| Voice | The first speech version OpenRouter lists | Per character |
-| New shots | Veo 3.1 | About $0.40 a second at 1080p, with sound |
-| Stills | Nano Banana 2 | Per image |
+| `music`, `soundEffect` | Lyria 3 Clip | About $0.04 per 30 s clip |
+| `voice` | The first speech version OpenRouter lists | Per character |
+| `still` | Nano Banana 2 | A few cents per image |
+| `shot`, `extension`, `bridge` | Veo 3.1 (Settings › Services › New shots) | About $0.20 a second at 1080p, silent; $0.40 with sound |
+| `changedShot` | Aleph 2.0 (Settings › Services › Changed shots) | About $0.28 a second, $0.56 at least. FLUX Video Edit is about $0.03 a second. |
+| `slowMotion` | This Mac (Apple frame interpolation) | Nothing |
+| `upscale` | This Mac (Apple super resolution); FLUX Video Upscale through OpenRouter | Nothing on this Mac |
 
 Versions and prices come from OpenRouter's model lists, cached for a day in `~/Library/Application Support/Direction/openrouter-models.json`.
+
+### `direction_estimate`
+
+`{turnover, steps: [<direction_make arguments>, …]}` (up to 24 steps; `note` may be left out). Spends nothing. Returns each step's `{kind, version, versionName, spend, seconds, requests, note?}`, the plan's `total`, `turnoverSpent`, `limit`, `needsQuestion`, `monthSpent`, `monthLeft`, `overMonthlyCap` and a `message` saying what to do.
 
 ### `direction_make`
 
 | Argument | Required | Meaning |
 |---|---|---|
-| `kind` | yes | `music`, `soundEffect`, `voice`, `shot`, `changedShot` (a shot from one you have) or `still`. |
-| `ask` | yes | What to make, in plain words. For `voice`, the words to say. This is what the director reads as "What the editor asked for", so write it for them. |
+| `kind` | yes | `music`, `soundEffect`, `voice`, `still`, `shot`, `extension`, `bridge`, `changedShot`, `slowMotion` or `upscale`. |
+| `ask` | except slow motion and sharpening | What to make, or for a changed shot what to change, in plain words. For `voice`, the words to say. The director reads it as "What the editor asked for", so write it for them. |
 | `note` | yes | The note ID it's for (a note number also works), or `"unasked"`. |
 | `turnover` | yes | The turnover ID. |
-| `seconds` | for music, sound effects and shots | The length. Music and effects go up to 600 s; shots up to 60 s, rounded up to a length the version offers (Veo 3.1 offers 4, 6 or 8 s). |
-| `from` | for `changedShot` | `{assetID, start, end?}` in source seconds. The take's frame at `start` becomes the shot's first frame. OpenRouter's video API takes images, not video, so "change the sky" makes a new shot that starts on that frame. |
-| `references` | no | Asset ids of stills or takes, as visual references for shots and stills. |
-| `ways` | no | 1 (default) or 2. With 2 it makes it twice, for options A and B, at twice the cost. |
-| `version` | no | A version id from `direction_services`. |
+| `seconds` | music, sound effects, shots, extensions, bridges | The length. Music and effects up to 600 s; shots up to 60 s, rounded up to a length the version offers (Veo 3.1 offers 4, 6 or 8 s). |
+| `from` | changed shots, slow motion, sharpening, extensions | `{assetID, start, end}` in source seconds: the range to change (up to 10 s), slow down (up to 20 s) or sharpen (up to 60 s). For an extension, `{assetID, end, side: "tail"}` continues from `end`, and `{assetID, start, side: "head"}` leads into `start`. |
+| `first`, `last` | bridges need both | `{assetID, at?}`: the frame a shot starts or ends on, from a still (no `at`) or a take at `at` seconds. |
+| `references` | no | Up to 4 stills or takes (`assetID`, or `{assetID, at}`) that ground a still or shot in the film. |
+| `sound` | no | Shots, extensions and bridges are silent unless true. |
+| `factor` | slow motion | 2 (default), 3 or 4. |
+| `ways` | no | 1 (default) or 2; up to 4 for stills. Each way costs the same again. |
+| `version` | no | A version id from `direction_services`. A bridge, or an extension with `side: "head"`, needs one that takes a last frame; without `version`, Direction uses Veo 3.1 and says so in `note`. |
 | `estimateOnly` | no | Returns `{spend, seconds, version, versionName, requests, priced}` and spends nothing. |
 | `spendQuestionID` | no | A spend question the director answered yes to (below). |
 
 Otherwise it returns a job. Poll `direction_job` until its status is `completed`. Its `result` is:
 
 ```json
-{"assetID": "asset-…", "made": [{"assetID": "asset-…", "file": "Made/music-sparse-felt-piano-1a2b.wav", "provenance": {"kind": "music", "version": "google/lyria-3-clip-preview", "versionName": "Lyria 3 Clip", "asked": "…", "seconds": 24, "spend": 0.04, "noteID": "…", "turnoverID": "…"}}], "spend": 0.04, "estimate": 0.04}
+{"assetID": "asset-…", "made": [{"assetID": "asset-…", "file": "Made/changedShot-replace-the-overcast-sky-1a2b.mov", "provenance": {"kind": "changedShot", "version": "runway/aleph-2", "versionName": "Aleph 2.0", "asked": "…", "seconds": 5, "spend": 1.4, "from": {"assetID": "…", "start": 12, "end": 17}, "sharpenedFrom": "1280 × 720", "noteID": "…", "turnoverID": "…"}}], "spend": 1.4, "estimate": 1.4}
 ```
+
+How each kind is made:
+
+- **Still:** `POST /images` with references as image parts.
+- **Shot, extension, bridge:** `POST /videos` with `frame_images` (`first_frame`, `last_frame`), references as image parts, `generate_audio` from `sound`. An extension's first frame is the take's frame at `end` (tail), or its last frame is the frame at `start` (head).
+- **Changed shot:** the range is sent itself, as an H.264 file (1280 wide at most, under 16 MB) in `input_references` as a `video_url`. What comes back is the same length, without sound. Place it on V2 over the same range so the take's sound keeps playing.
+- **Slow motion** and **sharpening on this Mac** use Apple's frame interpolation and super resolution. Nothing leaves the Mac and nothing is spent. Apple's sharpening takes inputs up to 1920 × 1080 and downloads its files on first use.
+
+Finishing: every shot that comes back from OpenRouter is sharpened on this Mac to the cut's size when the cut is at least 1.5× taller and this Mac can (the result's provenance has `sharpenedFrom`; `sharpened: false` says it couldn't). An extension's repeated join frame is dropped. Finished files are HEVC 10-bit.
 
 What happens to the result:
 
@@ -71,32 +91,31 @@ The record is per Mac and per month, and the month resets on the 1st. The app an
 
 ### Over the turnover's limit
 
-When a make would push the turnover past the director's limit, `direction_make` returns this, not a job:
+Price the plan first with `direction_estimate`. When `needsQuestion` is true, or a make returns `spend_over_limit`, nothing has been sent:
 
 ```json
-{"status": "spend_over_limit", "estimate": 3.2, "turnoverSpent": 2.9, "turnoverLimit": 5, "left": 2.1, "message": "…"}
+{"status": "spend_over_limit", "estimate": 1.4, "turnoverSpent": 4.1, "turnoverLimit": 5, "left": 0.9, "message": "…"}
 ```
 
-Nothing has been sent. To go ahead:
+To go ahead:
 
-1. Ask a spend question. Direction writes the money line ("About $3.20. This turnover would reach $6.10 of your $5.00 limit.") from its own record:
+1. Ask one spend question for the whole plan, with its total. Direction writes the money line ("About $2.75. This turnover would reach $5.65 of your $5.00 limit.") from its own record:
 
    ```json
    {"kind": "spend", "turnoverID": "…", "noteIDs": ["…"],
-    "text": "Note 3 wants less sky. Reframing to 1.6× gets the sky to a third of the frame. To change the sky itself to dusk cloud, I'd make a new shot from this frame with Veo 3.1.",
+    "text": "Note 3 wants less sky. Reframing to 1.6× gets the sky to a third of the frame. To make the sky itself dusk cloud, I'd change those 5 seconds of the take with Aleph 2.0, and make an establishing shot of the ridge at dusk to lead in.",
     "choices": [{"id": "reframe", "label": "Reframe only", "detail": "No spend", "recommended": true, "assetID": "…"},
-                {"id": "make", "label": "Make a new shot from this frame", "detail": "About $3.20", "assetID": "…"},
+                {"id": "make", "label": "Change the sky and add the dusk shot", "detail": "About $2.75", "assetID": "…"},
                 {"id": "find", "label": "Find another take", "detail": "I'll search the ridge footage first"}],
-    "spend": {"estimate": 3.2, "choiceID": "make", "kind": "changedShot"}}
+    "spend": {"estimate": 2.75, "choiceID": "make", "kind": "changedShot"}}
    ```
 
 2. Wait for the director's answer in `direction_questions`.
-3. If they picked the `choiceID` choice, call `direction_make` again with `spendQuestionID`.
+3. If they picked the `choiceID` choice, make each step with `spendQuestionID`.
 
 Rules for that approval:
 
-- One yes lets exactly one request past the turnover's limit (`spend_question_used` after that).
-- It covers up to 10% more than the question's estimate (`spend_over_question` past that).
+- A yes covers the plan it priced: every request that names it may go past the turnover's limit until together they've used the estimate plus 10% (`spend_over_question` past that).
 - It never gets past the monthly cap.
 - Other answers return `spend_not_agreed`. Then do what the director chose instead.
 
@@ -115,6 +134,8 @@ There's no override from your side. Tell the director in your answer or a can't-
 | `no_openrouter_key` | There's no key in Settings › Services. Nothing was sent. |
 | `openrouter_key_rejected`, `openrouter_credits`, `openrouter_error` | OpenRouter refused. The message is OpenRouter's own. |
 | `shot_failed`, `shot_timeout` | The video job failed or ran past 30 minutes. |
+| `spend_over_question` | The plan's yes is used up. Ask again for the rest. |
+| `nothing_to_sharpen`, `cant_sharpen` | The take is already the cut's size, or bigger than Apple's sharpening takes (use FLUX Video Upscale). |
 | `unknown_version`, `invalid_arguments`, `feedback_not_found`, `turnover_not_found` | Fix the call. |
 
 ## The key
@@ -127,7 +148,7 @@ There are two copies because of how macOS protects keychain items. Since macOS 1
 
 The key never appears in tool arguments, results, job records, logs or the film. Removing it in Settings stops new requests at once, and made clips stay playable.
 
-Frames sent for a shot from one you have leave the Mac. OpenRouter's video generation isn't eligible for zero data retention.
+Frames and ranges sent for a shot leave the Mac. OpenRouter's video services aren't covered by zero data retention.
 
 ## For other areas
 

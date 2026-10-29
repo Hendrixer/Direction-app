@@ -27,6 +27,11 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 
 19. **Phase 2 frames vary the sample.** Frame 61 shows note 4 answered two ways, B with made music, where story.md has a single −6 dB answer. Frame 64 adds an eighth answer to Cut 4, a title for the cold open numbered 8, although Script's note 8 is "Let this breathe" and the Cut 4 turnover covers notes 1–7. Treat 61 and 64 as alternate samples that each show one feature, not one continuous state.
 20. **The Look sheet's layout** (frame 63): Strength sits on the Looks header row, Apply to sits in the sheet's foot left of the buttons, and filter rows are 22 tall, so everything fits a 720-tall sheet without scrolling. This wins over looks.md where they differ.
+22. **The editor plans the shot; Direction gives it steps.** No separate planning agent: the editor chains `direction_make` kinds (stills, new shots from frames, extended shots, bridges, changed shots) with the `make-shot` skill's recipes. Stills before motion; frames of the film as references.
+23. **One amount decides when the director is asked.** The editor prices each turnover's plan with `direction_estimate`. Under Settings › Services › Ask before spending more than, it makes it without asking; over it, one spend question covers the whole plan (its estimate plus 10%). There's no separate approval of stills.
+24. **A changed shot changes the take itself** (Aleph 2.0 or FLUX Video Edit through OpenRouter), not a new shot from its frame. Runway and Higgsfield directly would add keys without adding versions: OpenRouter carries Runway's Aleph 2.0 and Gen-4.5 at Runway's prices, and Higgsfield's API resells the same versions.
+25. **Slow motion and sharpening are local.** Apple's frame interpolation and super resolution (VideoToolbox) run on this Mac at no cost; made shots are sharpened to the cut's size before they come in.
+26. **People in made shots.** For now the only person in the films is the director, so pickups that show someone from the footage need no extra consent step.
 
 ## Needs product decisions (not blockers for building the UI)
 

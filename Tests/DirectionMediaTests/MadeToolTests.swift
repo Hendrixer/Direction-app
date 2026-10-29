@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import DirectionCore
+import DirectionMedia
 @testable import DirectionTools
 
 // direction_services and direction_make against a stubbed OpenRouter. No request leaves this Mac.
@@ -114,7 +115,7 @@ private struct MadeFixture {
         #expect(abs(shortAsset.duration.seconds - 24) < 0.1 && stub.count("chat/completions") == 4)
     }
 
-    @Test func aShotFromOneYouHaveRunsPendingToCompletedThenDownloads() async throws {
+    @Test func aNewShotFromATakesFrameRunsPendingToCompletedThenDownloads() async throws {
         let movie = try Data(contentsOf: try await MediaFixture.make().source)
         let stub = OpenRouterStub { r, _ in
             let path = r.url!.path
@@ -133,20 +134,23 @@ private struct MadeFixture {
             return try await stub.transport(r)
         }
         let f = try await MadeFixture.make(transport: wrapped); defer { f.media.cleanup() }
-        let estimate = try await f.make(["kind": .string("changedShot"), "ask": .string("The same frame, the sky turning to dusk cloud."), "seconds": .number(8), "from": .object(["assetID": .string(f.assetID), "start": .number(1)]), "estimateOnly": .bool(true)])
-        #expect(abs((estimate["spend"].double ?? 0) - 3.20) < 1e-9 && estimate["seconds"].double == 8)
+        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("The ridge at dusk, cloud moving. Camera holds."), "seconds": .number(8), "first": .object(["assetID": .string(f.assetID), "at": .number(1)])]
+        let estimate = try await f.make(shot.merging(["estimateOnly": .bool(true)]) { _, b in b })
+        // Silent unless asked: $0.20 a second.
+        #expect(abs((estimate["spend"].double ?? 0) - 1.60) < 1e-9 && estimate["seconds"].double == 8)
         #expect(stub.requests.isEmpty)
 
-        let done = try await f.finish(try await f.make(["kind": .string("changedShot"), "ask": .string("The same frame, the sky turning to dusk cloud."), "seconds": .number(8), "from": .object(["assetID": .string(f.assetID), "start": .number(1)])]))
+        let done = try await f.finish(try await f.make(shot))
         #expect(done.status == "completed", "\(done.error ?? "")")
         let submit = try #require(stub.bodies("/videos").first)
-        #expect(submit["model"].string == "google/veo-3.1" && submit["duration"].double == 8 && submit["resolution"].string == "1080p" && submit["aspect_ratio"].string == "16:9")
+        #expect(submit["model"].string == "google/veo-3.1" && submit["duration"].double == 8 && submit["resolution"].string == "1080p" && submit["aspect_ratio"].string == "16:9" && submit["generate_audio"].bool == false)
         let frame = submit["frame_images"].array?.first
-        #expect(frame?["frame_type"].string == "first_frame" && frame?["image_url"]["url"].string?.hasPrefix("data:image/jpeg;base64,") == true)
+        #expect(submit["frame_images"].array?.count == 1 && frame?["frame_type"].string == "first_frame" && frame?["image_url"]["url"].string?.hasPrefix("data:image/jpeg;base64,") == true)
         #expect(polls.used == 4 && stub.requests.last?.url?.query == "index=0")
         let shotID = try #require(done.result?["assetID"].string)
         let record = try #require(try f.media.store.madeRecord(shotID))
-        #expect(record.kind == .changedShot && record.from == MadeFrom(assetID: f.assetID, start: 1) && record.spend == 3.2 && record.file.hasSuffix(".mp4"))
+        // As big as the cut already, so it comes in as made.
+        #expect(record.kind == .shot && record.first == MadeFrame(assetID: f.assetID, at: 1) && record.spend == 3.2 && record.file.hasSuffix(".mp4") && record.sharpenedFrom == nil)
         #expect(!(try f.media.store.read().asset(record.assetID).video.isEmpty))
     }
 
@@ -159,7 +163,7 @@ private struct MadeFixture {
             return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "usage": .object(["cost": .number(3.2)])])), [:])
         }
         let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
-        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("An establishing shot of the ridge at dusk."), "seconds": .number(8)]
+        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("An establishing shot of the ridge at dusk."), "seconds": .number(8), "sound": .bool(true)]
         #expect(try await f.finish(try await f.make(shot)).status == "completed")
 
         // $3.20 spent; another $3.20 passes the $5.00 turnover limit, and nothing goes out.
@@ -186,8 +190,8 @@ private struct MadeFixture {
         _ = try f.media.store.answerQuestion(id: q.id, choiceID: "make", text: nil)
         await expectCode("spend_over_question") { _ = try await f.make(shot.merging(["spendQuestionID": .string(q.id), "ways": .number(2)]) { _, b in b }) }
         #expect(try await f.finish(try await f.make(approved)).status == "completed")
-        // One yes, one request.
-        await expectCode("spend_question_used") { _ = try await f.make(approved) }
+        // The yes covered about $3.52; a second $3.20 shot is more than the director agreed to.
+        await expectCode("spend_over_question") { _ = try await f.make(approved) }
 
         // The month: $43.70 spent elsewhere this month puts the next shot past $50.00, and a yes doesn't help.
         try OpenRouter.$overrides.withValue(f.overrides) { try SpendLedger.record(SpendEntry(kind: .shot, version: "google/veo-3.1", estimate: 43.7, spend: 43.7, filmID: "another-film", turnoverID: "turnover-x")) }
@@ -200,11 +204,137 @@ private struct MadeFixture {
 
         // direction_services tells the editor the same.
         let services = try await f.call("direction_services")
-        #expect(services["services"].array?.first?["state"].string == "ready")
+        #expect(services["services"].array?.first?["state"].string == "ready" && services["services"].array?.last?["service"].string == "local")
         #expect(services["limits"]["askAbovePerTurnover"].double == 5 && services["limits"]["stopAtPerMonth"].double == 50)
         #expect(abs((services["month"]["spent"].double ?? 0) - 50.1) < 1e-9 && abs((services["turnover"]["spent"].double ?? 0) - 6.4) < 1e-9)
-        let kinds = services["services"].array?.first?["kinds"].array ?? []
-        #expect(kinds.first { $0["kind"].string == "shot" }?["price"].string == "About $0.40 a second at 1080p")
+        let kinds = services["kinds"].array ?? []
+        #expect(kinds.first { $0["kind"].string == "shot" }?["price"].string == "About $0.20 a second at 1080p")
+        #expect(kinds.first { $0["kind"].string == "changedShot" }?["version"].string == "runway/aleph-2" && kinds.first { $0["kind"].string == "slowMotion" }?["service"].string == "local")
+    }
+
+    @Test func aPlanIsPricedOnceAndAskedAboutOnlyOverTheLimit() async throws {
+        let stub = OpenRouterStub { _, _ in (500, Data(), [:]) }
+        let f = try await MadeFixture.make(transport: stub.transport, key: nil); defer { f.media.cleanup() }
+        let take = JSONValue.string(f.assetID)
+        let steps: JSONValue = .array([
+            .object(["kind": .string("still"), "ask": .string("The diner at dusk, neon on wet asphalt, 35 mm."), "references": .array([.object(["assetID": take, "at": .number(1)])]), "ways": .number(2)]),
+            .object(["kind": .string("shot"), "ask": .string("Slow push in. Steam from the vent."), "seconds": .number(6), "first": .object(["assetID": take, "at": .number(2)])]),
+            .object(["kind": .string("changedShot"), "ask": .string("Dusk sky with cloud. Keep everything else."), "from": .object(["assetID": take, "start": .number(0.5), "end": .number(2.5)])]),
+            .object(["kind": .string("slowMotion"), "from": .object(["assetID": take, "start": .number(1), "end": .number(2)]), "factor": .number(2)]),
+        ])
+        let plan = try await f.call("direction_estimate", ["turnover": .string(f.turnover.id), "steps": steps])
+        let priced = plan["steps"].array ?? []
+        #expect(priced.map { $0["version"].string ?? "" } == ["google/gemini-3.1-flash-image", "google/veo-3.1", "runway/aleph-2", "local/frame-interpolation"])
+        // Two stills at about 8¢, a silent 6 s shot at $0.20 a second, 2 s of Aleph at its 56¢ minimum, slow motion for nothing.
+        #expect(abs((priced[1]["spend"].double ?? 0) - 1.20) < 1e-9 && abs((priced[2]["spend"].double ?? 0) - 0.56) < 1e-9 && priced[3]["spend"].double == 0)
+        let total = try #require(plan["total"].double)
+        #expect(abs(total - (0.0774 * 2 + 1.20 + 0.56)) < 1e-6 && plan["needsQuestion"].bool == false && plan["limit"].double == 5)
+        // Nothing was sent and no key was needed to price it.
+        #expect(stub.requests.isEmpty && f.ledger.isEmpty)
+
+        // With a $1.00 limit the same plan needs one question.
+        var tight = f; tight.overrides.limits = SpendLimits(askAbove: 1, stopAt: 50)
+        let over = try await tight.call("direction_estimate", ["turnover": .string(f.turnover.id), "steps": steps])
+        #expect(over["needsQuestion"].bool == true && over["message"].string?.contains("one spend question") == true)
+        // A step that can't be made says which.
+        await expectCode("invalid_arguments") { _ = try await f.call("direction_estimate", ["turnover": .string(f.turnover.id), "steps": .array([.object(["kind": .string("bridge"), "ask": .string("Car to door."), "seconds": .number(4), "first": .object(["assetID": take, "at": .number(0)])])])]) }
+    }
+
+    @Test func aBridgeSendsBothFramesAndNeedsAVersionThatTakesALastFrame() async throws {
+        let movie = try Data(contentsOf: try await MediaFixture.make().source)
+        let stub = videoStub(movie, cost: 0.8)
+        let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        var catalog = MadeCatalog.builtIn; catalog.fetchedAt = Date().timeIntervalSince1970
+        catalog.versions.append(MadeVersion(id: "runway/gen-4.5", name: "Gen-4.5", listing: .video, skus: ["cents_per_second_output": "12"], durations: [2, 3, 4, 5], resolutions: ["720p"], frames: ["first_frame"]))
+        try JSONEncoder.direction.encode(catalog).write(to: try #require(f.overrides.catalog))
+        let take = JSONValue.string(f.assetID)
+        let bridge: [String: JSONValue] = ["kind": .string("bridge"), "ask": .string("The camera drifts from the car to the front door."), "seconds": .number(4),
+                                           "first": .object(["assetID": take, "at": .number(0.5)]), "last": .object(["assetID": take, "at": .number(2.5)])]
+        await expectCode("unknown_version") { _ = try await f.make(bridge.merging(["version": .string("runway/gen-4.5")]) { _, b in b }) }
+        await expectCode("invalid_arguments") { _ = try await f.make(bridge.merging(["last": .null]) { _, b in b }) }
+        let done = try await f.finish(try await f.make(bridge))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+        let submit = try #require(stub.bodies("/videos").first)
+        #expect(submit["model"].string == "google/veo-3.1" && submit["duration"].double == 4 && submit["generate_audio"].bool == false)
+        #expect(submit["frame_images"].array?.map { $0["frame_type"].string ?? "" } == ["first_frame", "last_frame"])
+        let madeID = try #require(done.result?["assetID"].string)
+        let record = try #require(try f.media.store.madeRecord(madeID))
+        #expect(record.kind == .bridge && record.first == MadeFrame(assetID: f.assetID, at: 0.5) && record.last == MadeFrame(assetID: f.assetID, at: 2.5) && record.spend == 0.8)
+    }
+
+    @Test func aChangedShotSendsTheRangeItself() async throws {
+        let movie = try Data(contentsOf: try await MediaFixture.make().source)
+        let stub = videoStub(movie, cost: 0.56)
+        let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        let change: [String: JSONValue] = ["kind": .string("changedShot"), "ask": .string("Replace the red wall with dusk sky. Keep the square exactly as it moves."), "from": .object(["assetID": .string(f.assetID), "start": .number(0.5), "end": .number(2.5)])]
+        let estimate = try await f.make(change.merging(["estimateOnly": .bool(true)]) { _, b in b })
+        #expect(abs((estimate["spend"].double ?? 0) - 0.56) < 1e-9 && estimate["version"].string == "runway/aleph-2" && estimate["seconds"].double == 2)
+        await expectCode("invalid_arguments") { _ = try await f.make(change.merging(["from": .object(["assetID": .string(f.assetID), "start": .number(1)])]) { _, b in b }) }
+
+        let done = try await f.finish(try await f.make(change))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+        let submit = try #require(stub.bodies("/videos").first)
+        #expect(submit["model"].string == "runway/aleph-2" && submit["prompt"].string == change["ask"]?.string && submit["frame_images"] == .null && submit["duration"] == .null)
+        let reference = try #require(submit["input_references"].array?.first)
+        #expect(reference["type"].string == "video_url")
+        let url = try #require(reference["video_url"]["url"].string)
+        #expect(url.hasPrefix("data:video/mp4;base64,"))
+        // The range itself, about 2 s, without sound.
+        let sent = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4"); defer { try? FileManager.default.removeItem(at: sent) }
+        try Data(base64Encoded: String(url.dropFirst("data:video/mp4;base64,".count)))!.write(to: sent)
+        let probed = try await MediaInspector.inspect(url: sent, thumbnailDirectory: nil)
+        #expect(abs(probed.duration.seconds - 2) < 0.1 && probed.audio.isEmpty && !probed.video.isEmpty)
+        let madeID = try #require(done.result?["assetID"].string)
+        let record = try #require(try f.media.store.madeRecord(madeID))
+        #expect(record.kind == .changedShot && record.from == MadeFrom(assetID: f.assetID, start: 0.5, end: 2.5) && record.versionName == "Aleph 2.0")
+    }
+
+    @Test func anExtendedShotStartsOnTheTakesLastFrameAndDropsTheRepeat() async throws {
+        let media = try await MediaFixture.make(); defer { media.cleanup() }
+        let movie = try Data(contentsOf: media.source)
+        let stub = videoStub(movie, cost: 0.8)
+        let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        let done = try await f.finish(try await f.make(["kind": .string("extension"), "ask": .string("The square keeps drifting right. Camera holds."), "seconds": .number(4),
+                                                        "from": .object(["assetID": .string(f.assetID), "end": .number(2), "side": .string("tail")])]))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+        let frame = try #require(stub.bodies("/videos").first?["frame_images"].array?.first)
+        #expect(frame["frame_type"].string == "first_frame")
+        let madeID = try #require(done.result?["assetID"].string)
+        let made = try f.media.store.read().asset(madeID)
+        let source = try f.media.store.read().asset(f.assetID)
+        let fps = try #require(source.video.first?.frameRate)
+        // The downloaded clip less its first frame.
+        #expect(abs(made.duration.seconds - (source.duration.seconds - 1 / fps)) < 0.5 / fps, "\(made.duration.seconds)")
+        let record = try #require(try f.media.store.madeRecord(made.id))
+        #expect(record.kind == .extension && record.from?.side == "tail" && record.file.hasSuffix(".mov"))
+    }
+
+    @Test func slowMotionIsMadeOnThisMacWithoutAKeyOrSpend() async throws {
+        let stub = OpenRouterStub { _, _ in (500, Data(), [:]) }
+        let f = try await MadeFixture.make(transport: stub.transport, key: nil); defer { f.media.cleanup() }
+        let done = try await f.finish(try await f.make(["kind": .string("slowMotion"), "from": .object(["assetID": .string(f.assetID), "start": .number(1), "end": .number(2)]), "factor": .number(2)]))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+        let madeID = try #require(done.result?["assetID"].string)
+        let made = try f.media.store.read().asset(madeID)
+        #expect(abs(made.duration.seconds - 2) < 0.15 && made.audio.isEmpty, "\(made.duration.seconds)")
+        let record = try #require(try f.media.store.madeRecord(made.id))
+        #expect(record.isLocal && record.spend == 0 && record.factor == 2 && record.serviceName == "This Mac")
+        #expect(stub.requests.isEmpty && f.ledger.isEmpty)
+        // The cut is 320 × 180, as big as the take: nothing to sharpen.
+        let sharpen: [String: JSONValue] = ["kind": .string("upscale"), "from": .object(["assetID": .string(f.assetID), "start": .number(0), "end": .number(1)])]
+        await expectCode("nothing_to_sharpen") { _ = try await f.make(sharpen) }
+
+        // In a 640 × 360 cut, this Mac sharpens it with Apple's super resolution, when its files are here (never fetched in tests).
+        guard MadeProcessing.sharpeningStatus(width: 320, height: 180) == .ready else { return }
+        var format = EditOperation("format"); format.width = 640; format.height = 360
+        _ = try f.media.store.apply(.init(baseEditRevision: f.media.store.revision(), operations: [format]))
+        let sharp = try await f.finish(try await f.make(sharpen))
+        #expect(sharp.status == "completed", "\(sharp.error ?? "")")
+        let sharpID = try #require(sharp.result?["assetID"].string)
+        let sharpened = try f.media.store.read().asset(sharpID)
+        #expect(sharpened.video.first?.width == 640 && sharpened.video.first?.height == 360 && abs(sharpened.duration.seconds - 1) < 0.1)
+        let sharpRecord = try #require(try f.media.store.madeRecord(sharpID))
+        #expect(sharpRecord.kind == .upscale && sharpRecord.sharpenedFrom == "320 \u{00D7} 180" && sharpRecord.isLocal && stub.requests.isEmpty)
     }
 
     @Test func failuresGiveTheHoldBackAndNothingGoesOutWithoutAKey() async throws {
@@ -230,6 +360,16 @@ private struct MadeFixture {
         await expectCode("invalid_arguments") { _ = try await f.make(["kind": .string("music"), "ask": .string("Piano.")]) }
         await expectCode("unknown_version") { _ = try await f.make(["kind": .string("music"), "ask": .string("Piano."), "seconds": .number(10), "version": .string("nobody/nothing")]) }
         await expectCode("feedback_not_found") { _ = try await f.call("direction_make", ["kind": .string("music"), "ask": .string("Piano."), "seconds": .number(10), "note": .string("note-x"), "turnover": .string(f.turnover.id)]) }
+    }
+}
+
+/// A video service that takes any job, finishes it on the first poll, and sends `movie`.
+private func videoStub(_ movie: Data, cost: Double) -> OpenRouterStub {
+    OpenRouterStub { r, n in
+        let path = r.url!.path
+        if r.httpMethod == "POST" && path.hasSuffix("/videos") { return (202, data(.object(["id": .string("vid-\(n)"), "status": .string("pending")])), [:]) }
+        if path.hasSuffix("/content") { return (200, movie, ["Content-Type": "video/mp4"]) }
+        return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "usage": .object(["cost": .number(cost)])])), [:])
     }
 }
 

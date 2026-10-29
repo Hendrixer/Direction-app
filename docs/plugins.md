@@ -1,6 +1,6 @@
 # Direction plugins
 
-`plugins/direction/` is a single local package with both `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json`. Both hosts use the same `.mcp.json` and six skills:
+`plugins/direction/` is a single local package with both `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json`. Both hosts use the same `.mcp.json` and these skills:
 
 - **start-project** — create/open a project, import supplied media, log the footage for Dailies.
 - **assemble** — build the first cut from the director's circles in script order (`insert`, `roll`, `splitEdit`), watch it, deliver it.
@@ -8,8 +8,11 @@
 - **take-turnover** — work as the director's editor: read the brief, read back a turnover, cut, ask, and deliver the next cut with an answer per note.
 - **review-feedback** — read original frames/audio/transcript and source projections, revise, reply as addressed.
 - **finish** — after picture lock: balance and match shots, mix to the loudness target, captions, deliveries.
+- **make-shot** — picture the footage doesn't have: change a take, hold longer, bridge, inserts and establishing shots, pickups, slow motion, sharpening. Stills first, motion last; price the plan with `direction_estimate`.
+- **make-graphic** — titles, lower thirds, cards and charts as JavaScript Direction renders.
+- **propose-look** — offer the director a look as an option, never apply one.
 
-When Direction starts the editor itself (Settings › Editor › Editor runs on), it copies the job's skill into the film's working folder and names it in the job; see [editor-runs.md](editor-runs.md).
+When Direction starts the editor itself (Settings › Editor › Editor runs on), it copies every skill into the film's working folder (`Editor/.claude/skills/`) and names the job's own skill in the job; see [editor-runs.md](editor-runs.md).
 
 Requires Apple Silicon and macOS 26+. It uses Direction's native executable; it does not embed an LLM, access a cloud service, generate footage, or install model dependencies. Apple's local speech model may download on first transcription.
 

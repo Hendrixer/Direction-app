@@ -7,7 +7,7 @@ Frames 42–48, 54 and 55. Opens with Direction › Settings… (`⌘,`). It's a
 | Part | Spec |
 |---|---|
 | Width | 720 pt, fixed. |
-| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 722, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
+| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 812, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
 | Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. |
 | Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘9` switch tabs while Settings is key. |
 | Body | Padding 4/28/22. Each group is a label (`.label`, 14 above and 7 below) plus a `.set-card` (`--panel`, radius 10, hairline). |
@@ -201,26 +201,29 @@ Note under Looking at footage: "The editor reads what's found here to log takes,
 ---
 
 ## 55 · Settings, Services
-Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 722. Tab icon: `key`.
+Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 812. Tab icon: `key`.
 
-**The OpenRouter row** (`.set-row`, min 56): a 28 rounded-square monogram "O" (`--raised` fill, hairline border, radius 8, 12/700 text-2; no brand logo), "OpenRouter" (13/600) with "Music, voice, sound effects, new shots and stills" under it (11.5 text-3), and on the right a chip "Ready" (ok style) with "$37.20 left" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`, key icon).
+**The OpenRouter row** (`.set-row`, min 56): a 28 rounded-square monogram "O" (`--raised` fill, hairline border, radius 8, 12/700 text-2; no brand logo), "OpenRouter" (13/600) with "Music, voice, sound effects, shots and stills" under it (11.5 text-3), and on the right a chip "Ready" (ok style) with "$37.20 left" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`, key icon).
 
 **Editing the key:** the row grows to show a secure `.input` (placeholder "Paste your OpenRouter key"), a text link "Get a key" with an arrow-up-right icon (opens openrouter.ai/keys), and Cancel (plain) / **Save** (`.btn`, not steel; the window has no steel button). After Save, Direction checks the key (`GET /key`) and shows Ready or "That key didn't work: <OpenRouter's message>". The row's context menu has Replace Key…, Remove Key, and Show Credits (opens openrouter.ai/credits).
 
 **What the editor uses** (a card under the key, one row per kind, each a select of OpenRouter versions with the default first):
 
-| Kind | Default | Sub-label |
-|---|---|---|
-| Music | Lyria 3 Clip | "About $0.04 a 30 s clip" |
-| Voice | (first speech version) | — |
-| New shots | Veo 3.1 | "About $0.40 a second at 1080p" |
-| Stills | Nano Banana 2 | — |
+| Kind | Default | Sub-label | Lists |
+|---|---|---|---|
+| Music | Lyria 3 Clip | "About $0.04 a 30 s clip" | Audio versions |
+| Voice | (first speech version) | — | Speech versions |
+| New shots | Veo 3.1 | "About $0.20 a second at 1080p" | Video versions that make shots. Extended shots and bridges use it too. |
+| Changed shots | Aleph 2.0 | "About $0.28 a second" | Versions that change video (Aleph 2.0, FLUX Video Edit) |
+| Stills | Nano Banana 2 | — | Image versions |
+
+Note under the card: "Slow motion and sharpening happen on this Mac and cost nothing."
 
 Prices in sub-labels come from OpenRouter's listing and update with it.
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
-| Spending | Ask before spending more than | Select: $1.00 / $5.00 / $10.00 / $25.00 per turnover | $5.00 per turnover | Over this, the editor asks a spend question (frame 62). |
+| Spending | Ask before spending more than | Select: $1.00 / $5.00 / $10.00 / $25.00 / $50.00 per turnover. Sub-label: "The editor prices each turnover's plan first, and asks only when it goes over." | $5.00 per turnover | A plan over this needs a yes to one spend question (frame 62). Under it, the editor just makes it. |
 | Spending | Stop for the month at | Select: $25.00 / $50.00 / $100.00 / $250.00 / No limit | $50.00 | Nothing is made past this. |
 | Spending | Spent this month | Meter (like Storage's), one segment per kind, with a legend: Music $0.36, New shots $12.40, Looking at footage $0.04 | — | Read-only. "$12.80 of $50.00" in SF Mono on the right of the row. |
 

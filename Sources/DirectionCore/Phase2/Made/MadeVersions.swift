@@ -2,17 +2,25 @@ import Foundation
 
 /// What the editor can make (product-model.md › Made).
 public enum MadeKind: String, Codable, CaseIterable, Sendable {
-    case music, soundEffect, voice, shot, changedShot, still
+    case music, soundEffect, voice, still, shot, `extension`, bridge, changedShot, slowMotion, upscale
     public var label: String {
-        switch self { case .music: "Music"; case .soundEffect: "Sound effect"; case .voice: "Voice"; case .shot: "New shot"; case .changedShot: "Changed shot"; case .still: "Still" }
+        switch self {
+        case .music: "Music"; case .soundEffect: "Sound effect"; case .voice: "Voice"; case .still: "Still"; case .shot: "New shot"
+        case .extension: "Extended shot"; case .bridge: "Bridge"; case .changedShot: "Changed shot"; case .slowMotion: "Slow motion"; case .upscale: "Sharpened"
+        }
     }
     /// The OpenRouter listing its versions come from.
     public var listing: MadeVersion.Listing {
-        switch self { case .music, .soundEffect: .audio; case .voice: .speech; case .shot, .changedShot: .video; case .still: .image }
+        switch self { case .music, .soundEffect: .audio; case .voice: .speech; case .still: .image; case .shot, .extension, .bridge, .changedShot, .slowMotion, .upscale: .video }
     }
-    public var isPicture: Bool { [.shot, .changedShot, .still].contains(self) }
-    /// Music, effects and shots are made to a length; voice runs as long as its words; stills have none.
-    public var needsSeconds: Bool { [.music, .soundEffect, .shot, .changedShot].contains(self) }
+    public var isPicture: Bool { ![.music, .soundEffect, .voice].contains(self) }
+    /// Music, effects and new shots are made to a length; voice runs as long as its words; stills have none;
+    /// changed shots, slow motion and sharpening follow the range they're made from.
+    public var needsSeconds: Bool { [.music, .soundEffect, .shot, .extension, .bridge].contains(self) }
+    /// Made from a range of a take (`from: {assetID, start, end}`).
+    public var worksOnRange: Bool { [.changedShot, .slowMotion, .upscale].contains(self) }
+    /// Made shots that come back from a service and are finished on this Mac (made-media.md › Finishing a made shot).
+    public var isMadeShot: Bool { [.shot, .extension, .bridge, .changedShot].contains(self) }
     public var spendKind: SpendKind { SpendKind(rawValue: rawValue)! }
 }
 
@@ -30,9 +38,27 @@ public struct MadeVersion: Codable, Hashable, Sendable, Identifiable {
     public var resolutions: [String] = []
     public var aspectRatios: [String] = []
     public var voices: [String] = []
-    public init(id: String, name: String, listing: Listing, pricing: [String: String] = [:], skus: [String: String] = [:], durations: [Int] = [], resolutions: [String] = [], aspectRatios: [String] = [], voices: [String] = []) {
-        self.id = id; self.name = name; self.listing = listing; self.pricing = pricing; self.skus = skus; self.durations = durations; self.resolutions = resolutions; self.aspectRatios = aspectRatios; self.voices = voices
+    /// `/videos/models` `supported_frame_images`: "first_frame", "last_frame".
+    public var frames: [String] = []
+    /// `/videos/models` lists an `upscale_factor` range.
+    public var upscales: Bool = false
+    public init(id: String, name: String, listing: Listing, pricing: [String: String] = [:], skus: [String: String] = [:], durations: [Int] = [], resolutions: [String] = [], aspectRatios: [String] = [], voices: [String] = [], frames: [String] = [], upscales: Bool = false) {
+        self.id = id; self.name = name; self.listing = listing; self.pricing = pricing; self.skus = skus; self.durations = durations; self.resolutions = resolutions; self.aspectRatios = aspectRatios; self.voices = voices; self.frames = frames; self.upscales = upscales
     }
+
+    /// Returns the video it's given, changed (Aleph, FLUX Video Edit): no listed durations or frames, priced by the second out.
+    public var changesVideo: Bool { listing == .video && !upscales && (id.contains("aleph") || id.contains("video-edit")) }
+    /// Takes a video as a reference: the changing versions, and those with a "with video input" price (Seedance).
+    public var takesVideo: Bool { changesVideo || upscales || skus.keys.contains { $0.contains("video_input") } }
+    public var takesLastFrame: Bool { frames.contains("last_frame") }
+    /// Makes new shots: a video version that neither changes nor enlarges what it's given.
+    public var makesShots: Bool { listing == .video && !changesVideo && !upscales && !id.hasPrefix("heygen/") }
+    /// Runs on this Mac (slow motion, sharpening). Never billed.
+    public var isLocal: Bool { id.hasPrefix("local/") }
+
+    /// Apple's frame interpolation and super resolution, on this Mac.
+    public static let frameInterpolation = MadeVersion(id: "local/frame-interpolation", name: "This Mac", listing: .video)
+    public static let superResolution = MadeVersion(id: "local/super-resolution", name: "This Mac", listing: .video)
 
     /// "Google: Nano Banana 2 (Gemini 3.1 Flash Image)" → "Nano Banana 2"; "Lyria 3 Clip Preview" → "Lyria 3 Clip".
     /// A name that says nothing on its own keeps its maker: "AssemblyAI: TTS 1" → "AssemblyAI TTS 1".
@@ -57,23 +83,36 @@ public struct MadeCatalog: Codable, Sendable, Equatable {
     public init(fetchedAt: Double, versions: [MadeVersion]) { self.fetchedAt = fetchedAt; self.versions = versions }
 
     /// The spec's defaults (made-media.md › Services). Voice takes the first speech version listed.
-    public static let defaults: [MadeKind: String] = [.music: "google/lyria-3-clip", .soundEffect: "google/lyria-3-clip", .shot: "google/veo-3.1", .changedShot: "google/veo-3.1", .still: "google/gemini-3.1-flash-image"]
+    public static let defaults: [MadeKind: String] = [.music: "google/lyria-3-clip", .soundEffect: "google/lyria-3-clip", .still: "google/gemini-3.1-flash-image",
+                                                      .shot: "google/veo-3.1", .extension: "google/veo-3.1", .bridge: "google/veo-3.1", .changedShot: "runway/aleph-2",
+                                                      .slowMotion: MadeVersion.frameInterpolation.id, .upscale: MadeVersion.superResolution.id]
 
+    /// The versions that can make a kind: changed shots need a version that changes video, bridges one that takes a last frame.
+    public func listed(_ kind: MadeKind) -> [MadeVersion] {
+        switch kind {
+        case .slowMotion: return [.frameInterpolation]
+        case .upscale: return [.superResolution] + versions.filter { $0.listing == .video && $0.upscales }
+        case .changedShot: return versions.filter(\.changesVideo)
+        case .shot, .extension: return versions.filter(\.makesShots)
+        case .bridge: return versions.filter { $0.makesShots && $0.takesLastFrame }
+        default: return versions.filter { $0.listing == kind.listing }
+        }
+    }
     /// Versions for a kind, the default first.
     public func choices(_ kind: MadeKind) -> [MadeVersion] {
-        let all = versions.filter { $0.listing == kind.listing }
+        let all = listed(kind)
         guard let d = defaultVersion(kind), let i = all.firstIndex(of: d) else { return all }
         var out = all; out.remove(at: i); out.insert(d, at: 0); return out
     }
     /// The listed version matching the default id, or a listed variant of it ("…-clip" → "…-clip-preview").
     public func defaultVersion(_ kind: MadeKind) -> MadeVersion? {
-        let all = versions.filter { $0.listing == kind.listing }
+        let all = listed(kind)
         guard let id = Self.defaults[kind] else { return all.first }
         return all.first { $0.id == id } ?? all.first { $0.id.hasPrefix(id + "-") } ?? all.first
     }
     /// The chosen version (Settings › Services, or the editor's `version`), else the default.
     public func version(_ kind: MadeKind, chosen: String? = nil) -> MadeVersion? {
-        let all = versions.filter { $0.listing == kind.listing }
+        let all = listed(kind)
         if let chosen, let v = all.first(where: { $0.id == chosen }) ?? all.first(where: { $0.id.hasPrefix(chosen + "-") }) { return v }
         return defaultVersion(kind)
     }
@@ -82,7 +121,8 @@ public struct MadeCatalog: Codable, Sendable, Equatable {
     public static let builtIn = MadeCatalog(fetchedAt: 0, versions: [
         MadeVersion(id: "google/lyria-3-clip-preview", name: "Lyria 3 Clip", listing: .audio),
         MadeVersion(id: "openai/gpt-4o-mini-tts-2025-12-15", name: "GPT-4o mini TTS", listing: .speech, pricing: ["prompt": "0.0000006", "completion": "0.000012"], voices: ["alloy"]),
-        MadeVersion(id: "google/veo-3.1", name: "Veo 3.1", listing: .video, skus: ["duration_seconds_with_audio": "0.40", "duration_seconds_without_audio": "0.20", "duration_seconds_with_audio_4k": "0.60", "duration_seconds_without_audio_4k": "0.40"], durations: [4, 6, 8], resolutions: ["720p", "1080p", "4K"], aspectRatios: ["16:9", "9:16"]),
+        MadeVersion(id: "google/veo-3.1", name: "Veo 3.1", listing: .video, skus: ["duration_seconds_with_audio": "0.40", "duration_seconds_without_audio": "0.20", "duration_seconds_with_audio_4k": "0.60", "duration_seconds_without_audio_4k": "0.40"], durations: [4, 6, 8], resolutions: ["720p", "1080p", "4K"], aspectRatios: ["16:9", "9:16"], frames: ["first_frame", "last_frame"]),
+        MadeVersion(id: "runway/aleph-2", name: "Aleph 2.0", listing: .video, skus: ["cents_per_second_output": "28", "minimum_cents_per_generation": "56"], aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9"]),
         MadeVersion(id: "google/gemini-3.1-flash-image", name: "Nano Banana 2", listing: .image, pricing: ["prompt": "0.0000005", "completion": "0.000003", "image_output": "0.00006"]),
     ])
 }
@@ -129,7 +169,8 @@ public enum MadeVersions {
             guard let id = m["id"].string else { continue }
             versions.append(MadeVersion(id: id, name: MadeVersion.displayName(m["name"].string ?? "", id: id), listing: .video, skus: strings(m["pricing_skus"]),
                                         durations: m["supported_durations"].array?.compactMap(\.int) ?? [], resolutions: m["supported_resolutions"].array?.compactMap(\.string) ?? [],
-                                        aspectRatios: m["supported_aspect_ratios"].array?.compactMap(\.string) ?? []))
+                                        aspectRatios: m["supported_aspect_ratios"].array?.compactMap(\.string) ?? [],
+                                        frames: m["supported_frame_images"].array?.compactMap(\.string) ?? [], upscales: m["upscale_factor"] != .null))
         }
         guard !versions.isEmpty else { throw DirectionError("no_versions", "OpenRouter listed no versions.") }
         return MadeCatalog(fetchedAt: now.timeIntervalSince1970, versions: versions)
@@ -173,8 +214,24 @@ public enum MadeEstimator {
     }
     static func isClipVersion(_ v: MadeVersion) -> Bool { v.id.contains("lyria") }
 
-    public static func estimate(_ kind: MadeKind, version v: MadeVersion, seconds: Double?, words: String = "", ways: Int = 1, resolution: String? = nil) -> MadeEstimate {
-        let ways = max(1, min(2, ways))
+    /// - sound: a shot made with its own sound (`generate_audio`). Shots are silent unless asked.
+    /// - fromImage: a shot that starts from a frame, priced at the version's image-to-video rate where it has one.
+    /// - outputPixels: what sharpening through a service makes, per frame (the cut's size).
+    public static func estimate(_ kind: MadeKind, version v: MadeVersion, seconds: Double?, words: String = "", ways: Int = 1, resolution: String? = nil, sound: Bool = false, fromImage: Bool = false, outputPixels: Double? = nil) -> MadeEstimate {
+        let ways = max(1, min(kind == .still ? 4 : 2, ways))
+        if v.isLocal { return MadeEstimate(spend: 0, seconds: seconds, requests: 0, priced: true) }
+        if v.upscales {
+            let s = max(1, seconds ?? 5), megapixels = (outputPixels ?? 3840 * 2160) / 1_000_000
+            let cents = v.skus["cents_per_megapixel_second_precise"].flatMap(Double.init)
+            return MadeEstimate(spend: (cents ?? 0) / 100 * megapixels * s, seconds: s, requests: 1, priced: cents != nil)
+        }
+        if v.changesVideo {
+            // The range goes in and comes back changed, so it's priced by the range's length.
+            let s = max(1, seconds ?? 5), per = perSecond(v, resolution: nil, audio: false, fromImage: false)
+            var spend = (per ?? 0) * s
+            if let minimum = v.skus["minimum_cents_per_generation"].flatMap(Double.init) { spend = max(spend, minimum / 100) }
+            return MadeEstimate(spend: spend * Double(ways), seconds: s, requests: ways, priced: per != nil)
+        }
         switch kind.listing {
         case .audio:
             let s = max(1, seconds ?? clipSeconds)
@@ -195,7 +252,7 @@ public enum MadeEstimator {
             return MadeEstimate(spend: (per + (v.price("request") ?? 0)) * Double(ways), seconds: nil, requests: ways, priced: per > 0)
         case .video:
             let duration = videoDuration(v, seconds: seconds ?? 8), res = resolution ?? videoResolution(v)
-            let per = perSecond(v, resolution: res, audio: true, fromImage: kind == .changedShot)
+            let per = perSecond(v, resolution: res, audio: sound, fromImage: fromImage)
             var spend = (per ?? 0) * Double(duration)
             if let minimum = v.skus["minimum_cents_per_generation"].flatMap(Double.init) { spend = max(spend, minimum / 100) }
             return MadeEstimate(spend: spend * Double(ways), seconds: Double(duration), requests: ways, duration: duration, resolution: res, priced: per != nil)
@@ -261,8 +318,9 @@ public enum MadeFormat {
             guard e.priced, e.spend > 0 else { return nil }
             return MadeEstimator.isClipVersion(v) ? "About \(money(e.spend)) a 30 s clip" : "About \(money(e.spend)) for 30 s"
         case .video:
-            let res = MadeEstimator.videoResolution(v)
-            guard let per = MadeEstimator.perSecond(v, resolution: res, audio: true, fromImage: false), per > 0 else { return nil }
+            if v.isLocal { return "Nothing, on this Mac" }
+            let res = v.changesVideo ? nil : MadeEstimator.videoResolution(v)
+            guard let per = MadeEstimator.perSecond(v, resolution: res, audio: false, fromImage: false), per > 0 else { return nil }
             return "About \(money(per)) a second" + (res.map { " at \($0)" } ?? "")
         case .speech, .image: return nil
         }

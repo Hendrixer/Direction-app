@@ -28,8 +28,8 @@ struct MadeChip: View {
         .popover(isPresented: Binding(get: { open && !film.isPreview }, set: { if !$0, open { film.made.provenanceID = nil } }), arrowEdge: .bottom) {
             MadeProvenance(film: film, record: record).background(Gate.Surface.panel)
         }
-        .help("Made with \(record.versionName). Where it came from")
-        .accessibilityLabel("Made with \(record.versionName)")
+        .help("\(record.madeWith). Where it came from")
+        .accessibilityLabel(record.madeWith)
         .accessibilityHint("Shows what the editor asked for and what it cost")
     }
 }
@@ -47,7 +47,7 @@ struct MadeProvenance: View {
             HStack(alignment: .top, spacing: 8) {
                 GemMark(size: 8).frame(width: 14, height: 17)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Made with \(record.versionName)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).frame(height: 17)
+                    Text(record.madeWith).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).frame(height: 17)
                     Text(record.provenanceLine).font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary).frame(height: 15)
                 }
             }
@@ -56,17 +56,20 @@ struct MadeProvenance: View {
                 PlayerSurface(player: film.made.playerForPicture).aspectRatio(film.aspect, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: Gate.Radius.frame))
                     .padding(.horizontal, 16).padding(.bottom, 14)
             }
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("What the editor asked for")
-                Text("\u{201C}\(record.asked)\u{201D}").font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).cssLineHeight(1.5, size: 12.5)
-                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            if !record.asked.isEmpty && ![.slowMotion, .upscale].contains(record.kind) {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel("What the editor asked for")
+                    Text("\u{201C}\(record.asked)\u{201D}").font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).cssLineHeight(1.5, size: 12.5)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                }
+                .section()
             }
-            .section()
             VStack(spacing: 8) {
-                fact("Version", record.version)
+                if !record.isLocal { fact("Version", record.version) }
+                if let from = record.fromText(take: { film.takeCode($0) ?? film.asset($0)?.name ?? "a take" }) { fact("From", from) }
                 if let length = record.lengthText { fact("Length", length) }
-                fact("Spent", MadeFormat.money(record.spend))
-                if let from = record.from { fact("From", (film.takeCode(from.assetID) ?? film.asset(from.assetID)?.name ?? "a take") + " at " + Timecode.format(from.start, fps: film.fps)) }
+                if let size = record.sharpenedFrom { fact("Sharpened", "From \(size) on this Mac") }
+                fact("Spent", record.spentText)
                 fact("For", record.noteID.map { "Note \(film.noteNumber($0))" } ?? "Unasked")
             }
             .section()
@@ -86,7 +89,7 @@ struct MadeProvenance: View {
         }
         .frame(width: 320, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Made with \(record.versionName)")
+        .accessibilityLabel(record.madeWith)
     }
 
     private func fact(_ label: String, _ value: String) -> some View {
@@ -126,7 +129,7 @@ enum MadeText {
 
 // MARK: 62 · A spend question
 
-/// `.spend`: "About $3.20. This turnover would reach $6.10 of your $5.00 limit." Money in SF Mono.
+/// `.spend`: "About $2.75. This turnover would reach $5.65 of your $5.00 limit." Money in SF Mono.
 struct SpendLine: View {
     var spend: SpendAsk
     var body: some View {

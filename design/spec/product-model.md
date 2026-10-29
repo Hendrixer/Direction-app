@@ -139,7 +139,8 @@ Filter    kind: .grain | .halation | .bloom | .vignette | .gateWeave | .chromati
 LUT       file (.cube), use: .camera | .look, size: 17–65, from: .folder | .film | .editor
 Graphic   name: "Title · Launch day", source: folder in the film (HTML + JavaScript), duration, words: [GraphicWord], note: Note?
 GraphicWord  key, label: "Title", text, maxLength?    // the director may change words directly
-Made      kind: .music | .soundEffect | .voice | .shot | .changedShot | .still, service ("openrouter"), version, asked: String, from: (Take, time)?,
+Made      kind: .music | .soundEffect | .voice | .still | .shot | .extension | .bridge | .changedShot | .slowMotion | .upscale,
+          service ("openrouter" | "local"), version, asked: String, from: (Take, range)?, first/last: (Take or Still, time)?, sharpened: Size?,
           spend: Money, note: Note?, file      // appears in Dailies under Made, and in History with its provenance
 Service   name, uses: [Made.kind], key (Keychain), state: .notSet | .ready | .failing(reason), spentThisMonth: Money
 Spending  askAbove: Money per turnover, stopAt: Money per month

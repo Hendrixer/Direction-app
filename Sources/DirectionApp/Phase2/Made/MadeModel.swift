@@ -74,14 +74,39 @@ import DirectionCore
 }
 
 extension MadeRecord {
+    /// "Made with Lyria 3 Clip", or "Made on this Mac".
+    var madeWith: String { isLocal ? "Made on this Mac" : "Made with \(versionName)" }
     /// "Music · OpenRouter · Oct 28 14:02".
     var provenanceLine: String {
         let f = DateFormatter(); f.dateFormat = "MMM d HH:mm"
-        return [kind == .changedShot ? "New shot" : kind.label, serviceName, f.string(from: Date(timeIntervalSince1970: createdAt))].joined(separator: " \u{00B7} ")
+        return [kind.label, serviceName, f.string(from: Date(timeIntervalSince1970: createdAt))].joined(separator: " \u{00B7} ")
     }
     /// "0:24".
     var lengthText: String? { seconds.map(MadeFormat.length) }
+    /// "$1.40", or "Nothing" for what this Mac made.
+    var spentText: String { isLocal && spend == 0 ? "Nothing" : MadeFormat.money(spend) }
     var icon: String {
-        switch kind { case .music: "music.note"; case .soundEffect: "waveform"; case .voice: "mic"; case .shot, .changedShot: "film"; case .still: "photo" }
+        switch kind {
+        case .music: "music.note"; case .soundEffect: "waveform"; case .voice: "mic"; case .still: "photo"
+        case .shot, .extension, .bridge, .changedShot: "film"; case .slowMotion: "tortoise"; case .upscale: "sparkle.magnifyingglass"
+        }
+    }
+
+    /// The provenance popover's From row (made-media.md › The provenance popover); `take` names a take ("A012").
+    func fromText(take: (String) -> String) -> String? {
+        switch kind {
+        case .changedShot, .slowMotion, .upscale:
+            guard let from, let end = from.end else { return nil }
+            return "\(take(from.assetID)) \u{00B7} \(MadeFormat.length(from.start))\u{2013}\(MadeFormat.length(end))"
+        case .extension:
+            guard let from else { return nil }
+            return (from.side == "head" ? "Start of " : "End of ") + take(from.assetID)
+        case .bridge:
+            guard let first, let last else { return nil }
+            return "\(take(first.assetID)) to \(take(last.assetID))"
+        default:
+            guard let first else { return from.map { "\(take($0.assetID)) at \(MadeFormat.length($0.start))" } }
+            return first.at.map { "\(take(first.assetID)) at \(MadeFormat.length($0))" } ?? "Still: \(take(first.assetID))"
+        }
     }
 }

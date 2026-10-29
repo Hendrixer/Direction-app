@@ -116,10 +116,10 @@ func toneWAV(seconds: Double, rate: Int = 8_000) -> Data {
         let bed = MadeEstimator.estimate(.music, version: lyria, seconds: 75)
         #expect(bed.requests == 3 && abs(bed.spend - 0.12) < 1e-9)
         #expect(MadeEstimator.estimate(.music, version: lyria, seconds: 24, ways: 2).spend == 0.08)
-        let shot = MadeEstimator.estimate(.changedShot, version: veo, seconds: 7)
+        let shot = MadeEstimator.estimate(.shot, version: veo, seconds: 7, sound: true)
         #expect(shot.duration == 8 && shot.resolution == "1080p" && abs(shot.spend - 3.20) < 1e-9)
         #expect(MadeFormat.priceLine(.music, lyria) == "About $0.04 a 30 s clip")
-        #expect(MadeFormat.priceLine(.shot, veo) == "About $0.40 a second at 1080p")
+        #expect(MadeFormat.priceLine(.shot, veo) == "About $0.20 a second at 1080p")
         // SKUs in cents and per resolution, and image-to-video tiers.
         let kling = MadeVersion(id: "kwaivgi/kling-v3.0-pro", name: "Kling", listing: .video, skus: ["duration_seconds": "0.112", "duration_seconds_with_audio": "0.168", "image_to_video_duration_seconds_720p": "0.112"], durations: [5, 10], resolutions: ["720p"])
         #expect(MadeEstimator.perSecond(kling, resolution: "720p", audio: true, fromImage: true) == 0.112)
@@ -174,7 +174,52 @@ func toneWAV(seconds: Double, rate: Int = 8_000) -> Data {
         #expect(SpendCheck.of(estimate: 2.1, turnoverSpent: 2.9, monthSpent: 2.9, askAbove: 5, stopAt: 50, approved: false) == .ok)
     }
 
-    @Test func theLedgerHoldsEstimatesAndLetsEachYesThroughOnce() throws {
+    @Test func aYesCoversEveryStepOfThePlanItPriced() throws {
+        let ledger = temporaryFile("spend.json"); defer { try? FileManager.default.removeItem(at: ledger); try? FileManager.default.removeItem(atPath: ledger.path + ".lock") }
+        try OpenRouter.$overrides.withValue(.init(ledger: ledger)) {
+            func step(_ estimate: Double) -> SpendEntry { SpendEntry(kind: .changedShot, version: "runway/aleph-2", estimate: estimate, filmID: "film-1", turnoverID: "turnover-1") }
+            _ = try SpendLedger.reserve(step(4.5), askAbove: 5, stopAt: 50)
+            // A $2.75 plan: a $1.40 changed shot, two $0.08 stills and a $1.20 shot. Its yes allows $3.03.
+            let budget = SpendLedger.budget(forEstimate: 2.75)
+            #expect(budget == 3.03)
+            #expect(try SpendLedger.reserve(step(1.40), askAbove: 5, stopAt: 50) == .overLimit(estimate: 1.40, spent: 4.5, limit: 5))
+            for e in [1.40, 0.08, 0.08, 1.20] { #expect(try SpendLedger.reserve(step(e), approvedBy: "question-plan", budget: budget, askAbove: 5, stopAt: 50) == .ok) }
+            // A retry of the shot would go past what the director agreed to.
+            expectError("spend_over_question") { _ = try SpendLedger.reserve(step(1.20), approvedBy: "question-plan", budget: budget, askAbove: 5, stopAt: 50) }
+            // Small change inside the 10% still fits.
+            #expect(try SpendLedger.reserve(step(0.25), approvedBy: "question-plan", budget: budget, askAbove: 5, stopAt: 50) == .ok)
+        }
+    }
+
+    @Test func versionsKnowWhatTheyCanDoAndArePricedThatWay() {
+        let aleph = MadeVersion(id: "runway/aleph-2", name: "Aleph 2.0", listing: .video, skus: ["cents_per_second_output": "28", "minimum_cents_per_generation": "56"])
+        let edit = MadeVersion(id: "black-forest-labs/flux-video-edit", name: "FLUX Video Edit", listing: .video, skus: ["cents_per_second_output": "3"])
+        let upscale = MadeVersion(id: "black-forest-labs/flux-video-upscale", name: "FLUX Video Upscale", listing: .video, skus: ["cents_per_megapixel_second_precise": "3.5"], upscales: true)
+        let gen = MadeVersion(id: "runway/gen-4.5", name: "Gen-4.5", listing: .video, skus: ["cents_per_second_output": "12"], durations: [2, 5, 10], resolutions: ["720p"], frames: ["first_frame"])
+        let veo = MadeCatalog.builtIn.versions.first { $0.id == "google/veo-3.1" }!
+        let catalog = MadeCatalog(fetchedAt: 0, versions: [veo, gen, aleph, edit, upscale])
+        #expect(catalog.listed(.changedShot).map(\.id) == ["runway/aleph-2", "black-forest-labs/flux-video-edit"])
+        #expect(catalog.listed(.shot).map(\.id) == ["google/veo-3.1", "runway/gen-4.5"])
+        #expect(catalog.listed(.bridge).map(\.id) == ["google/veo-3.1"])
+        #expect(catalog.version(.changedShot)?.id == "runway/aleph-2" && catalog.version(.slowMotion)?.isLocal == true && catalog.version(.upscale)?.isLocal == true)
+        // A bridge can't use a version without a last frame; it falls back to the default.
+        #expect(catalog.version(.bridge, chosen: "runway/gen-4.5")?.id == "google/veo-3.1")
+        #expect(!aleph.makesShots && aleph.changesVideo && aleph.takesVideo && !gen.takesLastFrame && veo.takesLastFrame && upscale.takesVideo && !upscale.changesVideo)
+
+        // A changed shot is priced by its range, with Aleph's 56¢ minimum; shots are silent unless asked.
+        #expect(abs(MadeEstimator.estimate(.changedShot, version: aleph, seconds: 5).spend - 1.40) < 1e-9)
+        #expect(abs(MadeEstimator.estimate(.changedShot, version: aleph, seconds: 1).spend - 0.56) < 1e-9)
+        #expect(abs(MadeEstimator.estimate(.changedShot, version: edit, seconds: 5).spend - 0.15) < 1e-9)
+        #expect(abs(MadeEstimator.estimate(.shot, version: veo, seconds: 6).spend - 1.20) < 1e-9)
+        #expect(abs(MadeEstimator.estimate(.shot, version: veo, seconds: 6, sound: true).spend - 2.40) < 1e-9)
+        #expect(abs(MadeEstimator.estimate(.bridge, version: veo, seconds: 3).spend - 0.80) < 1e-9)
+        #expect(MadeEstimator.estimate(.slowMotion, version: .frameInterpolation, seconds: 4) == MadeEstimate(spend: 0, seconds: 4, requests: 0, priced: true))
+        #expect(abs(MadeEstimator.estimate(.upscale, version: upscale, seconds: 2, outputPixels: 1920 * 1080).spend - 0.035 * 2.0736 * 2) < 1e-9)
+        #expect(MadeFormat.priceLine(.changedShot, aleph) == "About $0.28 a second" && MadeFormat.priceLine(.shot, veo) == "About $0.20 a second at 1080p")
+        #expect(MadeEstimator.estimate(.still, version: veo, seconds: nil, ways: 4).requests == 4)
+    }
+
+    @Test func theLedgerHoldsEstimatesAndAYesCoversWhatItPriced() throws {
         let ledger = temporaryFile("spend.json"); defer { try? FileManager.default.removeItem(at: ledger); try? FileManager.default.removeItem(atPath: ledger.path + ".lock") }
         try OpenRouter.$overrides.withValue(.init(ledger: ledger)) {
             func shot(_ t: String = "turnover-1") -> SpendEntry { SpendEntry(kind: .shot, version: "google/veo-3.1", estimate: 3.2, filmID: "film-1", turnoverID: t) }
@@ -183,8 +228,8 @@ func toneWAV(seconds: Double, rate: Int = 8_000) -> Data {
             #expect(try SpendLedger.reserve(shot(), askAbove: 5, stopAt: 50) == .overLimit(estimate: 3.2, spent: 3.2, limit: 5))
             // Another turnover starts at zero.
             #expect(try SpendLedger.reserve(shot("turnover-2"), askAbove: 5, stopAt: 50) == .ok)
-            #expect(try SpendLedger.reserve(shot(), approvedBy: "question-1", askAbove: 5, stopAt: 50) == .ok)
-            expectError("spend_question_used") { _ = try SpendLedger.reserve(shot(), approvedBy: "question-1", askAbove: 5, stopAt: 50) }
+            #expect(try SpendLedger.reserve(shot(), approvedBy: "question-1", budget: SpendLedger.budget(forEstimate: 3.2), askAbove: 5, stopAt: 50) == .ok)
+            expectError("spend_over_question") { _ = try SpendLedger.reserve(shot(), approvedBy: "question-1", budget: SpendLedger.budget(forEstimate: 3.2), askAbove: 5, stopAt: 50) }
             try SpendLedger.settle(first.id, spend: 2.75, assetIDs: ["asset-1"])
             let all = SpendLedger.entries()
             #expect(abs(SpendLedger.turnoverSpent(all, filmID: "film-1", turnoverID: "turnover-1") - 5.95) < 1e-9)

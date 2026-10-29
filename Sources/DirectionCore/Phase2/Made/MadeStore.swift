@@ -3,13 +3,24 @@ import GRDB
 
 // Made media, services and spend (specs/made-media.md).
 
-/// Where a changed shot started: a take and the moment its frame was taken from.
+/// The take a made clip came from: the range a changed shot, slow motion or sharpening worked on, or the take
+/// an extended shot continues (`side`).
 public struct MadeFrom: Codable, Hashable, Sendable {
     public var assetID: String
-    /// Source seconds in the take. The frame is taken at `start`.
+    /// Source seconds in the take.
     public var start: Double
     public var end: Double?
-    public init(assetID: String, start: Double, end: Double? = nil) { self.assetID = assetID; self.start = start; self.end = end }
+    /// An extended shot's side of the take: "tail" continues from `end`, "head" leads into `start`.
+    public var side: String?
+    public init(assetID: String, start: Double, end: Double? = nil, side: String? = nil) { self.assetID = assetID; self.start = start; self.end = end; self.side = side }
+}
+
+/// A frame a new shot or bridge starts or ends on: a still, or a moment of a take.
+public struct MadeFrame: Codable, Hashable, Sendable {
+    public var assetID: String
+    /// Source seconds; nil for a still.
+    public var at: Double?
+    public init(assetID: String, at: Double? = nil) { self.assetID = assetID; self.at = at }
 }
 
 /// Provenance of one made clip, keyed by the footage asset it became. It stays with the film, so
@@ -31,19 +42,27 @@ public struct MadeRecord: Codable, Hashable, Sendable, Identifiable {
     public var noteID: String?
     public var turnoverID: String?
     public var from: MadeFrom?
+    public var first: MadeFrame?
+    public var last: MadeFrame?
     public var references: [String]
+    /// Slow motion's factor.
+    public var factor: Int?
+    /// "1280 × 720" when Direction sharpened it to the cut's size on this Mac.
+    public var sharpenedFrom: String?
     /// The file inside the film package: "Made/music-….wav".
     public var file: String
     /// 1 or 2 when the editor made it two ways.
     public var way: Int?
     public var jobID: String?
     public var createdAt: Double
-    public init(assetID: String, kind: MadeKind, service: String = "openrouter", version: String, versionName: String, asked: String, seconds: Double?, spend: Double, estimate: Double, noteID: String?, turnoverID: String?, from: MadeFrom? = nil, references: [String] = [], file: String, way: Int? = nil, jobID: String? = nil, createdAt: Double = Date().timeIntervalSince1970) {
+    public init(assetID: String, kind: MadeKind, service: String = "openrouter", version: String, versionName: String, asked: String, seconds: Double?, spend: Double, estimate: Double, noteID: String?, turnoverID: String?, from: MadeFrom? = nil, first: MadeFrame? = nil, last: MadeFrame? = nil, references: [String] = [], factor: Int? = nil, sharpenedFrom: String? = nil, file: String, way: Int? = nil, jobID: String? = nil, createdAt: Double = Date().timeIntervalSince1970) {
         self.assetID = assetID; self.kind = kind; self.service = service; self.version = version; self.versionName = versionName; self.asked = asked; self.seconds = seconds; self.spend = spend; self.estimate = estimate
-        self.noteID = noteID; self.turnoverID = turnoverID; self.from = from; self.references = references; self.file = file; self.way = way; self.jobID = jobID; self.createdAt = createdAt
+        self.noteID = noteID; self.turnoverID = turnoverID; self.from = from; self.first = first; self.last = last; self.references = references; self.factor = factor; self.sharpenedFrom = sharpenedFrom
+        self.file = file; self.way = way; self.jobID = jobID; self.createdAt = createdAt
     }
-    /// "OpenRouter".
-    public var serviceName: String { service == "openrouter" ? "OpenRouter" : service.capitalized }
+    /// "OpenRouter", or "This Mac" for slow motion and sharpening made here.
+    public var serviceName: String { service == "openrouter" ? "OpenRouter" : service == "local" ? "This Mac" : service.capitalized }
+    public var isLocal: Bool { service == "local" }
 }
 
 /// The money line on a spend question (frame 62). Direction fills in what's been spent and the limit itself,

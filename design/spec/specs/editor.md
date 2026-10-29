@@ -69,6 +69,7 @@ A skill is a short playbook in Markdown (`plugins/direction/skills/<name>/SKILL.
 | `take-turnover` | Turnover | Read back, cut with edit functions, ask when unsure, watch every change, answer every note |
 | `make-graphic` | Graphics for a note | Start from an example, keep words in `words`, check with `direction_graphic`, place with `placeGraphic` |
 | `propose-look` | A look note | Make two or three looks with `direction_make_look`, offer them as Options or a question, never apply one |
+| `make-shot` | Picture the footage doesn't have | Footage first; stills before motion; price the plan with `direction_estimate` and ask once only when it's over the limit; recipes for changed shots, extensions, bridges, inserts, pickups, slow motion and sharpening (`made-media.md`) |
 | `finish` | After picture lock | Balance and match shots, mix to the loudness target, captions, deliveries |
 
 ## Jobs

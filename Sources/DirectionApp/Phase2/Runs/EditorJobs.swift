@@ -110,10 +110,14 @@ enum EditorJobs {
         for sub in ["Graphics", "Looks", "Effects", ".direction"] { try fm.createDirectory(at: folder.appendingPathComponent(sub), withIntermediateDirectories: true) }
         let notes = folder.appendingPathComponent("NOTES.md")
         if !fm.fileExists(atPath: notes.path) { try Data("# Notes between runs\n\nWhat I\u{2019}d want to know next time I pick up this film.\n".utf8).write(to: notes) }
-        if let source = skillsFolder()?.appendingPathComponent(job.skill).appendingPathComponent("SKILL.md"), let text = try? Data(contentsOf: source) {
-            let target = folder.appendingPathComponent(skillPath(job))
-            try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try text.write(to: target, options: .atomic)
+        // The job names its own skill; the others (make-shot, make-graphic, propose-look…) are there for it to follow too.
+        if let skills = skillsFolder(), let names = try? fm.contentsOfDirectory(atPath: skills.path) {
+            for name in names {
+                guard let text = try? Data(contentsOf: skills.appendingPathComponent(name).appendingPathComponent("SKILL.md")) else { continue }
+                let target = folder.appendingPathComponent(".claude/skills/\(name)/SKILL.md")
+                try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try text.write(to: target, options: .atomic)
+            }
         }
         return folder
     }

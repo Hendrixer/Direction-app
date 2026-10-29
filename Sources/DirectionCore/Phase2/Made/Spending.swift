@@ -3,10 +3,13 @@ import Darwin
 
 /// What spend is for, in Settings › Services › Spent this month.
 public enum SpendKind: String, Codable, CaseIterable, Sendable {
-    case music, soundEffect, voice, shot, changedShot, still, looking
-    /// Legend rows: shots and changed shots are both "New shots".
+    case music, soundEffect, voice, still, shot, `extension`, bridge, changedShot, slowMotion, upscale, looking
+    /// Legend rows: every kind of shot is "New shots".
     public var group: String {
-        switch self { case .music: "Music"; case .soundEffect: "Sound effects"; case .voice: "Voice"; case .shot, .changedShot: "New shots"; case .still: "Stills"; case .looking: "Looking at footage" }
+        switch self {
+        case .music: "Music"; case .soundEffect: "Sound effects"; case .voice: "Voice"; case .still: "Stills"; case .looking: "Looking at footage"
+        case .shot, .extension, .bridge, .changedShot, .slowMotion, .upscale: "New shots"
+        }
     }
     public static let groups = ["Music", "Sound effects", "Voice", "New shots", "Stills", "Looking at footage"]
 }
@@ -24,7 +27,7 @@ public struct SpendEntry: Codable, Hashable, Sendable, Identifiable {
     public var filmID: String?
     public var turnoverID: String?
     public var assetIDs: [String]?
-    /// The spend question whose yes let this request past the turnover's limit. One request per yes.
+    /// The spend question whose yes let this request past the turnover's limit. A yes covers the plan it priced.
     public var questionID: String?
     public init(id: String = newID("spend"), at: Date = Date(), kind: SpendKind, service: String = "openrouter", version: String, estimate: Double, spend: Double? = nil, filmID: String? = nil, turnoverID: String? = nil, questionID: String? = nil) {
         self.id = id; self.at = at.timeIntervalSince1970; self.kind = kind; self.service = service; self.version = version; self.estimate = estimate; self.spend = spend; self.filmID = filmID; self.turnoverID = turnoverID; self.questionID = questionID
@@ -40,7 +43,7 @@ extension SharedSettings {
         public static let askAbove = "spendAskAbovePerTurnover", stopAt = "spendStopAtPerMonth"
         public static func version(_ kind: MadeKind) -> String { "madeVersion." + kind.rawValue }
     }
-    public static let askAboveChoices: [Double] = [1, 5, 10, 25]
+    public static let askAboveChoices: [Double] = [1, 5, 10, 25, 50]
     /// 0 is "No limit".
     public static let stopAtChoices: [Double] = [25, 50, 100, 250, 0]
 
@@ -53,9 +56,9 @@ extension SharedSettings {
         return v > 0 ? v : nil
     }
     /// The version Settings › Services chose for a kind; nil follows the default. Sound effects use the
-    /// music version and a shot from one you have uses the new-shot version (made-media.md › Services).
+    /// music version; extended shots and bridges use the new-shot version (made-media.md › What the editor can make).
     public static func madeVersion(_ kind: MadeKind) -> String? {
-        let shown: MadeKind = kind == .soundEffect ? .music : kind == .changedShot ? .shot : kind
+        let shown: MadeKind = switch kind { case .soundEffect: .music; case .extension, .bridge: .shot; default: kind }
         return defaults.string(forKey: SpendKey.version(shown)).flatMap { $0.isEmpty ? nil : $0 }
     }
 }
@@ -133,12 +136,20 @@ public enum SpendLedger {
         }
     }
 
+    /// A yes covers the plan it priced, and a little over: its estimate plus 10%.
+    public static func budget(forEstimate estimate: Double) -> Double { (estimate * 1.1 * 100).rounded() / 100 }
+
     /// Checks both limits and holds the estimate in one locked step, so two processes can't both slip under a limit.
-    /// `approvedBy` is a spend question the director said yes to; it lets one request past the turnover's limit.
-    public static func reserve(_ entry: SpendEntry, approvedBy question: String? = nil, askAbove: Double = SharedSettings.spendAskAbove, stopAt: Double? = SharedSettings.spendStopAt, now: Date = Date()) throws -> SpendCheck {
+    /// `approvedBy` is a spend question the director said yes to, with the `budget` it allows: every request that
+    /// names it may go past the turnover's limit until together they've used that much.
+    public static func reserve(_ entry: SpendEntry, approvedBy question: String? = nil, budget: Double? = nil, askAbove: Double = SharedSettings.spendAskAbove, stopAt: Double? = SharedSettings.spendStopAt, now: Date = Date()) throws -> SpendCheck {
         try transaction { entries in
-            let used = question.map { q in entries.contains { $0.questionID == q } } ?? false
-            if used { throw DirectionError("spend_question_used", "That spend question already let one request through. Ask again for another.") }
+            if let question {
+                let used = entries.filter { $0.questionID == question }.reduce(0) { $0 + $1.amount }
+                if let budget, used + entry.estimate > budget + 0.005 {
+                    throw DirectionError("spend_over_question", "The director agreed to about \(MadeFormat.money(budget)) for that plan and \(MadeFormat.money(used)) of it is used; this would cost about \(MadeFormat.money(entry.estimate)). Ask again for the rest.")
+                }
+            }
             let check = SpendCheck.of(estimate: entry.estimate, turnoverSpent: turnoverSpent(entries, filmID: entry.filmID, turnoverID: entry.turnoverID), monthSpent: monthSpent(entries, now: now), askAbove: askAbove, stopAt: stopAt, approved: question != nil)
             if check == .ok { var e = entry; e.questionID = question; e.spend = nil; entries.append(e) }
             return check

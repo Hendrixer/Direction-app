@@ -64,9 +64,13 @@ public enum EditorActivityLog {
         case "direction_edit", "direction_remove_range", "direction_edit_transcript":
             return edit(name, a, c)
         case "direction_make":
+            if a["estimateOnly"].bool == true { return ActivityInput(verb: "Pricing", object: madeKind(a["kind"].string), tool: name) }
             let kind = madeKind(a["kind"].string ?? a["type"].string)
             let note = noteLabel(a, c)
-            return ActivityInput(verb: "Making", object: note.map { "\(kind) for \($0)" } ?? kind, tool: name)
+            return ActivityInput(verb: a["kind"].string == "changedShot" ? "Changing" : "Making", object: note.map { "\(kind) for \($0)" } ?? kind, tool: name)
+        case "direction_estimate":
+            let n = a["steps"].array?.count ?? 0
+            return ActivityInput(verb: "Pricing", object: n == 1 ? "one step" : "a plan of \(n) steps", tool: name)
         case "direction_graphic":
             let what = a["name"].string ?? a["title"].string ?? "a graphic"
             let note = noteLabel(a, c)
@@ -211,7 +215,11 @@ public enum EditorActivityLog {
         case "soundEffect", "sound": "a sound effect"
         case "voice": "a voice"
         case "shot": "a shot"
-        case "changedShot": "a changed shot"
+        case "extension": "a longer shot"
+        case "bridge": "a bridge"
+        case "changedShot": "a take"
+        case "slowMotion": "slow motion"
+        case "upscale": "a sharper take"
         case "still": "a still"
         default: kind ?? "something"
         }

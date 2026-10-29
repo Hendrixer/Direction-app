@@ -52,7 +52,7 @@ All flags are in `EditorPrograms.swift`. `EditorJobTests.flagsStillExistInTheIns
 
 - Claude Code: `claude --print <job> --output-format stream-json --verbose --model <v> --mcp-config Editor/.mcp.json --strict-mcp-config --allowedTools mcp__direction,Read,Glob,Grep,Edit(./**),Write(./**)[,Bash] --append-system-prompt <role> --permission-mode dontAsk [--settings <sandbox>] [--resume <session>]`
 - Codex: `codex exec --json --skip-git-repo-check [--model <v>] --config mcp_servers.direction.… --output-schema Editor/.direction/result.schema.json --cd Editor --sandbox workspace-write|read-only <job>`; continue with `codex exec resume … <session> <prompt>`.
-- The working folder is `<film>.direction/Editor/` (Graphics, Looks, Effects, NOTES.md). The job's skill is copied to `Editor/.claude/skills/<skill>/SKILL.md` from the app bundle's `Resources/Skills` (`scripts/build-app.sh`) or, in development, the checkout's `plugins/direction/skills`.
+- The working folder is `<film>.direction/Editor/` (Graphics, Looks, Effects, NOTES.md). Every skill is copied to `Editor/.claude/skills/<skill>/SKILL.md`, and the job names its own from the app bundle's `Resources/Skills` (`scripts/build-app.sh`) or, in development, the checkout's `plugins/direction/skills`.
 - The `direction` helper is `Direction.app/Contents/Helpers/direction`, else the `direction` next to the app's executable (`.build/<config>/direction`), else `~/.local/bin/direction`.
 
 ## Job text

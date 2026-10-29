@@ -14,15 +14,17 @@ struct ServicesPane: View {
     var body: some View {
         SettingsPane {
             SettingsGroup(label: "Services", note: AnyView(SettingsNote("Your key is kept in your Mac\u{2019}s keychain. The editor never sees it; Direction makes every request."))) { keyRow }
-            SettingsGroup(label: "What the editor uses") {
+            SettingsGroup(label: "What the editor uses", note: AnyView(SettingsNote("Slow motion and sharpening happen on this Mac and cost nothing."))) {
                 versionRow(.music, "Music", first: true)
                 versionRow(.voice, "Voice")
                 versionRow(.shot, "New shots")
-                    .help("A shot from one you have sends that frame to OpenRouter, so it leaves this Mac.")
+                    .help("Extended shots and bridges use this version too. Frames of your takes are sent to OpenRouter, so they leave this Mac.")
+                versionRow(.changedShot, "Changed shots")
+                    .help("The take\u{2019}s range itself is sent to OpenRouter, so it leaves this Mac.")
                 versionRow(.still, "Stills")
             }
             SettingsGroup(label: "Spending", note: AnyView(SettingsNote("Check each version\u{2019}s terms on OpenRouter before you release a film. Some don\u{2019}t cover film or TV."))) {
-                SettingsRow(label: "Ask before spending more than", first: true) {
+                SettingsRow(label: "Ask before spending more than", detail: "The editor prices each turnover\u{2019}s plan first, and asks only when it goes over.", first: true) {
                     GateSelect(options: SharedSettings.askAboveChoices.map { ($0, MadeFormat.money($0) + " per turnover") }, selection: limit($askAbove, preview: 5))
                 }
                 SettingsRow(label: "Stop for the month at") {
@@ -78,7 +80,7 @@ struct ServicesPane: View {
     private var failing: Bool { if case .failing = state.key, !state.editing { return true }; return false }
     private var subLabel: String {
         if case .failing(let why) = state.key, !state.editing { return "That key didn\u{2019}t work: \(why)" }
-        return "Music, voice, sound effects, new shots and stills"
+        return "Music, voice, sound effects, shots and stills"
     }
 
     @ViewBuilder private var keyControl: some View {

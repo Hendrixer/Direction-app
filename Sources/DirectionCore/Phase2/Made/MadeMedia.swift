@@ -135,7 +135,7 @@ public enum MadeMedia {
         return d.seconds
     }
 
-    /// A take's frame as JPEG, for "a shot from one you have" (`first_frame`) and references. Stills are read as they are.
+    /// A frame as JPEG, for the frames a shot starts or ends on (`first_frame`, `last_frame`) and references. Stills are read as they are.
     public static func frame(of path: String, at seconds: Double, isImage: Bool, maxDimension: Int = 1280) async throws -> Data {
         let url = URL(fileURLWithPath: path)
         let image: CGImage
