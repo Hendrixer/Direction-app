@@ -59,6 +59,11 @@ struct FilmModelTests {
         m.brief = SampleFilm.briefValue
         #expect(m.onboardingStep == .footage)
         m.project = SampleFilm.project(clips: [], revision: 1)
+        #expect(m.onboardingStep == .footage)
+        m.dailies = SampleFilm.dailies()
+        #expect(m.onboardingStep == nil)
+        m.dailies = Dailies()
+        m.onboardingDismissed = true
         #expect(m.onboardingStep == nil)
         m.cuts = SampleFilm.cuts
         #expect(m.onboardingStep == nil)

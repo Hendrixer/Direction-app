@@ -319,11 +319,15 @@ final class FilmModel {
     }
     var isPictureLocked: Bool { directing.pictureLocked }
     /// Before a film has a first cut, the window walks through Brief → Footage → First look.
+    /// The director left onboarding early (Open Dailies while the editor is still logging).
+    var onboardingDismissed = false
     var onboardingStep: OnboardingStep? {
-        guard cuts.isEmpty else { return nil }
+        guard cuts.isEmpty, !onboardingDismissed else { return nil }
         if !brief.isComplete { return .brief }
         if !hasFootage { return .footage }
         if openTurnover?.kind == "assembly" { return .firstLook }
+        // Footage is in but the editor hasn't logged scenes yet: Logging footage.
+        if dailies.scenes.isEmpty { return .footage }
         return nil
     }
     var defaultRoom: Room {
@@ -552,8 +556,8 @@ final class FilmModel {
         Task {
             for url in urls {
                 do {
-                    let append = (try runtime.store.read().sequences.first?.clips.isEmpty) ?? true
-                    _ = try await runtime.invoke("direction_import", arguments: .object(["path": .string(url.path), "append": .bool(append && cuts.isEmpty && false)]))
+                    // Footage goes to the library; the editor builds the assembly from circles.
+                    _ = try await runtime.invoke("direction_import", arguments: .object(["path": .string(url.path), "append": .bool(false)]))
                 } catch { self.error = "\(url.lastPathComponent): \(error.localizedDescription)" }
                 refresh(force: true)
             }
