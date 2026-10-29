@@ -31,11 +31,12 @@ Frame: `screens/01-films-empty.html` · Render: `renders/01-films-empty@2x.png`
 
 **Motion:** On first launch the mark fades in and rises 8 pt over Glide (360 ms, ease-out), the text follows after 80 ms. Reduce Motion: fade only.
 
-**The mark's light** (`ChromeMark` in the app): once it has risen, light keeps passing over the chrome. Two layers, both clipped to the mark's alpha:
-- **The rainbow:** an angular gradient of the spectrum (twice around) with hue blending at 80%, so grey chrome stays grey and only the colored fringes take the gradient's hue. It turns half a revolution per pass, so passes loop without a seam.
-- **The light:** a soft white band (14% of the diagonal) with overlay blending, crossing from top left to bottom right.
-- **Timing:** each pass is 4.6 s on the curve `cubic-bezier(0.72, 0, 0.14, 1)` (slow out of rest, fast through the middle, a long eased stall), then a 2.4 s rest. Progress is 11% at 1.4 s, 63% at 2.2 s, 89% at 2.9 s.
-- Reduce Motion: the still mark. The `zz-chrome-mark` snapshot renders six moments of one pass.
+**The mark's light** (`ChromeMark` in the app): the rainbow reflection at the lower left of the stem travels around the letter, as if the light moved, and comes home.
+- The art isn't recolored. The rainbow is lifted out of the mark once at launch: a soft spot (radius 70–135 of the 1024 art, centered at x 180, y 700) becomes its own image, and the mark under it goes grey there.
+- The rainbow is laid back with color blending, so wherever it goes it takes the chrome's own light and shade. A second copy of only its colored pixels, with screen blending, carries its light onto darker chrome. It fades out as the rainbow nears home, so at rest the mark matches the art exactly.
+- The path is a closed curve over the letter's face: up the stem, across the top, around the bowl, along the bottom, home.
+- **Timing:** each pass is 5.2 s on `cubic-bezier(0.72, 0, 0.14, 1)` (slow out of rest, quick through the middle, a long eased stall coming home), then a 2.6 s rest at home.
+- Reduce Motion: the still mark. The `zz-chrome-mark` and `zz-chrome-mark-close` snapshots render moments of one pass.
 
 **Accessibility:** Mark is decorative (no label). Focus order: New film, Start from a folder…, titlebar New film. The strip is static text read as a list "How it works, 4 items".
 

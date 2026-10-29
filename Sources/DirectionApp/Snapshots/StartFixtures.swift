@@ -11,8 +11,11 @@ enum StartFixtures {
                 return SnapshotScene(FilmsView(app: app))
             },
             "zz-chrome-mark": {
-                let at = [1.4, 1.9, 2.2, 2.5, 2.9, 3.6]
+                let at = [0.0, 1.7, 2.3, 2.6, 2.9, 3.8]
                 return SnapshotScene(size: CGSize(width: 1260, height: 240), HStack(spacing: 20) { ForEach(at, id: \.self) { ChromeMark(size: 190, at: $0) } }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black))
+            },
+            "zz-chrome-mark-close": {
+                SnapshotScene(size: CGSize(width: 1040, height: 520), HStack(spacing: 0) { ChromeMark(size: 500, at: 0); ChromeMark(size: 500, at: 2.6) }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black))
             },
             "02-films": {
                 let app = AppModel(); app.previewFilms = films
