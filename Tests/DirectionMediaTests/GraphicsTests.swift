@@ -229,6 +229,24 @@ struct GraphicsTests {
         keep(result.stills.map(\.path), as: "examples")
     }
 
+    /// The bundled libraries load offline as documented: classic scripts (with or without crossorigin) and three.js as a module.
+    @Test func bundledLibrariesLoadFromDirection() async throws {
+        let f = try GraphicsFixture.make(width: 640, height: 360); defer { f.cleanup() }
+        try f.write("libraries", """
+        <!doctype html><html><head><meta charset="utf-8">
+        <script src="direction:lib/anime.js"></script><script src="direction:lib/d3.js" crossorigin></script><script src="direction:lib/lottie.js"></script>
+        </head><body><h1 id="title" style="font:700 40px Archivo;color:#fff;position:absolute;top:150px;left:100px"></h1>
+        <script type="module">
+        import * as THREE from "direction:lib/three.module.js";
+        for (const [name, ok] of Object.entries({ anime: typeof anime?.animate, d3: typeof d3?.scaleLinear, lottie: typeof lottie?.loadAnimation, THREE: typeof THREE.WebGLRenderer })) if (ok !== 'function') throw new Error(name + ' did not load');
+        direction.graphic({ duration: 0.2, words: { title: { label: 'Title', text: 'Offline', max: 20 } }, render(t, words) { title.textContent = words.title; } });
+        </script></body></html>
+        """)
+        let result = try await GraphicMaker.make(store: f.store, name: "libraries", noteID: nil, checkOnly: true, cacheDirectory: f.runtime.cacheDirectory)
+        #expect(result.consoleErrors.isEmpty, "\(result.consoleErrors)")
+        #expect(result.problems.isEmpty, "\(result.problems)")
+    }
+
     /// DIRECTION_TEST_ARTIFACTS=<dir> keeps stills and movies for a look.
     func keep(_ paths: [String], as name: String) {
         guard let dir = ProcessInfo.processInfo.environment["DIRECTION_TEST_ARTIFACTS"] else { return }
