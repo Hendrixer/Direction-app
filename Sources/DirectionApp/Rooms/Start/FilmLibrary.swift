@@ -117,14 +117,21 @@ struct FilmIndexCard: Sendable {
     private static let trashedKey = "trashedFilms"
     static var trashed: Set<String> { Set(UserDefaults.standard.stringArray(forKey: trashedKey) ?? []) }
     static func noteTrashed(_ path: String) { UserDefaults.standard.set(Array(trashed.union([path])), forKey: trashedKey) }
+    /// A film is at this path again (a new film took a trashed one's name): show it.
+    static func noteRestored(_ path: String) {
+        guard trashed.contains(path) else { return }
+        UserDefaults.standard.set(Array(trashed.subtracting([path])), forKey: trashedKey)
+    }
 }
 
 extension AppModel {
     /// The Films grid: sample films in previews, otherwise the library's films read from their stores.
     var summaries: [FilmSummary] {
         if let previewFilms { return previewFilms }
+        // Trashing moves the package away, so a film still at a trashed path is a new one that took its
+        // name ("Untitled film" after an empty one was discarded). Hide only what's really gone.
         let trashed = FilmLibraryIndex.trashed
-        return films.filter { !trashed.contains($0.path) }.map { FilmLibraryIndex.shared.summary(for: $0) }
+        return films.filter { !(trashed.contains($0.path) && !$0.available) }.map { FilmLibraryIndex.shared.summary(for: $0) }
     }
     /// Films with something waiting on the director.
     var waitingCount: Int {

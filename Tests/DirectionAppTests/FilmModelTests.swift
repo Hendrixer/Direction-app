@@ -6,6 +6,24 @@ import DirectionCore
 @Suite("Film model")
 @MainActor
 struct FilmModelTests {
+    @Test func aNewFilmThatTakesATrashedFilmsNameStillShowsInFilms() throws {
+        let path = "/tmp/direction-tests-\(UUID().uuidString)/Untitled film.direction"
+        func entry(available: Bool) throws -> ProjectEntry {
+            try JSONDecoder().decode(ProjectEntry.self, from: JSONSerialization.data(withJSONObject: ["id": path, "name": "AI, the last human invention", "path": path, "lastOpened": 1.0, "available": available]))
+        }
+        defer { FilmLibraryIndex.noteRestored(path) }
+        FilmLibraryIndex.noteTrashed(path)
+        let app = AppModel()
+        // The empty film that was trashed: gone from disk, so hidden.
+        app.films = [try entry(available: false)]
+        #expect(app.summaries.isEmpty)
+        // A new film at the same path: shown.
+        app.films = [try entry(available: true)]
+        #expect(app.summaries.map(\.path) == [path])
+        FilmLibraryIndex.noteRestored(path)
+        #expect(!FilmLibraryIndex.trashed.contains(path))
+    }
+
     @Test func stripMergesClipsIntoScenesAtTheirRealLengths() {
         let m = SampleFilm.make()
         let scenes = m.stripScenes

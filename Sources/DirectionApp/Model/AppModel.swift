@@ -36,6 +36,7 @@ final class AppModel {
             model.startPolling()
             film = model
             lastFilm = url.path
+            FilmLibraryIndex.noteRestored(url.path)
             NSDocumentController.shared.noteNewRecentDocumentURL(url)
             reloadFilms()
         } catch { self.error = error.localizedDescription }
