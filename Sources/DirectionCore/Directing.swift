@@ -224,7 +224,8 @@ public struct QuestionAnswer: Codable, Hashable, Sendable {
 public struct EditorQuestion: Codable, Hashable, Sendable, Identifiable {
     public var id: String
     public var turnoverID: String?
-    /// "question" asks the director to decide; "cant" reports a note the editor can't do as written.
+    /// "question" asks the director to decide; "cant" reports a note the editor can't do as written;
+    /// "spend" asks to go over the turnover's spend limit (made-media.md).
     public var kind: String
     public var noteIDs: [String]
     public var text: String
@@ -233,6 +234,8 @@ public struct EditorQuestion: Codable, Hashable, Sendable, Identifiable {
     public var allowsText: Bool
     public var answer: QuestionAnswer?
     public var createdAt: Double
+    /// A spend question's money line and the choice that says yes.
+    public var spend: SpendAsk? = nil
     public init(id: String, turnoverID: String?, kind: String, noteIDs: [String], text: String, detail: String?, choices: [QuestionChoice], allowsText: Bool, answer: QuestionAnswer?, createdAt: Double) {
         self.id = id; self.turnoverID = turnoverID; self.kind = kind; self.noteIDs = noteIDs; self.text = text; self.detail = detail; self.choices = choices; self.allowsText = allowsText; self.answer = answer; self.createdAt = createdAt
     }

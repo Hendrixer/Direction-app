@@ -332,12 +332,13 @@ final class FilmModel {
         if directing.editorPaused { return .paused }
         // The editor can't cut scenes whose takes are missing; say so until they're found.
         if missingTakes > 0 { return .needsFootage }
-        let cants = openQuestions.filter { $0.kind == "cant" }.count, asks = openQuestions.filter { $0.kind == "question" }.count
+        // Spend questions (made-media.md) count as questions.
+        let cants = openQuestions.filter { $0.kind == "cant" }.count, asks = openQuestions.filter { $0.kind != "cant" }.count
         if let t = openTurnover {
             let total = max(1, t.noteIDs.count), done = t.progress.values.filter { $0 == .done }.count
             switch t.state {
             case .waiting: return .waiting
-            case .readBack: return t.readBackApproved ? .working("Starting", nil) : .readBackReady
+            case .readBack: return t.readBackApproved ? .working("Starting", nil) : asks > 0 ? .asks(asks) : .readBackReady
             case .cutting:
                 if cants > 0 { return .cant(cants) }
                 if asks > 0 { return .asks(asks) }

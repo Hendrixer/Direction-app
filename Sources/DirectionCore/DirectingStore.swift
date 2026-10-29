@@ -432,7 +432,8 @@ extension ProjectStore {
     }
     public func ask(_ q: EditorQuestion) throws -> EditorQuestion {
         guard !q.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, q.text.count <= 4_000 else { throw DirectionError("invalid_question", "A question needs words.") }
-        guard (q.kind == "question" && (2...4).contains(q.choices.count)) || (q.kind == "cant" && q.choices.count <= 4) else { throw DirectionError("invalid_question", "Questions carry 2–4 concrete choices; can't-do reports up to 4.") }
+        guard (["question", "spend"].contains(q.kind) && (2...4).contains(q.choices.count)) || (q.kind == "cant" && q.choices.count <= 4) else { throw DirectionError("invalid_question", "Questions carry 2–4 concrete choices; can't-do reports up to 4.") }
+        if q.kind == "spend" { try Self.validateSpendQuestion(q) }
         var question = q; question.answer = nil; question.createdAt = Date().timeIntervalSince1970
         try database.write { db in
             try db.execute(sql: "INSERT OR REPLACE INTO questions (id, payload, created_at) VALUES (?, ?, ?)", arguments: [question.id, try JSONEncoder.direction.encode(question), question.createdAt])

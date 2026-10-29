@@ -108,6 +108,8 @@ struct ABSide {
     var revision: Int?
     var sequenceID: String?
     var unavailable: String?
+    /// The made clip this side uses, for its Made chip.
+    var made: MadeRecord? = nil
 }
 
 /// The two cards, the foot and the shared transport.
@@ -155,6 +157,7 @@ struct ABStage<Foot: View>: View {
                 if side.using { Chip("Using \(side.letter)", style: .ok, mono: false) }
                 Spacer(minLength: 4)
                 if let d = side.delta { Text(d).font(Gate.Font.mono).foregroundStyle(Gate.Text.tertiary) }
+                if let made = side.made { MadeChip(film: model, record: made, place: "option") }
             }
             .padding(.horizontal, 4).padding(.bottom, 4)
         }
@@ -235,7 +238,8 @@ struct OptionsStage: View {
             // An option without its own revision is the version that went into the cut.
             let revision = o.revision ?? (o.label == inCut ? answer?.revision : nil)
             return ABSide(letter: o.label, title: "Option \(o.label)", detail: o.summary, delta: o.delta, preferred: answer?.preferred == o.label, using: picked == o.label, art: art,
-                          revision: revision, sequenceID: model.reviewCut?.sequenceID, unavailable: revision == nil ? "The editor didn\u{2019}t keep a separate version of option \(o.label)." : nil)
+                          revision: revision, sequenceID: model.reviewCut?.sequenceID, unavailable: revision == nil ? "The editor didn\u{2019}t keep a separate version of option \(o.label)." : nil,
+                          made: answer.flatMap { model.made.record(for: note, option: o, answer: $0, film: model) })
         }
     }
 

@@ -304,7 +304,11 @@ struct ChangeRow: View {
             AnswerThumb(model: model, note: note, prism: false).frame(width: 120, height: 40).opacity(revert != nil ? 0.45 : 1)
             what.opacity(revert != nil ? 0.45 : 1)
             ranges
-            Text(model.deltaText(note, in: cut, picked: true)).font(Gate.Font.mono).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
+            HStack(spacing: 6) {
+                Text(model.deltaText(note, in: cut, picked: true)).font(Gate.Font.mono).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
+                // A made clip's provenance stays with the cut that introduced it (made-media.md).
+                if let made = model.made.introduced(note, in: cut, film: model) { MadeChip(film: model, record: made, place: "history-" + cut.id) }
+            }
             action
         }
         .font(.system(size: 13))

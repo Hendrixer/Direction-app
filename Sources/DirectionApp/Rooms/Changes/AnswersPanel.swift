@@ -197,7 +197,11 @@ struct AnswerRow: View {
 
     private var right: some View {
         VStack(alignment: .trailing, spacing: 8) {
-            Text(model.deltaText(note)).font(Gate.Font.mono).foregroundStyle(partly ? Gate.State.alert : Gate.Text.tertiary).lineLimit(1)
+            HStack(spacing: 6) {
+                Text(model.deltaText(note)).font(Gate.Font.mono).foregroundStyle(partly ? Gate.State.alert : Gate.Text.tertiary).lineLimit(1)
+                // Made picture or sound (made-media.md › Where made things show).
+                if let made = model.made.records(for: note, in: model.reviewCut, film: model).first { MadeChip(film: model, record: made, place: "answer") }
+            }
             actions
         }
         .fixedSize()
