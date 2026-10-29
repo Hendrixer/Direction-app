@@ -45,7 +45,7 @@ The director is never named in the UI; it's "you". The agent speaks in first per
 
 Never show the words "AI", "generate", "prompt", "model", "revision", "comment", "task", or "magic".
 
-**Program names.** Settings › Editor, Settings › Footage (Whisper, mlx-whisper, Gemini, and the local vision version such as "Qwen3-VL 8B"), Settings › Services, the editor setup sheet (frame 56), the Editor popover (frames 41, 57) and a stopped editor's message (frame 58) may name the programs and services the director installs and pays for: Claude Code, Codex, ElevenLabs, Runway, Higgsfield, Gemini, and each one's version ("Claude Opus 5.5"). Provenance of made media names its service ("Made with ElevenLabs"). Nowhere else. A version is a "version", never a "model". What the editor asked a service for is "What the editor asked for", never a prompt.
+**Program names.** Settings › Editor, Settings › Footage (Whisper, mlx-whisper, Gemini, and the local vision version such as "Qwen3-VL 8B"), Settings › Services, the editor setup sheet (frame 56), the Editor popover (frames 41, 57) and a stopped editor's message (frame 58) may name the programs and services the director installs and pays for: Claude Code, Codex, ElevenLabs, Runway, Higgsfield, Gemini, and each one's version ("Claude Opus 5.5"). Provenance of made media names its service ("Made with ElevenLabs"), and so does anything that asks the director to spend with one: a spend question (frame 62) or a read-back line that plans to make something. Nowhere else. A version is a "version", never a "model". What the editor asked a service for is "What the editor asked for", never a prompt.
 
 ## Objects
 

@@ -24,6 +24,9 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 17. **Graphics are JavaScript Direction renders**, not Remotion. Examples ship with the app.
 18. **Local first for looking at footage.** MLX Swift in-process (Qwen3-VL 8B by default); Gemini is optional with a key.
 
+19. **Phase 2 frames vary the sample.** Frame 61 shows note 4 answered two ways, B with made music, where story.md has a single −6 dB answer. Frame 64 adds an eighth answer to Cut 4, a title for the cold open numbered 8, although Script's note 8 is "Let this breathe" and the Cut 4 turnover covers notes 1–7. Treat 61 and 64 as alternate samples that each show one feature, not one continuous state.
+20. **The Look sheet's layout** (frame 63): Strength sits on the Looks header row, Apply to sits in the sheet's foot left of the buttons, and filter rows are 22 tall, so everything fits a 720-tall sheet without scrolling. This wins over looks.md where they differ.
+
 ## Needs product decisions (not blockers for building the UI)
 
 - **Hosted sharing (39, 40, 48).** Screening links need a hosted service ("direction.film") and server-side watermarking. Today Direction is local only. Build the Share sheet and the Outside inbox; until a service exists, Share shows a disabled state ("Sharing isn't set up on this Mac"), and outside notes can come in through the editor's tools.
