@@ -233,7 +233,7 @@ struct OptionsStage: View {
 
     private var sides: [ABSide] {
         let art = model.answerScene(note)?.art ?? .room
-        let inCut = answer?.pick ?? answer?.preferred
+        let inCut = answer?.optionInCut
         return options.map { o in
             // An option without its own revision is the version that went into the cut.
             let revision = o.revision ?? (o.label == inCut ? answer?.revision : nil)

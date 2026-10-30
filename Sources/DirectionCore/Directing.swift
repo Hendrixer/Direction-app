@@ -177,10 +177,23 @@ public struct NoteAnswer: Codable, Hashable, Sendable {
     public var options: [NoteOption]?
     public var preferred: String?
     public var pick: String?
+    /// The option the cut plays, once the director has used one (Use A / Use B puts it in).
+    public var inCut: String?
     public var state: String = "unreviewed"
     public var createdAt: Double
     public init(cutID: String, revision: Int, summary: String, delta: String? = nil, range: MediaRange? = nil, options: [NoteOption]? = nil, preferred: String? = nil, createdAt: Double = Date().timeIntervalSince1970) {
         self.cutID = cutID; self.revision = revision; self.summary = summary; self.delta = delta; self.range = range; self.options = options; self.preferred = preferred; self.createdAt = createdAt
+    }
+
+    /// The option the cut plays now. Until the director uses one, it's the version the editor delivered:
+    /// the option without its own revision, or else the one committed last.
+    public var optionInCut: String? {
+        guard let options, !options.isEmpty else { return nil }
+        if let inCut { return inCut }
+        let unkept = options.filter { $0.revision == nil }
+        if unkept.count == 1 { return unkept[0].label }
+        if unkept.isEmpty { return options.max { $0.revision! < $1.revision! }?.label }
+        return pick ?? preferred ?? options.first?.label
     }
 }
 

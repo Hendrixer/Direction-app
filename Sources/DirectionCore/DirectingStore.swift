@@ -266,16 +266,18 @@ extension ProjectStore {
 
     @discardableResult
     func modifyNote(_ id: String, kind: String = "feedback.updated", summary: String = "Updated a note", _ change: (inout ReviewComment, Database) throws -> Void) throws -> ReviewComment {
-        try database.write { db in
-            guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM comments WHERE id = ?", arguments: [id]) else { throw DirectionError("feedback_not_found", "Note not found.") }
-            var c = try JSONDecoder().decode(ReviewComment.self, from: data)
-            try change(&c, db)
-            c.updatedAt = Date().timeIntervalSince1970
-            try Self.event(db, kind: kind, revision: c.editRevision, summary: summary)
-            c.cursor = db.lastInsertedRowID
-            try db.execute(sql: "UPDATE comments SET payload = ?, cursor = ? WHERE id = ?", arguments: [try JSONEncoder.direction.encode(c), c.cursor, c.id])
-            return c
-        }
+        try database.write { db in try Self.changeNote(db, id, kind: kind, summary: summary, change) }
+    }
+    @discardableResult
+    static func changeNote(_ db: Database, _ id: String, kind: String = "feedback.updated", summary: String = "Updated a note", _ change: (inout ReviewComment, Database) throws -> Void) throws -> ReviewComment {
+        guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM comments WHERE id = ?", arguments: [id]) else { throw DirectionError("feedback_not_found", "Note not found.") }
+        var c = try JSONDecoder().decode(ReviewComment.self, from: data)
+        try change(&c, db)
+        c.updatedAt = Date().timeIntervalSince1970
+        try event(db, kind: kind, revision: c.editRevision, summary: summary)
+        c.cursor = db.lastInsertedRowID
+        try db.execute(sql: "UPDATE comments SET payload = ?, cursor = ? WHERE id = ?", arguments: [try JSONEncoder.direction.encode(c), c.cursor, c.id])
+        return c
     }
 
     /// Notes can be rewritten until they're turned over; after that they can only be replied to.
@@ -318,16 +320,79 @@ extension ProjectStore {
     public func acceptAnswer(noteID: String) throws {
         try modifyNote(noteID, summary: "Accepted an answer") { c, _ in
             guard var answer = c.answers?.last else { throw DirectionError("no_answer", "This note has no answer yet.") }
-            if let options = answer.options, !options.isEmpty, answer.pick == nil { answer.pick = answer.preferred ?? options.first?.label }
+            // Accepting without a pick keeps what plays.
+            if answer.pick == nil { answer.pick = answer.optionInCut }
             answer.state = "accepted"; c.answers![c.answers!.count - 1] = answer
             c.status = "accepted"; c.noteState = .accepted
             c.replies.append(.init(id: newID("reply"), author: "Director", text: "Accepted", revision: answer.revision, createdAt: Date().timeIntervalSince1970))
         }
     }
-    public func pickOption(noteID: String, label: String) throws {
-        try modifyNote(noteID, summary: "Picked option \(label)") { c, _ in
-            guard var answer = c.answers?.last, let options = answer.options, options.contains(where: { $0.label == label }) else { throw DirectionError("no_options", "This answer has no option \(label).") }
-            answer.pick = label; c.answers![c.answers!.count - 1] = answer
+    /// Use A / Use B: puts that option's version in its cut as a new revision, so Screening and Play
+    /// changes play it, and records the pick. Using the other one switches back. Options that aren't
+    /// versions of the cut (looks) only record the pick. `record: false` leaves no pick, for Undo of a
+    /// first pick.
+    public func pickOption(noteID: String, label: String, record: Bool = true) throws {
+        guard let note = try notes().first(where: { $0.id == noteID }) else { throw DirectionError("feedback_not_found", "Note not found.") }
+        guard let answer = note.answers?.last, let options = answer.options, let option = options.first(where: { $0.label == label }) else { throw DirectionError("no_options", "This answer has no option \(label).") }
+        let versions = options.contains { $0.revision != nil }
+        let playing = answer.optionInCut.flatMap { l in options.first { $0.label == l } }
+        // The playing version: its own revision, or the cut it was delivered in.
+        let fromRevision = playing?.revision ?? answer.revision
+        var swap: (cut: ReviewCut, head: Int, result: OptionSwap.Result)?
+        if versions && playing?.label != label {
+            let cuts = try cuts()
+            guard let cut = cuts.first(where: { $0.id == answer.cutID }) else { throw DirectionError("cut_not_found", "This answer\u{2019}s cut is gone.") }
+            guard cuts.first?.id == cut.id else { throw DirectionError("cut_moved_on", "\(cut.name) isn\u{2019}t the latest cut, so its options can\u{2019}t change it. Reply in the latest cut instead.") }
+            guard let toRevision = option.revision else { throw DirectionError("no_version", "The editor didn\u{2019}t keep a separate version of option \(label).") }
+            let head = try read()
+            if let result = try OptionSwap.swap(try head.sequence(cut.sequenceID), from: try read(revision: fromRevision).sequence(cut.sequenceID), to: try read(revision: toRevision).sequence(cut.sequenceID)) {
+                swap = (cut, head.editRevision, result)
+            }
+        }
+        let summary = "Used option \(label)" + (note.number.map { " for note \($0)" } ?? "")
+        try database.write { db in
+            if let swap {
+                let sequenceID = swap.cut.sequenceID, sequence = swap.result.sequence
+                let p: Project
+                do {
+                    p = try Self.commit(db, expectedRevision: swap.head, key: newID("pick"), request: Data("pick:\(noteID):\(label)".utf8), summary: summary) { p in
+                        guard let i = p.sequences.firstIndex(where: { $0.id == sequenceID }) else { throw DirectionError("sequence_not_found", "Sequence not found.") }
+                        p.sequences[i] = sequence
+                    }
+                } catch let e as DirectionError where e.code == "scene_locked" {
+                    throw DirectionError(e.code, "Option \(label) changes a locked scene. Unlock the scene to use it.")
+                } catch let e as DirectionError where e.code == "picture_locked" {
+                    throw DirectionError(e.code, "Picture is locked, so option \(label) can\u{2019}t go in. Unlock picture to use it.")
+                }
+                // The cut plays the new revision; answers after the swapped stretch move with it.
+                var cut = swap.cut; cut.editRevision = p.editRevision
+                try db.execute(sql: "UPDATE cuts SET payload = ? WHERE id = ?", arguments: [try JSONEncoder.direction.encode(cut), cut.id])
+                let at = swap.result.at.seconds, oldEnd = at + swap.result.removed.seconds, d = swap.result.inserted.seconds - swap.result.removed.seconds
+                if d != 0 {
+                    for data in try Data.fetchAll(db, sql: "SELECT payload FROM comments") {
+                        var c = try JSONDecoder().decode(ReviewComment.self, from: data)
+                        guard c.id != noteID, var a = c.answers?.last, a.cutID == cut.id, let r = a.range, r.start.seconds >= oldEnd - 1e-6 else { continue }
+                        a.range = MediaRange(start: r.start.seconds + d, end: r.end.seconds + d); c.answers![c.answers!.count - 1] = a
+                        try db.execute(sql: "UPDATE comments SET payload = ? WHERE id = ?", arguments: [try JSONEncoder.direction.encode(c), c.id])
+                    }
+                }
+            }
+            try Self.changeNote(db, noteID, summary: summary) { c, _ in
+                guard var a = c.answers?.last else { return }
+                if let swap {
+                    // Both versions stay playable side by side.
+                    a.options = a.options?.map { o in var o = o; if o.revision == nil { o.revision = fromRevision }; return o }
+                    // Play changes covers what changed between the two, where it sits now.
+                    let at = swap.result.at.seconds, oldEnd = at + swap.result.removed.seconds, newEnd = at + swap.result.inserted.seconds
+                    if let r = a.range {
+                        let end = r.end.seconds >= oldEnd - 1e-6 ? r.end.seconds + newEnd - oldEnd : r.end.seconds
+                        a.range = MediaRange(start: min(r.start.seconds, at), end: max(end, newEnd))
+                    } else { a.range = MediaRange(start: at, end: newEnd) }
+                }
+                if versions { a.inCut = label }
+                a.pick = record ? label : nil
+                c.answers![c.answers!.count - 1] = a
+            }
         }
     }
     /// "Not quite": reopens the note for the next turnover with the director's words.
@@ -456,6 +521,16 @@ extension ProjectStore {
     public func completeTurnover(id: String, revision: Int?, sequenceID: String?, answers: [AnswerInput]) throws -> (Turnover, ReviewCut) {
         let t = try turnover(id)
         guard t.state.isOpen else { throw DirectionError("turnover_closed", "This turnover is closed.") }
+        // Two ways are two revisions, so the director can put either one in the cut. Choices that aren't
+        // versions of the cut (looks) carry none.
+        let delivered = try revision ?? self.revision()
+        for a in answers {
+            guard let options = a.options, !options.isEmpty else { continue }
+            let kept = options.compactMap(\.revision)
+            guard Set(options.map(\.label)).count == options.count, kept.isEmpty || kept.count == options.count, kept.allSatisfy({ $0 <= delivered }) else {
+                throw DirectionError("invalid_options", "Give each option its own label. Two versions of the cut each need the revision you committed them at, so the director can put either one in; looks carry none.")
+            }
+        }
         let priorCuts = try cuts().count
         let name = t.kind == "assembly" || priorCuts == 0 ? "Assembly" : "Cut \(priorCuts + 1)"
         let cut = try createCut(name: name, sequenceID: sequenceID ?? t.sequenceID, revision: revision)

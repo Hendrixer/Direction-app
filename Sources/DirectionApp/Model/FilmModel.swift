@@ -612,7 +612,16 @@ final class FilmModel {
     // MARK: Changes
 
     func acceptAnswer(_ noteID: String) { perform { try $0.acceptAnswer(noteID: noteID) }; registerUndo("Accept") { m in m.perform { try $0.unacceptAnswer(noteID: noteID) } } }
-    func pickOption(_ noteID: String, _ label: String) { let old = note(noteID)?.latestAnswer?.pick; perform { try $0.pickOption(noteID: noteID, label: label) }; if let old { registerUndo("Pick Option") { $0.pickOption(noteID, old) } } }
+    /// Puts that option's version in the cut. Undo puts back the one that played before.
+    @discardableResult
+    func pickOption(_ noteID: String, _ label: String) -> Bool {
+        guard let store else { return false }
+        let answer = note(noteID)?.latestAnswer, oldPick = answer?.pick, playing = answer?.optionInCut
+        do { try store.pickOption(noteID: noteID, label: label) } catch { self.error = error.localizedDescription; refresh(force: true); return false }
+        refresh(force: true)
+        if let back = oldPick ?? playing, oldPick != label { registerUndo("Use \(label)") { m in m.perform { try $0.pickOption(noteID: noteID, label: back, record: oldPick != nil) } } }
+        return true
+    }
     func reopen(_ noteID: String, text: String) {
         let turnoverID = note(noteID)?.turnoverID
         perform { try $0.reopenAnswer(noteID: noteID, text: text) }

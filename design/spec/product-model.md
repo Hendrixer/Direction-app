@@ -104,7 +104,8 @@ Note
 ReadBack   turnover, lines: [ReadBackLine], state: .waiting | .approved | .adjusted
 ReadBackLine  note, plan: String ("Trim three pauses, −2.4 s"), options: Bool, conflictWith: Note?
 
-Answer   note, cut, summary, delta: String ("−4.2 s" | "crop" | "−6 dB"), change: Change, options: (A, B)?, pick: A|B?
+Answer   note, cut, summary, delta: String ("−4.2 s" | "crop" | "−6 dB"), change: Change, options: (A, B)?, pick: A|B?, inCut: A|B?
+         // each option is a revision; using one puts it in the cut (changes.md › 30)
 Change   range in new cut, range in old cut, scene, note, revertible: Bool
 
 Question  id, asked: Date, text, choices: [Choice] (2–4, each may show a still or take), freeText: Bool, blocks: [Note]?

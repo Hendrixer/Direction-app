@@ -521,11 +521,13 @@ struct EditWork {
 
     // Time and ripples
 
-    mutating func spliceTrackKeys(_ sp: Splice) {
-        guard var tracks = s.tracks else { return }
+    mutating func spliceTrackKeys(_ sp: Splice) { s.tracks = Self.spliced(s.tracks, sp) }
+    /// Track keys are in cut seconds, so they move with a splice.
+    static func spliced(_ tracks: [String: TrackSettings]?, _ sp: Splice) -> [String: TrackSettings]? {
+        guard var tracks else { return nil }
         func moved(_ k: [Keyframe]) -> [Keyframe] { k.map { Keyframe(t: sp.forward($0.t), v: $0.v, ease: $0.ease) } }
         for (name, var t) in tracks { t.gainKeys = t.gainKeys.map(moved); t.effects = t.effects?.map { e in var e = e; e.keys = e.keys?.mapValues(moved); return e }; tracks[name] = t }
-        s.tracks = tracks
+        return tracks
     }
     @discardableResult mutating func removeRange(_ r: MediaRange, ripple: Bool) -> Splice? {
         s.clips = EditReducer.removing(r, from: s.clips, ripple: ripple)

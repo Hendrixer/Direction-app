@@ -40,7 +40,7 @@ import DirectionCore
     func record(for note: ReviewComment, option: NoteOption, answer: NoteAnswer, film: FilmModel) -> MadeRecord? {
         let candidates = records(for: note, in: film.reviewCut, film: film)
         guard !candidates.isEmpty else { return nil }
-        let inCut = answer.pick ?? answer.preferred
+        let inCut = answer.optionInCut
         guard let revision = option.revision ?? (option.label == inCut ? answer.revision : nil), let project = CutProjects.project(film, revision: revision) else { return nil }
         let used = Set(project.sequences.flatMap(\.clips).compactMap(\.assetID))
         return candidates.first { used.contains($0.assetID) }

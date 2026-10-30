@@ -438,6 +438,125 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     #expect(finished.committed)
 }
 
+// MARK: Two ways
+
+/// Cut 2 with note 1 two ways (A holds on b a second longer; B cuts to d over it, then back), and
+/// note 2 cut after them (c's tail −0.5 s). B went in last, so it plays.
+struct TwoWays {
+    var store: ProjectStore, feel: ReviewComment, pace: ReviewComment, a: Int, b: Int, delivered: Int
+
+    static func make() throws -> TwoWays {
+        let store = try temporaryStore(), cut = TimelineCut.make()
+        for a in cut.project.assets { _ = try store.addAsset(a, append: false, expectedRevision: try store.revision()) }
+        let inserts = cut.project.sequences[0].clips.map { c -> EditOperation in var o = EditOperation("insert"); o.assetID = c.assetID; o.range = c.sourceRange; o.at = c.start; o.layer = c.layer; return o }
+        let seeded = try store.apply(.init(baseEditRevision: try store.revision(), operations: inserts))
+        let id = Dictionary(seeded.sequences[0].clips.map { ($0.assetID!, $0.id) }, uniquingKeysWith: { a, _ in a })
+        _ = try store.logDailies(Dailies(scenes: cut.context.dailies.scenes, takes: cut.context.dailies.takes))
+        let assembly = try store.createCut(name: "Assembly", sequenceID: nil, revision: nil)
+        let feel = try store.addComment(text: "I want to feel how tired she was.", sequenceID: nil, revision: seeded.editRevision, cutID: assembly.id, time: .init(seconds: 6), extra: NoteFields(kind: .feeling))
+        let pace = try store.addComment(text: "Out of the launch sooner.", sequenceID: nil, revision: seeded.editRevision, cutID: assembly.id, time: .init(seconds: 11), extra: NoteFields(kind: .pace))
+        _ = try store.turnOver(noteIDs: [feel.id, pace.id], latitude: .faithful, waitForOK: false, cutID: assembly.id, sequenceID: nil)
+        func edit(_ note: Int, _ ops: String...) throws -> Int { try store.edit(EditBatch(baseEditRevision: store.revision(), notes: [note], operations: ops.map(op))).editRevision }
+        let a = try edit(1, #"{"op":"trim","clipID":"\#(id["b"]!)","edge":"tail","frames":30}"#)
+        let b = try edit(1, #"{"op":"trim","clipID":"\#(id["b"]!)","edge":"tail","frames":-30}"#, #"{"op":"cutaway","assetID":"d","sourceRange":{"start":1,"end":2},"at":5}"#)
+        let delivered = try edit(2, #"{"op":"trim","clipID":"\#(id["c"]!)","edge":"tail","frames":-15}"#)
+        return TwoWays(store: store, feel: feel, pace: pace, a: a, b: b, delivered: delivered)
+    }
+
+    func deliver(_ revisions: (Int?, Int?)? = nil) throws -> ReviewCut {
+        let r = revisions ?? (a, b)
+        let options = [NoteOption(label: "A", summary: "Hold on her", revision: r.0, delta: "+1.0 s"), NoteOption(label: "B", summary: "Window, then back", revision: r.1, delta: "0.0 s")]
+        let t = try store.turnovers().last!
+        return try store.completeTurnover(id: t.id, revision: delivered, sequenceID: nil, answers: [
+            AnswerInput(noteID: feel.id, summary: "Two ways. A holds on her, B cuts to the window and back.", start: 4, end: 9, options: options, preferred: "A"),
+            AnswerInput(noteID: pace.id, summary: "Out of the launch half a second sooner.", delta: "\u{2212}0.5 s", start: 9, end: 12.5),
+        ]).1
+    }
+    func answer(_ note: ReviewComment) throws -> NoteAnswer { try store.notes().first { $0.id == note.id }!.latestAnswer! }
+    func playing() throws -> Sequence { try store.read(revision: store.cuts().first!.editRevision).sequences[0] }
+    func clip(_ asset: String) throws -> Clip? { try playing().clips.first { $0.assetID == asset } }
+}
+
+@Test func twoWaysAreDeliveredAsTwoRevisions() throws {
+    let w = try TwoWays.make(); defer { try? FileManager.default.removeItem(at: w.store.url) }
+    expectFailure("invalid_options", index: nil) { _ = try w.deliver((w.a, nil)) }
+    #expect(try w.store.cuts().count == 1 && w.store.turnovers().last!.state.isOpen)
+    _ = try w.deliver()
+    // The version committed last plays; accepting without a pick keeps it, whatever the editor prefers.
+    #expect(try w.answer(w.feel).optionInCut == "B" && w.clip("d") != nil)
+    try w.store.acceptAnswer(noteID: w.feel.id)
+    #expect(try w.answer(w.feel).pick == "B" && w.store.revision() == w.delivered)
+}
+
+@Test func optionsThatArentVersionsOfTheCutOnlyRecordThePick() throws {
+    // Looks: the director's pick is the look; the cut doesn't change.
+    let w = try TwoWays.make(); defer { try? FileManager.default.removeItem(at: w.store.url) }
+    let cut = try w.deliver((nil, nil))
+    try w.store.pickOption(noteID: w.feel.id, label: "A")
+    #expect(try w.answer(w.feel).pick == "A" && w.answer(w.feel).inCut == nil && w.store.revision() == w.delivered && w.store.cuts().first == cut)
+}
+
+@Test func usingTheOtherOptionPutsItsVersionInTheCut() throws {
+    let w = try TwoWays.make(); defer { try? FileManager.default.removeItem(at: w.store.url) }
+    let cut = try w.deliver()
+    // Making B from A shortened b, which cut a second out of the music under it.
+    #expect(try w.playing().clips.filter { $0.assetID == "music" }.count == 2)
+    try w.store.pickOption(noteID: w.feel.id, label: "A")
+    // A new revision, and Cut 2 plays it: b held a second longer, no window, the music whole as in A, note 2's trim kept.
+    let after = try w.store.cuts().first!
+    #expect(try after.id == cut.id && after.editRevision == w.delivered + 1 && w.store.revision() == w.delivered + 1)
+    #expect(try w.clip("d") == nil && w.clip("b")?.range == MediaRange(start: 4, end: 10) && w.clip("c")?.range == MediaRange(start: 10, end: 13.5) && w.playing().clips.filter { $0.assetID == "music" }.map(\.range) == [MediaRange(start: 0, end: 13)])
+    var feel = try w.answer(w.feel)
+    #expect(feel.pick == "A" && feel.inCut == "A" && feel.range == MediaRange(start: 4, end: 10))
+    // Note 2's change moved with it, so Play changes still lands on it.
+    #expect(try w.answer(w.pace).range == MediaRange(start: 10, end: 13.5))
+    #expect(try w.store.events(since: 0).contains { $0.summary == "Used option A for note 1" })
+
+    // Change pick: B again, exactly as delivered.
+    try w.store.pickOption(noteID: w.feel.id, label: "B")
+    #expect(try OptionSwap.plain(w.playing().clips, origin: .zero) == OptionSwap.plain(w.store.read(revision: w.delivered).sequences[0].clips, origin: .zero))
+    #expect(try w.store.cuts().first!.editRevision == w.delivered + 2 && w.answer(w.pace).range == MediaRange(start: 9, end: 12.5))
+    // Undo of a first pick puts the version back and leaves no pick.
+    try w.store.pickOption(noteID: w.feel.id, label: "B", record: false)
+    feel = try w.answer(w.feel)
+    #expect(try feel.pick == nil && feel.inCut == "B" && w.store.revision() == w.delivered + 2)
+
+    // A locked scene keeps its cut.
+    try w.store.lockScene(id: "s1", locked: true)
+    expectFailure("scene_locked", index: nil) { try w.store.pickOption(noteID: w.feel.id, label: "A") }
+    #expect(try w.store.revision() == w.delivered + 2 && w.answer(w.feel).inCut == "B")
+    try w.store.lockScene(id: "s1", locked: false)
+    // Only the latest cut can change.
+    _ = try w.store.createCut(name: "Cut 3", sequenceID: nil, revision: nil)
+    expectFailure("cut_moved_on", index: nil) { try w.store.pickOption(noteID: w.feel.id, label: "A") }
+}
+
+@Test func optionSwapFindsTheShotsWhereverTheySitNow() throws {
+    var cut = TimelineCut.make()
+    let (b, _) = try cut.run([#"{"op":"cutaway","assetID":"d","sourceRange":{"start":1,"end":2},"at":5}"#])
+    let (a, _) = try cut.run([#"{"op":"trim","clipID":"c2","edge":"tail","frames":30}"#])
+    // Nothing else changed: A exactly as cut.
+    #expect(try OptionSwap.swap(b.sequences[0], from: b.sequences[0], to: a.sequences[0])?.sequence.clips == a.sequences[0].clips)
+    // A later note shortened the first shot, so B's shots sit half a second earlier now.
+    cut.project = b
+    let (later, _) = try cut.run([#"{"op":"trim","clipID":"c1","edge":"tail","frames":-15}"#], notes: [2])
+    let swapped = try #require(try OptionSwap.swap(later.sequences[0], from: b.sequences[0], to: a.sequences[0]))
+    let s = swapped.sequence
+    #expect(s.clips.first { $0.id == "c1" }?.range == MediaRange(start: 0, end: 3.5) && s.clips.first { $0.id == "c2" }?.range == MediaRange(start: 3.5, end: 9.5))
+    #expect(s.clips.first { $0.id == "c3" }?.range == MediaRange(start: 9.5, end: 13.5) && !s.clips.contains { $0.assetID == "d" })
+    #expect(swapped.at == MediaTime(seconds: 3.5) && swapped.removed == MediaTime(seconds: 5) && swapped.inserted == MediaTime(seconds: 6))
+    // A shot that only one version has takes in the one before it, so there's something to find.
+    var shots = TimelineCut.make().project.sequences[0]; shots.clips.removeAll { $0.id == "m1" }
+    var added = shots; added.clips[2].start = MediaTime(seconds: 11); added.clips.append(Clip(id: "x", assetID: "d", name: "d", start: .init(seconds: 9), sourceRange: .init(start: 0, end: 2)))
+    let w = try #require(OptionSwap.window(OptionSwap.units(shots), OptionSwap.units(added)))
+    #expect(w.0 == 1..<2 && w.1 == 1..<3)
+    #expect(OptionSwap.window(OptionSwap.units(shots), OptionSwap.units(shots)) == nil)
+    // The same shots changed since: it says so instead of guessing.
+    cut.project = b
+    let (regraded, _) = try cut.run([#"{"op":"reframe","clipID":"c2","scale":1.2}"#], notes: [2])
+    expectFailure("option_moved", index: nil) { _ = try OptionSwap.swap(regraded.sequences[0], from: b.sequences[0], to: a.sequences[0]) }
+}
+
 // MARK: Reading
 
 @Test func theTimelineReadsAsOpenTimelineIOAndAnOutline() throws {

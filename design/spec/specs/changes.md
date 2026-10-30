@@ -75,7 +75,7 @@ Frame: `screens/29-changes.html` · Render: `renders/29-changes@2x.png`
 ## 30 · Changes, two options
 Frame: `screens/30-changes-options.html` · Render: `renders/30-changes-options@2x.png`
 
-**Arrives from / leads to:** 29, via "Pick A or B" or by selecting answer 2. Using A or B returns to 29 with answer 2 done ("Used B"). "Neither, reply" leads to 32.
+**Arrives from / leads to:** 29, via "Pick A or B" or by selecting answer 2. Using A or B puts that version in the cut and returns to 29 with answer 2 done ("Used B"). "Neither, reply" leads to 32.
 
 **Layout:**
 - The stage becomes two `.opt` cards side by side: 24 pt padding, 14 pt gap, 16:9 frames, steel-1 card fill.
@@ -94,7 +94,10 @@ Frame: `screens/30-changes-options.html` · Render: `renders/30-changes-options@
 - Audio: only the hovered or focused option plays sound. The other is muted, and a speaker glyph shows on the active card.
 - The "Synced" toggle can unlink the two pictures to scrub them separately. When unlinked, two transports appear, one under each card.
 - More than two options never occur; the editor offers exactly two.
-- When the director has picked, the chosen card shows a green "Using B" chip and the buttons collapse into "Change pick".
+- When the director has picked, the chosen card shows a green "Using B" chip and the buttons collapse into "Change pick". Change pick brings back Use A and Use B; using the other one swaps it into the cut.
+- The editor delivers the two ways as two revisions that differ only where the note is; the one committed last is in the cut. Using the other swaps those shots wherever they sit in the cut now, as a new revision, so changes for other notes stay. A music bed under them stays as it is unless the two versions differ in it.
+- If the swap would recut a locked scene, or picture is locked, nothing changes and the error says to unlock first. If the cut changed around the note since, it says "Reply to ask the editor for it."
+- Options that aren’t versions of the cut (looks) only record the pick.
 
 **Interactions:**
 - Click a card to make it the audible one.
@@ -107,7 +110,9 @@ Frame: `screens/30-changes-options.html` · Render: `renders/30-changes-options@
 **Acceptance:**
 - [ ] Both pictures stay frame-locked within one frame during playback.
 - [ ] The editor's preference is shown only as a chip and is never selected for the director.
-- [ ] Choosing an option writes the pick to the answer, and the unchosen version stays retrievable in history (33).
+- [ ] Using an option puts its version in the cut as a new revision: Screening, Play changes and Deliver play it, and answers after it move with it.
+- [ ] ⌘Z, or Change pick and the other option, puts the other version back.
+- [ ] Both versions stay playable side by side here, and the unchosen one stays retrievable in history (33).
 
 ## 31 · Play changes
 Frame: `screens/31-play-changes.html` · Render: `renders/31-play-changes@2x.png`

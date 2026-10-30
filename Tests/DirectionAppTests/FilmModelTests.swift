@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import DirectionCore
+import DirectionTools
 @testable import DirectionApp
 
 @Suite("Film model")
@@ -218,4 +219,38 @@ struct FilmModelTests {
     #expect(a.editor == nil && a.missing.map(\.name) == ["Claude Code"])
     // Footage and Services went into Engines.
     #expect(SettingsTab.stored("services") == .engines && SettingsTab.stored("footage") == .engines && SettingsTab.stored("cutting") == .cutting && SettingsTab.stored(nil) == nil)
+}
+
+/// Use B in Changes puts B in the cut: Screening plays the new revision, and ⌘Z puts A back.
+@MainActor @Test func usingAnOptionPlaysItInScreeningAndUndoes() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("direction-options-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = try ProjectStore.create(at: directory.appendingPathComponent("Film.direction"), name: "Two ways")
+    func take(_ id: String) -> MediaAsset { MediaAsset(id: id, name: id + ".mov", path: "/\(id).mov", duration: .init(seconds: 20), video: [.init(id: 1, width: 640, height: 360, frameRate: 30)]) }
+    for a in ["a", "b", "w"] { _ = try store.addAsset(take(a), append: true, expectedRevision: store.revision()) }
+    let shots = try store.read().sequences[0].clips
+    let assembly = try store.createCut(name: "Assembly", sequenceID: nil, revision: nil)
+    let note = try store.addComment(text: "Let her be tired.", sequenceID: nil, revision: store.revision(), cutID: assembly.id, time: .init(seconds: 21), extra: NoteFields(kind: .feeling))
+    let t = try store.turnOver(noteIDs: [note.id], latitude: .faithful, waitForOK: false, cutID: assembly.id, sequenceID: nil)
+    func edit(_ json: String) throws -> Int { try store.edit(EditBatch(baseEditRevision: store.revision(), notes: [1], operations: [EditOperation(json: JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)))])).editRevision }
+    // A cuts b two seconds shorter; B (in last) puts them back.
+    let a = try edit(#"{"op":"trim","clipID":"\#(shots[1].id)","edge":"tail","frames":-60}"#)
+    let b = try edit(#"{"op":"trim","clipID":"\#(shots[1].id)","edge":"tail","frames":60}"#)
+    _ = try store.completeTurnover(id: t.id, revision: b, sequenceID: nil, answers: [AnswerInput(noteID: note.id, summary: "Two ways.", start: 20, end: 40, options: [NoteOption(label: "A", summary: "Shorter", revision: a), NoteOption(label: "B", summary: "As it was", revision: b)], preferred: "A")])
+
+    let m = FilmModel(), undo = UndoManager()
+    undo.groupsByEvent = false
+    m.runtime = try ToolRuntime(store: store); m.undoManager = undo
+    m.refresh(force: true)
+    #expect(m.duration == 60 && m.displayed?.editRevision == b)
+    undo.beginUndoGrouping()
+    m.useOption(note.id, "A")
+    undo.endUndoGrouping()
+    #expect(m.error == nil, "\(m.error ?? "")")
+    #expect(m.reviewCut?.editRevision == b + 1 && m.displayed?.editRevision == b + 1 && m.duration == 58)
+    #expect(m.note(note.id)?.latestAnswer?.pick == "A" && m.status(m.note(note.id)!) == .accepted)
+    // Messages written on Cut 2 as delivered still say Cut 2.
+    #expect(m.cut(atRevision: b)?.name == "Cut 2" && m.cut(atRevision: a)?.name == "Assembly")
+    undo.undo()
+    #expect(m.reviewCut?.editRevision == b + 2 && m.duration == 60 && m.note(note.id)?.latestAnswer?.optionInCut == "B")
 }

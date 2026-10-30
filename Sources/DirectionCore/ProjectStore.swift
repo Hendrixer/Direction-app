@@ -73,29 +73,32 @@ public final class ProjectStore: Sendable {
 
     @discardableResult
     public func update(expectedRevision: Int, key: String, request: Data, summary: String, transform: @Sendable (inout Project) throws -> Void) throws -> Project {
+        try database.write { db in try Self.commit(db, expectedRevision: expectedRevision, key: key, request: request, summary: summary, transform: transform) }
+    }
+
+    /// `update` inside a transaction the caller already holds.
+    static func commit(_ db: Database, expectedRevision: Int, key: String, request: Data, summary: String, transform: @Sendable (inout Project) throws -> Void) throws -> Project {
         guard !key.isEmpty && key.count <= 256 else { throw DirectionError("invalid_idempotency_key", "Provide an idempotency key of 1–256 characters.") }
-        return try database.write { db in
-            if let row = try Row.fetchOne(db, sql: "SELECT request, revision FROM idempotency WHERE key = ?", arguments: [key]) {
-                let prior: Data = row["request"], revision: Int = row["revision"]
-                guard prior == request else { throw DirectionError("idempotency_conflict", "This idempotency key was used with a different request.") }
-                guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM revisions WHERE revision = ?", arguments: [revision]) else { throw DirectionError("corrupt_project", "Missing idempotent revision.") }
-                return try JSONDecoder().decode(Project.self, from: data)
-            }
-            guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM state WHERE id = 1") else { throw DirectionError("corrupt_project", "Missing project state.") }
-            var p = try JSONDecoder().decode(Project.self, from: data)
-            guard p.editRevision == expectedRevision else { throw DirectionError("revision_conflict", "Expected revision \(expectedRevision); current revision is \(p.editRevision). Refresh before applying changes.") }
-            let before = p
-            try transform(&p)
-            try LockRules.check(before: before, after: p, dailies: try Self.value(db, DirectingKey.dailies, as: Dailies.self) ?? Dailies(), state: try Self.value(db, DirectingKey.state, as: DirectingState.self) ?? DirectingState())
-            try EditReducer.validate(p)
-            p.editRevision += 1
-            let output = try JSONEncoder.direction.encode(p)
-            try db.execute(sql: "UPDATE state SET payload = ?, revision = ? WHERE id = 1", arguments: [output, p.editRevision])
-            try db.execute(sql: "INSERT INTO revisions (revision, payload, summary, created_at) VALUES (?, ?, ?, ?)", arguments: [p.editRevision, output, summary, Date().timeIntervalSince1970])
-            try db.execute(sql: "INSERT INTO idempotency (key, request, revision) VALUES (?, ?, ?)", arguments: [key, request, p.editRevision])
-            try Self.event(db, kind: "edit.committed", revision: p.editRevision, summary: summary)
-            return p
+        if let row = try Row.fetchOne(db, sql: "SELECT request, revision FROM idempotency WHERE key = ?", arguments: [key]) {
+            let prior: Data = row["request"], revision: Int = row["revision"]
+            guard prior == request else { throw DirectionError("idempotency_conflict", "This idempotency key was used with a different request.") }
+            guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM revisions WHERE revision = ?", arguments: [revision]) else { throw DirectionError("corrupt_project", "Missing idempotent revision.") }
+            return try JSONDecoder().decode(Project.self, from: data)
         }
+        guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM state WHERE id = 1") else { throw DirectionError("corrupt_project", "Missing project state.") }
+        var p = try JSONDecoder().decode(Project.self, from: data)
+        guard p.editRevision == expectedRevision else { throw DirectionError("revision_conflict", "Expected revision \(expectedRevision); current revision is \(p.editRevision). Refresh before applying changes.") }
+        let before = p
+        try transform(&p)
+        try LockRules.check(before: before, after: p, dailies: try Self.value(db, DirectingKey.dailies, as: Dailies.self) ?? Dailies(), state: try Self.value(db, DirectingKey.state, as: DirectingState.self) ?? DirectingState())
+        try EditReducer.validate(p)
+        p.editRevision += 1
+        let output = try JSONEncoder.direction.encode(p)
+        try db.execute(sql: "UPDATE state SET payload = ?, revision = ? WHERE id = 1", arguments: [output, p.editRevision])
+        try db.execute(sql: "INSERT INTO revisions (revision, payload, summary, created_at) VALUES (?, ?, ?, ?)", arguments: [p.editRevision, output, summary, Date().timeIntervalSince1970])
+        try db.execute(sql: "INSERT INTO idempotency (key, request, revision) VALUES (?, ?, ?)", arguments: [key, request, p.editRevision])
+        try Self.event(db, kind: "edit.committed", revision: p.editRevision, summary: summary)
+        return p
     }
 
     @discardableResult

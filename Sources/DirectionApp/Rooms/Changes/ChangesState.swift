@@ -81,7 +81,13 @@ extension FilmModel {
     func cutProject(_ cut: ReviewCut?) -> Project? { cut.flatMap { CutProjects.project(self, revision: $0.editRevision) } }
     func cutSequence(_ cut: ReviewCut?) -> DirectionCore.Sequence? { cut.flatMap { c in try? cutProject(c)?.sequence(c.sequenceID) } }
     func cutDuration(_ cut: ReviewCut?) -> Double? { cutSequence(cut)?.duration.seconds }
-    func cut(atRevision revision: Int?) -> ReviewCut? { revision.flatMap { r in cuts.last { $0.editRevision <= r } } }
+    /// The cut a message was written on. A cut keeps the revision it was delivered at in its answers, and
+    /// plays a later one after Use A or Use B.
+    func cut(atRevision revision: Int?) -> ReviewCut? {
+        guard let r = revision else { return nil }
+        if let id = notes.lazy.compactMap({ $0.answers?.first { $0.revision == r }?.cutID }).first, let cut = cuts.first(where: { $0.id == id }) { return cut }
+        return cuts.last { $0.editRevision <= r }
+    }
 
     // MARK: Answers
 
@@ -168,10 +174,14 @@ extension FilmModel {
         if isPreview { previewAccept(id) } else { acceptAnswer(id) }
         if advance { selectNext(after: id) }
     }
-    /// Use A or Use B: writes the pick and accepts the answer.
+    /// Use A or Use B: puts that version in the cut and accepts the answer.
     func useOption(_ id: String, _ label: String) {
         holdList(id)
-        if isPreview { previewAccept(id, pick: label) } else { pickOption(id, label); acceptAnswer(id) }
+        if isPreview { previewAccept(id, pick: label) } else {
+            guard pickOption(id, label) else { return }
+            // Change pick on an accepted answer only switches the version.
+            if let c = note(id), status(c) != .accepted { acceptAnswer(id) }
+        }
         if comparingNoteID == id { comparingNoteID = nil }
         selectNext(after: id)
     }
@@ -291,7 +301,7 @@ extension FilmModel {
     /// Snapshots have no store: mirror what the store does so the frames can show the result.
     private func previewAccept(_ id: String, pick: String? = nil) {
         guard let i = notes.firstIndex(where: { $0.id == id }), var a = notes[i].answers?.last else { return }
-        a.state = "accepted"; if let pick { a.pick = pick } else if a.options != nil && a.pick == nil { a.pick = a.preferred }
+        a.state = "accepted"; if let pick { a.pick = pick; a.inCut = pick } else if a.options != nil && a.pick == nil { a.pick = a.optionInCut }
         notes[i].answers![notes[i].answers!.count - 1] = a
         notes[i].status = "accepted"; notes[i].noteState = .accepted
     }
