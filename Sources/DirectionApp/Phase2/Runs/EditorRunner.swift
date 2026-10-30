@@ -190,6 +190,8 @@ import DirectionTools
         }) else { return }
         let ended = "Run \(run.id) (\(run.job.rawValue)) ended \(run.state.rawValue)\(run.reason.map { ": \($0.rawValue)" } ?? "")\(run.detail.map { " \u{2014} \($0)" } ?? "")"
         if run.state == .failed || run.state == .stopped { DirectionLog.error(ended, "editor") } else { DirectionLog.info(ended + (run.summary.map { ". \($0)" } ?? ""), "editor") }
+        // A run that finished is proof the program is signed in, whatever an earlier check said.
+        if run.state == .done || run.state == .waitingForYou, let p = EditorProgram(rawValue: run.program), EditorSetup.signedIn(p) != true { EditorSetup.setSignedIn(p, true) }
         if run.state == .failed, let reason = run.reason {
             if let id = run.turnoverID { failTurnover(id, reason: reason, run: run, store: store) }
             if reason == .notSignedIn, let p = EditorProgram(rawValue: run.program) { EditorSetup.setSignedIn(p, false) }

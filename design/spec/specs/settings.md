@@ -7,7 +7,7 @@ Frames 42–48, 54 and 55. Opens with Direction › Settings… (`⌘,`). It's a
 | Part | Spec |
 |---|---|
 | Width | 720 pt, fixed. |
-| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 812, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. |
+| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 812, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. The window never grows past the screen: a pane taller than the screen's visible height (less the toolbar and a 24 pt margin) scrolls under the toolbar. On a 900 pt screen, Editor and Services scroll. |
 | Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. |
 | Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘9` switch tabs while Settings is key. |
 | Body | Padding 4/28/22. Each group is a label (`.label`, 14 above and 7 below) plus a `.set-card` (`--panel`, radius 10, hairline). |

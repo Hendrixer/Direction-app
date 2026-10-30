@@ -33,6 +33,8 @@ struct SettingsView: View {
     var recording: ShortcutAction? = nil
     @AppStorage(SettingsKey.settingsTab) private var storedTab = SettingsTab.general.rawValue
     @State private var tab: SettingsTab
+    /// The pane's own height, so the window fits it, or scrolls it when the screen is shorter.
+    @State private var paneHeight: CGFloat = 0
 
     init(app: AppModel? = nil, initialTab: SettingsTab? = nil, preview: Bool = false, recording: ShortcutAction? = nil) {
         self.app = app; self.preview = preview; self.recording = recording
@@ -43,7 +45,14 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             SettingsToolbar(tab: select)
-            pane
+            // A pane taller than the screen scrolls under the toolbar. Without this the window grew past
+            // the screen, macOS held it to the screen, and the overflow cut the title row off the top.
+            ScrollView(.vertical) {
+                pane.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { paneHeight = $0 }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.automatic)
+            .frame(height: paneHeight > 0 ? min(paneHeight, maxPaneHeight) : nil)
         }
         .frame(width: Gate.Size.settingsWidth)
         .background(Gate.Surface.ground)
@@ -54,6 +63,12 @@ struct SettingsView: View {
         .background { tabKeys }
         .preferredColorScheme(.dark)
         .onChange(of: storedTab) { _, new in if let t = SettingsTab(rawValue: new), t != tab { select(t) } }
+    }
+
+    /// The screen's height less the title bar, the toolbar and a margin. Snapshots draw every pane whole.
+    private var maxPaneHeight: CGFloat {
+        guard !preview, let screen = NSScreen.main?.visibleFrame.height else { return .infinity }
+        return max(360, screen - 28 - 76 - 24)
     }
 
     private var select: Binding<SettingsTab> {
