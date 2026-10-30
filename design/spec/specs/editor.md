@@ -47,6 +47,7 @@ Settings › Editor › "Editor runs on" has three segments: Claude Code, Codex,
 | `direction_frame` with assetID, `direction_contact_sheet` | Looking at | the take, `3B T2` | — |
 | `direction_transcribe`, `direction_audio` reads | Listening to | the take, `2A T5` | — |
 | `direction_search_footage` | Searching footage for | the words, "Maya laughing" | — |
+| `direction_screen_text` | Reading the screen in | the take, `1A T1` | — |
 | `direction_edit` | The first operation's verb: Trimming, Rolling, Swapping takes, Reframing, Ducking … | the scene(s) touched, `scene 2` | the first changed time |
 | `direction_make` | Making | "music for note 4" | — |
 | `direction_graphic` | Drawing | the graphic, "the title for note 8" | its start |

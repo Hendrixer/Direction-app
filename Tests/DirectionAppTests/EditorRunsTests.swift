@@ -460,4 +460,13 @@ struct EditorRunnerTests {
     #expect(text.contains("1. 0:00\u{2013}0:43 \u{00B7} close, static \u{00B7} Close on a man with glasses speaking into a mic. (flags: soft)"))
     #expect(text.contains("Words (4): Imagine being a scientist."))
     #expect(!text.contains("### later.mp4"))
+    #expect(!text.contains("On screen:"))
+    // A screen recording's text: its gist, largest text first, and where to read the rest.
+    let shot = try #require(try store.shots(assetID: "cam").first)
+    try store.replaceScreenText(assetID: "cam", [
+        ScreenText(assetID: "cam", shotID: shot.id, start: 0, end: 43, lines: ["AI is the last thing humans will ever invent", "Planning"]),
+        ScreenText(assetID: "cam", shotID: shot.id, start: 10, end: 20, lines: ["Draft v3"]),
+    ])
+    let withScreen = try EditorJobs.text(for: run, store: store)
+    #expect(withScreen.contains("On screen: AI is the last thing humans will ever invent \u{00B7} Planning \u{00B7} Draft v3 (2 stretches over time: direction_screen_text with assetID)"))
 }

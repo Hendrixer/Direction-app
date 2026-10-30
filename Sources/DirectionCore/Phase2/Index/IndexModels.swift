@@ -125,6 +125,8 @@ public struct TakeIndex: Codable, Hashable, Sendable {
     /// The engine that last went through this take's shots, so shots it couldn't describe
     /// aren't retried with it again and again.
     public var triedEngine: String?
+    /// The text-on-screen reader that last read this take; a newer one reads it again.
+    public var screenTextVersion: Int?
     public var updatedAt: Double
     public init(assetID: String, state: IndexState, fingerprint: String, updatedAt: Double = Date().timeIntervalSince1970) { self.assetID = assetID; self.state = state; self.fingerprint = fingerprint; self.updatedAt = updatedAt }
 
@@ -137,9 +139,40 @@ public struct TakeIndex: Codable, Hashable, Sendable {
     public func needsDescriptions(by engine: String?) -> Bool { state == .done && described < shotCount && engine != nil && triedEngine != engine }
 }
 
-/// A search row: a shot's description or one line of dialogue inside it.
+/// Text on screen for a stretch of a shot (footage-index.md › Text on screen): the lines Apple's
+/// text recognition read in its frames, top to bottom. A stretch from the shot's start to its end
+/// is text that stayed on screen the whole shot: a window's title, a slide's heading, a sign.
+/// Lines come largest text first, then top to bottom.
+public struct ScreenText: Codable, Hashable, Sendable {
+    public var assetID: String
+    public var shotID: String
+    public var start: Double
+    public var end: Double
+    public var lines: [String]
+    public init(assetID: String, shotID: String, start: Double, end: Double, lines: [String]) { self.assetID = assetID; self.shotID = shotID; self.start = start; self.end = end; self.lines = lines }
+    public var text: String { lines.joined(separator: "\n") }
+    /// The first lines, up to `words`: lines come largest text first, so headings lead.
+    public func gist(words: Int) -> String {
+        var out: [String] = [], count = 0
+        for line in lines {
+            let n = line.split(separator: " ").count
+            if count + n > words { if out.isEmpty { out.append(line.split(separator: " ").prefix(words).joined(separator: " ") + "\u{2026}") }; break }
+            out.append(line); count += n
+        }
+        return out.joined(separator: " \u{00B7} ")
+    }
+    /// Several stretches' gist together, the one that stays longest first: what a shot shows.
+    public static func gist(_ stretches: [ScreenText], words: Int) -> String {
+        let longest = stretches.sorted { ($0.end - $0.start, -$0.start) > ($1.end - $1.start, -$1.start) }
+        var merged: [String] = [], seen = Set<String>()
+        for s in longest { for l in s.lines where seen.insert(l.lowercased()).inserted { merged.append(l) } }
+        return ScreenText(assetID: "", shotID: "", start: 0, end: 0, lines: merged).gist(words: words)
+    }
+}
+
+/// A search row: a shot's description, one line of dialogue inside it, or a stretch of its text on screen.
 public struct IndexSearchRow: Sendable {
-    public enum Kind: String, Sendable { case picture, words }
+    public enum Kind: String, Sendable { case picture, words, screen }
     public var shotID: String
     public var assetID: String
     public var kind: Kind

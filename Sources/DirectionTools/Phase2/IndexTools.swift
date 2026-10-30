@@ -12,10 +12,11 @@ extension ToolCatalog {
         let range = record(["start": number, "end": number], required: ["start", "end"])
         return [
             definition("direction_index", "Look at footage: find every shot, make each take's contact sheet, note the sounds, describe each shot and make it all searchable. Runs as a job (poll direction_job) at background priority, take by take in footage order; it starts by itself when footage arrives if Settings › Footage says so. How shots are described is the director's choice in Settings, not yours. assetIDs limits it to those takes (and retries failed ones); force looks again from scratch; cancel stops this process's index job. Returns the job and each state's count.", ["assetIDs": list(string), "force": bool, "cancel": bool], readOnly: false),
-            definition("direction_shots", "Read the shots Direction found, in take order: source range (seconds and timecode), description, size, movement, people (what's visible, never names: map them to names yourself), setting, flags, the sounds in the shot, and small keyframe paths (10%, 50%, 90%). Filter by assetID or sceneID; page with offset and limit. Each take's index state is waiting, looking, done or failed. Log takes from these before watching anything.", ["assetID": string, "sceneID": string, "offset": integer, "limit": integer]),
+            definition("direction_shots", "Read the shots Direction found, in take order: source range (seconds and timecode), description, size, movement, people (what's visible, never names: map them to names yourself), setting, flags, the sounds in the shot, the gist of any text on screen (onScreen; direction_screen_text has all of it, with times), and small keyframe paths (10%, 50%, 90%). Filter by assetID or sceneID; page with offset and limit. Each take's index state is waiting, looking, done or failed. Log takes from these before watching anything.", ["assetID": string, "sceneID": string, "offset": integer, "limit": integer]),
             definition("direction_contact_sheet", "One image of a take: frames (4–36, default 16) evenly across it, or across range {start,end} in source seconds, each labeled with its source timecode, plus the time of each cell. Use it to see a whole take at a glance, then direction_frame with assetID and time for a real frame.", ["assetID": string, "range": range, "frames": integer], required: ["assetID"]),
             definition("direction_watch", "The closest thing to watching: a filmstrip of a passage of the cut, start to end in cut seconds (at revision, default the current edit), frames 8–24 (default 12), with timecodes, the words spoken in it, the sounds, and where the cuts fall. Watch every passage you changed before delivering a cut.", ["start": number, "end": number, "revision": integer, "sequenceID": string, "frames": integer], required: ["start", "end"]),
-            definition("direction_search_footage", "Search footage by what's in it (\"Maya laughing\", \"wide of the ridge at dusk\"): ranks shots by the meaning of their descriptions and lines blended with exact words (0.6 meaning, 0.4 words), best shot per take first, with a score, why it matched (picture, words or both), the matching text and keyframe paths. similarTo: a shotID ranks by how alike the pictures are instead. wordsOnly searches the transcripts alone. Runs on this Mac; the query never leaves it.", ["query": string, "sceneID": string, "circledOnly": bool, "wordsOnly": bool, "similarTo": string, "limit": integer]),
+            definition("direction_screen_text", "Read the text on screen in a take over time (a screen recording, slides, a whiteboard, a sign), read by Apple's text recognition on this Mac when the footage was looked at: each stretch with its source range and its lines, top to bottom. A stretch spanning the whole shot is text that stayed on screen throughout (a window title, a slide's heading). range {start, end} in source seconds keeps the stretches that overlap it. Use it to cut to a screen recording when it shows what's being said, and to caption screen recordings by what they show.", ["assetID": string, "range": range], required: ["assetID"]),
+            definition("direction_search_footage", "Search footage by what's in it (\"Maya laughing\", \"wide of the ridge at dusk\", \"the pricing slide\"): ranks shots by the meaning of their descriptions, lines and text on screen blended with exact words (0.6 meaning, 0.4 words), best shot per take first, with a score, why it matched (picture, words, both, or screen: text read off the picture, and then start–end is when that text is on screen), the matching text and keyframe paths. similarTo: a shotID ranks by how alike the pictures are instead. wordsOnly searches the transcripts alone. Runs on this Mac; the query never leaves it.", ["query": string, "sceneID": string, "circledOnly": bool, "wordsOnly": bool, "similarTo": string, "limit": integer]),
         ]
     }
 }
@@ -48,11 +49,28 @@ extension ToolRuntime {
             let offset = max(0, a["offset"].int ?? 0), limit = min(500, max(1, a["limit"].int ?? 100))
             let page = Array(all.dropFirst(offset).prefix(limit))
             let sounds = Dictionary(grouping: try store.sounds(), by: \.assetID)
+            let screen = Dictionary(grouping: try store.screenText(), by: \.shotID)
             let assets = Dictionary(uniqueKeysWithValues: p.assets.map { ($0.id, $0) })
-            let shots: [JSONValue] = page.map { s in shotJSON(s, asset: assets[s.assetID], dailies: dailies, sounds: sounds[s.assetID] ?? []) }
+            let shots: [JSONValue] = page.map { s in shotJSON(s, asset: assets[s.assetID], dailies: dailies, sounds: sounds[s.assetID] ?? [], screen: screen[s.id] ?? []) }
             let takes: [JSONValue] = assetIDs.map { id in .object(["assetID": .string(id), "take": .string(label(id, dailies, assets)), "index": .string((states[id] ?? .waiting).rawValue)]) }
             let next = offset + page.count
             return ToolResponse(.object(["shots": .array(shots), "takes": .array(takes), "total": .number(Double(all.count)), "nextOffset": next < all.count ? .number(Double(next)) : .null]))
+
+        case "direction_screen_text":
+            autoIndexIfNeeded()
+            let p = try store.read(), asset = try p.asset(a.requiredString("assetID"))
+            var stretches = try store.screenText(assetID: asset.id)
+            if a["range"] != .null {
+                guard let s = a["range"]["start"].double, let e = a["range"]["end"].double, e > s else { throw DirectionError("invalid_range", "range is {start, end} in source seconds inside the take.") }
+                stretches = stretches.filter { $0.end > s && $0.start < e }
+            }
+            let fps = asset.video.first?.frameRate ?? 24, index = try store.takeIndex(asset.id)
+            let read = index.map { !FootageIndexer.needsScreenText($0) && $0.state == .done } ?? false
+            let note: String = asset.video.isEmpty ? "\(asset.name) has no picture." : !read ? "Direction hasn\u{2019}t read this take\u{2019}s screen yet; it does when it looks at the footage." : stretches.isEmpty ? "No text on screen." : "Lines read top to bottom; a stretch spanning the shot stayed on screen throughout."
+            let items: [JSONValue] = stretches.map { t in
+                .object(["shotID": .string(t.shotID), "start": .number((t.start * 1000).rounded() / 1000), "end": .number((t.end * 1000).rounded() / 1000), "range": .string(SourceTimecode.range(t.start, t.end, fps: fps)), "lines": .array(t.lines.map(JSONValue.string))])
+            }
+            return ToolResponse(.object(["assetID": .string(asset.id), "take": .string(label(asset.id, try store.dailies(), [asset.id: asset])), "read": .bool(read), "stretches": .array(items), "note": .string(note)]))
 
         case "direction_contact_sheet":
             let p = try store.read(), asset = try p.asset(a.requiredString("assetID"))
@@ -199,7 +217,7 @@ extension ToolRuntime {
         return parts.isEmpty ? (assets[id]?.name ?? id) : parts.joined(separator: " ")
     }
 
-    private func shotJSON(_ s: Shot, asset: MediaAsset?, dailies: Dailies, sounds: [IndexSound]) -> JSONValue {
+    private func shotJSON(_ s: Shot, asset: MediaAsset?, dailies: Dailies, sounds: [IndexSound], screen: [ScreenText] = []) -> JSONValue {
         let fps = asset?.video.first?.frameRate ?? 24
         let inShot = sounds.filter { $0.end > s.start && $0.start < s.end && $0.kind != .silence }
         var value: [String: JSONValue] = [
@@ -217,6 +235,7 @@ extension ToolRuntime {
             for key in ["description", "size", "movement", "setting", "describedWith"] { value[key] = .null }
             value["people"] = .array([]); value["flags"] = .array([])
         }
+        value["onScreen"] = screen.isEmpty ? .null : .string(ScreenText.gist(screen, words: 24))
         return .object(value)
     }
 

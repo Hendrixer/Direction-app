@@ -154,6 +154,8 @@ enum EditorJobs {
 enum LoggingDigest {
     /// Words per take before the rest is left to `direction_transcript`.
     static let wordsPerTake = 1_200
+    /// Words of text on screen per take: enough to say what a screen recording shows.
+    static let screenWordsPerTake = 40
 
     static func takes(_ assets: [MediaAsset], store: ProjectStore, dailies: Dailies) -> String {
         let transcripts = (try? store.transcripts()) ?? []
@@ -177,6 +179,10 @@ enum LoggingDigest {
                 let extra = [l.people.isEmpty ? nil : "people: " + l.people.joined(separator: "; "), l.setting.map { "setting: \($0)" }, l.flags.isEmpty ? nil : "flags: " + l.flags.joined(separator: ", ")].compactMap { $0 }
                 out.append("\(s.number). \(clock(s.start))\u{2013}\(clock(s.end))\(kind.isEmpty ? "" : " \u{00B7} \(kind)") \u{00B7} \(l.description)\(extra.isEmpty ? "" : " (" + extra.joined(separator: "; ") + ")")")
             }
+        }
+        let screen = (try? store.screenText(assetID: a.id)) ?? []
+        if !screen.isEmpty {
+            out.append("On screen: \(ScreenText.gist(screen, words: screenWordsPerTake))\(screen.count > 1 ? " (\(screen.count) stretches over time: direction_screen_text with assetID)" : "")")
         }
         let sounds = ((try? store.sounds(assetID: a.id)) ?? []).filter { $0.kind != .silence && $0.end - $0.start >= 2 }
         if !sounds.isEmpty { out.append("Sounds: " + sounds.prefix(12).map { "\($0.kind.rawValue) \(clock($0.start))\u{2013}\(clock($0.end))" }.joined(separator: ", ")) }

@@ -19,9 +19,10 @@ All steps run at background priority, in parallel with transcription, take by ta
 | 3. Contact sheet | 16 frames evenly across the take, a 4 × 4 grid, 1600 px wide, each cell labeled with its source timecode in SF Mono | One JPEG per take in `Index/` |
 | 4. Descriptions | A vision engine (below) looks at 3 keyframes per shot (10%, 50%, 90%) at 672 px, with the take's words for that range, and fills a fixed shape | `description`, `size`, `movement`, `people`, `flags` per shot |
 | 5. Sounds | SoundAnalysis `SNClassifySoundRequest(classifierIdentifier: .version1)` in 1 s windows. Runs merge; the top label maps to the seven kinds in `Sound`. Loudness per second is kept for the strip. | `Sound` rows |
-| 6. Search | Apple's NaturalLanguage sentence embeddings (`NLEmbedding.sentenceEmbedding(for: .english)`, built into macOS) make a vector for each shot's description and for each line of dialogue. Descriptions and transcript words also go into SQLite FTS5. Vision feature prints from step 2 are kept per keyframe for "more like this shot". | Vectors in `project.sqlite`; the FTS index |
+| 6. Text on screen | Vision `RecognizeTextRequest` (accurate, no language correction) on each shot's middle frame at 1920 px; a shot with 12 words or more is read every 2 s (below) | `ScreenText` stretches per shot |
+| 7. Search | Apple's NaturalLanguage sentence embeddings (`NLEmbedding.sentenceEmbedding(for: .english)`, built into macOS) make a vector for each shot's description, each line of dialogue and each stretch of text on screen. All three also go into SQLite FTS5. Vision feature prints from step 2 are kept per keyframe for "more like this shot". | Vectors in `project.sqlite`; the FTS index |
 
-Steps 1–3, 5 and 6 are built into macOS or bundled and always run on this Mac. Step 4 is the one with a choice of engine.
+Steps 1–3 and 5–7 are built into macOS or bundled and always run on this Mac. Step 4 is the one with a choice of engine.
 
 ### The shape a description fills
 
@@ -49,7 +50,7 @@ Both engines decode greedily (temperature 0) into this JSON with a 160-token lim
 - Weights download on first use to the Hugging Face cache (`~/.cache/huggingface/hub`), with progress in Settings › Footage, and show in Settings › Storage.
 - If free disk space is less than the download plus 2 GB, the download doesn't start, and Settings says so with Quick offered instead.
 - **Through OpenRouter**, each shot's three keyframes go as `image_url` parts (JPEG data URLs) with `response_format` set to the description's JSON schema. Requests run 4 at a time. Spend counts toward Settings › Services limits.
-- Without mlx-vlm and without an OpenRouter key, steps 1–3, 5 and 6 still run; descriptions are skipped and search uses words only.
+- Without mlx-vlm and without an OpenRouter key, steps 1–3 and 5–7 still run; descriptions are skipped and search uses words and text on screen only.
 
 Speed targets are for the sample film (214 takes, 3 h 12 min, about 1,900 shots): Standard finishes in about 35 minutes, and circling can start as soon as the first scene is logged.
 
@@ -85,12 +86,14 @@ Most of Apple's difference is verbatim speech Whisper tidies away: false starts 
 The editor logs footage in runs of up to 20 takes, each a fresh session, so no run grows past what one session can hold, and the director can circle while the rest is still being looked at.
 
 - **When a batch starts.** A take is ready once Direction has looked at it (when it looks by itself), its words are in or settled, and its sound has been compared. The first batch starts at 5 ready takes; later batches at 20; the last with whatever is left. Takes in sync go in the same batch. One logging run at a time, and none while one is stopped or waiting for Try Again.
-- **What a batch carries.** The job lists the scenes logged so far and, for each take in the batch, everything Direction found: picture size, sync, every shot with its times, size, movement, description, people, setting and flags, its sounds, and its words (up to 1,200, then where to read the rest). The editor logs from that and calls a tool only to see a moment that matters. On the director's first film, logging two takes by reading tools took Codex 991,000 tokens and 3½ minutes.
+- **What a batch carries.** The job lists the scenes logged so far and, for each take in the batch, everything Direction found: picture size, sync, every shot with its times, size, movement, description, people, setting and flags, the gist of its text on screen (40 words, largest text first), its sounds, and its words (up to 1,200, then where to read the rest). The editor logs from that and calls a tool only to see a moment that matters. On the director's first film, logging two takes by reading tools took Codex 991,000 tokens and 3½ minutes.
 - **Takes a run leaves.** A take that two finished runs didn't log goes to Unsorted with its first shot's description as its caption and the flag "Not logged by the editor", so logging finishes and the director can place it.
 
 ### Speed
 
 - **Descriptions** are most of the time: about 2 s a shot for Qwen3-VL 8B on this Mac, nearly all of it writing the line. A shot whose middle frame is within 0.3 (feature-print distance) of one already described anywhere in the film, or 0.35 within its own take, reuses that shot's line ("same picture as shot 2"): one setup split by a small change, or another take of it. A shot whose first and last frames are within 0.3 doesn't move, and only its middle frame is sent (2.3 s instead of 3.1 s on the director's footage).
+- **Text on screen** costs little next to shots: on the director's 3:12 screen recording it took 3.6 s (one stretch: the screen never changed, so one frame of 96 was read), and 0.2 s for the camera take's three shots, against about 14 s each to find shots. Reading is about 0.34 s a frame, 0.12 s with four at once; language correction doubled it and changed nothing Vision was sure of; a 3840 px frame reads no better and no faster than 1920.
+- **A smaller describer was tried and isn't offered.** Qwen3.5 4B (4-bit, 3.1 GB) on the director's footage: 0.76 s a shot against Qwen3-VL 8B's 1.35 s (0.51 against 0.85 in batches of 8), 6.1 GB of memory against 7.5. But it missed the director's dreadlocks, and on one still frame of a screen it wrote "text scrolling rapidly", where 8B read what the page was about. Describing is already a small part of looking (see above), so the speed isn't worth the lines.
 - **Sync** keeps every pair's answer, keyed by both takes' curves, so new footage is compared only against what's there. Pairs whose recording windows can't overlap (creation to last change, widened by the length and six hours) aren't compared at all. In an optimized build a pair of 1-minute takes takes 0.3 ms and two 1-hour takes 30 ms.
 
 ### 05 · The logging page
@@ -110,18 +113,30 @@ Takes that recorded the same moment (two cameras, a camera and a screen recordin
 - **The editor.** `direction_dailies › syncGroups` lists the groups. A `cutaway` without `sourceRange` (give `seconds`) plays the same moment from a synced take, lined up to the frame: switching angles, a screen recording under the words about it, picture-in-picture with `reframe`. Logging logs synced takes as angles of one moment; the assembly lays the sound take (or the angle the brief wants seen most) on V1 and never lays its angles end to end.
 - **Dailies.** A synced take's card has a line under its status, "🔗 In sync with B1 · its sound". The open take (frame 08) gets an **Angles** row above the transcript: one button per take (a waveform glyph on the sound take), and switching keeps the same moment. ← → do too, between synced takes. The take's context menu has **Use This Take's Sound** and **Not in Sync**.
 
+### Text on screen
+
+A screen recording, slides, a whiteboard or a sign can be found by what it says. Vision's text recognition reads it on this Mac; nothing is downloaded and nothing leaves the Mac.
+
+- **How.** Each shot's middle frame is read at 1920 px. Lines Vision is less than 0.8 sure of are dropped (at 0.3 and 0.5 they're mostly noise), so are icons read as symbols ("•", "©"), and a line needs three letters or digits. "Al" alone becomes "AI": the system font draws I and l alike. A frame's lines come largest text first (titles, headings, then body, then menus), each size top to bottom and left to right, since rows across a screen run through every column.
+- **Shots with text.** A shot whose middle has 12 words or more, and runs 4 s or longer, is read every 2 s. A frame is read again only when 0.1% of its pixels (a 480 px grey copy, changes over a tenth of the range) differ from the last frame read; otherwise it keeps that frame's lines. A caret or sensor noise doesn't count; a new line of text does. Other shots keep what their middle frame says.
+- **Stretches.** Lines in 80% or more of a shot's frames stayed on screen throughout and make one stretch from the shot's start to its end (a window title, a slide's heading). The rest make stretches for as long as each frame shares half its lines with the one before and a quarter with the stretch's first, so a page scrolling makes a new stretch once most of it has gone. A stretch runs from halfway after the frame before it to halfway before the frame after it.
+- **When.** After sounds, while a take is looked at; the logging page says "Reading the screen". Takes looked at before Direction read text are read once, by themselves (`TakeIndex.screenTextVersion`). A take whose text can't be read keeps everything else.
+- **Search.** Each stretch is a search row: all its words in FTS5, a sentence vector of its gist. A shot's text-on-screen side counts like its description and its lines; it wins when it scores higher, or when it holds half the query or more and more of it than the others do (its words are read, not judged, so they count for more than its meaning). The hit says `screen` ("on screen" in Dailies), quotes the lines that matched, and its time is when that text is on screen, not the whole shot.
+- **The editor.** `direction_shots` gives each shot's `onScreen` gist; `direction_screen_text` reads a take's stretches with their times; logging carries each take's gist and captions screen recordings by what they show.
+
 ## What the editor gets (tools)
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `direction_shots` | `assetID?`, `sceneID?`, `offset`, `limit` | Shots with range, description, size, movement, people, flags, sounds, and small keyframe paths |
+| `direction_shots` | `assetID?`, `sceneID?`, `offset`, `limit` | Shots with range, description, size, movement, people, flags, sounds, the gist of their text on screen, and small keyframe paths |
 | `direction_contact_sheet` | `assetID`, `range?`, `frames` (4–36, default 16) | One image grid with source timecodes, and the time of each cell |
 | `direction_frame` (extended) | `assetID` and `time` (source seconds), or the existing cut `time` | A real frame of a take, not only of the cut |
 | `direction_watch` | `start`, `end` (cut seconds), `revision?`, `frames` (8–24, default 12) | A filmstrip image of the passage with timecodes, the words in it, sounds, and where the cuts fall. The closest thing to watching. |
 | `direction_sync_takes` | `force?` | A job that finds takes in sync by their sound and writes `syncGroups` to Dailies |
-| `direction_search_footage` | `query`, `sceneID?`, `circledOnly?`, `limit` (default 12) | Ranked shots with a score, why they matched (`picture`, `words` or `both`), and keyframe paths |
+| `direction_screen_text` | `assetID`, `range?` | The take's text on screen: stretches with source ranges and their lines, largest text first |
+| `direction_search_footage` | `query`, `sceneID?`, `circledOnly?`, `limit` (default 12) | Ranked shots with a score, why they matched (`picture`, `words`, `both` or `screen`), and keyframe paths; a `screen` hit's range is when the text is on screen |
 
-- Search ranks by the similarity of the query's sentence embedding to each shot's description and lines, blended with FTS5 scores (0.6 meaning, 0.4 exact words), best shot per take first. `similarTo: shotID` ranks by Vision feature-print distance instead.
+- Search ranks by the similarity of the query's sentence embedding to each shot's description, lines and text on screen, blended with FTS5 scores (0.6 meaning, 0.4 exact words), best shot per take first. `similarTo: shotID` ranks by Vision feature-print distance instead.
 - `direction_dailies` gains an `index` field per take: `waiting`, `looking`, `done` or `failed`.
 - **Check your work.** Every skill that cuts ends with: watch every passage you changed with `direction_watch` before delivering. The turnover's finishing tool refuses delivery if a changed range was never watched in that run, with `not_watched` and the ranges.
 

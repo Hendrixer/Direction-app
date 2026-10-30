@@ -5,17 +5,23 @@ import NaturalLanguage
 /// meaning, FTS5 for exact words, blended 0.6 meaning and 0.4 words, best shot per take first.
 /// Everything runs on this Mac; the query never leaves it.
 public enum FootageSearch {
-    public enum Why: String, Codable, Sendable { case picture, words, both }
+    public enum Why: String, Codable, Sendable {
+        case picture, words, both, screen
+        /// How Dailies says it.
+        public var label: String { self == .screen ? "on screen" : rawValue }
+    }
 
     public struct Hit: Codable, Sendable, Hashable {
         public var shotID: String
         public var assetID: String
         public var score: Double
         public var why: Why
-        /// The description, or the quoted line of dialogue when it matched on words.
+        /// The description, the quoted line of dialogue when it matched on words, or the lines on
+        /// screen that matched.
         public var text: String
         /// Query words found in `text` (stemmed matches included), for highlighting.
         public var matched: [String]
+        /// The shot's range, or for text on screen, when that text is on screen.
         public var start: Double
         public var end: Double
         public var keyframes: [String]
@@ -102,32 +108,48 @@ public enum FootageSearch {
             return !options.circledOnly || t.circled
         }
 
-        struct Side { var meaning = 0.0; var exact = 0.0; var text = ""; var hits = Set<String>() }
-        var picture: [String: Side] = [:], words: [String: Side] = [:]
+        struct Side { var meaning = 0.0; var exact = 0.0; var text = ""; var hits = Set<String>(); var start = 0.0 }
+        var picture: [String: Side] = [:], words: [String: Side] = [:], screen: [String: Side] = [:]
 
         // Meaning: the query's sentence vector against each description and line.
         if let q {
             for row in try cachedVectors(store) where shots[row.shotID] != nil && allowed(row.assetID) {
-                if options.wordsOnly && row.kind == .picture { continue }
+                if options.wordsOnly && row.kind != .words { continue }
                 guard let v = row.vector else { continue }
                 let m = meaning(q, v)
-                if row.kind == .picture { if m > picture[row.shotID, default: Side()].meaning { picture[row.shotID, default: Side()].meaning = m; picture[row.shotID]!.text = row.text } }
-                else if m > words[row.shotID, default: Side()].meaning { words[row.shotID, default: Side()].meaning = m; words[row.shotID]!.text = row.text }
+                switch row.kind {
+                case .picture: if m > picture[row.shotID, default: Side()].meaning { picture[row.shotID, default: Side()].meaning = m; picture[row.shotID]!.text = row.text }
+                case .words: if m > words[row.shotID, default: Side()].meaning { words[row.shotID, default: Side()].meaning = m; words[row.shotID]!.text = row.text }
+                case .screen: if m > screen[row.shotID, default: Side()].meaning { screen[row.shotID, default: Side()].meaning = m; screen[row.shotID]!.text = row.text; screen[row.shotID]!.start = row.start }
+                }
             }
         }
         // Exact words: the share of query words each side contains.
         if !tokens.isEmpty {
             var lineHits: [String: [String: Set<String>]] = [:]
+            var screenHits: [String: [Double: (text: String, tokens: Set<String>)]] = [:]
             for token in tokens {
                 for (row, _) in try store.searchWord(token) where shots[row.shotID] != nil && allowed(row.assetID) {
-                    if row.kind == .picture {
+                    switch row.kind {
+                    case .picture:
                         guard !options.wordsOnly else { continue }
                         picture[row.shotID, default: Side()].hits.insert(token)
                         if picture[row.shotID]!.text.isEmpty { picture[row.shotID]!.text = row.text }
-                    } else {
+                    case .words:
                         lineHits[row.shotID, default: [:]][row.text, default: []].insert(token)
+                    case .screen:
+                        guard !options.wordsOnly else { continue }
+                        screenHits[row.shotID, default: [:]][row.start, default: (row.text, [])].tokens.insert(token)
                     }
                 }
+            }
+            // A shot's text on screen is its best stretch, the earliest of equals, so the hit
+            // says when that text is on screen.
+            for (shotID, stretches) in screenHits {
+                guard let best = stretches.max(by: { ($0.value.tokens.count, -$0.key) < ($1.value.tokens.count, -$1.key) }) else { continue }
+                var side = screen[shotID, default: Side()]
+                side.hits = best.value.tokens; side.text = best.value.text; side.start = best.key
+                screen[shotID] = side
             }
             // A shot's words side is its best single line, so a quote reads as one line.
             for (shotID, lines) in lineHits {
@@ -138,20 +160,41 @@ public enum FootageSearch {
             }
             for k in picture.keys { picture[k]!.exact = Double(picture[k]!.hits.count) / Double(tokens.count) }
             for k in words.keys { words[k]!.exact = Double(words[k]!.hits.count) / Double(tokens.count) }
+            for k in screen.keys { screen[k]!.exact = Double(screen[k]!.hits.count) / Double(tokens.count) }
         }
 
-        var hits: [Hit] = []
-        for id in Set(picture.keys).union(words.keys) {
+        var hits: [Hit] = [], stretches: [String: ScreenText]?
+        for id in Set(picture.keys).union(words.keys).union(screen.keys) {
             guard let shot = shots[id] else { continue }
-            let p = picture[id] ?? Side(), w = words[id] ?? Side()
-            let pScore = 0.6 * p.meaning + 0.4 * p.exact, wScore = 0.6 * w.meaning + 0.4 * w.exact
-            let score = 0.6 * max(p.meaning, w.meaning) + 0.4 * max(p.exact, w.exact)
+            let p = picture[id] ?? Side(), w = words[id] ?? Side(), o = screen[id] ?? Side()
+            let pScore = 0.6 * p.meaning + 0.4 * p.exact, wScore = 0.6 * w.meaning + 0.4 * w.exact, oScore = 0.6 * o.meaning + 0.4 * o.exact
+            let score = 0.6 * max(p.meaning, w.meaning, o.meaning) + 0.4 * max(p.exact, w.exact, o.exact)
             guard score >= floor else { continue }
-            let why: Why = (!p.hits.isEmpty && !w.hits.isEmpty && min(pScore, wScore) >= 0.85 * max(pScore, wScore)) ? .both : (pScore >= wScore ? .picture : .words)
-            let text = why == .words ? "\u{201C}\(w.text)\u{201D}" : (shot.look?.description ?? (p.text.isEmpty ? w.text : p.text))
-            hits.append(Hit(shotID: id, assetID: shot.assetID, score: (score * 1000).rounded() / 1000, why: why, text: text, matched: matchedWords(in: text, tokens: tokens), start: shot.start, end: shot.end, keyframes: shot.keyframes))
+            var start = shot.start, end = shot.end
+            let why: Why, text: String
+            // Text on screen is read, not judged, so its exact words count for more than its meaning:
+            // it wins when it holds more of the query than the description or the lines do.
+            if oScore > max(pScore, wScore) || (o.exact >= 0.5 && o.exact > max(p.exact, w.exact)) {
+                why = .screen; text = screenLines(o.text, tokens: tokens)
+                // When that text is on screen, not the whole shot.
+                if stretches == nil { stretches = Dictionary(try store.screenText().map { ("\($0.assetID)|\($0.start)", $0) }, uniquingKeysWith: { a, _ in a }) }
+                if let s = stretches?["\(shot.assetID)|\(o.start)"] { start = s.start; end = s.end }
+            } else {
+                why = (!p.hits.isEmpty && !w.hits.isEmpty && min(pScore, wScore) >= 0.85 * max(pScore, wScore)) ? .both : (pScore >= wScore ? .picture : .words)
+                text = why == .words ? "\u{201C}\(w.text)\u{201D}" : (shot.look?.description ?? (p.text.isEmpty ? w.text : p.text))
+            }
+            hits.append(Hit(shotID: id, assetID: shot.assetID, score: (score * 1000).rounded() / 1000, why: why, text: text, matched: matchedWords(in: text, tokens: tokens), start: start, end: end, keyframes: shot.keyframes))
         }
         return bestPerTakeFirst(hits, limit: options.limit)
+    }
+
+    /// The lines of a stretch on screen that hold query words (three at most), else its longest two.
+    static func screenLines(_ text: String, tokens: [String]) -> String {
+        let lines = text.split(separator: "\n").map(String.init)
+        let matching = lines.filter { !matchedWords(in: $0, tokens: tokens).isEmpty }
+        if !matching.isEmpty { return matching.prefix(3).joined(separator: " \u{00B7} ") }
+        let longest = Set(lines.sorted { $0.count > $1.count }.prefix(2))
+        return lines.filter(longest.contains).joined(separator: " \u{00B7} ")
     }
 
     /// Each take's best shot, by score, then every other shot by score.

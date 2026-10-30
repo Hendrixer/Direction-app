@@ -141,14 +141,14 @@ struct DailiesSearchResult: View {
                     .overlay(alignment: .topLeading) { label(take) }
                     .overlay { if take.circled { RoundedRectangle(cornerRadius: 8.5, style: .continuous).strokeBorder(Gate.Voice.director, lineWidth: 1.5).padding(-1.5) } }
                 highlighted.font(.system(size: 12.5)).lineLimit(1)
-                Text(hit.why.rawValue).font(.system(size: 11)).foregroundStyle(Gate.Text.disabled).padding(.top, -4)
+                Text(hit.why.label).font(.system(size: 11)).foregroundStyle(Gate.Text.disabled).padding(.top, -4)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .contextMenu { DailiesTakeMenu(model: model, ids: [hit.assetID], onOpen: open) }
         .help("Open \(model.dailiesLabel(take)) at \(SourceTimecode.format(hit.start, fps: fps))")
-        .accessibilityLabel("\(model.dailiesLabel(take)), \(hit.text), matched on \(hit.why.rawValue)\(take.circled ? ", circled" : "")")
+        .accessibilityLabel("\(model.dailiesLabel(take)), \(hit.text), matched on \(hit.why.label)\(take.circled ? ", circled" : "")")
     }
 
     /// "2A T3" in the corner; circled takes keep their hand-drawn circle around it.

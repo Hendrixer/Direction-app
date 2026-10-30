@@ -104,10 +104,13 @@ public enum FootageIndexer {
             switch t.state {
             case .waiting, .looking: return true
             case .failed: return assetIDs != nil
-            case .done: return !a.video.isEmpty && t.needsDescriptions(by: engine)
+            case .done: return !a.video.isEmpty && (t.needsDescriptions(by: engine) || needsScreenText(t))
             }
         }
     }
+
+    /// Done, but read by an older text reader (or before there was one).
+    public static func needsScreenText(_ t: TakeIndex) -> Bool { t.screenTextVersion != ScreenReader.version }
 
     private static func runBatch(_ todo: [MediaAsset], store: ProjectStore, options: Options, total: Int, offset: Int, summary: inout Summary, report: @escaping @Sendable (Progress) -> Void) async throws {
         let counter = Counter(done: offset)
@@ -195,6 +198,13 @@ public enum FootageIndexer {
         // A take already looked at whose file hasn't changed only needs describing.
         if let old = try store.takeIndex(asset.id), !options.force, old.fingerprint == t.fingerprint, old.firstPassDone {
             t = old; t.state = .looking; t.error = nil
+            if !asset.video.isEmpty, needsScreenText(t) {
+                t.step = "text"; try store.saveTakeIndex(t, summary: "Reading the text on screen in \(asset.name)")
+                let shots = try store.shots(assetID: asset.id)
+                try await readScreen(asset, shots: shots, store: store)
+                t.screenTextVersion = ScreenReader.version
+                try store.replaceSearchRows(assetID: asset.id, searchRows(shots: shots, transcripts: try store.transcripts().filter { $0.assetID == asset.id }, screen: try store.screenText(assetID: asset.id)))
+            }
             t.step = options.describer == nil ? nil : "describing"
             t.describeSkipped = options.describer == nil ? options.describeSkipped : nil
             try store.saveTakeIndex(t)
@@ -242,15 +252,33 @@ public enum FootageIndexer {
             catch { try store.replaceSounds(assetID: asset.id, []) }
         } else { try store.replaceSounds(assetID: asset.id, []) }
 
+        if !asset.video.isEmpty {
+            t.step = "text"; try store.saveTakeIndex(t, summary: "Reading the text on screen in \(asset.name)")
+            try await readScreen(asset, shots: shots, store: store)
+        }
+        t.screenTextVersion = ScreenReader.version
+
         t.step = "search"; try store.saveTakeIndex(t)
         let transcripts = try store.transcripts().filter { $0.assetID == asset.id }
-        try store.replaceSearchRows(assetID: asset.id, searchRows(shots: shots, transcripts: transcripts))
+        try store.replaceSearchRows(assetID: asset.id, searchRows(shots: shots, transcripts: transcripts, screen: try store.screenText(assetID: asset.id)))
         t.wordsFingerprint = TakeIndex.wordsFingerprint(transcripts)
         t.firstPassDone = true
         t.describeSkipped = options.describer == nil ? options.describeSkipped : nil
         t.step = options.describer == nil ? nil : "describing"
         try store.saveTakeIndex(t, summary: "Found \(shots.count) shots in \(asset.name)")
         return t
+    }
+
+    /// Text on screen for a take's shots. Like sounds, a take whose text can't be read keeps
+    /// everything else.
+    static func readScreen(_ asset: MediaAsset, shots: [Shot], store: ProjectStore) async throws {
+        do { try store.replaceScreenText(assetID: asset.id, try await ScreenReader.read(asset, shots: shots)) }
+        catch is CancellationError { throw CancellationError() }
+        catch {
+            if Task.isCancelled { throw CancellationError() }
+            DirectionLog.warning("Couldn\u{2019}t read the text on screen in \(asset.name): \(error.localizedDescription)", "index")
+            try store.replaceScreenText(assetID: asset.id, [])
+        }
     }
 
     /// 10%, 50% and 90% of a shot.
@@ -367,7 +395,7 @@ public enum FootageIndexer {
             }
         }
         let all = try store.shots(assetID: asset.id)
-        try store.replaceSearchRows(assetID: asset.id, searchRows(shots: all, transcripts: try store.transcripts().filter { $0.assetID == asset.id }))
+        try store.replaceSearchRows(assetID: asset.id, searchRows(shots: all, transcripts: try store.transcripts().filter { $0.assetID == asset.id }, screen: try store.screenText(assetID: asset.id)))
         t = try store.takeIndex(asset.id) ?? t
         t.described = all.filter { $0.look != nil }.count
         t.state = .done; t.step = nil; t.describeSkipped = nil; t.error = nil; t.triedEngine = describer.engine
@@ -431,9 +459,10 @@ public enum FootageIndexer {
         return out
     }
 
-    /// Search rows: each shot's description (with what's in it) and each line of dialogue, placed
-    /// in the shot it starts in. Vectors come from Apple's sentence embeddings.
-    public static func searchRows(shots: [Shot], transcripts: [SourceTranscript]) -> [IndexSearchRow] {
+    /// Search rows: each shot's description (with what's in it), each line of dialogue, placed in
+    /// the shot it starts in, and each stretch of text on screen. Vectors come from Apple's
+    /// sentence embeddings; a stretch's comes from its longer lines, since its words are all searchable.
+    public static func searchRows(shots: [Shot], transcripts: [SourceTranscript], screen: [ScreenText] = []) -> [IndexSearchRow] {
         var rows: [IndexSearchRow] = []
         for s in shots {
             guard let look = s.look else { continue }
@@ -443,6 +472,10 @@ public enum FootageIndexer {
         for line in transcriptLines(transcripts) {
             guard let shot = shots.last(where: { $0.start <= line.start + 0.001 }) ?? shots.first else { continue }
             rows.append(IndexSearchRow(shotID: shot.id, assetID: shot.assetID, kind: .words, text: line.text, start: line.start, vector: FootageSearch.vector(line.text)))
+        }
+        let ids = Set(shots.map(\.id))
+        for s in screen where ids.contains(s.shotID) {
+            rows.append(IndexSearchRow(shotID: s.shotID, assetID: s.assetID, kind: .screen, text: s.text, start: s.start, vector: FootageSearch.vector(s.gist(words: 40))))
         }
         return rows
     }
@@ -457,7 +490,7 @@ public enum FootageIndexer {
             let transcripts = byAsset[id] ?? []
             let fp = TakeIndex.wordsFingerprint(transcripts)
             guard fp != (t.wordsFingerprint ?? "") else { continue }
-            try store.replaceSearchRows(assetID: id, searchRows(shots: try store.shots(assetID: id), transcripts: transcripts))
+            try store.replaceSearchRows(assetID: id, searchRows(shots: try store.shots(assetID: id), transcripts: transcripts, screen: try store.screenText(assetID: id)))
             t.wordsFingerprint = fp
             try store.saveTakeIndex(t, summary: "Made new words searchable")
         }

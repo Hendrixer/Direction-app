@@ -268,7 +268,7 @@ extension FilmModel {
                 if t.step == "describing", t.shotCount > 0 {
                     rows.append(.init(asset: a, info: nil, status: .working("Describing \(min(t.described, t.shotCount)) of \(DailiesFormat.count(t.shotCount, "shot"))", Double(t.described) / Double(t.shotCount)))); continue
                 }
-                rows.append(.init(asset: a, info: nil, status: .working(t.step == "shots" ? "Finding shots" : "Looking", nil))); continue
+                rows.append(.init(asset: a, info: nil, status: .working(t.step == "shots" ? "Finding shots" : t.step == "text" ? "Reading the screen" : "Looking", nil))); continue
             }
             if let run = logging, run.assetIDs?.contains(a.id) ?? true {
                 rows.append(.init(asset: a, info: nil, status: .working("Logging \u{00B7} " + Self.clock(now - (run.startedAt ?? run.createdAt)), nil))); continue

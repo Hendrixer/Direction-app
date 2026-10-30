@@ -34,6 +34,8 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 26. **People in made shots.** For now the only person in the films is the director, so pickups that show someone from the footage need no extra consent step.
 27. **Takes that recorded the same moment are synced by their sound, not by a mode.** A screen recording and a camera, two cameras, a camera and a sound recorder are all the same thing: takes whose sound matches get linked, with offsets on the sound take's clock, and everything else is left alone. File dates can't be trusted for it (OBS stamps a recording when it ends). The editor never computes an offset: a cutaway without a source range plays the same moment (footage-index.md › Sync).
 
+28. **Text on screen is read on this Mac, by Apple.** Vision's text recognition reads screen recordings, slides and signs as footage is looked at, so the editor can find and cut to the moment something is on screen and log a screen recording by what it shows. Not picture search (SigLIP): it can't read text well, and screen recordings are where reading matters (footage-index.md › Text on screen).
+
 ## Needs product decisions (not blockers for building the UI)
 
 - **Hosted sharing (39, 40, 48).** Screening links need a hosted service ("direction.film") and server-side watermarking. Today Direction is local only. Build the Share sheet and the Outside inbox; until a service exists, Share shows a disabled state ("Sharing isn't set up on this Mac"), and outside notes can come in through the editor's tools.

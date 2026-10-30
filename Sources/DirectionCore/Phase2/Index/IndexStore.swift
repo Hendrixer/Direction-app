@@ -16,6 +16,8 @@ extension ProjectStore {
         CREATE INDEX IF NOT EXISTS index_vectors_by_asset ON index_vectors(asset_id);
         CREATE VIRTUAL TABLE IF NOT EXISTS index_fts USING fts5(text, shot_id UNINDEXED, asset_id UNINDEXED, kind UNINDEXED, start UNINDEXED, tokenize = 'porter unicode61');
         CREATE TABLE IF NOT EXISTS index_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS index_screen (asset_id TEXT NOT NULL, start DOUBLE NOT NULL, payload BLOB NOT NULL);
+        CREATE INDEX IF NOT EXISTS index_screen_by_asset ON index_screen(asset_id, start);
         CREATE TABLE IF NOT EXISTS index_watched (id INTEGER PRIMARY KEY AUTOINCREMENT, revision INTEGER NOT NULL, start DOUBLE NOT NULL, end DOUBLE NOT NULL, created_at DOUBLE NOT NULL);
         """)
     }
@@ -53,7 +55,7 @@ extension ProjectStore {
     /// Forgets a take's index so it's looked at again from the start.
     public func clearIndex(assetID: String) throws {
         try database.write { db in
-            for table in ["index_takes", "index_shots", "index_sounds", "index_vectors", "index_fts"] {
+            for table in ["index_takes", "index_shots", "index_sounds", "index_screen", "index_vectors", "index_fts"] {
                 // Table names are compile-time constants, never from a tool.
                 try db.execute(sql: "DELETE FROM \(table) WHERE asset_id = ?", arguments: [assetID])
             }
@@ -68,6 +70,7 @@ extension ProjectStore {
     public func replaceShots(assetID: String, _ shots: [Shot], prints: [String: [Float]] = [:]) throws {
         try database.write { db in
             try db.execute(sql: "DELETE FROM index_shots WHERE asset_id = ?", arguments: [assetID])
+            try db.execute(sql: "DELETE FROM index_screen WHERE asset_id = ?", arguments: [assetID])
             try db.execute(sql: "DELETE FROM index_vectors WHERE asset_id = ?", arguments: [assetID])
             try db.execute(sql: "DELETE FROM index_fts WHERE asset_id = ?", arguments: [assetID])
             for s in shots {
@@ -117,6 +120,24 @@ extension ProjectStore {
             let rows = assetID == nil ? try Data.fetchAll(db, sql: "SELECT payload FROM index_sounds ORDER BY asset_id, start")
                 : try Data.fetchAll(db, sql: "SELECT payload FROM index_sounds WHERE asset_id = ? ORDER BY start", arguments: [assetID])
             return try rows.map { try JSONDecoder().decode(IndexSound.self, from: $0) }
+        }
+    }
+
+    // MARK: Text on screen
+
+    public func replaceScreenText(assetID: String, _ stretches: [ScreenText]) throws {
+        try database.write { db in
+            try db.execute(sql: "DELETE FROM index_screen WHERE asset_id = ?", arguments: [assetID])
+            for s in stretches { try db.execute(sql: "INSERT INTO index_screen (asset_id, start, payload) VALUES (?, ?, ?)", arguments: [assetID, s.start, try JSONEncoder.direction.encode(s)]) }
+            try indexEvent(db, "Read the text on screen")
+        }
+    }
+    /// A take's stretches of text on screen (or every take's), in time order.
+    public func screenText(assetID: String? = nil) throws -> [ScreenText] {
+        try database.read { db in
+            let rows = assetID == nil ? try Data.fetchAll(db, sql: "SELECT payload FROM index_screen ORDER BY asset_id, start")
+                : try Data.fetchAll(db, sql: "SELECT payload FROM index_screen WHERE asset_id = ? ORDER BY start", arguments: [assetID])
+            return try rows.map { try JSONDecoder().decode(ScreenText.self, from: $0) }
         }
     }
 

@@ -75,10 +75,12 @@ import DirectionMedia
     }
 
     /// Footage arrived and Settings says to look at it automatically. At most every few seconds,
-    /// so a take that keeps failing doesn't restart the job in a loop.
+    /// so a take that keeps failing doesn't restart the job in a loop. Takes looked at before
+    /// Direction read text on screen are read once too.
     private func autoStart(_ film: FilmModel, assets: [MediaAsset]) {
         guard !film.isPreview, job == nil, SharedSettings.lookAutomatically, Date().timeIntervalSince(lastAutoStart) > 5 else { return }
-        guard assets.contains(where: { states[$0.id] == .waiting }) else { return }
+        let unread = { (a: MediaAsset) in !a.video.isEmpty && self.states[a.id] == .done && self.takes[a.id].map(FootageIndexer.needsScreenText) == true }
+        guard assets.contains(where: { states[$0.id] == .waiting || unread($0) }) else { return }
         lastAutoStart = Date()
         lookAtFootage(film)
     }
