@@ -98,9 +98,9 @@ struct FilmsView: View {
                 .scrollIndicators(.automatic)
                 .focusable().focusEffectDisabled().focused($gridFocused)
                 .onMoveCommand(perform: move)
-                .onKeyPress(.return) { guard let f = selected else { return .ignored }; open(f); return .handled }
+                .onKeyPress(.return) { guard !TextInput.hasFocus, let f = selected else { return .ignored }; open(f); return .handled }
                 .onKeyPress(.delete, phases: .down) { press in
-                    guard press.modifiers.contains(.command), let f = selected else { return .ignored }
+                    guard !TextInput.hasFocus, press.modifiers.contains(.command), let f = selected else { return .ignored }
                     trashing = f; return .handled
                 }
                 .accessibilityElement(children: .contain)

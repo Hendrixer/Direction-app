@@ -33,7 +33,7 @@ struct FinishRoom: View {
         .focusable()
         .focusEffectDisabled()
         .focused($focused)
-        .onKeyPress(.space) { model.togglePlayback(); return .handled }
+        .onKeyPress(.space) { guard !TextInput.hasFocus else { return .ignored }; model.togglePlayback(); return .handled }
         .onAppear { focused = true }
     }
 }

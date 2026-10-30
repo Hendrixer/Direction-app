@@ -85,6 +85,7 @@ struct ChangesRoom: View {
     }
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
+        guard !TextInput.hasFocus else { return .ignored }
         let mods = press.modifiers.subtracting([.numericPad, .capsLock])
         let char = press.characters.lowercased()
         // Playback keys work in every mode.

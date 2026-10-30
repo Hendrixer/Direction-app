@@ -302,7 +302,7 @@ struct DailiesGridKeys: ViewModifier {
                 anchor = order[next]; selection = [order[next]]
             }
             .onKeyPress(phases: .down) { press in
-                guard press.modifiers.isEmpty || press.modifiers == .shift else { return .ignored }
+                guard !TextInput.hasFocus, press.modifiers.isEmpty || press.modifiers == .shift else { return .ignored }
                 let ids = order.filter(selection.contains)
                 switch press.key {
                 case .space, .return:

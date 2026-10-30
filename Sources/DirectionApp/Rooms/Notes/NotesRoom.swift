@@ -52,6 +52,7 @@ struct NotesRoom: View {
     // Room keys never fire while a text field has focus: the field keeps its keystrokes.
 
     private func key(_ press: KeyPress) -> KeyPress.Result {
+        guard !TextInput.hasFocus else { return .ignored }
         guard model.sheet == nil, !model.showCommandMenu, !model.showShortcuts else { return .ignored }
         let mods = press.modifiers.subtracting([.capsLock, .numericPad])
         if mods == .option, let digit = Self.optionDigit(press) {

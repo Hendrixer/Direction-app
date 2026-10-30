@@ -25,6 +25,7 @@ struct LookSheet: View {
         .focusable().focused($focused).focusEffectDisabled()
         // `\` held shows the picture without the look.
         .onKeyPress(KeyEquivalent("\\"), phases: [.down, .repeat, .up]) { press in
+            guard !TextInput.hasFocus || press.phase == .up else { return .ignored }
             let held = press.phase != .up
             if looks.comparing != held { looks.comparing = held }
             return .handled

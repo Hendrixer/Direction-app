@@ -554,6 +554,7 @@ struct ScriptRoomContent: View {
     // MARK: Keys
 
     private func handleKey(_ press: KeyPress, _ doc: ScriptDocument) -> KeyPress.Result {
+        guard !TextInput.hasFocus else { return .ignored }
         if press.modifiers.contains(.command) || press.modifiers.contains(.control) { return .ignored }
         switch press.key {
         case .delete, .deleteForward: strike(doc); return .handled

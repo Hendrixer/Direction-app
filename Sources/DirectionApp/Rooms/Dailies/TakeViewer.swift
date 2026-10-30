@@ -333,7 +333,7 @@ struct DailiesTakeViewer: View {
     }
 
     private func keys(_ press: KeyPress) -> KeyPress.Result {
-        guard press.modifiers.isEmpty || press.modifiers == .shift else { return .ignored }
+        guard !TextInput.hasFocus, press.modifiers.isEmpty || press.modifiers == .shift else { return .ignored }
         if press.key == .space { toggle(); return .handled }
         switch press.characters.lowercased() {
         case "c": if let take, !take.unusable { model.setCircle(take.assetID, !take.circled) }; return .handled

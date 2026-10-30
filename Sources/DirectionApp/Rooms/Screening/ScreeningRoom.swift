@@ -322,6 +322,7 @@ struct ScreeningStage: View {
     // MARK: Keys
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
+        guard !TextInput.hasFocus else { return .ignored }
         if press.modifiers.contains(.command) || press.modifiers.contains(.control) { return .ignored }
         if ended {
             switch press.key {

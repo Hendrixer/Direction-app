@@ -370,7 +370,7 @@ struct OnboardingLoggingView: View {
             selection = rows[max(0, min(rows.count - 1, i + (d == .down ? 1 : -1)))].id
         }
         .onKeyPress(.space) {
-            guard let id = selection, let a = model.asset(id) else { return .ignored }
+            guard !TextInput.hasFocus, let id = selection, let a = model.asset(id) else { return .ignored }
             quickLook = URL(fileURLWithPath: a.path); return .handled
         }
         .quickLookPreview($quickLook)

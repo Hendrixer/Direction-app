@@ -193,6 +193,19 @@ final class NetworkMonitor {
 
 // MARK: Keys
 
+/// A text field or text view has the keyboard. SwiftUI offers a key press to a room's
+/// `onKeyPress` before an AppKit text view inside it sees the key, so a room that uses Space or
+/// the arrows would take them from a note being written. Every room key handler asks first and
+/// leaves the keystroke to the text.
+enum TextInput {
+    /// Asks the window the key press came from, else the key window, else (no window is key,
+    /// as when a test sends the key) any window.
+    @MainActor static var hasFocus: Bool {
+        if let window = NSApp.currentEvent?.window ?? NSApp.keyWindow { return window.firstResponder is NSText }
+        return NSApp.windows.contains { $0.firstResponder is NSText }
+    }
+}
+
 /// `?` opens the keyboard shortcuts and esc closes them, whenever no text field has focus.
 @MainActor
 final class WindowKeys {
