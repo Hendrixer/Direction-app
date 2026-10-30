@@ -1,6 +1,6 @@
 # Lock and Finish (frames 34–38)
 
-Locking protects the director's cut. Scenes can be locked one by one as they're approved, and **Lock picture** makes the whole edit final. After picture lock the **Finish** room opens: a checklist of finishing work (color, sound, captions, titles, licenses, delivery) where the editor does what it can and the director signs off. Nothing in Finish can move a frame.
+Locking protects the director's cut. Scenes can be locked one by one as they're approved, and **Lock picture** makes the whole edit final. Both locks mean the same thing at two sizes: the cut can't change (what's in it, from which take, when, how it's framed and joined), and its color and sound stay open. After picture lock the **Finish** room opens: a checklist of finishing work (color, sound, captions, titles, licenses, delivery) where the editor does what it can and the director signs off. Nothing in Finish can move a frame.
 
 Shared:
 - Locked scenes are drawn everywhere as grayscale footage at 28–30% opacity, 135° hatching (1 pt lines at 8% white every 6 pt), a lock glyph before the name, and a 1 pt line-2 border.
@@ -20,7 +20,7 @@ Frame: `screens/34-lock-scenes.html` · Render: `renders/34-lock-scenes@2x.png`
 - The answers panel shows the Accepted tab with all 7 rows done.
 
 **Content:**
-- Help: "3 of 5 locked. Lock a scene when you're happy with it; the editor won't touch it again."
+- Help: "3 of 5 locked. Lock a scene when its cut is right; the editor won't recut it. Color and sound stay open."
 - Tiles: 1 Cold open 00:00–00:27 (locked), 2 Maya, the problem 00:27–01:12 (locked), 3 The ridge 01:12–01:51 (hover), 4 Building it 01:51–02:47, 5 Launch day 02:47–03:31 (locked).
 - Foot: "Nothing left to review. Lock picture when the edit is done."
 - Primary (steel): "Lock picture…" with a lock glyph.
@@ -41,7 +41,7 @@ Frame: `screens/34-lock-scenes.html` · Render: `renders/34-lock-scenes@2x.png`
 
 **Acceptance:**
 - [ ] A locked scene is visibly hatched and grayscale in every strip in the app.
-- [ ] The editor cannot change a locked scene, and notes touching it produce frame 26.
+- [ ] The editor cannot recut a locked scene, and notes that need it produce frame 26. Its color and sound still change (balance, match, gain, fades, music).
 - [ ] Lock and unlock events appear in history (33).
 
 ## 35 · Lock picture
@@ -58,14 +58,14 @@ Frame: `screens/35-lock-picture.html` · Render: `renders/35-lock-picture@2x.png
 
 **Content:**
 - Title: "Lock picture on Cut 4?"
-- Explanation: "The edit becomes final. The editor can still help with color, sound, captions and delivery, but it can't move a frame."
+- Explanation: "The edit becomes final, and every scene locks with it. The editor starts finishing right away: color, sound, captions and delivery. It can't move a frame."
 - Checks:
   - ✓ "7 of 7 notes accepted" (Notes 1–7 on Cut 3 are answered in Cut 4)
   - ✓ "No open questions"
   - ✓ "No outside notes waiting" (Priya and Tom's notes were accepted or declined)
   - ✓ "3:31, inside your brief" (Brief asks for 3:00–4:00)
   - Lock: "2 scenes still open" (3 The ridge and 4 Building it will lock with the picture)
-- Footnote: "You can unlock later from Film › Unlock Picture. It's recorded in the history."
+- Footnote: "You can unlock later from Finish or Film › Unlock Picture. It's recorded in the history."
 
 **States and variants:**
 - A failed check (red ×) disables the steel button; each failed row gets a link to resolve it ("Review 2 answers").
@@ -105,10 +105,11 @@ Frame: `screens/36-finish.html` · Render: `renders/36-finish@2x.png`
 Also:
 - Pill: "Mixing sound", shimmer, with the meter at 62%.
 - Primary (steel): "Deliver…".
-- Foot: "The edit is locked. Finishing never moves a frame."
+- Foot: "The edit is locked. Finishing changes color and sound, never a frame." with a ghost small "Unlock picture…" on the right (the same confirmation as Film › Unlock Picture).
 
 **States and variants:**
 - Each item has one of the states: To do (no status), Editor working (prism bar), Needs you (neutral chip), Done (green check), Problem (red chip).
+- An editor-only item at Needs you or Problem says what the editor needs, with "Try again": once the director has done it, a new finishing run carries on with whatever isn't done. It's disabled while the editor is working.
 - Delivered (frame 38) replaces this list.
 - The color "Review" opens a before/after split on the stage using the options component.
 
@@ -136,6 +137,7 @@ Frame: `screens/37-export.html` · Render: `renders/37-export@2x.png`
 - Head: Archivo 24/800 title and a format line.
 - Body:
   - An outputs card (`.surface`) of `.out` rows: checkbox, a 40 pt thumbnail, name with spec line, and size (mono, right). Unchecked rows are at 50%.
+  - A "Size" row, only when the cut's footage is bigger than the cut: a segmented control with the footage's size at the cut's shape ("3840 × 2160 · your footage", the default) and the cut's own ("1920 × 1080 · the cut"). Spec lines and estimates follow it.
   - A "Save to" row with a folder select.
   - An "Also" row with two checkboxes.
   - A red-bordered warning line.
@@ -169,6 +171,7 @@ Frame: `screens/37-export.html` · Render: `renders/37-export@2x.png`
 
 **Acceptance:**
 - [ ] Size estimates update when outputs are toggled; the total includes only checked outputs.
+- [ ] A 1920 × 1080 cut of 3840 × 2160 footage delivers at 3840 × 2160 by default: rendered at that size (titles drawn at it, effects scaled to it), not upscaled.
 - [ ] Open finishing items appear as warnings but never block delivery.
 - [ ] Delivery continues in the background; the pill shows "Delivering 2 of 4" with shimmer, and the Finish panel shows per-file progress.
 

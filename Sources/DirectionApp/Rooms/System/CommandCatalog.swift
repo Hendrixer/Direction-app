@@ -45,7 +45,7 @@ struct CommandItem: Identifiable {
 /// Short answers for Help rows.
 enum CommandHelp {
     static let topics: [(String, String, [String])] = [
-        ("What does locking a scene do?", "A locked scene is untouchable: the editor can\u{2019}t change it, and a note that would need it comes back as \u{201C}can\u{2019}t\u{201D} with an Unlock button. Lock the scene under the playhead with \u{2318}L.", ["lock", "scene"]),
+        ("What does locking a scene do?", "It keeps the scene\u{2019}s cut: the editor can\u{2019}t recut it, and a note that would need it comes back as \u{201C}can\u{2019}t\u{201D} with an Unlock button. Its color and sound stay open, as after picture lock. Lock the scene under the playhead with \u{2318}L.", ["lock", "scene"]),
         ("How do turnovers work?", "Write your notes, then Turn over (\u{2318}\u{21A9}) hands the whole sheet to the editor at once. It reads them back in plain terms, waits for your OK if you asked it to, then cuts the next version.", ["turn over", "notes", "send"]),
         ("What is a read-back?", "The editor\u{2019}s plan for each note, with concrete numbers, before it cuts. You approve it or correct a line.", ["plan", "readback"]),
         ("How much freedom should the editor have?", "Do what I wrote changes only what each note names. Read between the lines interprets intent and cuts Feeling notes two ways. Take a pass may also suggest changes you didn\u{2019}t ask for, marked Unasked.", ["latitude", "freedom"]),
@@ -61,7 +61,7 @@ enum SettingsIndex {
     static let rows: [(SettingsTab, String)] = [
         (.general, "When Direction opens"), (.general, "Show Films when no film is open"), (.general, "Start screenings full screen"),
         (.general, "Hide controls in Screening after"), (.general, "Audio output"), (.general, "Film grain"), (.general, "Reduce motion"),
-        (.editor, "Wait for my OK on read-backs"), (.editor, "Cut Feeling notes two ways"), (.editor, "Ask before guessing"), (.editor, "Follow the brief"),
+        (.editor, "Wait for my OK before cutting"), (.editor, "Cut Feeling notes two ways"), (.editor, "Ask before guessing"), (.editor, "Follow the brief"),
         (.cutting, "Handles in Play changes"), (.cutting, "Name new cuts"), (.cutting, "Frame rate for new films"), (.cutting, "Loudness target"),
         (.engines, "Recommended"), (.engines, "Editor runs on"), (.engines, "Version"), (.engines, "Start work"), (.engines, "Let the editor run scripts"),
         (.engines, "Transcribe with"), (.engines, "Whisper version"), (.engines, "Look with"), (.engines, "Detail"), (.engines, "Look at new footage automatically"),

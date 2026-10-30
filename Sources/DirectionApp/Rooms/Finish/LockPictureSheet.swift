@@ -87,7 +87,7 @@ struct LockPictureSheet: View {
         AttachedSheet(width: 540, onDismiss: { model.sheet = nil }) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Lock picture on \(model.latestCut?.name ?? "this cut")?").font(Gate.Font.brandL).foregroundStyle(Gate.Text.primary)
-                Text("The edit becomes final. The editor can still help with color, sound, captions and delivery, but it can\u{2019}t move a frame.")
+                Text("The edit becomes final, and every scene locks with it. The editor starts finishing right away: color, sound, captions and delivery. It can\u{2019}t move a frame.")
                     .font(.system(size: 13)).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -103,7 +103,7 @@ struct LockPictureSheet: View {
                 .gateWell()
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Before you lock")
-                Text("You can unlock later from Film \u{203A} Unlock Picture. It\u{2019}s recorded in the history.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                Text("You can unlock later from Finish or Film \u{203A} Unlock Picture. It\u{2019}s recorded in the history.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
             }
             .padding(.horizontal, 22).padding(.vertical, 14)
 

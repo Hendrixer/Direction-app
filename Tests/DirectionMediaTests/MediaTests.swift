@@ -19,6 +19,21 @@ struct MediaIntegrationTests {
         #expect(abs(try await media.load(.duration).seconds - 3) < 0.04)
     }
 
+    @Test func deliveringAtTheFootagesSizeRendersAtThatSize() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let s = try f.store.read().sequences[0]
+        let output = f.directory.appendingPathComponent("double.mp4")
+        let response = try await f.runtime.invoke("direction_export", arguments: .object(["path": .string(output.path), "width": .number(Double(s.width * 2)), "height": .number(Double(s.height * 2))]))
+        _ = try await f.runtime.waitForJob(try #require(response.value["id"].string))
+        let video = try await AVURLAsset(url: output).loadTracks(withMediaType: .video)[0]
+        #expect(try await video.load(.naturalSize) == CGSize(width: s.width * 2, height: s.height * 2))
+        // Another shape is refused.
+        do {
+            _ = try await f.runtime.invoke("direction_export", arguments: .object(["path": .string(f.directory.appendingPathComponent("odd.mp4").path), "width": .number(Double(s.width * 2)), "height": .number(Double(s.height))]))
+            Issue.record("Expected invalid_size")
+        } catch let e as DirectionError { #expect(e.code == "invalid_size") }
+    }
+
     @Test func sourceAudioOffsetsSurviveExtractionForSpeechAndDSP() async throws {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         let composition = AVMutableComposition(), input = AVURLAsset(url: f.source)

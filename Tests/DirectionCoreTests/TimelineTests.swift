@@ -376,7 +376,7 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     #expect(free.operations[0].unasked && free.operations[0].notes.isEmpty)
 }
 
-@Test func lockedScenesRefuseAnythingOverThemButMoveWhole() throws {
+@Test func lockedScenesKeepTheirCutButNotTheirColorOrSound() throws {
     var cut = TimelineCut.make()
     cut.context.dailies.scenes[1].locked = true
     // A trim before Launch day moves it whole.
@@ -384,13 +384,15 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     #expect(clip(moved, "c3").start == MediaTime(seconds: 8.5))
     // Anything that changes it, on any track, fails at its index.
     expectFailure("scene_locked", index: 1) { _ = try cut.run([#"{"op":"slip","clipID":"c2","frames":3}"#, #"{"op":"trim","clipID":"c3","edge":"tail","frames":-3}"#]) }
-    for change in [#"{"op":"cutaway","assetID":"d","sourceRange":{"start":1,"end":3},"at":10}"#, #"{"op":"gain","target":"m1","dB":-4}"#,
+    for change in [#"{"op":"cutaway","assetID":"d","sourceRange":{"start":1,"end":3},"at":10}"#, #"{"op":"reframe","clipID":"c3","scale":1.2}"#,
                    #"{"op":"transition","editPoint":"c2|c3","type":"dipToBlack","frames":10}"#, #"{"op":"removeRange","range":{"start":10,"end":11}}"#,
-                   #"{"op":"cameraLUT","assetID":"c","lut":"none"}"#, #"{"op":"splitEdit","editPoint":"c2|c3","lead":"sound","frames":6}"#] {
+                   #"{"op":"splitEdit","editPoint":"c2|c3","lead":"sound","frames":6}"#] {
         expectFailure("scene_locked", index: 0) { _ = try cut.run([change]) }
     }
-    // Sound outside it still changes.
-    _ = try cut.run([#"{"op":"gain","target":"c1","dB":-2}"#])
+    // Its color and sound still change, as after picture lock.
+    let (_, open) = try cut.run([#"{"op":"balance","clipID":"c3","exposure":0.2}"#, #"{"op":"cameraLUT","assetID":"c","lut":"none"}"#,
+                                 #"{"op":"gain","target":"m1","dB":-4}"#, #"{"op":"gain","target":"c3","dB":-2}"#, #"{"op":"fade","clipID":"c3","out":6}"#])
+    #expect(open.operations.count == 5)
 }
 
 @Test func pictureLockLeavesOnlyColorAndSound() throws {
@@ -431,6 +433,9 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     try store.lockScene(id: "s2", locked: true)
     expectFailure("scene_locked", index: 1) { _ = try store.edit(EditBatch(baseEditRevision: base + 1, notes: [1], operations: [try op(#"{"op":"slip","clipID":"\#(id["b"]!)","frames":3}"#), try op(#"{"op":"trim","clipID":"\#(id["c"]!)","edge":"tail","frames":-3}"#)])) }
     #expect(try store.revision() == base + 1 && store.read().sequences[0].clips.first { $0.assetID == "b" }?.sourceRange.start == MediaTime(seconds: 3.1))
+    // Its color and sound still change.
+    let finished = try store.edit(EditBatch(baseEditRevision: base + 1, notes: [1], operations: [try op(#"{"op":"balance","clipID":"\#(id["c"]!)","exposure":0.2}"#), try op(#"{"op":"gain","target":"\#(id["c"]!)","dB":-2}"#)]))
+    #expect(finished.committed)
 }
 
 // MARK: Reading

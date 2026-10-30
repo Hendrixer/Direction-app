@@ -99,10 +99,14 @@ struct FinishingPanel: View {
             .frame(maxHeight: .infinity, alignment: .top)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Finishing, \(done) of \(items.count) done")
-            Text("The edit is locked. Finishing never moves a frame.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 14).frame(minHeight: 44)
-                .hairlineBorder(.top)
+            HStack(spacing: 10) {
+                Text("The edit is locked. Finishing changes color and sound, never a frame.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                Spacer(minLength: 8)
+                Button("Unlock picture\u{2026}") { FilmActions(model).confirmUnlockPicture() }.buttonStyle(.gate(.ghost, .small))
+                    .help("Unlock picture to change the edit. It\u{2019}s recorded in the history.")
+            }
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 14).frame(minHeight: 44)
+            .hairlineBorder(.top)
         }
     }
 }
@@ -217,6 +221,12 @@ struct FinishRow: View {
     }
 
     @ViewBuilder private var action: some View {
+        // The editor stopped to ask for something (it says what); once you've done it, it carries on.
+        if editor && !director && ["needsYou", "blocked"].contains(item.state) && model.runs.startsEditor {
+            Button("Try again") { model.runs.finishAgain(model) }.buttonStyle(.gate(.normal, .small))
+                .disabled(model.runs.active != nil || !model.isPictureLocked)
+                .help("Ask the editor to carry on with finishing")
+        }
         if director {
             Button { acting = true } label: {
                 switch item.id {

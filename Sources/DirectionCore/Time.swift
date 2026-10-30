@@ -45,6 +45,11 @@ public struct FrameRate: Codable, Hashable, Sendable {
     public init(_ numerator: Int32 = 30, _ denominator: Int32 = 1) { self.numerator = numerator; self.denominator = denominator }
     public var frameDuration: CMTime { CMTime(value: Int64(denominator), timescale: numerator) }
     public var value: Double { Double(numerator) / Double(denominator) }
+    /// The standard rate nearest a measured one: 29.97 is 30000/1001, 30.00005 is 30.
+    public static func nearest(_ fps: Double) -> FrameRate {
+        for d in [24000, 30000, 60000] where abs(fps - Double(d) / 1001) < 0.005 { return FrameRate(Int32(d), 1001) }
+        return FrameRate(Int32(max(1, min(240, fps.rounded()))), 1)
+    }
 }
 
 public struct DirectionError: Error, Codable, Sendable, LocalizedError {

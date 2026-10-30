@@ -50,7 +50,7 @@ public actor ToolRuntime {
             let path = try a.requiredString("path")
             let asset = try await MediaInspector.inspect(url: URL(fileURLWithPath: NSString(string: path).expandingTildeInPath), thumbnailDirectory: cacheDirectory.appendingPathComponent("Thumbnails"))
             let p = try store.read()
-            let output = try store.addAsset(asset, append: a["append"].bool ?? false, sequenceID: a["sequenceID"].string, expectedRevision: a["baseEditRevision"].int ?? p.editRevision, key: a["idempotencyKey"].string ?? UUID().uuidString)
+            let output = try store.addAsset(asset, append: a["append"].bool ?? false, sequenceID: a["sequenceID"].string, frameRate: a["frameRate"].double.map(FrameRate.nearest), expectedRevision: a["baseEditRevision"].int ?? p.editRevision, key: a["idempotencyKey"].string ?? UUID().uuidString)
             let saved = try output.assets.first(where: { $0.path == asset.path }) ?? output.asset(asset.id)
             return ToolResponse(.object(["asset": try .wrapping(saved), "editRevision": .number(Double(output.editRevision))]))
         case "direction_edit": return try await invokeEdit(a)
@@ -177,8 +177,17 @@ public actor ToolRuntime {
             guard !p.assets.contains(where: { URL(fileURLWithPath: $0.path).standardizedFileURL == output }) else { throw DirectionError("source_overwrite", "An export cannot overwrite source footage.") }
             let range = preview ? try secondsRange(a) : nil
             if let range, range.duration.seconds > 30 { throw DirectionError("preview_too_long", "Preview samples are limited to 30 seconds; use export for a full cut.") }
-            let job = try startJob(kind: preview ? "preview" : "export", revision: p.editRevision, phase: "Compiling pinned edit for \(preset)") {
-                let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequenceID, cacheDirectory: directory, looks: try? self.store.lookContext())
+            // Another size of the same shape: the cut renders at that multiple of its own size.
+            var scale = 1.0
+            if !preview, let w = a["width"].int, let h = a["height"].int {
+                let s = try p.sequence(sequenceID)
+                scale = Double(w) / Double(s.width)
+                guard abs(Double(h) / Double(s.height) - scale) < 0.01, (0.25...4).contains(scale), max(w, h) <= 8192 else {
+                    throw DirectionError("invalid_size", "Export at the cut\u{2019}s shape (\(s.width) \u{00D7} \(s.height)) or a multiple of it, up to 8192 wide.")
+                }
+            }
+            let job = try startJob(kind: preview ? "preview" : "export", revision: p.editRevision, phase: "Compiling pinned edit for \(preset)") { [scale] in
+                let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequenceID, cacheDirectory: directory, looks: try? self.store.lookContext(), scale: scale)
                 return try await SequenceRenderer.export(compiled, to: output, preset: preset, range: range)
             }
             return ToolResponse(try .wrapping(job))

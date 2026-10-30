@@ -32,6 +32,23 @@ func expectError(_ code: String, _ body: () throws -> Void) {
     catch { Issue.record("Unexpected error: \(error)") }
 }
 
+@Test func theFirstFootageSetsTheFilmsSizeAndRate() throws {
+    func take(_ id: String, _ width: Int, _ height: Int, _ fps: Double) -> MediaAsset {
+        MediaAsset(id: id, name: id + ".mov", path: "/\(id).mov", duration: .init(seconds: 10), video: [.init(id: 1, width: width, height: height, frameRate: fps)])
+    }
+    let store = try temporaryStore(); defer { try? FileManager.default.removeItem(at: store.url) }
+    var p = try store.addAsset(take("a", 3840, 2160, 29.97), append: false, expectedRevision: 0)
+    #expect(p.sequences[0].width == 3840 && p.sequences[0].height == 2160 && p.sequences[0].frameRate == FrameRate(30000, 1001))
+    // Later footage leaves it alone.
+    p = try store.addAsset(take("b", 1920, 1080, 24), append: false, expectedRevision: p.editRevision)
+    #expect(p.sequences[0].width == 3840 && p.sequences[0].frameRate == FrameRate(30000, 1001))
+    // A rate chosen in Settings wins over the footage's.
+    let other = try temporaryStore(); defer { try? FileManager.default.removeItem(at: other.url) }
+    let q = try other.addAsset(take("c", 1080, 1920, 30.00005), append: false, frameRate: .nearest(23.976), expectedRevision: 0)
+    #expect(q.sequences[0].width == 1080 && q.sequences[0].height == 1920 && q.sequences[0].frameRate == FrameRate(24000, 1001))
+    #expect(FrameRate.nearest(30.000051) == FrameRate(30, 1) && FrameRate.nearest(59.94) == FrameRate(60000, 1001) && FrameRate.nearest(25) == FrameRate(25, 1))
+}
+
 @Test func rationalArithmeticPreservesFractionalFrames() {
     let frame = MediaTime(value: 1001, timescale: 30_000)
     #expect(frame.scaled(by: 108_000) == MediaTime(value: 108_108, timescale: 30))

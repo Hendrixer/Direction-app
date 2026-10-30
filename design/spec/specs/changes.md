@@ -45,7 +45,7 @@ Frame: `screens/29-changes.html` · Render: `renders/29-changes@2x.png`
 - Text wraps to two lines at most, then ends in an ellipsis. Hovering shows the full text in a tooltip.
 
 **States and variants:**
-- To review empty: the list shows the empty line "Every answer is accepted. Lock scenes or lock picture when you're ready." and leads to 34.
+- To review empty: the list shows the empty line "Every answer is accepted. Screen it again for more notes, or lock picture when the edit is done." and leads to 34. The foot reads "Nothing left to review. Screen it again for more notes, or lock picture to start finishing."
 - Accepted tab: the same rows in their done state.
 - All tab: the same rows in note order.
 - If an answer failed partially, its row gets a red delta "partly" and the reply action is primary.

@@ -171,7 +171,7 @@ building (agent working, shimmer) ─▶ ready (prism sweep once, toast) ─▶ 
 ### Turnover → new cut (the core loop)
 1. Director presses **Turn over** (`⌘↩`) in Notes. A sheet lists the notes and the latitude for this turnover.
 2. Agent returns a **read-back** within seconds: one plain line per note with concrete numbers, flags conflicts, marks which notes it will cut two ways.
-3. If Settings › Agent › "Wait for my OK on read-backs" is on (default), the director approves or adjusts lines. Otherwise cutting starts immediately and the read-back stays visible.
+3. If Settings › Editor › "Wait for my OK before cutting" is on (default), the director approves or adjusts lines. Otherwise cutting starts immediately and the read-back stays visible.
 4. Agent cuts. Status pill shows progress per note. The director can keep watching the previous cut or work in Dailies or Script.
 5. Agent may raise a **question** (blocks only the notes it names) or report it **can't** do a note (missing footage, locked scene, contradicts the brief's must-keep).
 6. New cut is ready: one prism sweep across the window top edge (900 ms), toast "Cut 4 is ready", Changes room unlocks.
@@ -182,7 +182,7 @@ When two notes pull against each other, the agent resolves them in the order Fee
 
 ### Locking
 - Any scene can be locked from the scene strip (context menu or `⌘L` on the current scene). Locked scenes are hatched and grayscale in every strip.
-- The agent can't change a locked scene. A note that would require it gets a "can't" with the reason and an **Unlock scene 4** button.
+- The agent can't recut a locked scene; its color and sound stay open, as after picture lock. A note that would require recutting it gets a "can't" with the reason and an **Unlock scene 4** button.
 - **Lock picture** is available when every open note is accepted or dropped. It shows a confirmation, then moves the film to Finishing. Unlocking picture is possible from the Film menu and is logged.
 
 ### Latitude
@@ -205,7 +205,7 @@ These notes appear in the Notes sheet like any other, with a script icon. They d
 
 ## Agent behavior rules (UI must never imply otherwise)
 - Never circles a take. Only suggests.
-- Never changes a locked scene.
+- Never recuts a locked scene (its color and sound stay open).
 - Never changes anything without a note, except with latitude "free", and then labeled "Unasked".
 - Every change in a new cut points to exactly one note number (or "Unasked").
 - Always writes in first person, short, concrete: "Trimmed three pauses. −2.4 s." Never apologises twice, never says "Great note".

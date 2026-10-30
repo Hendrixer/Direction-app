@@ -22,10 +22,11 @@ public final class CompiledSequence: @unchecked Sendable {
 
 public enum SequenceRenderer {
     /// - looks: the director's look (`try? store.lookContext()`), applied over every layer that isn't above it.
-    public static func compile(project: Project, sequenceID: String? = nil, cacheDirectory: URL, previewMaxDimension: Int? = nil, looks: LookContext? = nil) async throws -> CompiledSequence {
-        try await compile(project: project, sequenceID: sequenceID, cacheDirectory: cacheDirectory, previewMaxDimension: previewMaxDimension, looks: looks, look: nil)
+    /// - scale: renders at this multiple of the cut's size, as a delivery at the footage's size does.
+    public static func compile(project: Project, sequenceID: String? = nil, cacheDirectory: URL, previewMaxDimension: Int? = nil, looks: LookContext? = nil, scale: Double = 1) async throws -> CompiledSequence {
+        try await compile(project: project, sequenceID: sequenceID, cacheDirectory: cacheDirectory, previewMaxDimension: previewMaxDimension, looks: looks, look: nil, scale: scale)
     }
-    static func compile(project: Project, sequenceID: String?, cacheDirectory: URL, previewMaxDimension: Int?, looks: LookContext?, look: (@Sendable (CIImage, String?, Int) -> CIImage)?) async throws -> CompiledSequence {
+    static func compile(project: Project, sequenceID: String?, cacheDirectory: URL, previewMaxDimension: Int?, looks: LookContext?, look: (@Sendable (CIImage, String?, Int) -> CIImage)?, scale: Double = 1) async throws -> CompiledSequence {
         try EditReducer.validate(project)
         let sequence = try project.sequence(sequenceID)
         guard sequence.duration > .zero else { throw DirectionError("empty_sequence", "Add footage to the sequence before playing or rendering.") }
@@ -49,6 +50,7 @@ public enum SequenceRenderer {
         func outgoing(_ c: Clip) -> ClipTransition? { picture[c.layer]?.first { $0.id != c.id && abs($0.start.seconds - c.end.seconds) < 0.5 / fps }?.transition }
         func trackSettings(_ c: Clip) -> [ClipEffect] { sequence.tracks?[c.trackName]?.effects ?? [] }
         func above(_ c: Clip) -> Bool { c.aboveLook ?? sequence.tracks?[c.trackName]?.aboveLook ?? false }
+        let ratio = previewMaxDimension.map { min(1, Double($0) / Double(max(sequence.width, sequence.height))) } ?? scale
         var layers: [RenderLayer] = [], audioParameters: [AVMutableAudioMixInputParameters] = []
         for clip in sequence.clips.sorted(by: { ($0.layer, $0.start.seconds, $0.id) < ($1.layer, $1.start.seconds, $1.id) }) {
             try Task.checkCancellation()
@@ -58,7 +60,9 @@ public enum SequenceRenderer {
                 .init(trackID: track, image: image, transform: transform, grade: clip.grade, framing: clip.framing, clip: clip, start: clip.start.seconds - head, end: clip.end.seconds + tail, outgoing: next, trackEffects: trackSettings(clip), aboveLook: above(clip), lut: lut)
             }
             if clip.kind == .title {
-                layers.append(layer(nil, try titleImage(clip.title ?? clip.name, width: sequence.width, height: sequence.height), .identity, nil))
+                // Drawn at the size it plays, so a delivery larger than the cut keeps titles sharp.
+                let size = max(1, ratio)
+                layers.append(layer(nil, try titleImage(clip.title ?? clip.name, width: Int(Double(sequence.width) * size), height: Int(Double(sequence.height) * size)), .identity, nil))
                 continue
             }
             guard let asset = assets.first(where: { $0.id == clip.assetID }) else { throw DirectionError("missing_asset", "Missing source for \(clip.name).") }
@@ -140,7 +144,6 @@ public enum SequenceRenderer {
             let active = layers.filter { $0.start < b - 1e-9 && $0.end > a + 1e-9 }
             instructions.append(.init(range: CMTimeRange(start: a == 0 ? .zero : cm(a), end: b == sequence.duration.seconds ? sequence.duration.cmTime : cm(b)), layers: active, timingTrackID: clockTrack.trackID, settings: settings))
         }
-        let ratio = previewMaxDimension.map { min(1, Double($0) / Double(max(sequence.width, sequence.height))) } ?? 1
         var configuration = AVVideoComposition.Configuration()
         configuration.customVideoCompositorClass = GPUCompositor.self
         configuration.instructions = instructions

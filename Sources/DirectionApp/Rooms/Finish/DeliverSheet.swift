@@ -54,6 +54,8 @@ final class Delivery {
     }
     var items: [Item] = []
     var folder: URL?
+    /// Another size of the cut's shape, such as the footage's; nil delivers at the cut's own size.
+    var size: (width: Int, height: Int)?
     /// After delivering, the director can go back to the checklist (38's more menu).
     var showChecklist = false
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -72,9 +74,10 @@ final class Delivery {
         return url
     }
 
-    func start(model: FilmModel, outputs: [DeliveryOutput], folder: URL, finderAlias: Bool) {
+    func start(model: FilmModel, outputs: [DeliveryOutput], folder: URL, size: (width: Int, height: Int)? = nil, finderAlias: Bool) {
         guard !isRunning, let cut = model.deliveryCut else { return }
         self.folder = folder
+        self.size = size
         showChecklist = true
         var taken: Set<String> = []
         items = outputs.map { o in
@@ -104,10 +107,12 @@ final class Delivery {
                 self.items[i].state = .writing
                 let item = self.items[i]
                 do {
-                    let response = try await runtime.invoke("direction_export", arguments: .object([
+                    var args: [String: JSONValue] = [
                         "path": .string(item.url.path), "preset": .string(item.output.preset),
                         "revision": .number(Double(cut.editRevision)), "sequenceID": .string(cut.sequenceID),
-                    ]))
+                    ]
+                    if let size = self.size { args["width"] = .number(Double(size.width)); args["height"] = .number(Double(size.height)) }
+                    let response = try await runtime.invoke("direction_export", arguments: .object(args))
                     let job = try response.value.decode(JobRecord.self)
                     _ = try await runtime.waitForJob(job.id)
                     self.items[i].state = .done
@@ -165,6 +170,18 @@ extension FilmModel {
     /// The cut picture was locked on; the latest cut before that.
     var deliveryCut: ReviewCut? { cuts.first { $0.id == directing.pictureLockedCutID } ?? latestCut }
     var deliveredFiles: [URL] { (directing.deliveredPaths ?? []).map { URL(fileURLWithPath: $0) } }
+
+    /// The size the cut's footage holds at the cut's shape, when that's bigger than the cut:
+    /// 3840 × 2160 for 4K footage in a 1920 × 1080 cut.
+    func footageSize(_ s: DirectionCore.Sequence?) -> (width: Int, height: Int)? {
+        guard let s, s.width > 0, s.height > 0, let assets = project?.assets else { return nil }
+        let used = Set(s.clips.filter { $0.kind == .video }.compactMap(\.assetID))
+        let scale = assets.filter { used.contains($0.id) && !$0.isImage }.compactMap(\.video.first)
+            .map { min(Double($0.width) / Double(s.width), Double($0.height) / Double(s.height)) }.max() ?? 1
+        guard scale > 1.05 else { return nil }
+        let width = Int((Double(s.width) * min(scale, 4)).rounded()) / 2 * 2
+        return (width, Int((Double(width) * Double(s.height) / Double(s.width)).rounded()) / 2 * 2)
+    }
 }
 
 // MARK: Formatting
@@ -203,6 +220,8 @@ struct DeliverSheet: View {
     @State private var chosen: Set<String> = Set(DeliveryOutput.all.filter(\.defaultOn).map(\.id))
     @State private var folder: URL?
     @State private var finderAlias = false
+    /// "footage" or "cut": which size to deliver at, when the footage is bigger than the cut.
+    @State private var sizeChoice = "footage"
     @AppStorage("deliveryRecentFolders") private var recentFolders = ""
 
     private var cut: ReviewCut? { model.deliveryCut }
@@ -213,6 +232,10 @@ struct DeliverSheet: View {
     private var total: Int64 { outputs.map(estimate).reduce(0, +) }
     private var free: (Int64, String)? { model.isPreview ? (312_000_000_000, "Macintosh HD") : DeliveryFormat.freeSpace(at: target) }
     private var tooBig: Bool { free.map { total > $0.0 } ?? false }
+    private var footage: (width: Int, height: Int)? { model.footageSize(sequence) }
+    /// What the files come out at: the footage's size when chosen, else the cut's.
+    private var size: (width: Int, height: Int)? { sizeChoice == "footage" ? footage : nil }
+    private var dimensions: (width: Int, height: Int)? { size ?? sequence.map { ($0.width, $0.height) } }
 
     var body: some View {
         AttachedSheet(width: 640, onDismiss: { model.sheet = nil }) {
@@ -225,6 +248,13 @@ struct DeliverSheet: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 outputsCard
+                if let footage, let s = sequence {
+                    HStack(alignment: .center, spacing: 16) {
+                        Text("Size").font(.system(size: 13, weight: .medium)).frame(width: 120, alignment: .leading)
+                        GateSegmented(options: [("footage", "\(footage.width) \u{00D7} \(footage.height) \u{00B7} your footage"), ("cut", "\(s.width) \u{00D7} \(s.height) \u{00B7} the cut")], selection: $sizeChoice)
+                        Spacer(minLength: 0)
+                    }
+                }
                 HStack(alignment: .center, spacing: 16) {
                     Text("Save to").font(.system(size: 13, weight: .medium)).frame(width: 120, alignment: .leading)
                     folderMenu
@@ -270,8 +300,8 @@ struct DeliverSheet: View {
 
     private func estimate(_ o: DeliveryOutput) -> Int64 {
         let seconds = model.cutDuration(cut) ?? model.duration
-        let s = sequence
-        let scale = Double((s?.width ?? 1920) * (s?.height ?? 1080)) / (1920 * 1080) * ((s?.frameRate.value ?? 24) / 24)
+        let d = dimensions
+        let scale = Double((d?.width ?? 1920) * (d?.height ?? 1080)) / (1920 * 1080) * ((sequence?.frameRate.value ?? 24) / 24)
         return Int64(o.mbps * 1_000_000 / 8 * seconds * max(0.1, scale))
     }
 
@@ -313,7 +343,7 @@ struct DeliverSheet: View {
         .accessibilityAddTraits(.isToggle)
     }
     private func spec(_ o: DeliveryOutput) -> String {
-        [o.codec, sequence.map { "\($0.width) \u{00D7} \($0.height)" }, o.note].compactMap { $0 }.joined(separator: " \u{00B7} ")
+        [o.codec, dimensions.map { "\($0.width) \u{00D7} \($0.height)" }, o.note].compactMap { $0 }.joined(separator: " \u{00B7} ")
     }
 
     private func askRow(_ a: AskOutput) -> some View {
@@ -410,7 +440,7 @@ struct DeliverSheet: View {
         guard !outputs.isEmpty, !tooBig else { return }
         let path = target.path
         recentFolders = ([path] + recent.map(\.path).filter { $0 != path }).prefix(5).joined(separator: "\n")
-        model.delivery.start(model: model, outputs: outputs, folder: target, finderAlias: finderAlias)
+        model.delivery.start(model: model, outputs: outputs, folder: target, size: size, finderAlias: finderAlias)
         model.sheet = nil
     }
 }

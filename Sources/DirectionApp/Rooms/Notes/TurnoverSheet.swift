@@ -17,7 +17,7 @@ struct TurnoverSheet: View {
     var body: some View {
         AttachedSheet(width: 600, onDismiss: cancel) {
             SheetHeader(title: notes.count == 1 ? "Turn over 1 note" : "Turn over \(notes.count) notes",
-                        subtitle: waitForOK ? "The editor reads them back to you before cutting \(model.nextCutName)." : "The editor reads them back, then starts cutting \(model.nextCutName).")
+                        subtitle: waitForOK ? "The editor reads back its plan for each note, and cuts \(model.nextCutName) when you OK it." : "The editor reads back its plan for each note, then cuts \(model.nextCutName).")
             VStack(alignment: .leading, spacing: 14) {
                 if drafts > 0 {
                     Text(drafts == 1 ? "1 draft stays behind." : "\(drafts) drafts stay behind.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
@@ -36,7 +36,7 @@ struct TurnoverSheet: View {
                 .onKeyPress(.downArrow) { step(1); return .handled }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("How much room for this turnover")
-                Toggle(isOn: $waitForOK) { Text("Wait for my OK on the read-back").lineHeight(13, 1.45) }.toggleStyle(GateCheckStyle())
+                Toggle(isOn: $waitForOK) { Text("Wait for my OK before cutting").lineHeight(13, 1.45) }.toggleStyle(GateCheckStyle())
             }
             .padding(.horizontal, 22).padding(.vertical, 14)
             SheetFooter {

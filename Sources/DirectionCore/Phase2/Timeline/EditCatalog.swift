@@ -91,7 +91,7 @@ public enum EditCatalog {
     ]
 
     public static let errors: [(code: String, when: String)] = [
-        ("scene_locked", "It would change anything overlapping a locked scene, on any track."),
+        ("scene_locked", "It would recut a locked scene: its takes, timing, framing, joins, or any picture over it. Its color and sound stay open."),
         ("picture_locked", "Any picture change after picture lock. Color and sound still change."),
         ("stale_revision", "baseEditRevision isn't current."),
         ("overlap", "It would make two clips overlap on one track."),

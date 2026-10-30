@@ -53,6 +53,15 @@ struct FilmModelTests {
         #expect(m.room == .dailies)
     }
 
+    @Test func deliveryOffersTheFootagesSizeWhenItIsBiggerThanTheCut() {
+        let m = SampleFilm.make()
+        // 3840 × 2160 takes in a 1920 × 1080 cut.
+        let size = m.footageSize(m.sequence)
+        #expect(size?.width == 3840 && size?.height == 2160)
+        var native = m.sequence; native?.width = 3840; native?.height = 2160
+        #expect(m.footageSize(native) == nil)
+    }
+
     @Test func stripMergesClipsIntoScenesAtTheirRealLengths() {
         let m = SampleFilm.make()
         let scenes = m.stripScenes

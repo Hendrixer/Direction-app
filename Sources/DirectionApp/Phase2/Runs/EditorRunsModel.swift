@@ -246,6 +246,15 @@ import DirectionTools
         film.refresh(force: true)
     }
 
+    /// Finishing again, once you've done what the editor stopped to ask for: a new run for whatever
+    /// on the checklist isn't done.
+    func finishAgain(_ film: FilmModel) {
+        guard let store = film.store, film.isPictureLocked, active == nil, let program = EditorSetup.runsOn.program else { return }
+        create(.finish, program: program, store: store)
+        if let r = runs.last { _ = try? store.updateRun(r.id) { $0.held = false } }
+        film.refresh(force: true)
+    }
+
     /// Spend cap: carry on with the footage only.
     func continueWithoutServices(_ film: FilmModel) { retry(film, "Continue without making anything with a service. Use the footage.") }
 

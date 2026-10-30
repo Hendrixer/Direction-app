@@ -1,9 +1,9 @@
 import Foundation
 
 /// Locks, checked one operation at a time so the error names it (agent-timeline.md › errors).
-/// A locked scene is its stretch of V1 and everything over or under it on every track; it may move
-/// whole when something before it changes length, but nothing in it may change. After picture lock
-/// only color and sound change.
+/// A lock keeps the cut, and color and sound stay open under it. A locked scene is its stretch of V1
+/// and every picture over or under it; it may move whole when something before it changes length, but
+/// what's in it and when may not change. After picture lock the same holds for the whole film.
 enum TimelineLocks {
     static let afterPictureLock: Set<String> = ["balance", "matchBalance", "cameraLUT", "color", "gain", "fade", "duck", "audio", "placeMusic", "syncSound"]
 
@@ -25,12 +25,11 @@ enum TimelineLocks {
         for span in spans(b, locked) {
             let label = context.dailies.scene(for: span.assetID)?.label ?? "That scene"
             let fail = DirectionError("scene_locked", "\(label) is locked. The director has to unlock it first.")
-            // The scene's own clips: all still there, unchanged, moved together if at all.
+            // The scene's own clips: all still there, cut the same, moved together if at all.
             var shift: Double?
             for id in span.clipIDs {
                 guard let old = b.clips.first(where: { $0.id == id }), let new = a.clips.first(where: { $0.id == id }) else { throw fail }
-                var x = old, y = new; x.start = .zero; y.start = .zero
-                guard x == y else { throw fail }
+                guard cut(old) == cut(new) else { throw fail }
                 let d = new.start.seconds - old.start.seconds
                 if let shift { guard abs(shift - d) < 1e-6 else { throw fail } } else { shift = d }
             }
@@ -49,11 +48,20 @@ enum TimelineLocks {
         return out
     }
 
+    /// A clip as the cut has it, wherever it sits: its color and sound left out, since locks keep them open.
+    static func cut(_ c: Clip) -> Clip {
+        var x = c
+        x.start = .zero; x.grade = ColorGrade(); x.audioOverrides = [:]
+        x.gainDB = nil; x.gainKeys = nil; x.duckKeys = nil; x.fadeIn = nil; x.fadeOut = nil; x.synced = nil
+        return x
+    }
+
     static func json<T: Encodable>(_ v: T) -> String { (try? JSONEncoder.direction.encode(v)).map { String(decoding: $0, as: UTF8.self) } ?? "" }
     static func r(_ x: Double) -> Double { (x * 10_000).rounded() / 10_000 }
 
-    /// Everything that plays inside [ws, we), on every track, relative to ws: what's there, from where in
-    /// which take, how it looks and sounds, and what reaches in from the cuts at either edge.
+    /// The cut inside [ws, we), relative to ws: every picture there, from where in which take, how it's
+    /// framed and joined, where its sound starts and ends, and what reaches in from the cuts at either
+    /// edge. Color and sound-only clips are left out; they stay open.
     static func signature(_ s: Sequence, _ p: Project, _ ws: Double, _ we: Double) -> [String] {
         var rows: [String] = []
         func cut(_ c: Clip, _ source: Double) -> Double { c.hold != nil ? c.start.seconds : c.start.seconds + (source - c.sourceRange.start.seconds) / c.speed }
@@ -65,21 +73,18 @@ enum TimelineLocks {
             for k in keys { let t = c.map { cut($0, k.t) } ?? k.t; if t >= ws - 1e-6 && t <= we + 1e-6 { out += [r(t - ws), k.v] } }
             return out.map(r)
         }
-        for c in s.clips {
-            let a = c.assetID.flatMap { id in p.assets.first { $0.id == id } }
+        for c in s.clips where c.kind != .audio {
             let snd = c.soundRange
             let lo = min(c.start.seconds, snd.start.seconds), hi = max(c.end.seconds, snd.end.seconds)
             var f: [String: String] = ["track": c.trackName]
             if lo < we - 1e-6 && hi > ws + 1e-6 {
                 let o0 = max(lo, ws)
                 f["asset"] = c.assetID ?? ""; f["title"] = c.title ?? ""; f["at"] = "\(r(o0 - ws))"; f["len"] = "\(r(min(hi, we) - o0))"; f["src"] = "\(r(src(c, o0)))"
-                f["speed"] = "\(c.speed)"; f["hold"] = "\(c.hold?.seconds ?? 0)"; f["grade"] = json(c.grade); f["framing"] = json(c.framing); f["audio"] = json(c.audioOverrides)
-                f["blend"] = c.blend ?? ""; f["above"] = "\(c.aboveLook ?? false)"; f["gain"] = "\(c.gainDB ?? 0)"
+                f["speed"] = "\(c.speed)"; f["hold"] = "\(c.hold?.seconds ?? 0)"; f["framing"] = json(c.framing)
+                f["blend"] = c.blend ?? ""; f["above"] = "\(c.aboveLook ?? false)"
                 f["fx"] = json((c.effects ?? []).map { [$0.name, json($0.params), json($0.source ?? ""), json(($0.keys ?? [:]).mapValues { windowed($0, c) })] })
-                f["gainKeys"] = json(windowed(c.gainKeys, c)); f["duckKeys"] = json(windowed(c.duckKeys, c))
-                if c.start.seconds >= ws - 1e-6 { f["in"] = json(c.transition) + "|\(c.fadeIn ?? 0)|\(c.soundLead ?? 0)" }
-                if c.end.seconds <= we + 1e-6 { f["out"] = "\(c.fadeOut ?? 0)|\(c.soundTail ?? 0)" }
-                if let a { f["lut"] = a.cameraLUT ?? ""; f["streams"] = json(a.audio.map(\.settings)) }
+                if c.start.seconds >= ws - 1e-6 { f["in"] = json(c.transition) + "|\(c.soundLead ?? 0)" }
+                if c.end.seconds <= we + 1e-6 { f["out"] = "\(c.soundTail ?? 0)" }
             } else if abs(c.start.seconds - we) < 1e-6, (c.transition?.before ?? 0) > 0 || (c.soundLead ?? 0) > 0 {
                 f["edgeIn"] = json(c.transition) + "|\(c.soundLead ?? 0)"
             } else if abs(c.end.seconds - ws) < 1e-6, (c.soundTail ?? 0) > 0 {
@@ -87,8 +92,8 @@ enum TimelineLocks {
             } else { continue }
             rows.append(json(f))
         }
-        for (name, t) in s.tracks ?? [:] where !t.isEmpty {
-            rows.append(json(["track": name, "fx": json((t.effects ?? []).map { [$0.name, json($0.params), json(($0.keys ?? [:]).mapValues { windowed($0, nil) })] }), "gain": "\(t.gainDB ?? 0)", "keys": json(windowed(t.gainKeys, nil)), "above": "\(t.aboveLook ?? false)"]))
+        for (name, t) in s.tracks ?? [:] where !t.isEmpty && name.hasPrefix("V") {
+            rows.append(json(["track": name, "fx": json((t.effects ?? []).map { [$0.name, json($0.params), json(($0.keys ?? [:]).mapValues { windowed($0, nil) })] }), "above": "\(t.aboveLook ?? false)"]))
         }
         return rows.sorted()
     }

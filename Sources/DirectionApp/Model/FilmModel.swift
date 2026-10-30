@@ -717,7 +717,10 @@ final class FilmModel {
             for url in urls {
                 do {
                     // Footage goes to the library; the editor builds the assembly from circles.
-                    _ = try await runtime.invoke("direction_import", arguments: .object(["path": .string(url.path), "append": .bool(false)]))
+                    var args: [String: JSONValue] = ["path": .string(url.path), "append": .bool(false)]
+                    // The film's rate comes from its first footage unless Settings › Cutting names one.
+                    if let rate = Double(UserDefaults.standard.string(forKey: SettingsKey.frameRate) ?? "match") { args["frameRate"] = .number(rate) }
+                    _ = try await runtime.invoke("direction_import", arguments: .object(args))
                 } catch { self.error = "\(url.lastPathComponent): \(error.localizedDescription)" }
                 importingFootage = max(0, importingFootage - 1)
                 refresh(force: true)

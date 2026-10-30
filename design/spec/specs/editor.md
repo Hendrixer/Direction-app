@@ -121,7 +121,7 @@ Frame: `screens/43-settings-editor.html` drew it as the Editor tab's first group
 | Who edits | Start work | Select: Right away / Ask me first | Right away | Sub-label: "When notes are turned over or footage arrives." |
 | Who edits | Let the editor run scripts | Switch | On | Sub-label: "Only inside its own folder in the film, with no internet. Some graphics and looks need it." |
 | Freedom | unchanged | | | |
-| Before cutting | Wait for my OK on read-backs; Cut Feeling notes two ways; Ask before guessing | unchanged | | |
+| Before cutting | Wait for my OK before cutting; Cut Feeling notes two ways; Ask before guessing | unchanged | | |
 | Before cutting | When notes conflict | The order as text-2 "Feeling › Story › Pace › Picture › Sound" and **Change…** (`.btn`) | Murch's order | Change… opens a popover anchored to the button with the reorderable list from the previous frame 43 (same rows, same keys) and Restore default. |
 
 Note under Before cutting: "The editor reads the brief before every cut."

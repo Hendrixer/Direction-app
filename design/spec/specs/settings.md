@@ -55,7 +55,7 @@ Frame: `screens/43-settings-editor.html` · Render: `renders/43-settings-editor@
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
 | Freedom (**per film**) | How much freedom the editor has | 3 cards: Do what I wrote / Read between the lines / Take a pass | Read between the lines | `Film.latitude`. Behavior per `product-model.md › Latitude`. It can be overridden for one turnover in frame 22. |
-| Before cutting | Wait for my OK on read-backs | Switch | On | Off: cutting starts right after the read-back, and the read-back stays readable in Notes. |
+| Before cutting | Wait for my OK before cutting | Switch | On | "The editor reads back its plan for each note first. Off: it starts cutting right after, and you can still read it." |
 | Before cutting | Cut Feeling notes two ways | Switch | On | When on, and latitude isn't "Do what I wrote", Feeling notes return as Options A/B (frame 30). |
 | Before cutting | Ask before guessing | Switch | On | Off: the editor picks the likelier reading of an unclear note and says so in the read-back, instead of raising a Question. |
 | Before cutting | Follow the brief | Chip "Always on" (not a control) | Always | The brief is input to every cut. Edit it with Film › Brief… (`⌘B`). |

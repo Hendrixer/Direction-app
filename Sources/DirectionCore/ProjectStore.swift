@@ -104,10 +104,15 @@ public final class ProjectStore: Sendable {
     }
 
     @discardableResult
-    public func addAsset(_ asset: MediaAsset, append: Bool, sequenceID: String? = nil, expectedRevision: Int, key: String = UUID().uuidString) throws -> Project {
+    /// The first picture into a film with nothing cut yet sets its cuts' size, and their rate unless
+    /// `frameRate` names one (Settings › Cutting › Frame rate for new films).
+    public func addAsset(_ asset: MediaAsset, append: Bool, sequenceID: String? = nil, frameRate: FrameRate? = nil, expectedRevision: Int, key: String = UUID().uuidString) throws -> Project {
         let request = try JSONValue.object(["operation": .string("import"), "path": .string(asset.path), "fileSize": .number(Double(asset.fileSize)), "modifiedAt": .number(asset.modifiedAt), "append": .bool(append), "sequenceID": sequenceID.map(JSONValue.string) ?? .null]).data()
         return try update(expectedRevision: expectedRevision, key: key, request: request, summary: "Imported \(asset.name)") { p in
             guard !p.assets.contains(where: { $0.path == asset.path }) else { throw DirectionError("already_imported", "This file is already in the project.") }
+            if !asset.isImage, let v = asset.video.first, v.width > 0, v.height > 0, !p.assets.contains(where: { !$0.isImage && !$0.video.isEmpty }), p.sequences.allSatisfy({ $0.clips.isEmpty }) {
+                for i in p.sequences.indices { p.sequences[i].width = v.width / 2 * 2; p.sequences[i].height = v.height / 2 * 2; p.sequences[i].frameRate = frameRate ?? .nearest(v.frameRate) }
+            }
             p.assets.append(asset)
             if append {
                 var op = EditOperation("insert"); op.assetID = asset.id

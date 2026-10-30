@@ -323,7 +323,7 @@ Frame: `screens/22-turnover.html` · Render: `renders/22-turnover@2x.png`
 - The titlebar's own Turn over becomes an inert regular button under the scrim, so only one steel button shows.
 
 **Content:**
-- Title: "Turn over 7 notes". Subtitle: "The editor reads them back to you before cutting Cut 4."
+- Title: "Turn over 7 notes". Subtitle: "The editor reads back its plan for each note, and cuts Cut 4 when you OK it." (With the checkbox off: "…, then cuts Cut 4.")
 - Rows 1–7: number, the anchor's start (`00:46:00`, `Line 14`, `Scene 4`) and the text ellipsized to one line.
   - Row 7 shows "· Priya Shah" and a steel number.
   - Each row ends with its kind.
@@ -331,13 +331,13 @@ Frame: `screens/22-turnover.html` · Render: `renders/22-turnover@2x.png`
   - "Do what I wrote": "Change only what each note names. No options."
   - "Read between the lines" (default; it's the film's latitude): "Interpret the intent. Try Feeling notes two ways."
   - "Take a pass": "Also suggest changes you didn't ask for, marked Unasked."
-- Checkbox: "Wait for my OK on the read-back" (default from Settings › Editor).
+- Checkbox: "Wait for my OK before cutting" (default from Settings › Editor). It's about cutting, not the editor's questions, which always wait for you.
 - Caption: "Notes can't be edited after turnover, only replied to."
 
 **States and variants:**
 - Notes without a kind: the kind cell reads "—", and the editor proposes a kind in the read-back.
 - Drafts present: a line above the list reads "2 drafts stay behind." in `--text-3`.
-- A note anchored in a locked scene: its kind cell is replaced by a lock chip, and the caption adds "1 note touches a locked scene. The editor will ask before unlocking."
+- A note anchored in a locked scene: its kind cell is replaced by a lock chip, and the caption adds "1 note touches a locked scene. The editor will ask before unlocking." (Only recutting needs the unlock; color and sound notes go ahead.)
 - Latitude changes here apply to this turnover only. The film default lives in Settings › Editor.
 
 **Interactions:**
@@ -364,7 +364,7 @@ Frame: `screens/23-readback.html` · Render: `renders/23-readback@2x.png`
 
 **Arrives from / leads to:**
 - Arrives a few seconds after turnover (frame 22).
-- **Start cutting** (`⌘↩`) leads to frame 25. Clicking a line, or **Adjust a line**, leads to frame 24.
+- **Start cutting** (`⌘↩`, in the titlebar or the foot) leads to frame 25. Clicking a line, or **Change a line**, leads to frame 24.
 
 **Layout:**
 - The sheet head reads "Read-back for Cut 4".
@@ -372,7 +372,7 @@ Frame: `screens/23-readback.html` · Render: `renders/23-readback@2x.png`
   - Header: diamond, "Here's what I'll do", and the latitude in `--text-4` on the right.
   - Lines (`.rb-line`: columns 24 / text / right). Each has the plan in `--text-1` 500 and the source note in 11.5 pt `--text-4`, quoted and ellipsized. The right column holds a delta (`.delta`) or a chip.
   - One conflict callout (`.conflict`) sits right after the higher-priority note.
-- Foot: a length estimate, then a ghost **Adjust a line** and the caption "Click any line to correct it".
+- Foot: a length estimate, the caption "Nothing is cut until you say so. Click a line to change it.", then a ghost **Change a line** and, on the right, a default-style **Looks right, start cutting ⌘↩** (the titlebar's Start cutting, where the director is reading; it isn't steel, so the titlebar's stays the only steel button). A first director typed "sounds good" into a line's correction to approve, because the only approval was in the titlebar.
 - Titlebar: the pill is `.agent.ready` "Read-back ready", and the primary is steel "Start cutting ⌘↩".
 - The stage follows the line you hover: hover seeks the picture.
 
@@ -425,7 +425,7 @@ Frame: `screens/24-readback-adjust.html` · Render: `renders/24-readback-adjust@
 **Layout:**
 - Line 3 becomes `.rb-line.edit`: a `--raised` background with a 1 pt `--line-2` ring, 8/6 padding, extending 6 beyond the line on each side.
 - Under the source quote is a focused `.field.area` (52 min height).
-- Then the caption "The editor rewrites this line. Nothing is cut yet."
+- Then the caption "Say what to change and the editor rewrites this line. If it's right as it is, start cutting instead."
 - Then a right-aligned row: ghost small **Cancel** and small **Update line ↩**.
 - The list scrolls inside the sheet's third row, with a 28 pt fade at the bottom (`.scroll-fade`). The foot stays pinned.
 

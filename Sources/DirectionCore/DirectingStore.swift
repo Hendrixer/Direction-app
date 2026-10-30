@@ -511,7 +511,8 @@ extension ProjectStore {
     }
 }
 
-/// Locked material is untouchable: the editor can't change a locked scene, and nothing can move a frame after picture lock.
+/// A lock keeps the cut: the editor can't recut a locked scene, and nothing can move a frame after picture
+/// lock. Color and sound stay open under both.
 enum LockRules {
     static func check(before: Project, after: Project, dailies: Dailies, state: DirectingState) throws {
         let lockedAssets = dailies.lockedAssetIDs
@@ -529,7 +530,7 @@ enum LockRules {
                 }
             }
             for c in old.clips where c.assetID.map(lockedAssets.contains) ?? false {
-                guard let n = newClips[c.id], n.sourceRange == c.sourceRange, n.speed == c.speed, n.grade == c.grade, n.framing == c.framing, n.audioOverrides == c.audioOverrides, n.layer == c.layer else {
+                guard let n = newClips[c.id], n.sourceRange == c.sourceRange, n.speed == c.speed, n.framing == c.framing, n.layer == c.layer else {
                     let scene = dailies.scene(for: c.assetID)
                     throw DirectionError("scene_locked", "\(scene?.label ?? "That scene") is locked. The director has to unlock it first.")
                 }

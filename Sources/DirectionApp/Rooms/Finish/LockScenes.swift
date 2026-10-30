@@ -2,7 +2,7 @@ import SwiftUI
 import DirectionCore
 
 // Owner: Changes and Finish agent. Locking scenes (34): the picture with large scene tiles under it.
-// Locked scenes are grayscale, hatched and carry a lock glyph; the editor can't touch them.
+// Locked scenes are grayscale, hatched and carry a lock glyph; the editor can't recut them.
 
 struct LockStage: View {
     @Bindable var model: FilmModel
@@ -33,7 +33,7 @@ struct LockStage: View {
     private var help: String {
         let scenes = model.scenes
         let locked = scenes.filter(\.locked).count
-        return "\(locked) of \(scenes.count) locked. Lock a scene when you\u{2019}re happy with it; the editor won\u{2019}t touch it again."
+        return "\(locked) of \(scenes.count) locked. Lock a scene when its cut is right; the editor won\u{2019}t recut it. Color and sound stay open."
     }
 }
 

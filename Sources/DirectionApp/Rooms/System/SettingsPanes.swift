@@ -125,7 +125,7 @@ struct EditorPane: View {
             }
             // The conflict list moved into Change…'s popover so the pane stays under 860 (frame 43).
             SettingsGroup(label: "Before cutting", note: AnyView(SettingsNote("The editor reads the brief before every cut."))) {
-                SettingsRow(label: "Wait for my OK on read-backs", detail: "Off: the editor starts cutting right after it reads back. You can still read it.", first: true) { GateSwitch(isOn: $waitForOK) }
+                SettingsRow(label: "Wait for my OK before cutting", detail: "The editor reads back its plan for each note first. Off: it starts cutting right after, and you can still read it.", first: true) { GateSwitch(isOn: $waitForOK) }
                 SettingsRow(label: "Cut Feeling notes two ways", detail: "You pick A or B in Changes.") { GateSwitch(isOn: $twoWays) }
                     .disabled(latitude == Latitude.exact.rawValue)
                 SettingsRow(label: "Ask before guessing", detail: "When a note could mean two things, the editor asks instead of choosing.") { GateSwitch(isOn: $askFirst) }

@@ -138,7 +138,8 @@ struct ReadBackLineView: View {
                   onSubmit: send, onEscape: cancel)
             .padding(.top, 8)
             .onAppear { focusRequest += 1 }
-        Text("The editor rewrites this line. Nothing is cut yet.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).padding(.top, 6)
+        Text("Say what to change and the editor rewrites this line. If it\u{2019}s right as it is, start cutting instead.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
+            .fixedSize(horizontal: false, vertical: true).padding(.top, 6)
         HStack(spacing: 8) {
             Spacer()
             Button("Cancel", action: cancel).buttonStyle(.gate(.ghost, .small))
@@ -198,7 +199,8 @@ struct ConflictCallout: View {
     private func flip() { model.flipConflict(noteID: line.noteID) }
 }
 
-/// The read-back foot: the length after these changes, then Adjust a line.
+/// The read-back foot: the length after these changes, then the two answers to it: change a line, or
+/// start cutting (the same as the titlebar's Start cutting).
 struct ReadBackFoot: View {
     var model: FilmModel
     var turnover: Turnover
@@ -209,10 +211,15 @@ struct ReadBackFoot: View {
             Text(lengthText(estimate, over: over)).font(Gate.Font.small).foregroundStyle(over ? Gate.State.alert : Gate.Text.tertiary).lineHeight(12, 1.45)
                 .fixedSize(horizontal: false, vertical: true)
             if !model.isCutting(turnover) {
+                Text("Nothing is cut until you say so. Click a line to change it.")
+                    .font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    Button(action: adjust) { Label("Adjust a line", systemImage: "arrowshape.turn.up.left") }.buttonStyle(.gate(.ghost))
+                    Button(action: adjust) { Label("Change a line", systemImage: "arrowshape.turn.up.left") }.buttonStyle(.gate(.ghost))
                     Spacer(minLength: 0)
-                    Text("Click any line to correct it").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
+                    if turnover.state == .readBack {
+                        Button { model.startCutting() } label: { HStack(spacing: 6) { Text("Looks right, start cutting"); KeyHint("\u{2318}\u{21A9}") } }
+                            .buttonStyle(.gate(.normal))
+                    }
                 }
             }
         }

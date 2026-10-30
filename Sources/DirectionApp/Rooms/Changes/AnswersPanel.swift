@@ -110,7 +110,7 @@ struct AnswersPanel: View {
     private var empty: some View {
         let text: String
         if model.reviewAnswers.isEmpty { text = "No answers in \(cutName). When the editor delivers a cut from your notes, each change shows up here with its note number." }
-        else if model.answersTab == .review { text = "Every answer is accepted. Lock scenes or lock picture when you\u{2019}re ready." }
+        else if model.answersTab == .review { text = "Every answer is accepted. Screen it again for more notes, or lock picture when the edit is done." }
         else { text = "Nothing accepted yet." }
         return Text(text).font(Gate.Font.body).foregroundStyle(Gate.Text.tertiary).frame(maxWidth: .infinity, alignment: .leading).padding(16)
     }
@@ -126,7 +126,7 @@ struct AnswersPanel: View {
     }
     private var footText: String {
         if model.isPictureLocked { return "Picture is locked. Unlock it from Film \u{203A} Unlock Picture to change the edit." }
-        if !model.reviewAnswers.isEmpty && model.toReview.isEmpty { return "Nothing left to review. Lock picture when the edit is done." }
+        if !model.reviewAnswers.isEmpty && model.toReview.isEmpty { return "Nothing left to review. Screen it again for more notes, or lock picture to start finishing." }
         return "Accepted answers stay in \(cutName). Anything you reply to goes into your next turnover."
     }
 }
