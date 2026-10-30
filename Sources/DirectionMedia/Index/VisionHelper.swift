@@ -71,20 +71,37 @@ public enum VisionHelper {
     }
     static func repoFolder(_ repo: String) -> URL { hubCache.appendingPathComponent("models--" + repo.replacingOccurrences(of: "/", with: "--")) }
 
-    /// True when a snapshot has its config and every weight file it names. Newer huggingface_hub
-    /// keeps blobs in a shared store and links to them, so links are followed.
+    /// True when a snapshot has its config and its weights, and nothing is still downloading. Newer
+    /// huggingface_hub keeps blobs in a shared store and links to them, so links are followed.
+    /// Weights count when every file the index names is there, or, since mlx-vlm loads whatever
+    /// `*.safetensors` it finds, when a set of `-of-N` shards is complete: some repos ship an index
+    /// that names shards they no longer have (Qwen3-VL 8B's names four of its two).
     public static func isDownloaded(_ repo: String) -> Bool {
         let fm = FileManager.default
+        let blobs = (try? fm.contentsOfDirectory(atPath: repoFolder(repo).appendingPathComponent("blobs").path)) ?? []
+        guard !blobs.contains(where: { $0.hasSuffix(".incomplete") }) else { return false }
         let snapshots = repoFolder(repo).appendingPathComponent("snapshots")
         for snap in (try? fm.contentsOfDirectory(at: snapshots, includingPropertiesForKeys: nil)) ?? [] {
             guard fm.fileExists(atPath: snap.appendingPathComponent("config.json").path) else { continue }
-            let files = (try? fm.contentsOfDirectory(atPath: snap.path)) ?? []
+            let weights = ((try? fm.contentsOfDirectory(atPath: snap.path)) ?? []).filter { $0.hasSuffix(".safetensors") && fm.fileExists(atPath: snap.appendingPathComponent($0).path) }
             if let index = try? Data(contentsOf: snap.appendingPathComponent("model.safetensors.index.json")),
-               let map = (try? JSONSerialization.jsonObject(with: index) as? [String: Any])?["weight_map"] as? [String: String] {
-                if Set(map.values).allSatisfy({ fm.fileExists(atPath: snap.appendingPathComponent($0).path) }) { return true }
-            } else if files.contains(where: { $0.hasSuffix(".safetensors") && fm.fileExists(atPath: snap.appendingPathComponent($0).path) }) { return true }
+               let map = (try? JSONSerialization.jsonObject(with: index) as? [String: Any])?["weight_map"] as? [String: String],
+               Set(map.values).allSatisfy({ fm.fileExists(atPath: snap.appendingPathComponent($0).path) }) { return true }
+            if shardsComplete(weights) { return true }
         }
         return false
+    }
+
+    /// "model-00001-of-00002.safetensors" and "model-00002-of-00002.safetensors": every shard of a
+    /// set is here. A single unsharded "model.safetensors" counts too.
+    public static func shardsComplete(_ names: [String]) -> Bool {
+        if names.contains("model.safetensors") { return true }
+        var sets: [Int: Set<Int>] = [:]
+        for name in names {
+            guard let m = name.firstMatch(of: /-(\d+)-of-(\d+)\.safetensors$/), let i = Int(m.1), let n = Int(m.2) else { continue }
+            sets[n, default: []].insert(i)
+        }
+        return sets.contains { n, have in n > 0 && have == Set(1...n) }
     }
 
     /// Bytes a repo's finished files hold, following links into the shared blob store.

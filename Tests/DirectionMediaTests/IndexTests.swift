@@ -419,3 +419,10 @@ struct IndexTests {
         await LocalVisionHelper.shared(SharedSettings.lookDetail.repo).stop()
     }
 }
+
+@Test func aModelCountsAsDownloadedWhenItsShardsAreAllThere() {
+    #expect(VisionHelper.shardsComplete(["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"]))
+    #expect(!VisionHelper.shardsComplete(["model-00001-of-00002.safetensors"]))
+    #expect(VisionHelper.shardsComplete(["model.safetensors"]))
+    #expect(!VisionHelper.shardsComplete([]))
+}

@@ -30,6 +30,8 @@ struct FootageLookingGroup: View {
             SettingsRow(label: "Look at new footage automatically") { GateSwitch(isOn: preview ? .constant(true) : $automatic) }
         }
         .task(id: "\(engine)|\(detail)|\(downloads.progress[chosen.id] == nil)") { await check() }
+        // The index may download a version on first use while Settings is open; look again on return.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await check() } }
     }
 
     // MARK: This Mac
