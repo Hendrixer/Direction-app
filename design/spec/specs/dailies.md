@@ -17,10 +17,13 @@ Frame: `screens/07-dailies.html` · Render: `renders/07-dailies@2x.png`
 
 **Layout**
 - Main 24/28 padding, 22 pt between blocks.
-- Header: scene title Archivo 800 24 at 120% ("2 Maya, the problem"), 12 pt meta below. Right: filter segmented control "All 7 · Circled 1 · Suggested 2", and a ghost icon button for sort and display options.
-- Editor note: one `.say` line, max 780 pt, explaining the strongest suggestion in this scene.
+- Header: scene title Archivo 800 24 at 120% ("2 Maya, the problem"), 12 pt meta below: just "7 takes · 3:30". Right: filter segmented control "All 7 · Circled 1 · Suggested 2", and a ghost icon button for sort and display options.
+- No editor note above the takes, and no help line: the suggestion lives on its take (diamond, "Suggested", the reason on hover and in 08), and the keys live in the bar at the bottom. Four kinds of text stacked above the first take (title, meta, note, hint, each its own size and colour) buried the pictures.
 - Setup block: header row (mono 12 setup code, 12.5 description `--text-3`, take count right), then a 4-column grid with 14 pt gaps.
-- Take card: 16:9 thumbnail radius 7, take number top-left (mono 11.5 semibold, text shadow), duration bottom-right in a glass tag, suggestion diamond top-right (8 pt inset). Caption 12.5 pt, max 2 lines, then a status line 11.5 pt.
+- Setup row: mono code, then the setup's description on one line (truncated, full text on hover), take count right.
+- Take card: 16:9 thumbnail radius 7, take number top-left (mono 11.5 semibold, text shadow), duration bottom-right in a glass tag, suggestion diamond top-right (8 pt inset), and for a take in sync a dark pill bottom-left: link glyph, the other angles' labels in mono ("2B T2", "B1"), and a waveform glyph when the cut uses this take's sound. Under it, caption 12.5 pt, max 2 lines, then one status word 11.5 pt: "Circled" (amber), "Suggested" (ion), "Not usable as a take" (`--text-4`), or up to two flags.
+- The bar (glass, centered, 16 pt above the bottom) is always there while the scene has takes. Nothing selected: "Select a take" and the keys, dimmed (Circle C, Watch ↩, Not Usable X). Takes selected: their label and the same actions, live.
+- Labels never repeat a setup: a take coded "A1" in setup A is "A1", not "A A1".
 
 **Content:** Story data, scene 2. Captions are the first line of dialogue in quotes, or a short description for B-roll. Status lines: "Flubbed line at 0:31", "Circled by you" (amber), "Suggested: warmest read" (ion), "Not usable as a take" (`--text-4`, card at 55% opacity), "B-roll", "Suggested: steadier", "Soft at 0:06". Editor note: "2A T3 has the warmest read of "Editing was the part nobody wanted." It fits "tired, then proud." Your circle decides; I only suggest."
 
@@ -29,8 +32,7 @@ Frame: `screens/07-dailies.html` · Render: `renders/07-dailies@2x.png`
 - Suggested: diamond top-right; status line in ion with the reason.
 - Circled and suggested: both marks; status reads "Circled by you · also suggested".
 - Hover (drawn on T3): the thumbnail lifts 4% and a tooltip "Circle T3 C" appears after 600 ms. Scrubbing horizontally across the thumbnail scrubs the take.
-- Nothing circled yet in the film: under the editor note, one 12 pt `--text-3` line with key caps: "Click a take to select it, then press C to circle it. Double-click or press ↩ to watch it." It goes once anything is circled.
-- Takes selected: a glass bar centered 16 pt above the bottom edge names the selection ("A1", or "3 takes") in SF Mono and offers **Circle** (amber) `C`, **Watch** `↩` (one take only) and **Not Usable** `X`. The same bar shows in Unsorted and Not usable. Clicking a take was a dead end before it: nothing said what selecting was for.
+- The bar (see Layout) says what selecting is for; clicking a take was a dead end before it. The same bar shows in Unsorted and Not usable.
 - Empty scene: centered "No takes in this scene yet. Drag takes here from Unsorted."
 
 **Interactions:** Click selects; `C` or clicking the take number circles/uncircles; `X` marks Not usable; `Space` or double-click opens 08; arrows move; `⌘A` then `C` circles all selected. Drag takes between setups or onto a sidebar scene. Context menu on a take: Circle, Play, Open in Script, Move to Scene ›, Not usable, Show in Finder.

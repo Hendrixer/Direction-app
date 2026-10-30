@@ -9,9 +9,25 @@ public protocol ShotDescriber: Sendable {
     var engine: String { get }
     /// How many shots to describe at once.
     var concurrency: Int { get }
+    /// How many one-frame shots one batched request can carry (1: no batching).
+    var batchSize: Int { get }
     func describe(_ request: DescribeRequest) async throws -> DescribeResult
+    /// Several shots in one go; nil for a shot whose reply never fit the shape.
+    func describeBatch(_ requests: [DescribeRequest]) async throws -> [DescribeResult?]
     /// Called when a job is done with it.
     func finish() async
+}
+
+extension ShotDescriber {
+    public var batchSize: Int { 1 }
+    public func describeBatch(_ requests: [DescribeRequest]) async throws -> [DescribeResult?] {
+        var out: [DescribeResult?] = []
+        for r in requests {
+            do { out.append(try await describe(r)) }
+            catch let e as DirectionError where e.code == "description_invalid" { out.append(nil) }
+        }
+        return out
+    }
 }
 
 public struct DescribeRequest: Sendable {
@@ -31,9 +47,9 @@ public struct DescribeResult: Sendable {
 public enum DescribePrompt {
     public static let maxTokens = 160
 
-    public static func text(words: String, retry: Bool = false) -> String {
+    public static func text(words: String, retry: Bool = false, frames: Int = 3) -> String {
         var lines = [
-            "You log footage for a film editor. The images are three moments of one continuous shot, at 10%, 50% and 90% of it.",
+            frames == 1 ? "You log footage for a film editor. The image is the middle of one continuous shot that doesn\u{2019}t move." : "You log footage for a film editor. The images are three moments of one continuous shot, at 10%, 50% and 90% of it.",
         ]
         let w = words.trimmingCharacters(in: .whitespacesAndNewlines)
         if !w.isEmpty { lines.append("Words spoken during the shot: \u{201C}\(w.prefix(600))\u{201D}") }
@@ -80,10 +96,10 @@ public enum DescribePrompt {
 
     /// One attempt, then one retry with a reminder; a reply that never fits the shape fails the shot.
     /// `attempt` sends a prompt and returns the reply and what it cost, if anything.
-    public static func run(words: String, _ attempt: (_ prompt: String) async throws -> (String, Double?)) async throws -> DescribeResult {
+    public static func run(words: String, frames: Int = 3, _ attempt: (_ prompt: String) async throws -> (String, Double?)) async throws -> DescribeResult {
         var spend = 0.0, spent = false
         for retry in [false, true] {
-            let (reply, cost) = try await attempt(text(words: words, retry: retry))
+            let (reply, cost) = try await attempt(text(words: words, retry: retry, frames: frames))
             if let cost { spend += cost; spent = true }
             if let look = parse(reply) { return DescribeResult(look: look, spend: spent ? spend : nil) }
         }

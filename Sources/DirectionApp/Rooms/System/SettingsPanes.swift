@@ -260,15 +260,17 @@ struct FootagePane: View {
     private static let sizes = ["mlx-community/whisper-large-v3-turbo": "1.6 GB", "mlx-community/whisper-large-v3-mlx": "3.1 GB"]
     private var usesWhisper: Bool { engine == SharedSettings.TranscriptionEngine.whisper.rawValue }
 
+    // Measured on the director's 3:12 take on an M4 Max (footage-index.md › Transcription engines):
+    // Apple 2.2 s, keeps false starts; Turbo 7.0 s; Large v3 11.9 s. Word starts agree within 0.08 s.
     private var engineDetail: String {
-        usesWhisper ? "Slower, with tighter word times for cutting on a single word. Runs on this Mac."
-            : "Fast and built into macOS. Runs on this Mac."
+        usesWhisper ? "Whisper on this Mac\u{2019}s graphics chip. It tidies speech, so false starts and repeated lines can drop out."
+            : "Built into macOS, on the Neural Engine. The fastest, and it keeps false starts, which helps find retakes."
     }
     private var modelDetail: String {
         let size = Self.sizes[model] ?? ""
         let downloaded = preview ? model == SharedSettings.whisperModels[0].id : WhisperTranscriber.isDownloaded(model)
-        let speed = model == SharedSettings.whisperModels[0].id ? "Fast. Nearly as accurate as Large v3." : "Slower, and a little more accurate."
-        return speed + (downloaded ? " Downloaded · \(size)." : " Downloads \(size) the first time it\u{2019}s used.")
+        let speed = model == SharedSettings.whisperModels[0].id ? "About 25\u{00D7} real time. Nearly as accurate as Large v3." : "About 16\u{00D7} real time, and a little more accurate."
+        return speed + (downloaded ? " Downloaded \u{00B7} \(size)." : " Downloads \(size) the first time it\u{2019}s used.")
     }
 
     var body: some View {

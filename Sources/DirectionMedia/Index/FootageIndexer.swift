@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import ImageIO
 import DirectionCore
 
 /// Looking at footage, take by take in the order the takes will be logged (footage-index.md ›
@@ -279,43 +280,90 @@ public enum FootageIndexer {
         let looks = SameShotBox(try store.shots().filter { $0.look != nil }.compactMap { s in prints[s.id].map { (s, $0) } })
         var count = 0
         t.described = shots.count - todo.count
-        try await withThrowingTaskGroup(of: Shot?.self) { group in
-            var queue = todo[...]
-            func add() {
-                guard let shot = queue.popFirst() else { return }
-                group.addTask {
-                    if let p = prints[shot.id], let same = looks.nearest(p, assetID: asset.id) {
-                        var described = shot; described.look = same.look
-                        described.engine = "\(same.engine ?? describer.engine) \u{00B7} same picture as shot \(same.number)\(same.assetID == asset.id ? "" : " of another take")"
-                        return described
-                    }
-                    var paths = (0..<3).map { describeFrame(shot, $0, options) }
-                    if !paths.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
-                        let images = try await SourceFrames.images(asset, at: keyframeTimes(shot), maxDimension: 672)
-                        for (k, image) in images.enumerated() { try SourceFrames.writeJPEG(image, to: paths[k], quality: 0.85) }
-                        paths = (0..<images.count).map { describeFrame(shot, $0, options) }
-                        // A shot that doesn't move (its first and last frames look alike) needs only its middle.
-                        if images.count == 3, let a = try? ShotDetector.featurePrint(images[0]), let b = try? ShotDetector.featurePrint(images[2]), ShotDetector.distance(a, b) < staticShot { paths = [paths[1]] }
-                    }
-                    let words = lines.filter { $0.start >= shot.start - 0.2 && $0.start < shot.end }.map(\.text).joined(separator: " ")
-                    do {
-                        let result = try await describer.describe(DescribeRequest(images: paths, words: words))
-                        if let s = result.spend { cents.add(s) }
-                        var described = shot; described.look = result.look; described.engine = describer.engine
-                        if let p = prints[shot.id] { looks.add(described, p) }
-                        return described
-                    } catch is CancellationError { throw CancellationError() }
-                    catch let e as DirectionError where e.code == "description_invalid" { return nil }
-                }
+        func saved(_ shot: Shot) throws {
+            try store.updateShot(shot); count += 1
+            // The logging page shows "Describing 4 of 12 shots" from this.
+            t.described += 1; try store.saveTakeIndex(t)
+        }
+        func reused(_ shot: Shot, from same: Shot) -> Shot {
+            var described = shot; described.look = same.look
+            described.engine = "\(same.engine ?? describer.engine) \u{00B7} same picture as shot \(same.number)\(same.assetID == asset.id ? "" : " of another take")"
+            return described
+        }
+        /// The frames a shot is described from: three, or the middle one for a shot that doesn't move.
+        func request(_ shot: Shot) async throws -> DescribeRequest {
+            var paths = (0..<3).map { describeFrame(shot, $0, options) }
+            if !paths.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
+                let images = try await SourceFrames.images(asset, at: keyframeTimes(shot), maxDimension: 672)
+                for (k, image) in images.enumerated() { try SourceFrames.writeJPEG(image, to: paths[k], quality: 0.85) }
+                paths = (0..<images.count).map { describeFrame(shot, $0, options) }
             }
-            for _ in 0..<max(1, describer.concurrency) { add() }
-            while let result = try await group.next() {
-                if let shot = result {
-                    try store.updateShot(shot); count += 1
-                    // The logging page shows "Describing 4 of 12 shots" from this.
-                    t.described += 1; try store.saveTakeIndex(t)
+            // A shot that doesn't move (its first and last frames look alike) needs only its middle.
+            if paths.count == 3, let a = jpegPrint(paths[0]), let b = jpegPrint(paths[2]), ShotDetector.distance(a, b) < staticShot { paths = [paths[1]] }
+            let words = lines.filter { $0.start >= shot.start - 0.2 && $0.start < shot.end }.map(\.text).joined(separator: " ")
+            return DescribeRequest(images: paths, words: words)
+        }
+
+        if describer.batchSize > 1 {
+            // This Mac: shots that don't move go in batches the version decodes together; a shot that
+            // looks like one waiting in the batch takes that one's line when it comes back.
+            var batch: [(Shot, DescribeRequest)] = [], followers: [String: [Shot]] = [:]
+            func flush() async throws {
+                guard !batch.isEmpty else { return }
+                let results = try await describer.describeBatch(batch.map(\.1))
+                for ((shot, _), result) in zip(batch, results) {
+                    guard let result else { continue }
+                    var described = shot; described.look = result.look; described.engine = describer.engine
+                    if let s = result.spend { cents.add(s) }
+                    if let p = prints[shot.id] { looks.add(described, p) }
+                    try saved(described)
+                    for f in followers[shot.id] ?? [] { try saved(reused(f, from: described)) }
                 }
-                add()
+                batch = []; followers = [:]
+            }
+            for shot in todo {
+                try Task.checkCancellation()
+                if let p = prints[shot.id], let same = looks.nearest(p, assetID: asset.id) { try saved(reused(shot, from: same)); continue }
+                if let p = prints[shot.id], let leader = batch.first(where: { b in prints[b.0.id].map { ShotDetector.distance(p, $0) < samePictureInTake } ?? false }) {
+                    followers[leader.0.id, default: []].append(shot); continue
+                }
+                let r = try await request(shot)
+                if r.images.count == 1 {
+                    batch.append((shot, r))
+                    if batch.count >= describer.batchSize { try await flush() }
+                    continue
+                }
+                do {
+                    let result = try await describer.describe(r)
+                    var described = shot; described.look = result.look; described.engine = describer.engine
+                    if let p = prints[shot.id] { looks.add(described, p) }
+                    try saved(described)
+                } catch let e as DirectionError where e.code == "description_invalid" {}
+            }
+            try await flush()
+        } else {
+            try await withThrowingTaskGroup(of: Shot?.self) { group in
+                var queue = todo[...]
+                func add() {
+                    guard let shot = queue.popFirst() else { return }
+                    group.addTask {
+                        if let p = prints[shot.id], let same = looks.nearest(p, assetID: asset.id) { return reused(shot, from: same) }
+                        let r = try await request(shot)
+                        do {
+                            let result = try await describer.describe(r)
+                            if let s = result.spend { cents.add(s) }
+                            var described = shot; described.look = result.look; described.engine = describer.engine
+                            if let p = prints[shot.id] { looks.add(described, p) }
+                            return described
+                        } catch is CancellationError { throw CancellationError() }
+                        catch let e as DirectionError where e.code == "description_invalid" { return nil }
+                    }
+                }
+                for _ in 0..<max(1, describer.concurrency) { add() }
+                while let result = try await group.next() {
+                    if let shot = result { try saved(shot) }
+                    add()
+                }
             }
         }
         let all = try store.shots(assetID: asset.id)
@@ -326,6 +374,11 @@ public enum FootageIndexer {
         if cents.total > 0 { t.spend = (t.spend ?? 0) + cents.total }
         try store.saveTakeIndex(t, summary: "Looked at \(asset.name)")
         return count
+    }
+
+    static func jpegPrint(_ url: URL) -> [Float]? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        return try? ShotDetector.featurePrint(image)
     }
 
     /// Feature-print distance under which a shot reuses another's line: 0.3 anywhere in the film,

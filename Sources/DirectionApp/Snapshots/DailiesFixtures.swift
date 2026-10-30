@@ -26,6 +26,15 @@ enum DailiesFixtures {
                 m.openTakeID = "take-2a-t3"
                 return scene(m, DailiesPreview(art: art, takePosition: SampleFilm.tc(0, 19, 2), takePlaying: true))
             },
+            "07-dailies-synced": {
+                // Two angles of one moment: the link badge on both pictures, the waveform on the sound take.
+                let m = film()
+                m.selectedSceneID = "scene-2"
+                var d = m.dailies
+                d.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "take-2a-t3", takes: [SyncedTake(assetID: "take-2a-t3", offset: 0, match: 1), SyncedTake(assetID: "take-2b-t2", offset: 0.089, match: 0.99)], method: "sound", createdAt: 0)]
+                m.dailies = d
+                return scene(m, DailiesPreview(art: art))
+            },
             "08-dailies-take-synced": {
                 // 2A T3 and 2B T2 recorded the same moment: the Angles row, and the line on each card.
                 let m = film()

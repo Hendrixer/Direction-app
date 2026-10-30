@@ -68,6 +68,18 @@ Transcription is Direction's work too. When footage arrives, the app transcribes
 - A take whose transcription failed (no speech on it, say) doesn't hold up logging. Its transcript section in Dailies says why and offers **Transcribe Again**.
 - Whisper runs through its library rather than its command line, with fallback temperatures, each window started fresh (`condition_on_previous_text` off) and silences skipped where it would make words up (`hallucination_silence_threshold` 2 s). The command line can't ask for fallback temperatures, so a window that began to loop ran on to the end of the take.
 
+### Transcription engines
+
+Measured on the director's 3:12 talking-head take on an M4 Max, against Whisper Large v3:
+
+| Engine | Time | Words | Differs from Large v3 | Word starts vs Large v3 |
+|---|---|---|---|---|
+| Apple (SpeechAnalyzer, Neural Engine) | 2.2 s (~85×) | 494 | 5.4% | median 0.08 s, 90% within 0.26 s |
+| Whisper Large v3 Turbo | 7.0 s (~27×) | 487 | 1.9% | median 0.08 s, 90% within 0.18 s |
+| Whisper Large v3 | 11.9 s (~16×) | 483 | n/a | n/a |
+
+Most of Apple's difference is verbatim speech Whisper tidies away: false starts and a repeated phrase ("it transitioned that large. I think", "I think we should"), which an editor wants for finding retakes, plus "7" for "seven". Turbo's one real slip: "in finite time" as "by nighttime". Settings › Footage says this in each choice's line.
+
 ### Logging in batches
 
 The editor logs footage in runs of up to 20 takes, each a fresh session, so no run grows past what one session can hold, and the director can circle while the rest is still being looked at.

@@ -5,6 +5,8 @@ Loads one mlx-vlm version once, then answers JSON lines on stdin/stdout:
 
     {"id": 1, "images": ["/path/a.jpg", ...], "prompt": "...", "max_tokens": 160}
     -> {"id": 1, "text": "..."}            or {"id": 1, "error": "..."}
+    {"id": 2, "batch": [{"images": ["/path/a.jpg"], "prompt": "..."}, ...], "max_tokens": 160}
+    -> {"id": 2, "texts": ["...", ...]}    (one-image prompts decoded together)
 
 The first line written is {"ready": true, "model": "..."} once the weights are loaded (they
 download to the Hugging Face cache on first use), or {"ready": false, "error": "..."}.
@@ -37,6 +39,10 @@ def main():
     try:
         from mlx_vlm import load, generate
         from mlx_vlm.prompt_utils import apply_chat_template
+        try:
+            from mlx_vlm import batch_generate
+        except ImportError:  # older mlx-vlm: batches are answered one at a time
+            batch_generate = None
 
         model, processor = load(args.model)
         config = getattr(model, "config", None)
@@ -45,6 +51,35 @@ def main():
         return 1
 
     reply({"ready": True, "model": args.model})
+
+    def one(images, text, max_tokens):
+        prompt = apply_chat_template(processor, config, text, num_images=len(images))
+        result = generate(model, processor, prompt, image=images or None, max_tokens=max_tokens, temperature=0.0, verbose=False)
+        return str(getattr(result, "text", result)).strip()
+
+    def reply_batch(rid, request):
+        """{"id", "batch": [{"images": [one path], "prompt"}], "max_tokens"} -> {"id", "texts": [...]}.
+
+        One-image prompts decode together through mlx-vlm's batch_generate (greedy). Where that
+        isn't available or fails, each is answered on its own, so a batch never comes back short.
+        """
+        items = request.get("batch") or []
+        max_tokens = int(request.get("max_tokens", args.max_tokens))
+        texts = None
+        if batch_generate is not None and len(items) > 1 and all(len(i.get("images", [])) == 1 for i in items):
+            try:
+                result = batch_generate(model, processor, images=[str(i["images"][0]) for i in items], prompts=[i["prompt"] for i in items], max_tokens=max_tokens)
+                texts = [str(t).strip() for t in result.texts]
+            except Exception:  # noqa: BLE001 - fall back to one at a time
+                traceback.print_exc(file=sys.stderr)
+                texts = None
+        try:
+            if texts is None or len(texts) != len(items):
+                texts = [one([str(p) for p in i.get("images", [])], i["prompt"], max_tokens) for i in items]
+            reply({"id": rid, "texts": texts})
+        except Exception as error:  # noqa: BLE001
+            traceback.print_exc(file=sys.stderr)
+            reply({"id": rid, "error": f"{type(error).__name__}: {error}"})
 
     for line in sys.stdin:
         line = line.strip()
@@ -58,6 +93,9 @@ def main():
         if request.get("quit"):
             break
         rid = request.get("id")
+        if "batch" in request:
+            reply_batch(rid, request)
+            continue
         try:
             images = [str(p) for p in request.get("images", [])]
             prompt = apply_chat_template(processor, config, request["prompt"], num_images=len(images))

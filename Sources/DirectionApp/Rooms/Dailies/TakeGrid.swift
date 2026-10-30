@@ -38,8 +38,6 @@ struct DailiesSceneView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
-                if let note = editorNote { DailiesSayLine(text: note, color: Gate.Text.secondary).frame(maxWidth: 780, alignment: .leading) }
-                if model.circledCount == 0, !allTakes.isEmpty { DailiesHowTo() }
                 if allTakes.isEmpty {
                     Text("No takes in this scene yet. Drag takes here from Unsorted.").font(Gate.Font.body).foregroundStyle(Gate.Text.tertiary)
                         .frame(maxWidth: .infinity).padding(.top, 120)
@@ -54,7 +52,7 @@ struct DailiesSceneView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.automatic)
-        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: order.filter(selection.contains)) { if let id = selection.first { model.openTakeID = id } } }
+        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: order.filter(selection.contains), available: !allTakes.isEmpty) { if let id = selection.first { model.openTakeID = id } } }
         .dropDestination(for: String.self) { items, _ in dropHere(items) }
         .modifier(DailiesGridKeys(model: model, order: order, columns: 4, selection: $selection, anchor: $anchor, showMove: $showMove))
         .focused($focused)
@@ -84,26 +82,18 @@ struct DailiesSceneView: View {
         .popover(isPresented: $showMove, arrowEdge: .bottom) { DailiesMovePicker(model: model, ids: Array(selection)) { showMove = false } }
     }
 
+    /// "2 takes · 6:24": what's here, and nothing else. The editor's suggestion is on its take.
     private var meta: String {
-        let setups = model.dailiesSetups(inScene: sceneID).filter { !$0.takes.isEmpty }.count
-        var parts = [DailiesFormat.count(setups, "setup"), DailiesFormat.count(allTakes.count, "take"), DailiesFormat.minutesSeconds(allTakes.reduce(0) { $0 + model.dailiesDuration($1.assetID) })]
-        let speaking = allTakes.filter { !(model.asset($0.assetID)?.audio.isEmpty ?? true) }
-        if !speaking.isEmpty && speaking.allSatisfy({ model.dailiesIsTranscribed($0.assetID) }) { parts.append("transcribed") }
+        var parts = [DailiesFormat.count(allTakes.count, "take"), Timecode.duration(allTakes.reduce(0) { $0 + model.dailiesDuration($1.assetID) })]
         if scene?.locked == true { parts.insert("Locked", at: 0) }
         return parts.joined(separator: " \u{00B7} ")
-    }
-
-    /// The editor's strongest suggestion in this scene, in its words.
-    private var editorNote: String? {
-        guard let t = allTakes.first(where: { $0.suggestion != nil && !$0.unusable }), let reason = t.suggestionReason else { return nil }
-        return "\(model.dailiesLabel(t)): \(reason.main) Your circle decides; I only suggest."
     }
 
     private func setupBlock(_ group: DailiesSetupGroup) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Text(group.code).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
-                Text(group.description).font(.system(size: 12.5)).foregroundStyle(Gate.Text.tertiary)
+                Text(group.description).font(.system(size: 12.5)).foregroundStyle(Gate.Text.tertiary).lineLimit(1).truncationMode(.tail).help(group.description)
                 Spacer(minLength: 8)
                 Text(DailiesFormat.count(group.takes.count, "take")).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
             }
@@ -164,7 +154,6 @@ struct DailiesTakeCard: View {
                 .draggable(payload) { DailiesTakeThumb(asset: model.asset(take.assetID), art: preview.art[take.assetID] ?? model.dailiesArt(take.assetID), preview: model.isPreview).frame(width: 168, height: 94.5).clipShape(RoundedRectangle(cornerRadius: 7)).rotationEffect(.degrees(-3)).opacity(0.92) }
             Text(model.dailiesCaption(take)).font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary).lineSpacing(1.8).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             status.font(.system(size: 11.5)).lineLimit(1).padding(.top, -4)
-            if let g = model.dailies.syncGroup(for: take.assetID) { DailiesSyncLine(model: model, group: g, assetID: take.assetID).padding(.top, -4) }
         }
         .opacity(take.unusable ? 0.55 : 1)
         .contentShape(Rectangle())
@@ -183,10 +172,10 @@ struct DailiesTakeCard: View {
     @ViewBuilder private var status: some View {
         if take.unusable { Text("Not usable as a take").foregroundStyle(Gate.Text.disabled) }
         else if model.indexFailed(take.assetID) { Text("Couldn\u{2019}t look at this take").foregroundStyle(Gate.Text.disabled) }
-        else if take.circled && take.suggestion != nil { Text("Circled by you").foregroundColor(Gate.Voice.director) + Text(" \u{00B7} also suggested").foregroundColor(Gate.Voice.agent) }
-        else if take.circled { Text("Circled by you").foregroundStyle(Gate.Voice.director) }
-        else if let s = take.suggestionShort { Text("Suggested: \(s)").foregroundStyle(Gate.Voice.agent) }
-        else if !take.flags.isEmpty { Text(take.flags.joined(separator: " \u{00B7} ")).foregroundStyle(Gate.Text.disabled) }
+        // One short word or two. The editor's reason is in the take, and on hover here.
+        else if take.circled { Text("Circled").foregroundStyle(Gate.Voice.director) }
+        else if take.suggestion != nil { Text("Suggested").foregroundStyle(Gate.Voice.agent).help(take.suggestionReason.map { $0.main } ?? "") }
+        else if !take.flags.isEmpty { Text(take.flags.prefix(2).joined(separator: " \u{00B7} ")).foregroundStyle(Gate.Text.disabled) }
     }
 
     private var accessibilityText: String {
@@ -216,6 +205,7 @@ struct DailiesTakePicture: View {
             .overlay { if hovered { Color.white.opacity(0.04) } }
             .overlay(alignment: .topTrailing) { if take.suggestion != nil { GemMark(size: 8).padding(7).accessibilityHidden(true) } }
             .overlay(alignment: .bottomTrailing) { DailiesDurationTag(text: Timecode.duration(model.dailiesDuration(take.assetID))).padding(6) }
+            .overlay(alignment: .bottomLeading) { if let g = model.dailies.syncGroup(for: take.assetID) { DailiesSyncBadge(model: model, group: g, assetID: take.assetID).padding(6) } }
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Gate.Line.subtle, lineWidth: 1))
             .overlay(alignment: .topLeading) { if showsNumber { number } }
@@ -378,40 +368,25 @@ struct DailiesMenuRowStyle: ButtonStyle {
 }
 
 /// A help tag as the frames draw it, for snapshots of hover states.
-/// "In sync with B1 · its sound": a take that recorded the same moment as others.
-struct DailiesSyncLine: View {
+/// On a take's picture: the takes it's in sync with ("B1"), and a waveform when the cut uses its sound.
+struct DailiesSyncBadge: View {
     var model: FilmModel
     var group: SyncGroup
     var assetID: String
     var body: some View {
+        // Angles are usually other setups, so the whole label: "2B T2", "B1".
         let others = group.takes.filter { $0.assetID != assetID }.map { model.dailiesLabel(model.dailies.take($0.assetID)) }
-        HStack(spacing: 5) {
-            Image(systemName: "link").font(.system(size: 9.5, weight: .semibold))
-            Text("In sync with \(others.joined(separator: ", "))" + (group.soundAssetID == assetID ? " \u{00B7} its sound" : ""))
+        let sound = group.soundAssetID == assetID
+        HStack(spacing: 4) {
+            Image(systemName: "link").font(.system(size: 9, weight: .bold))
+            Text(others.joined(separator: " ")).font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+            if sound { Image(systemName: "waveform").font(.system(size: 9, weight: .bold)) }
         }
-        .font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
-        .help("Recorded at the same moment, matched by sound. Right-click for Not in Sync or Use This Take\u{2019}s Sound.")
-    }
-}
-
-/// The first time through, before anything is circled: how circling works, in one line.
-struct DailiesHowTo: View {
-    var body: some View {
-        HStack(spacing: 6) {
-            Text("Click a take to select it, then press")
-            Key("C"); Text("to circle it. Double-click or press"); Key("\u{21A9}"); Text("to watch it.")
-        }
-        .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
-        .accessibilityElement(children: .combine)
-    }
-    private struct Key: View {
-        var text: String
-        init(_ text: String) { self.text = text }
-        var body: some View {
-            Text(text).font(.system(size: 10.5, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.secondary)
-                .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 17)
-                .background(RoundedRectangle(cornerRadius: 4).fill(Gate.Surface.panel).overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Gate.Line.strong, lineWidth: 1)))
-        }
+        .foregroundStyle(Gate.Text.primary)
+        .padding(.horizontal, 6).frame(height: 18)
+        .background(Capsule().fill(.black.opacity(0.55)).overlay(Capsule().strokeBorder(Gate.Line.strong, lineWidth: 1)))
+        .help("In sync with \(others.joined(separator: ", ")) by sound\(sound ? ". The cut uses this take\u{2019}s sound." : ".") Right-click for Not in Sync or Use This Take\u{2019}s Sound.")
+        .accessibilityLabel("In sync with \(others.joined(separator: ", "))\(sound ? ", its sound is used" : "")")
     }
 }
 
@@ -419,22 +394,27 @@ struct DailiesHowTo: View {
 struct DailiesSelectionBar: View {
     var model: FilmModel
     var ids: [String]
+    /// There are takes on screen to select.
+    var available = true
     var onOpen: () -> Void
     var body: some View {
+        if available { bar }
+    }
+    private var bar: some View {
         let takes = ids.compactMap { model.dailies.takes[$0] }
-        if !takes.isEmpty {
-            let circled = takes.allSatisfy(\.circled), unusable = takes.allSatisfy(\.unusable)
-            HStack(spacing: 4) {
-                Text(takes.count == 1 ? model.dailiesLabel(takes[0]) : "\(takes.count) takes").font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Gate.Text.secondary).padding(.horizontal, 8)
-                item(circled ? "Uncircle" : "Circle", key: "C", color: Gate.Voice.director) { model.toggleCircles(ids) }.disabled(unusable)
-                if takes.count == 1 { item("Watch", key: "\u{21A9}") { onOpen() } }
-                item(unusable ? "Usable Again" : "Not Usable", key: "X") { model.toggleUnusable(ids) }
-            }
-            .padding(5).gateGlass(12).fixedSize()
-            .frame(maxWidth: .infinity).padding(.bottom, 16)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        let circled = !takes.isEmpty && takes.allSatisfy(\.circled), unusable = !takes.isEmpty && takes.allSatisfy(\.unusable)
+        // Always in the same place. With nothing selected it shows the keys, dimmed.
+        return HStack(spacing: 4) {
+            Text(takes.isEmpty ? "Select a take" : takes.count == 1 ? model.dailiesLabel(takes[0]) : "\(takes.count) takes")
+                .font(.system(size: 12, weight: .semibold, design: takes.isEmpty ? .default : .monospaced))
+                .foregroundStyle(takes.isEmpty ? Gate.Text.tertiary : Gate.Text.secondary).padding(.horizontal, 8)
+            item(circled ? "Uncircle" : "Circle", key: "C", color: Gate.Voice.director) { model.toggleCircles(ids) }.disabled(takes.isEmpty || unusable)
+            item("Watch", key: "\u{21A9}") { onOpen() }.disabled(takes.count != 1)
+            item(unusable ? "Usable Again" : "Not Usable", key: "X") { model.toggleUnusable(ids) }.disabled(takes.isEmpty)
         }
+        .opacity(takes.isEmpty ? 0.7 : 1)
+        .padding(5).gateGlass(12).fixedSize()
+        .frame(maxWidth: .infinity).padding(.bottom, 16)
     }
     private func item(_ title: String, key: String, color: Color = Gate.Text.primary, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -546,7 +526,7 @@ struct DailiesBinGrid<Action: View, Footer: View>: View {
             .padding(.horizontal, 28).padding(.top, 24).padding(.bottom, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: takes.map(\.assetID).filter(selection.contains)) { if let id = selection.first { model.openTakeID = id } } }
+        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: takes.map(\.assetID).filter(selection.contains), available: !takes.isEmpty) { if let id = selection.first { model.openTakeID = id } } }
         .modifier(DailiesGridKeys(model: model, order: takes.map(\.assetID), columns: 5, selection: $selection, anchor: $anchor, showMove: $showMove))
         .focused($focused)
         .onAppear { focused = true }

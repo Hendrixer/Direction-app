@@ -9,13 +9,33 @@ public struct LocalDescriber: ShotDescriber {
     public let repo: String
     public var engine: String { "mlx-vlm \u{00B7} " + repo }
     public var concurrency: Int { 1 }
+    /// mlx-vlm decodes one-frame shots together: 8 at a time took 0.86 s a shot on an M4 Max against
+    /// 1.30 s one by one (Qwen3-VL 8B), with the same lines.
+    public var batchSize: Int { 8 }
     public init(repo: String) { self.repo = repo }
 
     public func describe(_ request: DescribeRequest) async throws -> DescribeResult {
         let helper = LocalVisionHelper.shared(repo)
-        return try await DescribePrompt.run(words: request.words) { prompt in
+        return try await DescribePrompt.run(words: request.words, frames: request.images.count) { prompt in
             (try await helper.ask(images: request.images, prompt: prompt, maxTokens: DescribePrompt.maxTokens), nil)
         }
+    }
+
+    /// One-frame shots go in one batched request; a reply that doesn't fit is asked again on its own.
+    public func describeBatch(_ requests: [DescribeRequest]) async throws -> [DescribeResult?] {
+        guard requests.count > 1, requests.allSatisfy({ $0.images.count == 1 }) else {
+            var out: [DescribeResult?] = []
+            for r in requests { do { out.append(try await describe(r)) } catch let e as DirectionError where e.code == "description_invalid" { out.append(nil) } }
+            return out
+        }
+        let helper = LocalVisionHelper.shared(repo)
+        let texts = try await helper.askBatch(requests.map { ($0.images[0], DescribePrompt.text(words: $0.words, frames: 1)) }, maxTokens: DescribePrompt.maxTokens)
+        var out: [DescribeResult?] = []
+        for (r, text) in zip(requests, texts) {
+            if let look = DescribePrompt.parse(text) { out.append(DescribeResult(look: look)); continue }
+            do { out.append(try await describe(r)) } catch let e as DirectionError where e.code == "description_invalid" { out.append(nil) }
+        }
+        return out
     }
     public func finish() async { await LocalVisionHelper.shared(repo).scheduleStop() }
 }
@@ -83,16 +103,28 @@ public actor LocalVisionHelper {
         }
     }
 
+    /// Several one-image prompts decoded together; the texts come back in order.
+    public func askBatch(_ items: [(image: URL, prompt: String)], maxTokens: Int) async throws -> [String] {
+        let reply = try await send(.object(["batch": .array(items.map { .object(["images": .array([.string($0.image.path)]), "prompt": .string($0.prompt)]) }), "max_tokens": .number(Double(maxTokens))]))
+        guard let texts = reply["texts"].array?.map({ $0.string ?? "" }), texts.count == items.count else { throw DirectionError("vision_helper_failed", "The vision helper answered a batch with the wrong number of lines.") }
+        return texts
+    }
+
     /// One request: images and a prompt in, the text the version wrote out.
     public func ask(images: [URL], prompt: String, maxTokens: Int) async throws -> String {
+        try await send(.object(["images": .array(images.map { .string($0.path) }), "prompt": .string(prompt), "max_tokens": .number(Double(maxTokens))]))["text"].string ?? ""
+    }
+
+    private func send(_ body: JSONValue) async throws -> JSONValue {
         idle?.cancel()
         try await start()
         guard let input, let reader, let process else { throw DirectionError("vision_helper_failed", "The vision helper isn't running.") }
         busy = true; defer { busy = false; lastUse = Date(); scheduleStop() }
         nextID += 1
         let id = nextID
-        let request = JSONValue.object(["id": .number(Double(id)), "images": .array(images.map { .string($0.path) }), "prompt": .string(prompt), "max_tokens": .number(Double(maxTokens))])
-        try input.write(contentsOf: try request.data() + Data("\n".utf8))
+        guard case .object(var fields) = body else { throw DirectionError("vision_helper_failed", "Bad request.") }
+        fields["id"] = .number(Double(id))
+        try input.write(contentsOf: try JSONValue.object(fields).data() + Data("\n".utf8))
         let timeout = timeoutSeconds
         let watchdog = Task { try? await Task.sleep(for: .seconds(timeout)); if !Task.isCancelled { process.terminate() } }
         defer { watchdog.cancel() }
@@ -106,7 +138,7 @@ public actor LocalVisionHelper {
             }
             guard let reply = try? JSONDecoder().decode(JSONValue.self, from: Data(line.utf8)), reply["id"].int == id else { continue }
             if let error = reply["error"].string { throw DirectionError("vision_helper_failed", error) }
-            return reply["text"].string ?? ""
+            return reply
         }
     }
 
@@ -208,7 +240,7 @@ public struct OpenRouterDescriber: ShotDescriber {
     }
 
     public func describe(_ request: DescribeRequest) async throws -> DescribeResult {
-        try await DescribePrompt.run(words: request.words) { prompt in
+        try await DescribePrompt.run(words: request.words, frames: request.images.count) { prompt in
             let reply = try await OpenRouter.chat(try body(request, prompt: prompt), key: key, spend: .looking)
             let content = reply["choices"].array?.first?["message"]["content"]
             // Content is a string, or a list of text parts from some versions.

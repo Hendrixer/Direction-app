@@ -189,6 +189,36 @@ struct IndexTests {
         #expect(again.describeSkipped?.contains("couldn't load") == true)
     }
 
+    /// Like This Mac's: batches of one-frame shots.
+    struct Batched: ShotDescriber {
+        var batches = Calls(), singles = Calls()
+        var engine: String { "batched stand-in" }
+        var concurrency: Int { 1 }
+        var batchSize: Int { 8 }
+        func describe(_ request: DescribeRequest) async throws -> DescribeResult { singles.add(); return DescribeResult(look: ShotLook(description: "Wide on a moving test pattern.", size: "wide")) }
+        func describeBatch(_ requests: [DescribeRequest]) async throws -> [DescribeResult?] {
+            batches.add()
+            #expect(requests.allSatisfy { $0.images.count == 1 })
+            return requests.map { DescribeResult(look: ShotLook(description: "Wide on a still test pattern \($0.images[0].lastPathComponent).", size: "wide")) }
+        }
+        func finish() async {}
+    }
+
+    @Test func shotsThatDontMoveAreDescribedTogether() async throws {
+        let folder = try Self.temp("batch"); defer { try? FileManager.default.removeItem(at: folder) }
+        guard let clip = try Self.cuts(in: folder) else { return }
+        let (store, runtime) = try Self.project(folder)
+        _ = try store.addAsset(try await MediaInspector.inspect(url: clip), append: false, expectedRevision: try store.revision())
+        let describer = Batched()
+        _ = try await FootageIndexer.run(store: store, options: FootageIndexer.Options(cacheDirectory: runtime.cacheDirectory, describer: describer)) { _ in }
+        let shots = try store.shots()
+        #expect(shots.count == 5 && shots.allSatisfy { $0.look != nil })
+        // The still patterns (a colour, bars, black) go in one batch; a pattern whose counter changes
+        // enough between its first and last frames goes on its own with three.
+        #expect(describer.batches.count == 1 && describer.singles.count <= 2, "\(describer.batches.count) batches, \(describer.singles.count) singles")
+        #expect(try store.takeIndex(shots[0].assetID)?.described == 5)
+    }
+
     @Test func aSecondTakeOfTheSamePictureReusesItsDescriptions() async throws {
         let folder = try Self.temp("reuse"); defer { try? FileManager.default.removeItem(at: folder) }
         guard let clip = try Self.cuts(in: folder) else { return }

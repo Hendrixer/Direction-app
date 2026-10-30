@@ -108,7 +108,9 @@ extension FilmModel {
     // MARK: Describing a take
 
     /// "2A T3", or the file name before the editor has logged it.
+    /// "2A T3"; "A1" when the take's code already starts with its setup's ("A A1" said it twice).
     func dailiesLabel(_ t: TakeInfo) -> String {
+        if let setup = t.setupCode, !setup.isEmpty, let code = t.code, code.hasPrefix(setup) { return code }
         let parts = [t.setupCode, t.code].compactMap { $0 }.filter { !$0.isEmpty }
         return parts.isEmpty ? (asset(t.assetID)?.name ?? "Take") : parts.joined(separator: " ")
     }
