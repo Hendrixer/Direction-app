@@ -46,8 +46,14 @@ extension SharedSettings {
         lookOverride.flatMap(LookEngine.init(rawValue:)) ?? defaults.string(forKey: IndexKey.engine).flatMap(LookEngine.init(rawValue:)) ?? .thisMac
     }
     public static var lookDetail: LookDetail {
-        let id = ProcessInfo.processInfo.environment["DIRECTION_LOOK_DETAIL"] ?? defaults.string(forKey: IndexKey.detail) ?? "standard"
+        let id = ProcessInfo.processInfo.environment["DIRECTION_LOOK_DETAIL"] ?? defaults.string(forKey: IndexKey.detail) ?? defaultLookDetail()
         return lookDetails.first { $0.id == id } ?? lookDetails[1]
+    }
+    /// Until the director chooses: Best where it fits (32 GB of memory or more), since its 30B
+    /// with 3B running per word is faster than Standard's 8B and describes better
+    /// (footage-index.md › Speed); Standard below that.
+    public static func defaultLookDetail(memory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> String {
+        memory >= lookDetails[2].minimumMemory ? "best" : "standard"
     }
     public static var lookOpenRouterVersion: String {
         defaults.string(forKey: IndexKey.openRouterVersion) ?? lookOpenRouterVersions[0].id

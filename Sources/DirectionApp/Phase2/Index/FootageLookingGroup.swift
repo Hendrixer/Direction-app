@@ -7,7 +7,7 @@ import DirectionMedia
 struct FootageLookingGroup: View {
     var preview = false
     @AppStorage(SharedSettings.IndexKey.engine, store: SharedSettings.defaults) private var engine = SharedSettings.LookEngine.thisMac.rawValue
-    @AppStorage(SharedSettings.IndexKey.detail, store: SharedSettings.defaults) private var detail = "standard"
+    @AppStorage(SharedSettings.IndexKey.detail, store: SharedSettings.defaults) private var detail = SharedSettings.defaultLookDetail()
     @AppStorage(SharedSettings.IndexKey.openRouterVersion, store: SharedSettings.defaults) private var version = SharedSettings.lookOpenRouterVersions[0].id
     @AppStorage(SharedSettings.IndexKey.automatic, store: SharedSettings.defaults) private var automatic = true
     @State private var setup: Setup = .checking

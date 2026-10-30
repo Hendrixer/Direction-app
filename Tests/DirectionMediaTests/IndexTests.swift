@@ -456,3 +456,11 @@ struct IndexTests {
     #expect(VisionHelper.shardsComplete(["model.safetensors"]))
     #expect(!VisionHelper.shardsComplete([]))
 }
+
+/// Until the director chooses, Best describes footage wherever it fits: it's faster than Standard there.
+@Test func bestIsTheDefaultWhereItFits() {
+    #expect(SharedSettings.defaultLookDetail(memory: 64 << 30) == "best")
+    #expect(SharedSettings.defaultLookDetail(memory: 32 << 30) == "best")
+    #expect(SharedSettings.defaultLookDetail(memory: 24 << 30) == "standard")
+    #expect(SharedSettings.defaultLookDetail(memory: 16 << 30) == "standard")
+}
