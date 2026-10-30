@@ -112,10 +112,9 @@ import DirectionTools
         for t in film.turnovers where t.state.isOpen && !runs.contains(where: { $0.turnoverID == t.id }) {
             create(t.kind == "assembly" ? .assemble : .turnover, program: program, turnoverID: t.id, store: store)
         }
-        // Footage arriving: once the index has looked and Direction has the words, log what isn't logged.
-        if film.isLogging, !film.index.busy {
-            let total = film.project?.assets.count ?? 0, last = latest(.logFootage)
-            if last == nil || (last!.state == .done && (last!.assetCount ?? 0) < total) { create(.logFootage, program: program, assetCount: total, store: store) }
+        // Footage arriving: log it in batches as takes are ready, one fresh session per batch.
+        if film.isLogging, let batch = nextLogBatch(film, store: store) {
+            create(.logFootage, program: program, assetCount: film.project?.assets.count ?? 0, assetIDs: batch, store: store)
         }
         // Lock picture: finishing, once.
         if film.isPictureLocked, latest(.finish) == nil, !EditorRunner.finished(EditorRun(job: .finish, program: program.rawValue, version: ""), store: store) {
@@ -127,8 +126,46 @@ import DirectionTools
         }
     }
 
-    private func create(_ job: EditorJob, program: EditorProgram, turnoverID: String? = nil, assetCount: Int? = nil, store: ProjectStore) {
-        var run = EditorRun(job: job, program: program.rawValue, version: EditorSetup.version(program), turnoverID: turnoverID, assetCount: assetCount)
+    /// Logging in batches (footage-index.md › Logging in batches): up to 20 takes a run, so every run
+    /// stays small and the director can circle while the rest is still coming in. The first batch
+    /// starts at 5 ready takes, later ones at 20, and the last with whatever is left. Takes in sync go
+    /// together. One logging run at a time, and none while one is stopped or waiting for Try Again.
+    static let batchSize = 20, firstBatch = 5
+
+    private func nextLogBatch(_ film: FilmModel, store: ProjectStore) -> [String]? {
+        let logging = runs.filter { $0.job == .logFootage }
+        guard logging.allSatisfy({ $0.state == .done }) else { return nil }
+        let assets = film.project?.assets ?? []
+        let unlogged = assets.filter { film.dailies.takes[$0.id] == nil }
+        var tries: [String: Int] = [:]
+        for r in logging { for id in r.assetIDs ?? [] { tries[id, default: 0] += 1 } }
+        let decision = Self.logBatch(unlogged: unlogged.map(\.id), ready: Set(unlogged.filter { film.index.readyToLog($0) }.map(\.id)), tries: tries, firstRun: logging.isEmpty) { film.dailies.syncGroup(for: $0)?.takes.map(\.assetID) ?? [] }
+        switch decision {
+        case .wait: return nil
+        case .run(let ids): return ids
+        case .unplace(let ids):
+            for id in ids { try? store.logUnplaced(assetID: id, caption: film.index.shots(id).first?.look?.description ?? film.asset(id)?.name ?? "Take") }
+            return nil
+        }
+    }
+
+    enum LogBatch: Equatable { case wait, run([String]), unplace([String]) }
+
+    /// Pure: what logging does next with the takes not logged yet, in footage order.
+    static func logBatch(unlogged: [String], ready: Set<String>, tries: [String: Int], firstRun: Bool, partners: (String) -> [String]) -> LogBatch {
+        let fresh = unlogged.filter { tries[$0, default: 0] < 2 }
+        // Takes two runs left unlogged: Direction puts them in Unsorted once nothing else is coming.
+        if fresh.isEmpty { return unlogged.isEmpty ? .wait : .unplace(unlogged) }
+        let readyFresh = fresh.filter(ready.contains), preparing = readyFresh.count < fresh.count
+        guard !readyFresh.isEmpty, readyFresh.count >= batchSize || !preparing || (firstRun && readyFresh.count >= firstBatch) else { return .wait }
+        var batch = Array(readyFresh.prefix(batchSize))
+        let pool = Set(readyFresh)
+        for id in batch { for p in partners(id) where pool.contains(p) && !batch.contains(p) { batch.append(p) } }
+        return .run(batch)
+    }
+
+    private func create(_ job: EditorJob, program: EditorProgram, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, store: ProjectStore) {
+        var run = EditorRun(job: job, program: program.rawValue, version: EditorSetup.version(program), turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
         run.held = EditorSetup.asksFirst
         try? store.saveRun(run)
         runs.append(run)

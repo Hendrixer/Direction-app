@@ -273,23 +273,36 @@ public enum FootageIndexer {
         let frames = options.cacheDirectory.appendingPathComponent("IndexFrames").appendingPathComponent(asset.id)
         defer { try? FileManager.default.removeItem(at: frames) }
         let cents = SpendBox()
+        // Shots that look like one already described (the same setup, split by a small change, or
+        // another take of it) reuse its line: describing is most of the time (footage-index.md › Speed).
+        let prints = try store.featurePrints()
+        let looks = SameShotBox(try store.shots().filter { $0.look != nil }.compactMap { s in prints[s.id].map { (s, $0) } })
         var count = 0
+        t.described = shots.count - todo.count
         try await withThrowingTaskGroup(of: Shot?.self) { group in
             var queue = todo[...]
             func add() {
                 guard let shot = queue.popFirst() else { return }
                 group.addTask {
+                    if let p = prints[shot.id], let same = looks.nearest(p, assetID: asset.id) {
+                        var described = shot; described.look = same.look
+                        described.engine = "\(same.engine ?? describer.engine) \u{00B7} same picture as shot \(same.number)\(same.assetID == asset.id ? "" : " of another take")"
+                        return described
+                    }
                     var paths = (0..<3).map { describeFrame(shot, $0, options) }
                     if !paths.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
                         let images = try await SourceFrames.images(asset, at: keyframeTimes(shot), maxDimension: 672)
                         for (k, image) in images.enumerated() { try SourceFrames.writeJPEG(image, to: paths[k], quality: 0.85) }
                         paths = (0..<images.count).map { describeFrame(shot, $0, options) }
+                        // A shot that doesn't move (its first and last frames look alike) needs only its middle.
+                        if images.count == 3, let a = try? ShotDetector.featurePrint(images[0]), let b = try? ShotDetector.featurePrint(images[2]), ShotDetector.distance(a, b) < staticShot { paths = [paths[1]] }
                     }
                     let words = lines.filter { $0.start >= shot.start - 0.2 && $0.start < shot.end }.map(\.text).joined(separator: " ")
                     do {
                         let result = try await describer.describe(DescribeRequest(images: paths, words: words))
                         if let s = result.spend { cents.add(s) }
                         var described = shot; described.look = result.look; described.engine = describer.engine
+                        if let p = prints[shot.id] { looks.add(described, p) }
                         return described
                     } catch is CancellationError { throw CancellationError() }
                     catch let e as DirectionError where e.code == "description_invalid" { return nil }
@@ -297,7 +310,11 @@ public enum FootageIndexer {
             }
             for _ in 0..<max(1, describer.concurrency) { add() }
             while let result = try await group.next() {
-                if let shot = result { try store.updateShot(shot); count += 1 }
+                if let shot = result {
+                    try store.updateShot(shot); count += 1
+                    // The logging page shows "Describing 4 of 12 shots" from this.
+                    t.described += 1; try store.saveTakeIndex(t)
+                }
                 add()
             }
         }
@@ -309,6 +326,28 @@ public enum FootageIndexer {
         if cents.total > 0 { t.spend = (t.spend ?? 0) + cents.total }
         try store.saveTakeIndex(t, summary: "Looked at \(asset.name)")
         return count
+    }
+
+    /// Feature-print distance under which a shot reuses another's line: 0.3 anywhere in the film,
+    /// 0.35 within the take. One setup split by a small change measures 0.18–0.31; different
+    /// pictures measure about 1.
+    static let samePicture: Float = 0.3, samePictureInTake: Float = 0.35
+    /// First and last frames closer than this: the shot doesn't move, and one frame describes it.
+    static let staticShot: Float = 0.3
+
+    /// Described shots and their middle frame's feature print, shared by the describing tasks.
+    final class SameShotBox: @unchecked Sendable {
+        private let lock = NSLock(); private var items: [(Shot, [Float])]
+        init(_ items: [(Shot, [Float])]) { self.items = items }
+        func add(_ shot: Shot, _ print: [Float]) { lock.withLock { items.append((shot, print)) } }
+        func nearest(_ print: [Float], assetID: String) -> Shot? {
+            lock.withLock {
+                items.compactMap { s, p -> (Shot, Float)? in
+                    let d = ShotDetector.distance(print, p)
+                    return d < (s.assetID == assetID ? FootageIndexer.samePictureInTake : FootageIndexer.samePicture) ? (s, d) : nil
+                }.min { $0.1 < $1.1 }?.0
+            }
+        }
     }
 
     final class SpendBox: @unchecked Sendable {

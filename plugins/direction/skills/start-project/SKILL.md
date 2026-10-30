@@ -19,6 +19,8 @@ You can't watch video, so Direction looks at the footage for you, the way an ass
 
 Direction also finds takes that recorded the same moment by their sound (`direction_sync_takes`, run by itself when footage arrives): `direction_dailies` lists them as `syncGroups`, each with the take whose sound the cut uses and every take's offset on its clock. Log synced takes as angles of one moment in the same scene. Takes that don't share sound are never linked, so a single-camera film has none.
 
+When Direction starts you to log footage, it hands you a batch of up to 20 takes with everything it found already written out: shots and their descriptions, sounds, every word, and sync. Log that batch from what's written, call a tool only to check a moment that matters, and log only the takes listed; other batches come in later runs. In your own session, work the same way in batches of about 20.
+
 Log the footage for the director's Dailies with `direction_log_dailies`, working from the index rather than raw files:
 
 1. Read the shots with `direction_shots` (by `assetID`, or all of them page by page): each has a source range, a description, size, movement, people, setting, flags and the sounds in it. People are described, never named ("woman, dark hair"); map them to names yourself from the dialogue and the brief.

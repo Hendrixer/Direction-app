@@ -233,19 +233,16 @@ struct LoggingRow: Identifiable {
 
 extension FilmModel {
     /// Every file with where the editor is on it: problems first, then in progress, done, queued.
+    /// Progress is real where it's known (shots described, an estimate from how fast Whisper has run
+    /// on this Mac); elsewhere the row says how long it's been, never a bar that only loops.
     var loggingRows: [LoggingRow] {
         let assets = project?.assets ?? []
         let byAsset = Dictionary(grouping: transcripts, by: \.assetID)
         let transcribed = Set(transcripts.filter { !$0.words.isEmpty }.map(\.assetID))
         let running = jobs.filter { !$0.isTerminal && $0.kind == "transcription" }
         let editorActive = editorStatus.map { Date().timeIntervalSince1970 - $0.updatedAt < 120 } ?? false
-        // Jobs name their take; older ones didn't, so guess those: dialogue takes logged, then the rest, in order.
-        var transcribing = Dictionary(running.compactMap { j in j.assetID.map { ($0, j.progress) } }, uniquingKeysWith: { a, _ in a })
-        let unnamed = running.filter { $0.assetID == nil }
-        let untranscribed = assets.filter { !$0.audio.isEmpty && !transcribed.contains($0.id) && transcribing[$0.id] == nil }
-        let dialogue = untranscribed.filter { dailies.takes[$0.id]?.caption?.hasPrefix("\u{201C}") == true }
-        let unlogged = untranscribed.filter { dailies.takes[$0.id] == nil }
-        for (i, a) in (dialogue + unlogged).prefix(unnamed.count).enumerated() where transcribing[a.id] == nil { transcribing[a.id] = unnamed[i].progress }
+        let now = Date().timeIntervalSince1970, rate = transcriptionRate
+        let logging = runs.runs.last { $0.job == .logFootage && $0.state.isActive }
         var rows: [LoggingRow] = []
         for a in assets {
             let info = dailies.takes[a.id]
@@ -256,13 +253,27 @@ extension FilmModel {
             if !a.video.isEmpty && a.audio.isEmpty && (info == nil || flags.contains { $0.contains("no audio") }) && info?.unusable != true {
                 rows.append(.init(asset: a, info: info, status: .needsYou("No audio. Separate sound file?", sound: true))); continue
             }
-            if let progress = transcribing[a.id] { rows.append(.init(asset: a, info: info, status: .working("Transcribing", progress))); continue }
+            if let job = running.first(where: { $0.assetID == a.id }) {
+                if job.phase.hasPrefix("Downloading") { rows.append(.init(asset: a, info: info, status: .working("Downloading the Whisper model \u{00B7} " + Self.clock(now - job.createdAt), nil))); continue }
+                let expected = max(2, a.duration.seconds / rate), elapsed = now - job.createdAt
+                let left = expected - elapsed
+                rows.append(.init(asset: a, info: info, status: .working(left > 1 ? "Transcribing \u{00B7} about \(Self.clock(left)) left" : "Transcribing \u{00B7} almost done", min(0.97, elapsed / expected)))); continue
+            }
             if let info {
                 let line = Self.dailiesLines(byAsset[a.id] ?? []).first { !$0.direction }
                 let done = line.map { "\u{201C}\(Self.clip($0.text))\u{201D}" } ?? (["No dialogue"] + info.flags.prefix(1).map { $0.lowercased() }).joined(separator: " \u{00B7} ")
                 rows.append(.init(asset: a, info: info, status: .done(done))); continue
             }
-            if transcribed.contains(a.id) { rows.append(.init(asset: a, info: nil, status: .working("Logging", nil))); continue }
+            if let t = index.takes[a.id], t.state == .looking {
+                if t.step == "describing", t.shotCount > 0 {
+                    rows.append(.init(asset: a, info: nil, status: .working("Describing \(min(t.described, t.shotCount)) of \(DailiesFormat.count(t.shotCount, "shot"))", Double(t.described) / Double(t.shotCount)))); continue
+                }
+                rows.append(.init(asset: a, info: nil, status: .working(t.step == "shots" ? "Finding shots" : "Looking", nil))); continue
+            }
+            if let run = logging, run.assetIDs?.contains(a.id) ?? true {
+                rows.append(.init(asset: a, info: nil, status: .working("Logging \u{00B7} " + Self.clock(now - (run.startedAt ?? run.createdAt)), nil))); continue
+            }
+            if transcribed.contains(a.id) || index.readyToLog(a) { rows.append(.init(asset: a, info: nil, status: .working("Ready to log", nil))); continue }
             rows.append(.init(asset: a, info: nil, status: .queued))
         }
         // With the editor active but nothing visibly running, the first queued file is the one it's on.
@@ -271,6 +282,21 @@ extension FilmModel {
         }
         return rows.enumerated().sorted { ($0.element.rank, $0.offset) < ($1.element.rank, $1.offset) }.map(\.element)
     }
+
+    /// Seconds of audio Whisper gets through per second on this Mac, from this film's finished jobs.
+    var transcriptionRate: Double {
+        let rates = jobs.filter { $0.kind == "transcription" && $0.status == "completed" }.compactMap { j -> Double? in
+            guard let id = j.assetID, let a = asset(id), j.updatedAt > j.createdAt else { return nil }
+            return a.duration.seconds / (j.updatedAt - j.createdAt)
+        }.sorted()
+        return rates.isEmpty ? 15 : rates[rates.count / 2]
+    }
+
+    /// When this footage started coming in, and when logging finished, for "3:35 so far".
+    var loggingStartedAt: Double? { jobs.filter { ["index", "transcription", "sync"].contains($0.kind) }.map(\.createdAt).min() }
+    var loggingFinishedAt: Double? { isLogging ? nil : runs.runs.filter { $0.job == .logFootage }.compactMap(\.endedAt).max() }
+
+    static func clock(_ seconds: Double) -> String { let s = max(0, Int(seconds.rounded())); return String(format: "%d:%02d", s / 60, s % 60) }
 
     /// The stage line under the progress (footage-index.md › 05): the latest of Reading → Finding
     /// shots → Looking at footage → Listening → Sorting into scenes to have started. Counts in SF Mono.
@@ -325,7 +351,10 @@ struct OnboardingLoggingView: View {
                     VStack(spacing: 0) {
                         header(widths)
                         ScrollView {
-                            LazyVStack(spacing: 0) { ForEach(rows) { row($0, widths) } }
+                            // Elapsed times and estimates move once a second.
+                            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                                LazyVStack(spacing: 0) { ForEach(model.loggingRows) { row($0, widths) } }
+                            }
                         }
                         .scrollIndicators(.automatic)
                     }
@@ -363,6 +392,14 @@ struct OnboardingLoggingView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 Text(finished ? "Footage logged" : "Logging footage").font(Gate.Font.brand(size: 28, width: 122)).foregroundStyle(Gate.Text.primary)
+                if let start = model.loggingStartedAt {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let end = model.loggingFinishedAt ?? context.date.timeIntervalSince1970
+                        Text(finished ? "in \(FilmModel.clock(end - start))" : "\(FilmModel.clock(end - start)) so far")
+                            .font(.system(size: 13, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.secondary)
+                    }
+                    .accessibilityLabel(finished ? "Took \(FilmModel.clock((model.loggingFinishedAt ?? 0) - start))" : "Elapsed")
+                }
                 Text(finished ? "Every take is in Dailies." : ([model.loggingEstimate, model.dailies.scenes.isEmpty ? nil : "You can start circling takes now."].compactMap { $0 }.joined(separator: " "))).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
             }
             if !finished { LoggingBar(value: fraction).frame(height: 5).accessibilityLabel("Logged").accessibilityValue("\(Int(fraction * 100)) percent") }
@@ -474,8 +511,9 @@ struct OnboardingLoggingView: View {
             .font(.system(size: 12.5))
         case .working(let step, let progress):
             HStack(spacing: 8) {
-                GateProgress(value: progress, agent: true).frame(width: 80)
-                Text(step).foregroundStyle(Gate.Text.tertiary)
+                // A bar only when there's real progress to show; the spinner on the left says it's working.
+                if let progress { GateProgress(value: progress, agent: true).frame(width: 80) }
+                Text(step).foregroundStyle(Gate.Text.tertiary).monospacedDigit()
             }
             .font(.system(size: 12.5))
             .accessibilityLabel(progress.map { "\(step), \(Int($0 * 100)) percent" } ?? step)

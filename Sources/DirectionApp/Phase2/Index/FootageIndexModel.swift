@@ -83,6 +83,17 @@ import DirectionMedia
         lookAtFootage(film)
     }
 
+    /// Takes with sound whose words aren't settled yet.
+    @ObservationIgnored private(set) var unsettledWords: Set<String> = []
+
+    /// Ready for the editor to log: Direction has looked at it (when it looks by itself), its words
+    /// are in or settled, and its sound has been compared with the others (footage-index.md ›
+    /// Logging in batches).
+    func readyToLog(_ asset: MediaAsset) -> Bool {
+        let looked = asset.isImage || !SharedSettings.lookAutomatically || [.done, .failed].contains(state(asset.id))
+        return looked && !unsettledWords.contains(asset.id) && unsynced == 0
+    }
+
     /// Direction is still looking at or listening to footage that arrived, so logging waits. A take
     /// that just arrived counts as waiting before its index job exists.
     var busy: Bool { looking != nil || listening != nil || unsynced > 0 || (SharedSettings.lookAutomatically && states.values.contains(.waiting)) }
@@ -134,6 +145,7 @@ import DirectionMedia
             return last.status == "failed"
         }
         let waiting = speaking.filter { !settled($0) }
+        unsettledWords = film.isPreview ? [] : Set(waiting.map(\.id))
         listening = waiting.isEmpty || film.isPreview ? nil : IndexProgress(done: speaking.count - waiting.count, total: speaking.count)
         guard !film.isPreview, !startingTranscription, !jobs.contains(where: { !$0.isTerminal }), let next = waiting.first, let runtime = film.runtime else { return }
         startingTranscription = true

@@ -682,14 +682,18 @@ final class FilmModel {
     // MARK: Brief and footage
 
     func saveBrief(_ b: Brief) { brief = b; perform { try $0.saveBrief(b) } }
+    /// Files on their way in. The footage step shows logging from the first one, not the drop zone.
+    var importingFootage = 0
     func importFootage(_ urls: [URL]) {
         guard let runtime else { return }
+        importingFootage += urls.count
         Task {
             for url in urls {
                 do {
                     // Footage goes to the library; the editor builds the assembly from circles.
                     _ = try await runtime.invoke("direction_import", arguments: .object(["path": .string(url.path), "append": .bool(false)]))
                 } catch { self.error = "\(url.lastPathComponent): \(error.localizedDescription)" }
+                importingFootage = max(0, importingFootage - 1)
                 refresh(force: true)
             }
         }

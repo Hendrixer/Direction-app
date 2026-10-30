@@ -35,8 +35,12 @@ enum EditorJobs {
         var v = common(run.job, film: p.name, brief: brief, state: state)
         switch run.job {
         case .logFootage:
-            let logged = p.assets.filter { dailies.takes[$0.id] != nil }.count, waiting = p.assets.count - logged
-            v["footage"] = "There \(p.assets.count == 1 ? "is 1 take" : "are \(p.assets.count) takes") in the film; \(waiting == 1 ? "1 isn\u{2019}t" : "\(waiting) aren\u{2019}t") logged yet."
+            let logged = p.assets.filter { dailies.takes[$0.id] != nil }.count
+            let batch = (run.assetIDs ?? p.assets.filter { dailies.takes[$0.id] == nil }.map(\.id)).compactMap { id in p.assets.first { $0.id == id } }
+            let others = p.assets.count - logged - batch.count
+            v["footage"] = "This run logs \(batch.count == 1 ? "1 take" : "\(batch.count) takes"), listed below. The film has \(p.assets.count); \(logged) \(logged == 1 ? "is" : "are") logged already\(others > 0 ? " and \(others) more come in later runs" : ""). Log only the takes listed here."
+            v["takes"] = LoggingDigest.takes(batch, store: store, dailies: dailies)
+            v["scenes"] = LoggingDigest.scenes(dailies)
         case .assemble, .turnover:
             guard let t = try run.turnoverID.map({ try store.turnover($0) }) else { throw DirectionError("turnover_not_found", "This run has no turnover.") }
             let cuts = try store.cuts(), notes = try store.notes()
@@ -143,4 +147,57 @@ enum EditorJobs {
         candidates.append(NSHomeDirectory() + "/.local/bin/direction")
         return candidates.first { fm.isExecutableFile(atPath: $0) }
     }
+}
+
+/// What Direction found for a batch of takes, written into the logging job so the editor logs from
+/// it rather than fetching each part with a tool call (footage-index.md › Logging in batches).
+enum LoggingDigest {
+    /// Words per take before the rest is left to `direction_transcript`.
+    static let wordsPerTake = 1_200
+
+    static func takes(_ assets: [MediaAsset], store: ProjectStore, dailies: Dailies) -> String {
+        let transcripts = (try? store.transcripts()) ?? []
+        return assets.map { take($0, store: store, dailies: dailies, transcripts: transcripts) }.joined(separator: "\n\n")
+    }
+
+    static func take(_ a: MediaAsset, store: ProjectStore, dailies: Dailies, transcripts: [SourceTranscript]) -> String {
+        var out: [String] = []
+        let picture = a.video.first.map { "\($0.width)\u{00D7}\($0.height)" } ?? (a.isImage ? "still" : "sound only")
+        out.append("### \(a.name) \u{00B7} \(a.id) \u{00B7} \(clock(a.duration.seconds)) \u{00B7} \(picture)\(a.audio.isEmpty ? " \u{00B7} no sound" : "")")
+        if let g = dailies.syncGroup(for: a.id) {
+            let others = g.takes.filter { $0.assetID != a.id }.map { t in (try? store.read().asset(t.assetID).name) ?? t.assetID }
+            out.append("In sync with \(others.joined(separator: ", ")) (matched by sound)\(g.soundAssetID == a.id ? "; the cut uses this take\u{2019}s sound" : "").")
+        }
+        let shots = (try? store.shots(assetID: a.id)) ?? []
+        if !shots.isEmpty {
+            out.append("Shots:")
+            for s in shots {
+                guard let l = s.look else { out.append("\(s.number). \(clock(s.start))\u{2013}\(clock(s.end)) (not described)"); continue }
+                let kind = [l.size, l.movement].compactMap { $0 }.joined(separator: ", ")
+                let extra = [l.people.isEmpty ? nil : "people: " + l.people.joined(separator: "; "), l.setting.map { "setting: \($0)" }, l.flags.isEmpty ? nil : "flags: " + l.flags.joined(separator: ", ")].compactMap { $0 }
+                out.append("\(s.number). \(clock(s.start))\u{2013}\(clock(s.end))\(kind.isEmpty ? "" : " \u{00B7} \(kind)") \u{00B7} \(l.description)\(extra.isEmpty ? "" : " (" + extra.joined(separator: "; ") + ")")")
+            }
+        }
+        let sounds = ((try? store.sounds(assetID: a.id)) ?? []).filter { $0.kind != .silence && $0.end - $0.start >= 2 }
+        if !sounds.isEmpty { out.append("Sounds: " + sounds.prefix(12).map { "\($0.kind.rawValue) \(clock($0.start))\u{2013}\(clock($0.end))" }.joined(separator: ", ")) }
+        if let t = transcripts.filter({ $0.assetID == a.id }).max(by: { ($0.selectedAt ?? 0) < ($1.selectedAt ?? 0) }), !t.words.isEmpty {
+            let text = t.words.prefix(wordsPerTake).map(\.text).joined(separator: " ")
+            let more = t.words.count - wordsPerTake
+            out.append("Words (\(t.words.count)): \(text)\(more > 0 ? " \u{2026} (\(more) more: direction_transcript with assetID and offset \(wordsPerTake))" : "")")
+        } else if !a.audio.isEmpty {
+            out.append("Words: none transcribed.")
+        }
+        return out.joined(separator: "\n")
+    }
+
+    /// The scenes logged so far, so a later batch adds to them.
+    static func scenes(_ d: Dailies) -> String {
+        guard !d.scenes.isEmpty else { return "None yet. You start them." }
+        return d.scenes.sorted { $0.number < $1.number }.map { s in
+            let setups = s.setups.map { "\($0.code) \($0.description)" }.joined(separator: "; ")
+            return "- \(s.number) \(s.title) (\(s.id))\(setups.isEmpty ? "" : ": " + setups)"
+        }.joined(separator: "\n")
+    }
+
+    static func clock(_ seconds: Double) -> String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
 }

@@ -37,20 +37,37 @@ extension ToolRuntime {
 enum SyncPass {
     static func run(store: ProjectStore, assets: [MediaAsset], cache: URL) async throws -> JSONValue {
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
-        var curves: [String: SoundSync.Curve] = [:]
+        var curves: [String: SoundSync.Curve] = [:], keys: [String: String] = [:]
         for asset in assets {
             try Task.checkCancellation()
+            keys[asset.id] = curveKey(asset)
             if let c = try await curve(asset, cache: cache) { curves[asset.id] = c }
         }
         let ruledOut = Set((try store.dailies().notInSync ?? []).map { $0.sorted().joined(separator: "|") })
         let ids = assets.map(\.id).filter { curves[$0] != nil }
-        var matches: [(a: String, b: String, match: SoundSync.Match)] = []
+        let windows = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, recordingWindow($0)) })
+        // Every pair's answer is kept, keyed by both curves, so new footage is compared only against
+        // what's there, never everything again (footage-index.md › Sync).
+        let pairsFile = cache.appendingPathComponent("pairs.json")
+        var known = (try? JSONDecoder().decode([String: PairResult].self, from: Data(contentsOf: pairsFile))) ?? [:]
+        var matches: [(a: String, b: String, match: SoundSync.Match)] = [], compared = 0, skipped = 0
         for (i, a) in ids.enumerated() {
             for b in ids[(i + 1)...] where !ruledOut.contains([a, b].sorted().joined(separator: "|")) {
                 try Task.checkCancellation()
-                if let m = SoundSync.match(curves[a]!.values, curves[b]!.values) { matches.append((a, b, m)) }
+                let key = [keys[a]!, keys[b]!].sorted().joined(separator: "|"), flipped = keys[a]! > keys[b]!
+                let result: PairResult
+                if let r = known[key] { result = r }
+                else if let wa = windows[a] ?? nil, let wb = windows[b] ?? nil, !wa.overlaps(wb) { result = PairResult(); skipped += 1 }
+                else {
+                    // Stored as first key's take against the second's, whichever order they come in.
+                    let m = flipped ? SoundSync.match(curves[b]!.values, curves[a]!.values) : SoundSync.match(curves[a]!.values, curves[b]!.values)
+                    result = PairResult(m); compared += 1
+                }
+                known[key] = result
+                if let m = result.matchValue { matches.append(flipped ? (b, a, m) : (a, b, m)) }
             }
         }
+        try? JSONEncoder().encode(known).write(to: pairsFile, options: .atomic)
         let audioOnly = Set(assets.filter { $0.video.isEmpty }.map(\.id))
         let groups = SoundSync.groups(matches, curves: curves, audioOnly: audioOnly)
         try store.saveSync(groups, checked: assets.map(\.id))
@@ -58,14 +75,36 @@ enum SyncPass {
         for g in groups {
             DirectionLog.info("In sync by sound: " + g.takes.map { "\(names[$0.assetID] ?? $0.assetID) \($0.offset >= 0 ? "+" : "")\(String(format: "%.3f", $0.offset)) s (\($0.match))" }.joined(separator: ", ") + "; sound from \(names[g.soundAssetID] ?? g.soundAssetID)", "sync")
         }
-        return .object(["syncGroups": try .wrapping(groups), "compared": .number(Double(matches.count))])
+        return .object(["syncGroups": try .wrapping(groups), "compared": .number(Double(compared)), "skippedByDate": .number(Double(skipped))])
+    }
+
+    /// One pair's answer: the match if their sound lined up at all, nothing if not.
+    struct PairResult: Codable {
+        var offset: Double?, match: Double?, overlap: Double?
+        init() {}
+        init(_ m: SoundSync.Match?) { offset = m?.offset; match = m?.match; overlap = m?.overlap }
+        var matchValue: SoundSync.Match? { guard let offset, let match, let overlap else { return nil }; return .init(offset: offset, match: match, overlap: overlap) }
+    }
+
+    /// When a file could have been recording: from its creation to its last change, widened by its
+    /// length and six hours either side. Camera cards copied later, or OBS stamping a file when it
+    /// ends, stay inside it; footage shot on different days falls outside, and isn't compared.
+    static func recordingWindow(_ asset: MediaAsset) -> ClosedRange<Double>? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: asset.path) else { return nil }
+        let created = (attrs[.creationDate] as? Date)?.timeIntervalSince1970, modified = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970
+        guard let a = created ?? modified, let b = modified ?? created else { return nil }
+        let slack = 6 * 3600.0, length = asset.duration.seconds
+        return (min(a, b) - length - slack)...(max(a, b) + length + slack)
+    }
+
+    static func curveKey(_ asset: MediaAsset) -> String {
+        let muted = asset.audio.filter(\.settings.muted).map { String($0.id) }.joined(separator: ",")
+        return AudioProcessor.digest(Data("\(asset.path):\(asset.fileSize):\(asset.modifiedAt):\(muted):sync-v1".utf8))
     }
 
     /// A take's curve, kept on disk for as long as the file and its muted tracks don't change.
     static func curve(_ asset: MediaAsset, cache: URL) async throws -> SoundSync.Curve? {
-        let muted = asset.audio.filter(\.settings.muted).map { String($0.id) }.joined(separator: ",")
-        let key = AudioProcessor.digest(Data("\(asset.path):\(asset.fileSize):\(asset.modifiedAt):\(muted):sync-v1".utf8))
-        let file = cache.appendingPathComponent(key + ".json")
+        let file = cache.appendingPathComponent(curveKey(asset) + ".json")
         if let data = try? Data(contentsOf: file), let c = try? JSONDecoder().decode(SoundSync.Curve.self, from: data) { return c }
         guard let c = try await SoundSync.curve(asset: asset) else { return nil }
         try? JSONEncoder().encode(c).write(to: file, options: .atomic)

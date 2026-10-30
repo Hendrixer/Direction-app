@@ -65,8 +65,10 @@ public struct EditorRun: Codable, Hashable, Sendable, Identifiable {
     public var needsYou: [String] = []
     /// Invocations so far: the first start, then each resume, continue or try again.
     public var invocations = 0
-    public init(id: String = newID("run"), job: EditorJob, state: EditorRunState = .queued, program: String, version: String, turnoverID: String? = nil, assetCount: Int? = nil, createdAt: Double = Date().timeIntervalSince1970) {
-        self.id = id; self.job = job; self.state = state; self.program = program; self.version = version; self.turnoverID = turnoverID; self.assetCount = assetCount; self.createdAt = createdAt; self.updatedAt = createdAt
+    /// A logging run's batch: the takes it logs (footage-index.md › Logging in batches). Older runs logged everything.
+    public var assetIDs: [String]?
+    public init(id: String = newID("run"), job: EditorJob, state: EditorRunState = .queued, program: String, version: String, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, createdAt: Double = Date().timeIntervalSince1970) {
+        self.id = id; self.job = job; self.state = state; self.program = program; self.version = version; self.turnoverID = turnoverID; self.assetCount = assetCount; self.assetIDs = assetIDs; self.createdAt = createdAt; self.updatedAt = createdAt
     }
 }
 

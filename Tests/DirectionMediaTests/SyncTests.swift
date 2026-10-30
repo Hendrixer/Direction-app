@@ -76,6 +76,11 @@ struct SyncTests {
         #expect(Set(d.syncChecked ?? []) == Set(ids.values))
         // Nothing new: nothing to do.
         #expect(try await runtime.invoke("direction_sync_takes").value["note"].string != nil)
+        // Compared again from scratch, every pair's answer is already known: nothing is matched again.
+        let again = try await runtime.invoke("direction_sync_takes", arguments: .object(["force": .bool(true)])).value
+        let done = try await runtime.waitForJob(try #require(again["id"].string))
+        #expect(done.result?["compared"].int == 0)
+        #expect(try store.dailies().syncGroups?.first?.take(ids["late"]!) != nil)
     }
 
     // MARK: Fixtures

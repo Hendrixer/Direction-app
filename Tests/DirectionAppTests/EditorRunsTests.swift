@@ -417,3 +417,47 @@ struct EditorRunnerTests {
     // No cache: the list Codex had, never an empty menu.
     #expect(EditorProgram.codexModels(cache: file.appendingPathExtension("missing")).first?.id == "gpt-6.1-sol")
 }
+
+// MARK: Logging in batches (footage-index.md › Logging in batches)
+
+@MainActor
+@Test func loggingStartsSmallThenRunsInTwentiesAndKeepsSyncedTakesTogether() {
+    let ids = (1...45).map { "t\($0)" }
+    func decide(ready: Int, firstRun: Bool, tries: [String: Int] = [:], partners: [String: [String]] = [:]) -> EditorRunsModel.LogBatch {
+        EditorRunsModel.logBatch(unlogged: ids, ready: Set(ids.prefix(ready)), tries: tries, firstRun: firstRun) { partners[$0] ?? [] }
+    }
+    // The first batch goes at 5 ready takes; nothing before.
+    #expect(decide(ready: 4, firstRun: true) == .wait)
+    #expect(decide(ready: 6, firstRun: true) == .run(Array(ids.prefix(6))))
+    // Later ones wait for 20, and take at most 20, plus the takes in sync with them.
+    #expect(decide(ready: 12, firstRun: false) == .wait)
+    #expect(decide(ready: 30, firstRun: false, partners: ["t3": ["t25"]]) == .run(Array(ids.prefix(20)) + ["t25"]))
+    // The last batch takes whatever is left.
+    #expect(EditorRunsModel.logBatch(unlogged: ["a", "b"], ready: ["a", "b"], tries: [:], firstRun: false) { _ in [] } == .run(["a", "b"]))
+    // A take two runs left unlogged is skipped; once only those are left, Direction places them itself.
+    #expect(EditorRunsModel.logBatch(unlogged: ["a", "b"], ready: ["a", "b"], tries: ["a": 2], firstRun: false) { _ in [] } == .run(["b"]))
+    #expect(EditorRunsModel.logBatch(unlogged: ["a"], ready: ["a"], tries: ["a": 2], firstRun: false) { _ in [] } == .unplace(["a"]))
+    #expect(EditorRunsModel.logBatch(unlogged: [], ready: [], tries: [:], firstRun: false) { _ in [] } == .wait)
+}
+
+@MainActor
+@Test func aBatchRunCarriesWhatDirectionFoundAndOnlyItsTakes() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("batch-\(UUID().uuidString).direction")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = try ProjectStore.create(at: dir, name: "Essay")
+    var b = Brief(); b.logline = "An essay on the last invention."; b.feeling = "Calm."
+    try store.saveBrief(b)
+    let cam = MediaAsset(id: "cam", name: "camera.mp4", path: "/camera.mp4", duration: .init(seconds: 192), video: [.init(id: 1, width: 1920, height: 1080, frameRate: 30)], audio: [.init(id: 2, index: 0, label: "Audio 1", channels: 2, sampleRate: 48_000)])
+    let other = MediaAsset(id: "other", name: "later.mp4", path: "/later.mp4", duration: .init(seconds: 30), video: [.init(id: 1, width: 1920, height: 1080, frameRate: 30)])
+    for a in [cam, other] { _ = try store.addAsset(a, append: false, expectedRevision: try store.revision()) }
+    try store.replaceShots(assetID: "cam", [Shot(assetID: "cam", number: 1, start: 0, end: 43, look: ShotLook(description: "Close on a man with glasses speaking into a mic.", size: "close", movement: "static", flags: ["soft"]))])
+    try store.saveTranscript(SourceTranscript(assetID: "cam", audioTrackID: 2, provider: "test", words: ["Imagine", "being", "a", "scientist."].enumerated().map { i, w in TranscriptWord(text: w, range: .init(start: Double(i) * 0.5, end: Double(i) * 0.5 + 0.4)) }))
+    let run = EditorRun(job: .logFootage, program: "codex", version: "", assetIDs: ["cam"])
+    let text = try EditorJobs.text(for: run, store: store)
+    #expect(!text.contains("{{"))
+    #expect(text.contains("This run logs 1 take") && text.contains("1 more come in later runs"))
+    #expect(text.contains("### camera.mp4 \u{00B7} cam \u{00B7} 3:12"))
+    #expect(text.contains("1. 0:00\u{2013}0:43 \u{00B7} close, static \u{00B7} Close on a man with glasses speaking into a mic. (flags: soft)"))
+    #expect(text.contains("Words (4): Imagine being a scientist."))
+    #expect(!text.contains("### later.mp4"))
+}

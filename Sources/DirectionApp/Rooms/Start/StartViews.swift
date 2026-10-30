@@ -65,7 +65,9 @@ struct OnboardingView: View {
             switch step {
             case .brief: OnboardingBriefStep(model: model)
             case .footage:
-                if model.hasFootage { OnboardingLoggingView(model: model) } else { OnboardingFootageDrop(model: model) }
+                // Continue with footage attached saves the brief before the first file is in: show logging
+                // from then, or the drop zone flashes for a moment.
+                if model.hasFootage || model.importingFootage > 0 { OnboardingLoggingView(model: model) } else { OnboardingFootageDrop(model: model) }
             case .firstLook: OnboardingAssemblyView(model: model)
             }
         }

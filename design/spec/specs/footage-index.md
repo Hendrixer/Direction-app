@@ -59,7 +59,7 @@ Looking at footage is Direction's own work, done on the editor's behalf. Until t
 
 ### Listening
 
-Transcription is Direction's work too. When footage arrives, the app transcribes every take with sound, one at a time, with the engine in Settings › Footage, alongside looking at it. The editor's logging run starts only once both are done, so the editor logs from the words. While Direction is still transcribing after the index finishes, the pill reads "Listening · 3 of 12".
+Transcription is Direction's work too. When footage arrives, the app transcribes every take with sound, one at a time, with the engine in Settings › Footage, alongside looking at it. A take is logged only once its words are in (see Logging in batches), so the editor logs from them. While Direction is still transcribing after the index finishes, the pill reads "Listening · 3 of 12".
 
 - The app owns these jobs, never the editor's helper, so they outlive an editor run. A transcription job that was cancelled or whose process exited (an editor run that ended, a crash) is started again by the app, twice at most.
 - Logging waits from the moment footage arrives: a take with no index yet counts as still being looked at, so the editor never starts before Direction has begun.
@@ -68,6 +68,25 @@ Transcription is Direction's work too. When footage arrives, the app transcribes
 - A take whose transcription failed (no speech on it, say) doesn't hold up logging. Its transcript section in Dailies says why and offers **Transcribe Again**.
 - Whisper runs through its library rather than its command line, with fallback temperatures, each window started fresh (`condition_on_previous_text` off) and silences skipped where it would make words up (`hallucination_silence_threshold` 2 s). The command line can't ask for fallback temperatures, so a window that began to loop ran on to the end of the take.
 
+### Logging in batches
+
+The editor logs footage in runs of up to 20 takes, each a fresh session, so no run grows past what one session can hold, and the director can circle while the rest is still being looked at.
+
+- **When a batch starts.** A take is ready once Direction has looked at it (when it looks by itself), its words are in or settled, and its sound has been compared. The first batch starts at 5 ready takes; later batches at 20; the last with whatever is left. Takes in sync go in the same batch. One logging run at a time, and none while one is stopped or waiting for Try Again.
+- **What a batch carries.** The job lists the scenes logged so far and, for each take in the batch, everything Direction found: picture size, sync, every shot with its times, size, movement, description, people, setting and flags, its sounds, and its words (up to 1,200, then where to read the rest). The editor logs from that and calls a tool only to see a moment that matters. On the director's first film, logging two takes by reading tools took Codex 991,000 tokens and 3½ minutes.
+- **Takes a run leaves.** A take that two finished runs didn't log goes to Unsorted with its first shot's description as its caption and the flag "Not logged by the editor", so logging finishes and the director can place it.
+
+### Speed
+
+- **Descriptions** are most of the time: about 2 s a shot for Qwen3-VL 8B on this Mac, nearly all of it writing the line. A shot whose middle frame is within 0.3 (feature-print distance) of one already described anywhere in the film, or 0.35 within its own take, reuses that shot's line ("same picture as shot 2"): one setup split by a small change, or another take of it. A shot whose first and last frames are within 0.3 doesn't move, and only its middle frame is sent (2.3 s instead of 3.1 s on the director's footage).
+- **Sync** keeps every pair's answer, keyed by both takes' curves, so new footage is compared only against what's there. Pairs whose recording windows can't overlap (creation to last change, widened by the length and six hours) aren't compared at all. In an optimized build a pair of 1-minute takes takes 0.3 ms and two 1-hour takes 30 ms.
+
+### 05 · The logging page
+
+- Each take's row says where it is, with a bar only when the progress is real: "Describing 4 of 12 shots"; "Transcribing · about 0:08 left", estimated from how fast Whisper has run on this film; "Finding shots", "Logging · 1:12" and "Ready to log" without one (the spinner on the left says it's working). No bar loops.
+- The title carries the time since the footage came in, "Logging footage 3:35 so far", and "Footage logged in 4:31" when it's done.
+- Continue on the brief with footage attached goes straight to this page: it shows from the moment the first file starts coming in, so the drop zone never flashes.
+
 ### Sync
 
 Takes that recorded the same moment (two cameras, a camera and a screen recording, a camera and a separate sound recorder, takes against a song) are found by their sound, as part of listening. Nothing is a "multicam" or "screen share" mode: takes are linked only when their sound matches, so a single-camera film, B-roll or silent footage is never linked and nothing about it changes.
@@ -75,7 +94,7 @@ Takes that recorded the same moment (two cameras, a camera and a screen recordin
 - **How.** Every take with sound at least 10 s long becomes a loudness curve: its loudest unmuted track (a silent desktop-audio track is skipped), decoded at 8 kHz on Direction's own clock (the one it plays on), averaged every 10 ms and standardized. Every pair of curves is cross-correlated through the FFT. A pair is the same moment when the curves correlate at 0.6 or more over at least 10 s of overlap; the peak is placed between samples with a parabola. Pairs chain into groups. Curves are kept in the cache, so new footage costs only its own decoding. On this Mac, at no cost: two 3-minute takes take about a second.
 - **The sound take.** One take in each group carries the sound the cut uses: a sound-only take if there is one (a recorder beats a camera mic), otherwise the loudest. Every take's offset is on its clock: sound take's time = take's time + offset. The director can change it (**Use This Take's Sound**); Direction keeps that choice when it compares again.
 - **The director's say.** **Not in Sync** takes a take out of its group, and the pair is never linked again.
-- **When.** By itself when footage arrives, alongside looking and listening; the editor's logging run waits for it. Checked takes are remembered, so it runs again only for new footage. The editor can run it with `direction_sync_takes`.
+- **When.** By itself when footage arrives, alongside looking and listening; a take isn't ready to log until it's been compared. Checked takes and every pair's answer are remembered (see Speed), so new footage is compared only against what's there. The editor can run it with `direction_sync_takes`.
 - **The editor.** `direction_dailies › syncGroups` lists the groups. A `cutaway` without `sourceRange` (give `seconds`) plays the same moment from a synced take, lined up to the frame: switching angles, a screen recording under the words about it, picture-in-picture with `reframe`. Logging logs synced takes as angles of one moment; the assembly lays the sound take (or the angle the brief wants seen most) on V1 and never lays its angles end to end.
 - **Dailies.** A synced take's card has a line under its status, "🔗 In sync with B1 · its sound". The open take (frame 08) gets an **Angles** row above the transcript: one button per take (a waveform glyph on the sound take), and switching keeps the same moment. ← → do too, between synced takes. The take's context menu has **Use This Take's Sound** and **Not in Sync**.
 

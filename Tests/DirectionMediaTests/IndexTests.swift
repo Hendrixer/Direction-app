@@ -149,13 +149,18 @@ struct IndexTests {
         #expect(try store.watchedRanges().last.map { $0.start == 1 && $0.end == 5 } == true)
     }
 
+    final class Calls: @unchecked Sendable { private let lock = NSLock(); private var n = 0; func add() { lock.withLock { n += 1 } }; var count: Int { lock.withLock { n } } }
+
     struct StandIn: ShotDescriber {
         var broken = false
+        var calls = Calls()
         var engine: String { "stand-in" }
         var concurrency: Int { 4 }
         func describe(_ request: DescribeRequest) async throws -> DescribeResult {
             if broken { throw DirectionError("vision_helper_failed", "mlx-vlm couldn't load the version.") }
-            #expect(request.images.count == 3 && request.images.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+            // Three frames, or just the middle one for a shot that doesn't move.
+            #expect([1, 3].contains(request.images.count) && request.images.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+            calls.add()
             return DescribeResult(look: ShotLook(description: "Wide on a test pattern \(request.images[0].lastPathComponent).", size: "wide"))
         }
         func finish() async {}
@@ -182,6 +187,22 @@ struct IndexTests {
         let again = try #require(try store.takeIndex(asset.id))
         #expect(again.state == .done && again.shotCount == 5 && again.described == 0)
         #expect(again.describeSkipped?.contains("couldn't load") == true)
+    }
+
+    @Test func aSecondTakeOfTheSamePictureReusesItsDescriptions() async throws {
+        let folder = try Self.temp("reuse"); defer { try? FileManager.default.removeItem(at: folder) }
+        guard let clip = try Self.cuts(in: folder) else { return }
+        let copy = folder.appendingPathComponent("second-take.mov")
+        try FileManager.default.copyItem(at: clip, to: copy)
+        let (store, runtime) = try Self.project(folder)
+        for url in [clip, copy] { _ = try store.addAsset(try await MediaInspector.inspect(url: url), append: false, expectedRevision: try store.revision()) }
+        let describer = StandIn()
+        _ = try await FootageIndexer.run(store: store, options: FootageIndexer.Options(cacheDirectory: runtime.cacheDirectory, describer: describer)) { _ in }
+        let shots = try store.shots()
+        // Every shot has a line, but only the first take's were written by the describer.
+        #expect(shots.count == 10 && shots.allSatisfy { $0.look != nil })
+        #expect(describer.calls.count == 5, "\(describer.calls.count) calls")
+        #expect(shots.filter { $0.engine?.contains("same picture as shot") == true }.count == 5)
     }
 
     // MARK: Search

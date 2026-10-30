@@ -76,6 +76,16 @@ extension ProjectStore {
         }
     }
 
+    /// A take two logging runs left unlogged goes to Unsorted with what Direction knows, so logging
+    /// can finish and the director can place it (footage-index.md › Logging in batches).
+    public func logUnplaced(assetID: String, caption: String) throws {
+        try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Put a take the editor didn\u{2019}t log in Unsorted") { d in
+            guard d.takes[assetID] == nil else { return }
+            var t = TakeInfo(assetID: assetID); t.caption = caption; t.flags = ["Not logged by the editor"]
+            d.takes[assetID] = t
+        }
+    }
+
     // MARK: Sync (footage-index.md › Sync)
 
     /// Direction's sync pass: groups found among the takes it checked. Groups the director has
