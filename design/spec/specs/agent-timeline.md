@@ -108,7 +108,7 @@ The editor may export the document to its working folder and analyze it in a scr
 
 | Op | Arguments | What Direction does |
 |---|---|---|
-| `cutaway` | `assetID`, `sourceRange?`, `seconds?`, `at`, `cover?` (a clip id or edit point) | Puts picture on V2 over the story; the sound underneath keeps playing. With `cover`, Direction centers it over a jump cut. Without `sourceRange`, `seconds` long: a take in sync with V1 there plays the same moment, lined up to the frame (switching angles, a screen recording under the words about it, picture-in-picture with `reframe`). |
+| `cutaway` | `assetID`, `sourceRange?`, `seconds?`, `at`, `cover?` (a clip id or edit point) | Puts picture on V2 over the story; the sound underneath keeps playing. With `cover`, Direction centers it over a jump cut. Without `sourceRange`, `seconds` long: a take in sync with V1 there plays the same moment, lined up to the frame (switching angles, a screen recording under the words about it, picture-in-picture with `reframe`). It stays lined up as the cut changes (footage-index.md › Sync). |
 | `placeGraphic` | `graphic`, `at`, `seconds?`, `aboveLook` (default true) | Places a checked graphic (`graphics.md`) on the first free layer at V2 or above |
 | `placeMade` | `madeID`, `at`, `track`, `sourceRange?` | Places a made clip like footage |
 
@@ -119,6 +119,7 @@ The editor may export the document to its working folder and analyze it in a scr
 | `gain` | `target` (clip id or track), `dB`, `keys?` | |
 | `fade` | `clipID`, `in?`, `out?` (frames) | |
 | `duck` | `track` (usually A2), `under` (usually A1), `dB`, `attack?`, `release?` | Direction finds every line of dialogue from the words and writes the gain keys |
+| `syncSound` | `clipID`, `assetID?` | A take in sync with a V1 clip plays its sound under it, in place of the clip's own: the group's sound take by default. Naming the clip's own take puts its sound back. Stays lined up like a synced cutaway. |
 | `placeMusic` | `madeID` or `assetID`, `at`, `endOn` (`cut`, `word`, or a time) | Lines the music's end up with a cut or a word, trimming from the head |
 | `audio` | as today | EQ, compression and per-track settings |
 

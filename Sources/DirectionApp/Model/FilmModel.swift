@@ -643,7 +643,33 @@ final class FilmModel {
 
     /// Not in Sync, and Use This Take's Sound (footage-index.md › Sync).
     func unsync(_ assetID: String) { perform { try $0.unsync(assetID: assetID) } }
-    func useSyncSound(_ assetID: String) { perform { try $0.setSyncSound(assetID: assetID) } }
+    /// Use This Take's Sound. The cut changes through the editor like any other note: where it plays
+    /// the group's takes with another take's sound, a sound note for the next turnover asks for this one.
+    func useSyncSound(_ assetID: String) {
+        let before = dailies.syncGroup(for: assetID)?.soundAssetID
+        perform { try $0.setSyncSound(assetID: assetID) }
+        guard before != assetID, let g = dailies.syncGroup(for: assetID), g.soundAssetID == assetID, let range = soundNoteRange(g, sound: assetID) else { return }
+        let label = dailiesLabel(dailies.take(assetID))
+        guard let note = addNote(text: "Use \(label)\u{2019}s sound here; it\u{2019}s in sync.", kind: .sound, range: range) else { return }
+        registerUndo("Use This Take\u{2019}s Sound") { m in
+            m.perform { try $0.dropNote(id: note.id) }
+            if let before { m.perform { try $0.setSyncSound(assetID: before) } }
+        }
+        toast = Toast(title: "Note \(note.number.map(String.init) ?? "") added: use \(label)\u{2019}s sound", detail: "The editor changes the cut at the next turnover.", actionTitle: "Open Notes", run: { [weak self] in self?.go(.notes) })
+    }
+
+    /// Where the cut plays a group's takes with another take's sound: its own, or sound laid in sync under it.
+    func soundNoteRange(_ g: SyncGroup, sound: String) -> ClosedRange<Double>? {
+        guard let clips = sequence?.clips else { return nil }
+        let members = Set(g.takes.map(\.assetID))
+        let off = clips.filter { c in
+            guard c.kind == .video, c.layer == 0, let id = c.assetID, members.contains(id) else { return false }
+            let laid = clips.first { $0.synced == true && $0.kind == .audio && $0.start < c.end && $0.end > c.start }?.assetID
+            return (laid ?? id) != sound
+        }
+        guard let a = off.map(\.start.seconds).min(), let b = off.map(\.end.seconds).max(), b > a else { return nil }
+        return a...b
+    }
     func setCircle(_ assetID: String, _ on: Bool) { perform { try $0.setCircle(assetID: assetID, circled: on) }; registerUndo(on ? "Circle Take" : "Uncircle Take") { $0.setCircle(assetID, !on) } }
     func moveTake(_ assetID: String, to sceneID: String?) { let old = dailies.take(assetID).sceneID; perform { try $0.setTakeScene(assetID: assetID, sceneID: sceneID) }; registerUndo("Move Take") { $0.moveTake(assetID, to: old) } }
     func setUnusable(_ assetID: String, _ on: Bool) { perform { try $0.setUnusable(assetID: assetID, unusable: on) }; registerUndo(on ? "Mark Not Usable" : "Mark Usable") { $0.setUnusable(assetID, !on) } }

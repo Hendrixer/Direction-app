@@ -469,7 +469,7 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
 
 @Test func theCatalogCoversEverySpecOperationAndEffect() throws {
     let ops = Set(EditCatalog.operations.map(\.op))
-    for name in ["insert", "overwrite", "removeRange", "remove", "move", "split", "trim", "roll", "slip", "slide", "splitEdit", "replaceTake", "removeWords", "tightenPauses", "speed", "freeze", "reframe", "balance", "matchBalance", "cameraLUT", "addEffect", "setEffect", "removeEffect", "transition", "removeTransition", "cutaway", "placeGraphic", "placeMade", "gain", "fade", "duck", "placeMusic", "audio", "format", "duplicateSequence"] { #expect(ops.contains(name), "\(name)") }
+    for name in ["insert", "overwrite", "removeRange", "remove", "move", "split", "trim", "roll", "slip", "slide", "splitEdit", "replaceTake", "removeWords", "tightenPauses", "speed", "freeze", "reframe", "balance", "matchBalance", "cameraLUT", "addEffect", "setEffect", "removeEffect", "transition", "removeTransition", "cutaway", "placeGraphic", "placeMade", "gain", "fade", "duck", "placeMusic", "syncSound", "audio", "format", "duplicateSequence"] { #expect(ops.contains(name), "\(name)") }
     for name in ["transform", "blend", "mask", "blur", "sharpen", "stabilize", "filter.grain", "filter.letterbox", "shader"] { #expect(EditCatalog.effect(name) != nil, "\(name)") }
     #expect(EditCatalog.errors.map(\.code).contains("words_are_yours") && EditCatalog.json()["operations"].array?.count == EditCatalog.operations.count)
     let params = try ShaderHeader.params("// direction: param amount 0 1 0.5\n// direction: param tint color #F2A33A\n[[ stitchable ]] half4 effect(coreimage::sample_h s, float amount, float3 tint) { return s; }")
@@ -494,6 +494,66 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     // d hadn't started at cut 0 (a at 2.0 is d at 0.5, but 0.6 s earlier it wasn't recording).
     cut.context.dailies.syncGroups![0].takes[1].offset = 2.6
     expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"cutaway","assetID":"d","at":0,"seconds":1}"#]) }
+}
+
+@Test func syncedClipsFollowTheStoryAsTheCutChanges() throws {
+    var cut = TimelineCut.make()
+    cut.context.dailies.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "a", takes: [SyncedTake(assetID: "a", offset: 0, match: 1), SyncedTake(assetID: "d", offset: 1.5, match: 0.98)], method: "sound", createdAt: 0)]
+    let id = try cut.apply(#"{"op":"cutaway","assetID":"d","at":1,"seconds":2}"#).operations[0].clipIDs![0]
+    #expect(clip(cut.project, id).synced == true)
+    // Slipping the story half a second later: the cutaway follows (a at 3.5 is d at 2.0).
+    let slipped = try cut.apply(#"{"op":"slip","clipID":"c1","frames":15}"#)
+    #expect(close(clip(cut.project, id).sourceRange.start.seconds, 2.0, 0.001))
+    #expect(slipped.warnings.isEmpty && slipped.operations[0].changes.contains { $0.tracks == ["V2"] })
+    // Removing a passage before it moves it with everything else and keeps it lined up.
+    try cut.apply(#"{"op":"removeRange","range":{"start":0.5,"end":0.8}}"#)
+    let after = clip(cut.project, id)
+    #expect(close(after.start.seconds, 0.7, 0.001) && close(after.sourceRange.start.seconds, 2.0, 0.001) && after.synced == true)
+    // Another take on V1 that isn't in sync: it keeps what it plays, stops following, and says so.
+    let under = try #require(cut.project.sequences[0].clips.first { $0.layer == 0 && $0.kind == .video && $0.start.seconds <= 0.7 && $0.end.seconds > 0.7 })
+    let swapped = try cut.apply("{\"op\":\"replaceTake\",\"clipID\":\"\(under.id)\",\"withAssetID\":\"b\",\"alignOn\":\"head\"}")
+    #expect(clip(cut.project, id).synced == nil && swapped.warnings.contains { $0.contains("isn't over a take it's in sync with") })
+
+    // Slipping the cutaway itself is choosing another moment by hand: no longer synced, no warning.
+    var hand = TimelineCut.make()
+    hand.context.dailies.syncGroups = cut.context.dailies.syncGroups
+    let away = try hand.apply(#"{"op":"cutaway","assetID":"d","at":1,"seconds":2}"#).operations[0].clipIDs![0]
+    let r = try hand.apply("{\"op\":\"slip\",\"clipID\":\"\(away)\",\"frames\":6}")
+    #expect(clip(hand.project, away).synced == nil && r.warnings.isEmpty && close(clip(hand.project, away).sourceRange.start.seconds, 1.7, 0.001))
+}
+
+@Test func aSyncedCutawaySplitsWhereTheStoryJumps() throws {
+    var cut = TimelineCut.make()
+    cut.context.dailies.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "a", takes: [SyncedTake(assetID: "a", offset: 0, match: 1), SyncedTake(assetID: "d", offset: 1.5, match: 0.98)], method: "sound", createdAt: 0)]
+    // V1 plays a 2–6, then jumps to a 10–15.
+    cut.project.sequences[0].clips[1] = Clip(id: "c2", assetID: "a", name: "a", start: .init(seconds: 4), sourceRange: .init(start: 10, end: 15))
+    try cut.apply(#"{"op":"cutaway","assetID":"d","at":3,"seconds":2}"#)
+    let pieces = cut.project.sequences[0].clips.filter { $0.assetID == "d" }.sorted { $0.start < $1.start }
+    #expect(pieces.count == 2 && pieces.allSatisfy { $0.synced == true })
+    // a at 5 is d at 3.5; a at 10 is d at 8.5.
+    #expect(close(pieces[0].start.seconds, 3) && close(pieces[0].sourceRange.start.seconds, 3.5, 0.001) && close(pieces[0].end.seconds, 4, 0.001))
+    #expect(close(pieces[1].start.seconds, 4) && close(pieces[1].sourceRange.start.seconds, 8.5, 0.001) && close(pieces[1].end.seconds, 5, 0.001))
+}
+
+@Test func syncSoundPlaysAnotherTakesSoundUnderAStoryClip() throws {
+    var cut = TimelineCut.make()
+    cut.context.dailies.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "a", takes: [SyncedTake(assetID: "a", offset: 0, match: 1), SyncedTake(assetID: "d", offset: 1.5, match: 0.98)], method: "sound", createdAt: 0)]
+    // c1 is the sound take already.
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"syncSound","clipID":"c1"}"#]) }
+    expectFailure("not_in_sync", index: 0) { _ = try cut.run([#"{"op":"syncSound","clipID":"c2"}"#]) }
+    let r = try cut.apply(#"{"op":"syncSound","clipID":"c1","assetID":"d"}"#)
+    let sound = clip(cut.project, r.operations[0].clipIDs![0])
+    // Lined up (a at 2.0 is d at 0.5), on the first free sound track (the music has A2), and c1's own sound is off.
+    #expect(sound.kind == .audio && sound.trackName == "A3" && sound.synced == true && close(sound.start.seconds, 0) && close(sound.sourceRange.start.seconds, 0.5, 0.001) && close(sound.duration.seconds, 4, 0.001))
+    #expect(clip(cut.project, "c1").audioOverrides["2"]?.muted == true)
+    #expect(TimelineExport.document(.init(project: cut.project, sequence: cut.project.sequences[0], cutName: "Cut 1", dailies: cut.context.dailies)).outline.contains("in sync"))
+    // It follows the story too.
+    try cut.apply(#"{"op":"slip","clipID":"c1","frames":15}"#)
+    #expect(close(clip(cut.project, sound.id).sourceRange.start.seconds, 1.0, 0.001))
+    // Naming the clip's own take puts its own sound back.
+    let back = try cut.apply(#"{"op":"syncSound","clipID":"c1","assetID":"a"}"#)
+    #expect(!cut.project.sequences[0].clips.contains { $0.id == sound.id } && clip(cut.project, "c1").audioOverrides["2"]?.muted == false)
+    #expect(back.operations[0].summary.contains("own sound again"))
 }
 
 @Test func theDirectorShapesSyncAndDirectionKeepsTheirChoices() throws {

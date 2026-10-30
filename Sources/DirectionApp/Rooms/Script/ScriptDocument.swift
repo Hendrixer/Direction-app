@@ -363,7 +363,10 @@ extension ScriptDocument {
             let scene = picture.flatMap { sceneByID[$0.id] } ?? dailies.scene(for: run.asset)
             let norm = ScriptText.normalized(text)
             var readings: [ScriptReading] = []
-            for m in entry.map({ entries[$0].members }) ?? [(run.asset, run.line)] {
+            // A take in sync with this one recorded the same performance from another angle: not
+            // another reading of the line (footage-index.md › Sync).
+            let angles = Set(dailies.syncGroup(for: run.asset)?.takes.map(\.assetID) ?? []).subtracting([run.asset])
+            for m in entry.map({ entries[$0].members }) ?? [(run.asset, run.line)] where !angles.contains(m.assetID) {
                 guard let l = source[m.assetID]?[m.line] else { continue }
                 let off = l.speaker.map { $0.contains("O.S") || $0.contains("OFF") } ?? false
                 readings.append(.init(assetID: m.assetID, lineIndex: m.line, text: l.text.trimmingCharacters(in: CharacterSet(charactersIn: "[] ")), start: l.start, end: l.end, exact: l.norm == norm || l.norm == src.norm, offCamera: off, aside: l.aside))

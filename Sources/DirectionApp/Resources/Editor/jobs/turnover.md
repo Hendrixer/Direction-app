@@ -1,4 +1,4 @@
-<!-- direction-job turnover v1 -->
+<!-- direction-job turnover v2 -->
 # Cut {{cutName}} of "{{film}}"
 
 Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
@@ -12,6 +12,8 @@ The director turned over {{noteCount}} on {{baseCut}}: turnover {{turnoverNumber
 3. Cut with `direction_edit`, reporting `progress` per note as you go. Ask with `direction_ask` only what you can't decide; keep cutting the notes it doesn't block.
 4. Watch every passage you changed with `direction_watch`.
 5. Deliver with `direction_turnover_complete` for turnover `{{turnoverID}}`, one answer per note.
+
+{{sync}}
 
 ## The brief
 {{brief}}

@@ -105,14 +105,17 @@ Story operations keep every layer in sync; overlays and sound-only clips move on
 | `setEffect` / `removeEffect` | `effectID, params?, keys?` / `effectID` | A clip's blend has the id `<clipID>:blend`. |
 | `transition` | `editPoint, type, frames` | Centered on the cut. `"|<clip>"` dips in at a clip's head. A dissolve needs handles; an edit that later takes them away drops it with a warning. |
 | `removeTransition` | `editPoint` | |
-| `cutaway` | `assetID, sourceRange \| seconds, at \| cover` | First free layer at V2 or above; its own sound is muted. `cover` (a clip or edit point) centers it over that cut. With `seconds` and no `sourceRange`, a take in `direction_dailies › syncGroups` plays the same moment as V1 under it. |
+| `cutaway` | `assetID, sourceRange \| seconds, at \| cover` | First free layer at V2 or above; its own sound is muted. `cover` (a clip or edit point) centers it over that cut. With `seconds` and no `sourceRange`, a take in `direction_dailies › syncGroups` plays the same moment as V1 under it, and stays in sync (below). |
 | `placeGraphic` | `graphic, at, seconds?, aboveLook?` (default true) | First free layer at V2 or above. |
 | `placeMade` | `madeID, at, track, sourceRange?` | Places a made clip like footage; the track must be free. |
 | `gain` | `target (clip or A track), dB, keys?: {dB: [{t, v}]}` | |
 | `fade` | `clipID, in?, out?` (frames) | |
 | `duck` | `track, under? (A1), dB, attack? (0.25), release? (0.5)` | Words less than 0.6 s apart are one line; keys go on every clip of `track`, and redoing it replaces them. |
+| `syncSound` | `clipID, assetID?` | A take in sync with a V1 clip plays its sound under it, lined up, in place of the clip's own: the group's `soundAssetID` by default. For the screen on V1 with the camera's mic, or a camera with a separate recorder. Naming the clip's own take puts its own sound back. |
 | `placeMusic` | `madeID \| assetID, at, endOn: {cut} \| {word} \| seconds, track?` | Ends on the cut or the word's start, trimmed from the head; if it's shorter, it starts later and says so. |
 | `audio`, `format`, `duplicateSequence` | as before | |
+
+**Staying in sync.** A synced clip (a `cutaway` without `sourceRange`, or `syncSound`'s sound) is `synced: true` in the timeline ("in sync" in the outline). After every operation Direction lines it up again with the V1 clip under its start, and splits it where V1 jumps to footage that doesn't carry on, so a slip, roll or new reading under it doesn't leave it behind. If the V1 under it isn't in sync with it any more, or it would need footage from before the take started, it keeps what it plays, stops being synced, and the operation warns. Slipping, swapping, speeding or freezing the synced clip itself is choosing by hand: it stops being synced without a warning.
 
 Older shapes still decode: `{"batch": {…}}` with `type` per operation and `{value,timescale}` times; `title`, `color`, `frame` and `rename` keep working.
 

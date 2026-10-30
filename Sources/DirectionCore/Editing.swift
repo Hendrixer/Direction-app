@@ -300,8 +300,13 @@ public enum EditReducer {
                 let (notes, unasked) = try noteCheck(op, batch, context)
                 if let context { try TimelineLocks.gate(op, w, context) }
                 let before = w.project, oldLength = w.s.duration.seconds
+                // Choosing what a synced clip plays by hand takes it out of sync.
+                let byHand = ["slip", "replaceTake", "speed", "freeze"].contains(op.type) ? op.clipID : nil
                 var outcome = try w.perform(op)
-                outcome.warnings += w.normalizeTransitions() + (op.resolved?.warnings ?? [])
+                if let id = byHand, let k = w.s.clips.firstIndex(where: { $0.id == id }) { w.s.clips[k].synced = nil }
+                let followed = w.relineSynced()
+                outcome.changes += followed.changes
+                outcome.warnings += w.normalizeTransitions() + (op.resolved?.warnings ?? []) + followed.warnings
                 try validate(w.project)
                 if let context { try TimelineLocks.check(before: before, after: w.project, si: si, context: context) }
                 steps.append(.init(op: op, outcome: outcome, notes: notes, unasked: unasked, delta: w.s.duration.seconds - oldLength))
@@ -610,6 +615,7 @@ struct EditWork {
             s.clips[ri].transition = nil
             return change("Took the transition out before \(label(s.clips[ri]))", s.clips[ri], head: true)
         case "cutaway": return try cutaway(op)
+        case "syncSound": return try syncSound(op)
         case "placeGraphic": return try placeGraphic(op)
         case "placeMade": return try placeMade(op)
         case "gain": return try gain(op)
@@ -1252,6 +1258,7 @@ struct EditWork {
         let r = MediaRange(start: at, duration: src.duration)
         let layer = firstFree(audio: false, from: 1, r)
         var clip = Clip(assetID: a.id, name: a.name, kind: .video, layer: layer, start: at, sourceRange: src)
+        if synced { clip.synced = true }
         // The sound under it keeps playing.
         for stream in a.audio { var m = stream.settings; m.muted = true; clip.audioOverrides[String(stream.id)] = m }
         s.clips.append(clip)
@@ -1266,6 +1273,82 @@ struct EditWork {
         guard let start = dailies.syncedTime(here, from: baseID, to: a.id) else { throw DirectionError("not_in_sync", "\(a.name) isn't in sync with \(label(base)). Give sourceRange, or see direction_dailies › syncGroups.") }
         guard start >= -frame / 2, start + length.seconds <= a.duration.seconds + frame else { throw bad("\(a.name) wasn't recording for all of \(tc(at))–\(tc(at + length)).") }
         return try sourceRange(MediaRange(start: MediaTime(seconds: max(0, start)), duration: length), of: a)
+    }
+
+    /// Another take in sync plays its sound under a story clip, lined up, in place of the clip's own:
+    /// the group's sound take by default (a recorder, or the better mic), or `assetID`. Naming the
+    /// clip's own take puts its own sound back (footage-index.md › Sync).
+    mutating func syncSound(_ op: EditOperation) throws -> Outcome {
+        let i = try clipIndex(op.clipID); let c = s.clips[i]
+        guard c.kind == .video, c.layer == 0, c.hold == nil, let baseID = c.assetID, let own = assetOf(c) else { throw bad("syncSound plays sound in sync under a story clip on V1.") }
+        guard let group = (context?.dailies ?? Dailies()).syncGroup(for: baseID) else { throw DirectionError("not_in_sync", "\(label(c)) isn't in sync with another take. See direction_dailies › syncGroups.") }
+        let soundID = op.assetID ?? group.soundAssetID
+        guard group.takes.contains(where: { $0.assetID == soundID }) else { throw DirectionError("not_in_sync", "That take isn't in sync with \(label(c)).") }
+        // Sound already laid in sync under this clip makes way.
+        let under = { (x: Clip) in x.synced == true && x.kind == .audio && x.start < c.end && x.end > c.start }
+        let had = s.clips.contains(where: under)
+        s.clips.removeAll(where: under)
+        if soundID == baseID {
+            guard had else { throw bad("\(label(c)) already plays its own sound.") }
+            for stream in own.audio { var m = c.audioOverrides[String(stream.id)] ?? stream.settings; m.muted = false; s.clips[i].audioOverrides[String(stream.id)] = m }
+            return .init(summary: "\(label(c)) plays its own sound again", changes: [.init(before: (c.start.seconds, c.end.seconds), after: (c.start.seconds, c.end.seconds), tracks: ["A1"])])
+        }
+        let a = try asset(soundID)
+        guard !a.audio.isEmpty else { throw bad("\(a.name) has no sound.") }
+        guard c.speed == 1 else { throw bad("\(label(c)) plays at \(String(format: "%g", c.speed))×; sound in sync needs it at normal speed.") }
+        let src = try syncedSource(a, at: c.start, length: c.duration)
+        var clip = Clip(assetID: a.id, name: a.name, kind: .audio, layer: firstFree(audio: true, from: 1, c.range), start: c.start, sourceRange: src)
+        clip.synced = true
+        s.clips.append(clip)
+        for stream in own.audio { var m = c.audioOverrides[String(stream.id)] ?? stream.settings; m.muted = true; s.clips[i].audioOverrides[String(stream.id)] = m }
+        return .init(summary: "\(label(c)) plays \(label(clip))\u{2019}s sound, in sync", changes: [.init(before: (c.start.seconds, c.end.seconds), after: (c.start.seconds, c.end.seconds), tracks: ["A1", clip.trackName])], clipIDs: [clip.id])
+    }
+
+    /// The story clip on V1 at a time.
+    func story(at t: MediaTime) -> Clip? {
+        s.clips.first { $0.kind == .video && $0.layer == 0 && $0.assetID != nil && $0.start.seconds <= t.seconds + 1e-9 && t.seconds < $0.end.seconds - 1e-9 }
+    }
+
+    /// Synced clips follow the story under them: after every operation each is lined up again with
+    /// the V1 clip under its start, and split where the story jumps to footage that doesn't carry
+    /// on from it, so each part follows its own. One that can't follow (the story under it isn't in
+    /// sync with it, plays at another speed, or the take wasn't recording then) keeps what it plays
+    /// and stops being synced, with a warning. Returns what changed and the warnings.
+    mutating func relineSynced() -> (changes: [LocalChange], warnings: [String]) {
+        guard let dailies = context?.dailies else { return ([], []) }
+        var changes: [LocalChange] = [], warnings: [String] = []
+        func expected(_ c: Clip, _ a: MediaAsset, under base: Clip, at t: MediaTime) -> Double? {
+            guard base.hold == nil, base.speed == c.speed, let id = base.assetID else { return nil }
+            // Where the take is at the clip's start, if the story's take carried on back to it.
+            let here = base.sourceTime(at: t).seconds - (t - c.start).seconds * c.speed
+            return dailies.syncedTime(here, from: id, to: a.id)
+        }
+        var i = 0
+        while i < s.clips.count {
+            defer { i += 1 }
+            guard s.clips[i].synced == true else { continue }
+            let c = s.clips[i]
+            guard let a = assetOf(c), c.hold == nil else { s.clips[i].synced = nil; continue }
+            func unsync(_ why: String) {
+                s.clips[i].synced = nil
+                warnings.append("\(label(c)) at \(tc(c.start)) \(why); it plays what it did and isn't kept in sync any more. Cut away again without sourceRange to line it up.")
+            }
+            guard let base = story(at: c.start), let start = expected(c, a, under: base, at: c.start) else { unsync("isn't over a take it's in sync with"); continue }
+            // Where the story jumps under the clip to footage that doesn't carry on from it, the clip
+            // splits, and the part after follows the story there.
+            let next = s.clips.filter { $0.kind == .video && $0.layer == 0 && $0.assetID != nil && $0.start.seconds > c.start.seconds + frame / 2 && $0.start.seconds < c.end.seconds - frame / 2 }.min { $0.start < $1.start }
+            if let next, expected(c, a, under: next, at: c.start).map({ abs($0 - start) >= frame / 2 }) ?? true {
+                let (l, r) = EditReducer.split(c, at: next.start)
+                s.clips[i] = l; s.clips.insert(r, at: i + 1)
+            }
+            let piece = s.clips[i]
+            guard start >= -frame / 2, start + piece.sourceRange.duration.seconds <= a.duration.seconds + frame else { unsync("needs \(a.name) from before it started or after it stopped recording"); continue }
+            let moved = start - piece.sourceRange.start.seconds
+            guard abs(moved) > frame / 4 else { continue }
+            s.clips[i].sourceRange.start = MediaTime(seconds: max(0, start))
+            changes.append(.init(before: (piece.start.seconds, piece.end.seconds), after: (piece.start.seconds, piece.end.seconds), tracks: [piece.trackName]))
+        }
+        return (changes, warnings)
     }
 
     mutating func placeGraphic(_ op: EditOperation) throws -> Outcome {

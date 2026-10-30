@@ -35,6 +35,16 @@ enum DailiesFixtures {
                 m.dailies = d
                 return scene(m, DailiesPreview(art: art))
             },
+            "07-dailies-synced-circled": {
+                // Circling one angle asks for the moment: the other shows the circle faint and broken.
+                let m = film()
+                m.selectedSceneID = "scene-2"
+                var d = m.dailies
+                d.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "take-2a-t3", takes: [SyncedTake(assetID: "take-2a-t3", offset: 0, match: 1), SyncedTake(assetID: "take-2b-t2", offset: 0.089, match: 0.99)], method: "sound", createdAt: 0)]
+                d.takes["take-2a-t3"]?.circled = true
+                m.dailies = d
+                return scene(m, DailiesPreview(art: art))
+            },
             "08-dailies-take-synced": {
                 // 2A T3 and 2B T2 recorded the same moment: the Angles row, and the line on each card.
                 let m = film()

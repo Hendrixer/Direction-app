@@ -152,7 +152,7 @@ public enum EditorActivityLog {
         "addEffect": "Adding an effect to", "setEffect": "Adjusting an effect in", "removeEffect": "Removing an effect from",
         "transition": "Adding a transition to", "removeTransition": "Removing a transition from", "cutaway": "Cutting away in",
         "placeGraphic": "Placing a graphic in", "placeMade": "Placing a made clip in", "gain": "Mixing", "fade": "Fading", "duck": "Ducking",
-        "placeMusic": "Placing music in", "audio": "Mixing", "title": "Titling", "format": "Changing the format of", "rename": "Renaming", "duplicateSequence": "Copying",
+        "placeMusic": "Placing music in", "audio": "Mixing", "syncSound": "Syncing sound in", "title": "Titling", "format": "Changing the format of", "rename": "Renaming", "duplicateSequence": "Copying",
     ]
 
     private static func edit(_ name: String, _ a: JSONValue, _ c: Context) -> ActivityInput {

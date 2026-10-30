@@ -5,7 +5,7 @@ import Foundation
 /// whole when something before it changes length, but nothing in it may change. After picture lock
 /// only color and sound change.
 enum TimelineLocks {
-    static let afterPictureLock: Set<String> = ["balance", "matchBalance", "cameraLUT", "color", "gain", "fade", "duck", "audio", "placeMusic"]
+    static let afterPictureLock: Set<String> = ["balance", "matchBalance", "cameraLUT", "color", "gain", "fade", "duck", "audio", "placeMusic", "syncSound"]
 
     static func gate(_ op: EditOperation, _ w: EditWork, _ c: EditContext) throws {
         guard c.state.pictureLocked, !afterPictureLock.contains(op.type) else { return }

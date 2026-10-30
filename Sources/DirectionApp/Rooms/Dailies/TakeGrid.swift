@@ -174,6 +174,7 @@ struct DailiesTakeCard: View {
         else if model.indexFailed(take.assetID) { Text("Couldn\u{2019}t look at this take").foregroundStyle(Gate.Text.disabled) }
         // One short word or two. The editor's reason is in the take, and on hover here.
         else if take.circled { Text("Circled").foregroundStyle(Gate.Voice.director) }
+        else if let angle = model.circledAngle(take.assetID) { Text("Circled with \(angle)").foregroundStyle(Gate.Voice.director.opacity(0.6)).help("The same moment as \(angle), which you circled. The editor treats it as circled too.") }
         else if take.suggestion != nil { Text("Suggested").foregroundStyle(Gate.Voice.agent).help(take.suggestionReason.map { $0.main } ?? "") }
         else if !take.flags.isEmpty { Text(take.flags.prefix(2).joined(separator: " \u{00B7} ")).foregroundStyle(Gate.Text.disabled) }
     }
@@ -181,7 +182,7 @@ struct DailiesTakeCard: View {
     private var accessibilityText: String {
         var parts = ["\(take.setupCode ?? "") Take \(take.takeNumber == .max ? "" : String(take.takeNumber)), \(Int(model.dailiesDuration(take.assetID).rounded())) seconds", model.dailiesCaption(take)]
         if let s = take.suggestionShort { parts.append("Suggested by the editor: \(s)") }
-        parts.append(take.unusable ? "Not usable" : take.circled ? "Circled" : "Not circled")
+        parts.append(take.unusable ? "Not usable" : take.circled ? "Circled" : model.circledAngle(take.assetID).map { "Circled with \($0)" } ?? "Not circled")
         parts.append(contentsOf: take.flags)
         return parts.joined(separator: ". ")
     }
@@ -228,6 +229,10 @@ struct DailiesTakePicture: View {
             ZStack(alignment: .topLeading) {
                 if take.circled {
                     HandCircle().trim(from: 0, to: drawn).stroke(Gate.Voice.director, style: .init(lineWidth: 1.8, lineCap: .round))
+                        .frame(width: 46, height: 36).transition(.opacity.animation(Gate.Motion.snap))
+                } else if model.circledAngle(take.assetID) != nil {
+                    // Circled through the angle it's in sync with: the same circle, faint and broken.
+                    HandCircle().stroke(Gate.Voice.director.opacity(0.45), style: .init(lineWidth: 1.4, lineCap: .round, dash: [3, 3.5]))
                         .frame(width: 46, height: 36).transition(.opacity.animation(Gate.Motion.snap))
                 }
                 Text(model.dailiesShortLabel(take)).font(.system(size: 11.5, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)

@@ -198,9 +198,10 @@ struct DailiesTakeViewer: View {
                         .background(RoundedRectangle(cornerRadius: 7).fill(open ? Gate.Surface.raised : .clear).overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(open ? Gate.Line.strong : Gate.Line.subtle, lineWidth: 1)))
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain).foregroundStyle(open ? Gate.Text.primary : Gate.Text.secondary)
+                    // A circled angle reads in the director's color: circling any of them asks for the moment.
+                    .buttonStyle(.plain).foregroundStyle(model.dailies.take(t.assetID).circled ? Gate.Voice.director : open ? Gate.Text.primary : Gate.Text.secondary)
                     .help(t.assetID == group.soundAssetID ? "\(label): the cut uses this take\u{2019}s sound" : "\(label), \(Self.offsetText(t.offset)) from the sound take")
-                    .accessibilityLabel("\(label)\(t.assetID == group.soundAssetID ? ", its sound is used" : "")\(open ? ", open" : "")")
+                    .accessibilityLabel("\(label)\(model.dailies.take(t.assetID).circled ? ", circled" : "")\(t.assetID == group.soundAssetID ? ", its sound is used" : "")\(open ? ", open" : "")")
                 }
             }
         }

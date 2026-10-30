@@ -99,6 +99,27 @@ struct FilmModelTests {
         #expect(changed)
     }
 
+    /// Use This Take's Sound asks for it where the cut plays the group with another take's sound.
+    @Test func aNewSoundTakeIsAskedForWhereTheCutPlaysAnotherSound() {
+        let m = FilmModel(preview: true)
+        var p = Project(name: "Sound")
+        p.sequences[0].clips = [
+            Clip(id: "c1", assetID: "cam", name: "cam", start: .zero, sourceRange: .init(start: 0, end: 4)),
+            Clip(id: "c2", assetID: "other", name: "other", start: .init(seconds: 4), sourceRange: .init(start: 0, end: 3)),
+            Clip(id: "c3", assetID: "screen", name: "screen", start: .init(seconds: 7), sourceRange: .init(start: 10, end: 12)),
+        ]
+        m.project = p
+        let g = SyncGroup(id: "g", soundAssetID: "cam", takes: [.init(assetID: "cam", offset: 0, match: 1), .init(assetID: "screen", offset: 0.089, match: 0.97)], method: "sound", createdAt: 0)
+        // Using the screen's sound: the camera at 0–4 plays its own, the screen at 7–9 already plays the screen's.
+        #expect(m.soundNoteRange(g, sound: "screen") == 0...4)
+        // Using the camera's: only the screen clip needs it.
+        #expect(m.soundNoteRange(g, sound: "cam") == 7...9)
+        // Sound already laid in sync under the screen clip counts as what it plays.
+        var laid = Clip(assetID: "cam", name: "cam", kind: .audio, layer: 1, start: .init(seconds: 7), sourceRange: .init(start: 9.9, end: 11.9)); laid.synced = true
+        m.project?.sequences[0].clips.append(laid)
+        #expect(m.soundNoteRange(g, sound: "cam") == nil)
+    }
+
     @Test func onboardingWalksBriefThenFootageUntilTheFirstCut() {
         let m = FilmModel(preview: true)
         m.project = Project(name: "New")
@@ -122,4 +143,36 @@ struct FilmModelTests {
         m.directing.pictureLocked = true
         #expect(m.isEnabled(.finish))
     }
+}
+
+/// A take in sync with the one in the cut recorded the same performance from another angle: Script
+/// doesn't offer it as another reading of the line.
+@Test func syncedAnglesArentOtherReadingsOfALine() {
+    func take(_ id: String) -> MediaAsset { MediaAsset(id: id, name: id + ".mov", path: "/\(id).mov", duration: .init(seconds: 20), video: [.init(id: 1, width: 1920, height: 1080, frameRate: 30)], audio: [.init(id: 2, index: 0, label: "Mic", channels: 1, sampleRate: 48_000)]) }
+    var p = Project(name: "Readings")
+    p.assets = ["cam", "screen", "retake"].map(take)
+    p.sequences[0].clips = [Clip(id: "c1", assetID: "cam", name: "cam", start: .zero, sourceRange: .init(start: 0, end: 4))]
+    func said(_ id: String, at offset: Double) -> SourceTranscript {
+        SourceTranscript(assetID: id, audioTrackID: 2, provider: "test", words: ["We", "waited", "two", "years."].enumerated().map { i, w in TranscriptWord(text: w, range: .init(start: offset + Double(i) * 0.5, end: offset + Double(i) * 0.5 + 0.4)) })
+    }
+    let transcripts = [said("cam", at: 1), said("screen", at: 2.5), said("retake", at: 1.2)]
+    var d = Dailies(scenes: [DailiesScene(id: "s1", number: 1, title: "Open")], takes: [:])
+    for (id, setup, code) in [("cam", "1A", "T1"), ("screen", "1B", "T1"), ("retake", "1A", "T2")] { var t = TakeInfo(assetID: id); t.sceneID = "s1"; t.setupCode = setup; t.code = code; d.takes[id] = t }
+    func readings() -> [String]? { ScriptDocument.build(project: p, sequence: p.sequences[0], transcripts: transcripts, dailies: d, cutScenes: []).lines.first?.readings.map(\.assetID).sorted() }
+    #expect(readings() == ["cam", "retake", "screen"])
+    d.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "cam", takes: [SyncedTake(assetID: "cam", offset: 0, match: 1), SyncedTake(assetID: "screen", offset: -1.5, match: 0.97)], method: "sound", createdAt: 0)]
+    #expect(readings() == ["cam", "retake"])
+}
+
+/// The assembly and turnover jobs list the takes in sync with the rules for cutting them, and say
+/// nothing about sync when a film has none.
+@Test func cuttingJobsCarryTheTakesInSync() {
+    var d = Dailies()
+    for (id, setup, code) in [("cam", "1A", "T1"), ("screen", "1B", "T1")] { var t = TakeInfo(assetID: id); t.setupCode = setup; t.code = code; d.takes[id] = t }
+    d.takes["screen"]?.circled = true
+    #expect(EditorJobs.syncRules(d, assets: []).isEmpty)
+    d.syncGroups = [SyncGroup(id: "g", soundAssetID: "cam", takes: [.init(assetID: "cam", offset: 0, match: 1), .init(assetID: "screen", offset: 0.089, match: 0.97)], method: "sound", createdAt: 0)]
+    let rules = EditorJobs.syncRules(d, assets: [])
+    #expect(rules.contains("- 1A T1 (its sound) \u{00B7} 1B T1, circled") && rules.contains("never two angles end to end") && rules.contains("`syncSound`"))
+    for job in ["assemble", "turnover"] { #expect(EditorJobs.template(job)?.contains("{{sync}}") == true, "\(job)") }
 }

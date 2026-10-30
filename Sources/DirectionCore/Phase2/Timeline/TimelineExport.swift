@@ -60,6 +60,7 @@ public enum TimelineExport {
             if let t = take(c) { d["take"] = .string(t) }
             if let n = input.dailies.scene(for: c.assetID)?.number { d["scene"] = .number(Double(n)) }
             if sound { d["linked"] = .string("picture") }
+            if c.synced == true { d["synced"] = .bool(true) }
             if let m = a?.madeID { d["madeID"] = .string(m) }
             if let g = a?.graphic { d["graphic"] = .string(g) }
             if !sound {
@@ -155,6 +156,7 @@ public enum TimelineExport {
                 let srcEnd = c.hold == nil ? c.sourceRange.end.seconds : c.sourceRange.start.seconds
                 parts.append("src \(tc(c.sourceRange.start.seconds))–\(tc(srcEnd))")
             }
+            if c.synced == true { parts.append("in sync") }
             if let t = c.transition { parts.append("\(t.type) \(t.frames)f in") }
             for e in c.effects ?? [] {
                 switch e.name {

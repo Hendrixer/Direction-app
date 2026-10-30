@@ -50,6 +50,7 @@ enum EditorJobs {
             v["baseCut"] = t.baseCutID.flatMap { id in cuts.first { $0.id == id }?.name } ?? "the current cut"
             v["noteCount"] = t.noteIDs.count == 1 ? "1 note" : "\(t.noteIDs.count) notes"
             v["circles"] = "The director circled \(dailies.takes.values.filter(\.circled).count) takes."
+            v["sync"] = syncRules(dailies, assets: p.assets)
             let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }.sorted { ($0.number ?? 0) < ($1.number ?? 0) }
             v["notes"] = included.map(noteLine).joined(separator: "\n")
             v["waitForOK"] = t.waitForOK
@@ -63,6 +64,29 @@ enum EditorJobs {
             v["loudness"] = "\(Int(lufs)) LUFS"
         }
         return fill(template(templateName(run.job)) ?? "", v)
+    }
+
+    /// How to cut takes in sync, with the film's groups, or nothing when it has none
+    /// (footage-index.md › Sync).
+    static func syncRules(_ dailies: Dailies, assets: [MediaAsset]) -> String {
+        let groups = dailies.syncGroups ?? []
+        guard !groups.isEmpty else { return "" }
+        func label(_ id: String) -> String {
+            let t = dailies.take(id), code = [t.setupCode, t.code].compactMap { $0 }.joined(separator: " ")
+            return code.isEmpty ? (assets.first { $0.id == id }?.name ?? id) : code
+        }
+        let list = groups.map { g in
+            "- " + g.takes.map { t in label(t.assetID) + (t.assetID == g.soundAssetID ? " (its sound)" : "") + (dailies.take(t.assetID).circled ? ", circled" : "") }.joined(separator: " \u{00B7} ")
+        }.joined(separator: "\n")
+        return """
+        ## Takes in sync
+        These recorded the same moment, matched by their sound. Each group is one performance, seen from more than one angle.
+        \(list)
+
+        - A circle on any take in a group asks for that moment. Put one angle on V1, never two angles end to end.
+        - Bring the other angles in over it with `cutaway` without `sourceRange` (give `at` and `seconds`): it plays the same moment, and Direction keeps it lined up as you edit.
+        - The cut uses the group's sound take. If the angle on V1 isn't it, `syncSound` that clip so the sound take plays under it.
+        """
     }
 
     /// A continuation of the same session: an answer, an approval, Resume or Try again.

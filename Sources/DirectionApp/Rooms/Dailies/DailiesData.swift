@@ -114,6 +114,12 @@ extension FilmModel {
         let parts = [t.setupCode, t.code].compactMap { $0 }.filter { !$0.isEmpty }
         return parts.isEmpty ? (asset(t.assetID)?.name ?? "Take") : parts.joined(separator: " ")
     }
+    /// An uncircled take in sync with a circled one, that one's label: circling either angle asks for
+    /// the moment, so the editor treats both as circled (footage-index.md › Sync).
+    func circledAngle(_ assetID: String) -> String? {
+        guard !dailies.take(assetID).circled, let g = dailies.syncGroup(for: assetID) else { return nil }
+        return g.takes.first { $0.assetID != assetID && dailies.take($0.assetID).circled }.map { dailiesLabel(dailies.take($0.assetID)) }
+    }
     /// "T3" inside its setup.
     func dailiesShortLabel(_ t: TakeInfo) -> String { t.code ?? dailiesLabel(t) }
     func dailiesDuration(_ id: String) -> Double { asset(id)?.duration.seconds ?? 0 }
