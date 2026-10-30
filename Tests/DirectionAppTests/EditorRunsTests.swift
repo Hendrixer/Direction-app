@@ -406,3 +406,14 @@ struct EditorRunnerTests {
         #expect(r.state == .stopped && r.reason == .stoppedByYou)
     }
 }
+
+@Test func codexVersionsAreTheModelsItsOwnMenuLists() throws {
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("models-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: file) }
+    try #"{"models":[{"slug":"gpt-6-astra","display_name":"GPT-6-Astra","visibility":"list","priority":2},{"slug":"gpt-reserve","display_name":"GPT-Reserve","visibility":"hide","priority":3},{"slug":"gpt-6.1-sol","display_name":"GPT-6.1-Sol","visibility":"list","priority":1},{"slug":"gpt-6.1-terra","display_name":"GPT-6.1 Terra","visibility":"list","priority":4}]}"#.write(to: file, atomically: true, encoding: .utf8)
+    let models = EditorProgram.codexModels(cache: file)
+    #expect(models.map(\.id) == ["gpt-6.1-sol", "gpt-6-astra", "gpt-6.1-terra"])
+    #expect(models.map(\.name) == ["GPT-6.1 Sol", "GPT-6 Astra", "GPT-6.1 Terra"])
+    // No cache: the list Codex had, never an empty menu.
+    #expect(EditorProgram.codexModels(cache: file.appendingPathExtension("missing")).first?.id == "gpt-6.1-sol")
+}

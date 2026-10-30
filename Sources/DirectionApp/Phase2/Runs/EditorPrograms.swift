@@ -11,13 +11,28 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     var command: String { self == .claudeCode ? "claude" : "codex" }
     var installCommand: String { self == .claudeCode ? "curl -fsSL https://claude.ai/install.sh | bash" : "npm install -g @openai/codex" }
 
-    /// Versions offered in Settings › Editor. Ships with the app; "Other…" takes any string the program accepts.
+    /// Versions offered in Settings › Editor; "Other…" takes any string the program accepts. Codex's
+    /// are the ones its own model menu lists, read from its cache, so they follow the installed Codex.
     var versions: [(id: String, name: String)] {
         switch self {
         case .claudeCode: [("claude-opus-5-5", "Claude Opus 5.5"), ("claude-sonnet-5-5", "Claude Sonnet 5.5"), ("claude-haiku-5-5", "Claude Haiku 5.5")]
-        // open-questions.md › Codex versions: undecided, so the program's own default.
-        case .codex: [("", "The program\u{2019}s default")]
+        case .codex: [("", "The program\u{2019}s default")] + Self.codexModels()
         }
+    }
+
+    /// Codex's model menu: `~/.codex/models_cache.json`, listed models by priority, named the way
+    /// its menu names them ("GPT-6.1-Sol" → "GPT-6.1 Sol"). Without the cache, the list it had on 2026-10-29.
+    static func codexModels(cache: URL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".codex/models_cache.json")) -> [(id: String, name: String)] {
+        struct Cache: Decodable { struct Model: Decodable { var slug: String; var display_name: String?; var visibility: String?; var priority: Int? }; var models: [Model] }
+        func name(_ display: String) -> String {
+            let parts = display.split(separator: "-", maxSplits: 2).map(String.init)
+            return parts.count == 3 ? "\(parts[0])-\(parts[1]) \(parts[2])" : display
+        }
+        if let data = try? Data(contentsOf: cache), let c = try? JSONDecoder().decode(Cache.self, from: data) {
+            let listed = c.models.filter { ($0.visibility ?? "list") == "list" }.sorted { ($0.priority ?? .max) < ($1.priority ?? .max) }
+            if !listed.isEmpty { return listed.map { ($0.slug, name($0.display_name ?? $0.slug)) } }
+        }
+        return [("gpt-6.1-sol", "GPT-6.1 Sol"), ("gpt-6-astra", "GPT-6 Astra"), ("gpt-6.1-terra", "GPT-6.1 Terra"), ("gpt-6-sol", "GPT-6 Sol"), ("gpt-6-luna", "GPT-6 Luna"), ("gpt-5.6-sol", "GPT-5.6 Sol"), ("gpt-5.6-terra", "GPT-5.6 Terra"), ("gpt-5.6-luna", "GPT-5.6 Luna")]
     }
     var defaultVersion: String { versions[0].id }
     func versionName(_ id: String) -> String { versions.first { $0.id == id }?.name ?? id }

@@ -39,7 +39,7 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 - **Hosted sharing (39, 40, 48).** Screening links need a hosted service ("direction.film") and server-side watermarking. Today Direction is local only. Build the Share sheet and the Outside inbox; until a service exists, Share shows a disabled state ("Sharing isn't set up on this Mac"), and outside notes can come in through the editor's tools.
 - **Credit for outside notes.** Should an accepted outside note keep its author's name when the editor sees it? The default is yes (Settings › Sharing).
 - **Region dim strength.** While drawing, the area outside the region is dimmed 35%. That may be too subtle over bright footage; 50% while drawing, 35% at rest is the fallback.
-- **Codex versions.** The list of versions to offer for Codex. Until decided, "The program's default" and Other….
+- **Codex versions** (decided): the models Codex's own menu lists, read from `~/.codex/models_cache.json` (visible ones, by priority, named as its menu names them), after "The program's default". Without the cache, the list as of 2026-10-29. Other… still takes any model name.
 - **Cost with plan sign-ins.** Claude Code and Codex may report no cost when signed in with a plan. The popover hides spend then; decide whether to show tokens instead.
 - **Music for release.** Each music version on OpenRouter has its own terms. Decide whether Direction warns at delivery when a film contains made music.
 - **Vision downloads.** Standard is 5.8 GB and Best 17 GB. This Mac has 13 GB free today; decide whether Quick should be the default on Macs with less than 50 GB free.
