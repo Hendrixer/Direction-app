@@ -6,7 +6,6 @@ import DirectionCore
 enum MadeFixtures {
     static var frames: [String: () -> SnapshotScene] {
         [
-            "55-settings-services": { services() },
             "61-changes-made": { changesMade() },
             "62-notes-spend": { .film(notesSpend()) },
         ]
@@ -16,13 +15,6 @@ enum MadeFixtures {
     static let pianoBed = MadeRecord(assetID: "made-piano-bed", kind: .music, version: "google/lyria-3-clip", versionName: "Lyria 3 Clip",
                                      asked: "Sparse felt piano, unresolved, around 70 bpm. No swell. 24 seconds, ending on a held note.", seconds: 24, spend: 0.04, estimate: 0.04,
                                      noteID: "note-4", turnoverID: "turnover-3", file: "Made/music-sparse-felt-piano-1a2b.wav", createdAt: SampleFilm.date(10, 28, 14, 2))
-
-    /// Frame 55: Ready with credits left, the default versions, $12.80 spent this month. The window fits the pane: 812 tall.
-    private static func services() -> SnapshotScene {
-        SettingsKey.register()
-        return SnapshotScene(size: CGSize(width: 720, height: 812),
-                             SettingsView(initialTab: .services, preview: true).frame(width: 720, height: 812, alignment: .top).clipped().background(Gate.Surface.ground))
-    }
 
     /// Frame 61: Cut 4 in Changes, note 4 answered two ways (decision 19), B with made music, its provenance open.
     private static func changesMade() -> SnapshotScene {

@@ -174,7 +174,7 @@ public enum OpenRouter {
         var request = URLRequest(url: components.url!, timeoutInterval: timeout)
         request.httpMethod = method
         if authorized {
-            guard let key = key ?? Key.read() else { throw DirectionError("no_openrouter_key", "Add an OpenRouter key in Settings \u{203A} Services.") }
+            guard let key = key ?? Key.read() else { throw DirectionError("no_openrouter_key", "Add an OpenRouter key in Settings \u{203A} Engines.") }
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }
         request.setValue("https://direction.film", forHTTPHeaderField: "HTTP-Referer")

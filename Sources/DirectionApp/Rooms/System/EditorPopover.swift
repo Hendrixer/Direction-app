@@ -302,7 +302,7 @@ struct EditorPopover: View {
             }
             .buttonStyle(.gate(.ghost, .small))
             Spacer(minLength: 8)
-            OpenSettingsButton(tab: .editor) { Label("Editor settings\u{2026}", systemImage: "gearshape") }
+            OpenSettingsButton(tab: .engines) { Label("Editor settings\u{2026}", systemImage: "gearshape") }
                 .buttonStyle(.gate(.ghost, .small))
                 .simultaneousGesture(TapGesture().onEnded { model.showEditorPopover = false })
         }

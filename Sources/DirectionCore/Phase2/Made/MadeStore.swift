@@ -71,7 +71,7 @@ public struct SpendAsk: Codable, Hashable, Sendable {
     public var estimate: Double
     /// Spent in this turnover before this request.
     public var turnoverSpent: Double
-    /// The turnover's limit (Settings › Services › Ask before spending more than).
+    /// The turnover's limit (Settings › Engines › Ask before spending more than).
     public var limit: Double
     /// The choice that says yes to the spend.
     public var choiceID: String

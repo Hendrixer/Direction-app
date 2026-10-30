@@ -36,7 +36,7 @@ public enum FootageIndexer {
     /// Tests look without describing, or with a stand-in, without touching Settings or the keychain.
     nonisolated(unsafe) public static var describerOverride: (@Sendable () -> (describer: (any ShotDescriber)?, skipped: String?, download: SharedSettings.LookDetail?))?
 
-    /// Settings › Footage decides; the editor never does. Nothing is described when the chosen
+    /// Settings › Engines decides; the editor never does. Nothing is described when the chosen
     /// engine isn't ready, and nothing falls back to another engine (footage stays on this Mac).
     public static func chosenDescriber() -> (describer: (any ShotDescriber)?, skipped: String?, download: SharedSettings.LookDetail?) {
         if let override = describerOverride { return override() }
@@ -55,7 +55,7 @@ public enum FootageIndexer {
             case .downloaded: return (LocalDescriber(repo: detail.repo), nil, nil)
             }
         case .openRouter:
-            guard OpenRouter.Key.read() != nil else { return (nil, "Add an OpenRouter key in Settings › Services.", nil) }
+            guard OpenRouter.Key.read() != nil else { return (nil, "Add an OpenRouter key in Settings › Engines.", nil) }
             return (OpenRouterDescriber(version: SharedSettings.lookOpenRouterVersion), nil, nil)
         }
     }

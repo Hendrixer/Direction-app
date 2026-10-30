@@ -3,7 +3,7 @@ import AppKit
 import DirectionCore
 
 /// Frame 56: Who's editing? Shown the first time a film needs the editor and none is set up, and
-/// from Settings › Editor › Set up again…. Cancel leaves the film where it was: the pill says
+/// from Settings › Engines › Set up again…. Cancel leaves the film where it was: the pill says
 /// "Editor not set up" and nothing is lost.
 struct EditorSetupSheet: View {
     @Bindable var model: FilmModel

@@ -52,8 +52,8 @@ window.FRAMES = [
   { id: "41-agent-popover", group: "Share", title: "Editor popover", spec: "share.md" },
 
   { id: "42-settings-general", group: "Settings", title: "Settings, General", spec: "settings.md", size: "720x600" },
-  { id: "43-settings-editor", group: "Settings", title: "Settings, Editor", spec: "editor.md", size: "720x853" },
-  { id: "44-settings-cutting", group: "Settings", title: "Settings, Cutting", spec: "settings.md", size: "720x650" },
+  { id: "43-settings-editor", group: "Settings", title: "Settings, Editor", spec: "editor.md", size: "720x585" },
+  { id: "44-settings-cutting", group: "Settings", title: "Settings, Cutting", spec: "settings.md", size: "720x800" },
   { id: "45-settings-notifications", group: "Settings", title: "Settings, Notifications", spec: "settings.md", size: "720x530" },
   { id: "46-settings-shortcuts", group: "Settings", title: "Settings, Shortcuts", spec: "settings.md", size: "720x690" },
   { id: "47-settings-storage", group: "Settings", title: "Settings, Storage", spec: "settings.md", size: "720x520" },
@@ -65,8 +65,7 @@ window.FRAMES = [
   { id: "52-media-missing", group: "System", title: "Footage missing", spec: "system.md" },
   { id: "53-menus", group: "System", title: "Context menus", spec: "system.md" },
 
-  { id: "54-settings-footage", group: "Settings", title: "Settings, Footage", spec: "settings.md", size: "720x724" },
-  { id: "55-settings-services", group: "Settings", title: "Settings, Services", spec: "settings.md", size: "720x812" },
+  { id: "54-settings-engines", group: "Settings", title: "Settings, Engines", spec: "settings.md", size: "720x1700" },
 
   { id: "56-editor-setup", group: "Editor", title: "Who's editing? (setup)", spec: "editor.md" },
   { id: "57-editor-working", group: "Editor", title: "The editor at work", spec: "editor.md" },

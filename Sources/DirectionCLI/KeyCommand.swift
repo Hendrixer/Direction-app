@@ -3,10 +3,10 @@ import ArgumentParser
 import DirectionCore
 
 /// `direction key save|remove|status`: this tool's own copy of the director's OpenRouter key.
-/// Direction's Settings › Services runs it, with the key on stdin. Nothing here prints the key
+/// Direction's Settings › Engines runs it, with the key on stdin. Nothing here prints the key
 /// (see OpenRouter.Key for why each binary keeps its own copy).
 struct KeyCommand: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "key", abstract: "Keep this tool's copy of the OpenRouter key. Direction's Settings › Services does this for you; the key is never printed.", subcommands: [Save.self, Remove.self, Status.self])
+    static let configuration = CommandConfiguration(commandName: "key", abstract: "Keep this tool's copy of the OpenRouter key. Direction's Settings › Engines does this for you; the key is never printed.", subcommands: [Save.self, Remove.self, Status.self])
 
     struct Options: ParsableArguments {
         @Option(help: .hidden) var service = OpenRouter.Key.defaultService

@@ -47,7 +47,7 @@ import DirectionTools
         runner.pump()
     }
 
-    /// Direction starts the editor (Settings › Editor › Editor runs on isn't Your own session).
+    /// Direction starts the editor (Settings › Engines › Editor runs on isn't Your own session).
     var startsEditor: Bool { previewStarts ?? EditorSetup.directionStarts }
     /// The program Direction starts is chosen and found.
     var ready: Bool { previewStarts != nil ? previewReady : EditorSetup.ready }

@@ -115,7 +115,6 @@ struct EditorPane: View {
 
     var body: some View {
         SettingsPane {
-            EditorWhoEditsGroup(app: app, preview: preview)
             SettingsGroup(label: "How much freedom the editor has", note: AnyView(SettingsNote("You can change this for a single turnover in the Turnover sheet."))) {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(Latitude.allCases, id: \.self) { l in latitudeCard(l) }
@@ -248,9 +247,9 @@ private struct ReorderBehavior: ViewModifier {
 
 // MARK: 54 · Footage
 
-/// Settings › Footage: how takes are transcribed. Stored in the shared suite, because the editor's
+/// Settings › Engines › Transcription: how takes are transcribed. Stored in the shared suite, because the editor's
 /// tools run in their own process and transcribe with whatever is chosen here.
-struct FootagePane: View {
+struct TranscriptionGroup: View {
     var preview = false
     @AppStorage(SharedSettings.Key.transcriptionEngine, store: SharedSettings.defaults) private var engine = SharedSettings.TranscriptionEngine.apple.rawValue
     @AppStorage(SharedSettings.Key.whisperModel, store: SharedSettings.defaults) private var model = SharedSettings.whisperModels[0].id
@@ -274,19 +273,15 @@ struct FootagePane: View {
     }
 
     var body: some View {
-        SettingsPane {
-            SettingsGroup(label: "Transcription", note: AnyView(SettingsNote("Takes already transcribed keep their words. New footage uses this engine."))) {
-                SettingsRow(label: "Transcribe with", detail: engineDetail, first: true) {
-                    GateSegmented(options: [(SharedSettings.TranscriptionEngine.apple.rawValue, "Apple"), (SharedSettings.TranscriptionEngine.whisper.rawValue, "Whisper")], selection: $engine)
-                }
-                SettingsRow(label: "Whisper version", detail: modelDetail) {
-                    GateSelect(options: SharedSettings.whisperModels.map { ($0.id, $0.name) }, selection: $model)
-                }
-                .disabled(!usesWhisper)
-                if usesWhisper { setupRow }
+        SettingsGroup(label: "Transcription", note: AnyView(SettingsNote("Takes already transcribed keep their words. New footage uses this engine."))) {
+            SettingsRow(label: "Transcribe with", detail: engineDetail, first: true) {
+                GateSegmented(options: [(SharedSettings.TranscriptionEngine.apple.rawValue, "Apple"), (SharedSettings.TranscriptionEngine.whisper.rawValue, "Whisper")], selection: $engine)
             }
-            FootageLookingGroup(preview: preview)
-            FootageColorGroup(preview: preview)
+            SettingsRow(label: "Whisper version", detail: modelDetail) {
+                GateSelect(options: SharedSettings.whisperModels.map { ($0.id, $0.name) }, selection: $model)
+            }
+            .disabled(!usesWhisper)
+            if usesWhisper { setupRow }
         }
         .task { await check() }
     }
@@ -319,6 +314,7 @@ struct FootagePane: View {
 
 struct CuttingPane: View {
     var app: AppModel?
+    var preview = false
     @AppStorage(SettingsKey.handleSeconds) private var handles = 2.0
     @AppStorage(SettingsKey.cutNaming) private var naming = "number"
     @AppStorage(SettingsKey.frameRate) private var frameRate = "match"
@@ -370,6 +366,7 @@ struct CuttingPane: View {
                 }
                 SettingsRow(label: "Play from proxies", detail: "Smaller copies for smooth playback. Deliveries always use the originals.") { GateSwitch(isOn: $proxies) }
             }
+            FootageColorGroup(preview: preview)
         }
     }
 }

@@ -2,18 +2,22 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Settings › General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing.
+/// Settings › General, Editor, Engines, Cutting, Notifications, Shortcuts, Storage, Sharing.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, editor, footage, cutting, services, notifications, shortcuts, storage, sharing
+    case general, editor, engines, cutting, notifications, shortcuts, storage, sharing
     var id: String { rawValue }
+    /// A remembered tab; Footage and Services went into Engines.
+    static func stored(_ raw: String?) -> SettingsTab? {
+        guard let raw else { return nil }
+        return ["footage", "services"].contains(raw) ? .engines : SettingsTab(rawValue: raw)
+    }
     var title: String { rawValue.capitalized }
     var icon: String {
         switch self {
         case .general: "gearshape"
         case .editor: "gem"
-        case .footage: "film.stack"
+        case .engines: "cpu"
         case .cutting: "film"
-        case .services: "key"
         case .notifications: "bell"
         case .shortcuts: "keyboard"
         case .storage: "externaldrive"
@@ -38,7 +42,7 @@ struct SettingsView: View {
 
     init(app: AppModel? = nil, initialTab: SettingsTab? = nil, preview: Bool = false, recording: ShortcutAction? = nil) {
         self.app = app; self.preview = preview; self.recording = recording
-        let stored = UserDefaults.standard.string(forKey: SettingsKey.settingsTab).flatMap(SettingsTab.init(rawValue:))
+        let stored = SettingsTab.stored(UserDefaults.standard.string(forKey: SettingsKey.settingsTab))
         _tab = State(initialValue: initialTab ?? stored ?? .general)
     }
 
@@ -60,7 +64,7 @@ struct SettingsView: View {
         .background { if !preview { SettingsWindowConfigurator(title: tab.title) } }
         .background { tabKeys }
         .preferredColorScheme(.dark)
-        .onChange(of: storedTab) { _, new in if let t = SettingsTab(rawValue: new), t != tab { select(t) } }
+        .onChange(of: storedTab) { _, new in if let t = SettingsTab.stored(new), t != tab { select(t) } }
     }
 
     /// The screen's height less the title bar, the toolbar and a margin. Snapshots draw every pane whole.
@@ -85,9 +89,8 @@ struct SettingsView: View {
         switch tab {
         case .general: GeneralPane(preview: preview)
         case .editor: EditorPane(app: app)
-        case .footage: FootagePane(preview: preview)
-        case .cutting: CuttingPane(app: app)
-        case .services: ServicesPane(preview: preview)
+        case .engines: EnginesPane(app: app, preview: preview)
+        case .cutting: CuttingPane(app: app, preview: preview)
         case .notifications: NotificationsPane(preview: preview)
         case .shortcuts: ShortcutsPane(recording: recording)
         case .storage: StoragePane(app: app, preview: preview)
@@ -95,7 +98,7 @@ struct SettingsView: View {
         }
     }
 
-    /// ⌘1…⌘7 switch tabs while Settings is key; esc closes the window.
+    /// ⌘1…⌘8 switch tabs while Settings is key; esc closes the window.
     private var tabKeys: some View {
         ZStack {
             ForEach(Array(SettingsTab.allCases.enumerated()), id: \.offset) { i, t in

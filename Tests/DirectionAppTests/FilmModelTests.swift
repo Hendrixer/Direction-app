@@ -176,3 +176,37 @@ struct FilmModelTests {
     #expect(rules.contains("- 1A T1 (its sound) \u{00B7} 1B T1, circled") && rules.contains("never two angles end to end") && rules.contains("`syncSound`"))
     for job in ["assemble", "turnover"] { #expect(EditorJobs.template(job)?.contains("{{sync}}") == true, "\(job)") }
 }
+
+/// Settings › Engines recommends from the Mac: the largest local version that fits memory and disk,
+/// OpenRouter only where nothing local can run, Apple for transcription, an installed editor.
+@MainActor
+@Test func enginesRecommendWhatThisMacRunsBest() {
+    var mac = MacFacts(chip: "Apple M4 Max", memory: 64 << 30, appleSilicon: true, freeBytes: 500_000_000_000, volume: "Macintosh HD", mlxVLM: true, downloaded: [], hasOpenRouterKey: false)
+    let both: Set<EditorProgram> = [.claudeCode, .codex]
+    var a = EngineAdvice.advise(mac, editor: .codex, installed: both)
+    #expect(a.lookEngine == .thisMac && a.lookDetail == "best" && a.transcription == .apple && a.editor == .codex && a.missing.isEmpty)
+    mac.memory = 16 << 30
+    #expect(EngineAdvice.advise(mac, editor: .codex, installed: both).lookDetail == "standard")
+    mac.memory = 8 << 30
+    #expect(EngineAdvice.advise(mac, editor: .codex, installed: both).lookDetail == "quick")
+    // No room for Best's download, but Standard is already here.
+    mac.memory = 64 << 30; mac.freeBytes = 4_000_000_000; mac.downloaded = ["standard"]
+    #expect(EngineAdvice.advise(mac, editor: .codex, installed: both).lookDetail == "standard")
+    // No room for anything and a key: OpenRouter. Without Apple silicon: OpenRouter.
+    mac.downloaded = []; mac.freeBytes = 1_000_000_000; mac.hasOpenRouterKey = true
+    #expect(EngineAdvice.advise(mac, editor: .codex, installed: both).lookEngine == .openRouter)
+    mac.freeBytes = 500_000_000_000; mac.appleSilicon = false
+    #expect(EngineAdvice.advise(mac, editor: .codex, installed: both).lookEngine == .openRouter)
+    // mlx-vlm missing is something to install, not a reason to send footage away.
+    mac.appleSilicon = true; mac.mlxVLM = false
+    a = EngineAdvice.advise(mac, editor: .codex, installed: both)
+    #expect(a.lookEngine == .thisMac && a.missing.map(\.name) == ["mlx-vlm"])
+    // The editor: the chosen program while it's installed, else whichever is; your own session stays.
+    mac.mlxVLM = true
+    #expect(EngineAdvice.advise(mac, editor: .codex, installed: [.claudeCode]).editor == .claudeCode)
+    #expect(EngineAdvice.advise(mac, editor: .yourOwn, installed: both).editor == nil)
+    a = EngineAdvice.advise(mac, editor: .claudeCode, installed: [])
+    #expect(a.editor == nil && a.missing.map(\.name) == ["Claude Code"])
+    // Footage and Services went into Engines.
+    #expect(SettingsTab.stored("services") == .engines && SettingsTab.stored("footage") == .engines && SettingsTab.stored("cutting") == .cutting && SettingsTab.stored(nil) == nil)
+}

@@ -2,11 +2,11 @@
 
 A coding agent can't watch video. Direction does what an assistant editor does when footage comes in: it finds every shot, makes a contact sheet for every take, writes a line about each shot, notes the sounds, reads any text on screen, and makes the footage searchable. You read that index, and look at real frames when you need to. The design is `design/spec/specs/footage-index.md`; this page is what the tools promise.
 
-Direction runs the index itself, the same way every time. You don't choose how footage is looked at or which engine describes it; the director does, in Settings › Footage. You read the result.
+Direction runs the index itself, the same way every time. You don't choose how footage is looked at or which engine describes it; the director does, in Settings › Engines. You read the result.
 
 ## When it runs
 
-- **By itself**, when footage arrives and Settings › Footage › "Look at new footage automatically" is on (the default). The app starts it as footage comes in; the MCP server starts it the first time you read `direction_dailies`, `direction_shots` or `direction_search_footage` with takes waiting.
+- **By itself**, when footage arrives and Settings › Engines › "Look at new footage automatically" is on (the default). The app starts it as footage comes in; the MCP server starts it the first time you read `direction_dailies`, `direction_shots` or `direction_search_footage` with takes waiting.
 - **On request**, with `direction_index`.
 - One index job runs per film at a time, in whichever process started it (the app or an MCP server). Asking again returns the running job. It works take by take in footage order, at background priority, and picks up footage that arrives while it runs.
 - Poll it like any job with `direction_job`. Its phase reads "Finding shots · 3 of 12", "Looking at footage · 7 of 12", or "Downloading Qwen3-VL 8B · 42%".

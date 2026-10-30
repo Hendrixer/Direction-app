@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Settings › Footage › Color (frame 54, specs/settings.md › 54). Both settings live in the shared
+/// Settings › Cutting › Color (frame 54, specs/settings.md › 54). Both settings live in the shared
 /// defaults suite, so the editor's tools and the renderer read the same folder and the same switch.
 struct FootageColorGroup: View {
     var preview = false

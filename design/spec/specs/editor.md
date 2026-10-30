@@ -13,7 +13,7 @@ Direction starts the editor itself whenever there's work: footage to log, an ass
 | **Direction starts it** (default) | Direction runs Claude Code or Codex on this Mac for each job, with Direction's tools connected and a job written for it. | Start, pause, resume, stop, retry. Activity, spend. |
 | **Your own session** | You run Claude Code or Codex yourself and connect it over MCP (`./scripts/install-local.sh`). Direction shows what it does from its tool calls. | Activity only. Direction can't start, pause or stop it; the pill's popover says "Your own session" and shows the request to copy, as today. |
 
-Settings › Editor › "Editor runs on" has three segments: Claude Code, Codex, Your own session.
+Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex, Your own session.
 
 ## Programs
 
@@ -33,7 +33,7 @@ Settings › Editor › "Editor runs on" has three segments: Claude Code, Codex,
 2. **Tools.** Direction's MCP server for this film (`direction mcp --project <film>`), passed per run, so the director's other MCP servers aren't loaded:
    - Claude Code: `claude -p <job> --output-format stream-json --verbose --model <version> --mcp-config <Editor/.mcp.json> --strict-mcp-config --allowedTools <list> --append-system-prompt <role>`; continue with `--resume <session>`.
    - Codex: `codex exec --json --model <version> --cd <Editor> --sandbox workspace-write -c 'mcp_servers.direction.command="<direction>"' -c 'mcp_servers.direction.args=["mcp","--project","<film>"]' --output-schema <schema.json> <job>`; continue with `codex exec resume <session>`.
-3. **Allowed tools.** Every `direction_*` tool, plus file read and write inside the working folder. Running scripts (Bash) is allowed only when Settings › Editor › "Let the editor run scripts" is on (default on), and only inside the working folder: Codex's `workspace-write` sandbox; Claude Code's sandbox with `Bash` allowed. Network access from scripts is off. Services are reached through Direction's tools, never directly.
+3. **Allowed tools.** Every `direction_*` tool, plus file read and write inside the working folder. Running scripts (Bash) is allowed only when Settings › Engines › "Let the editor run scripts" is on (default on), and only inside the working folder: Codex's `workspace-write` sandbox; Claude Code's sandbox with `Bash` allowed. Network access from scripts is off. Services are reached through Direction's tools, never directly.
 4. **The job text.** Direction writes it from a template in the app bundle (`Resources/Editor/jobs/<job>.md`), filled with: the film's name, the brief, latitude and what it means, preferences (two ways, ask before guessing, conflict order, handles), the job's ids (turnover, notes), and the skill to follow. Templates are versioned files with tests, not strings in code.
 5. **The result.** Each job's final message must match `{"finished": Bool, "summary": String, "needsYou": [String]}`. The real work arrives through Direction's tools, which validate it: the dailies log, the read-back, answers, questions. A run that ends without calling its job's finishing tool fails with "The editor stopped before finishing."
 6. **Activity.** Direction reads the program's event stream (Claude: `tool_use` blocks in `assistant` events; Codex: `item.started` and `item.completed` for MCP tool calls, commands and file changes) and turns each Direction tool call into an Activity with the table below. The editor's prose is not shown.
@@ -111,10 +111,8 @@ A skill is a short playbook in Markdown (`plugins/direction/skills/<name>/SKILL.
 
 ---
 
-## 43 · Settings, Editor (updated)
-Frame: `screens/43-settings-editor.html` · 720 × 853.
-
-A new first group, **Who edits**, above Freedom. The Follow the brief row and the conflict list are compacted so the pane stays under 860 (it is 853).
+## 43 · Who edits (in Settings › Engines)
+Frame: `screens/43-settings-editor.html` drew it as the Editor tab's first group; it now sits in Settings › Engines under This Mac (settings.md › 54), with transcription, looking at footage and OpenRouter. The Editor tab keeps Freedom and Before cutting (720 × 585).
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
@@ -138,7 +136,7 @@ Note under Before cutting: "The editor reads the brief before every cut."
 ## 56 · Who's editing? (setup sheet)
 Frame: `screens/56-editor-setup.html` · film window, sheet 560 wide.
 
-Shown the first time a film needs the editor (after Bring footage, before logging) when no editor has been set up, and from Settings › Editor › Set up again… Over the Footage step (frame 04's state behind the scrim).
+Shown the first time a film needs the editor (after Bring footage, before logging) when no editor has been set up, and from Settings › Engines › Set up again… Over the Footage step (frame 04's state behind the scrim).
 
 - Title (Archivo 22): "Who's editing?"
 - Body (13 text-2): "Direction starts the editor on this Mac whenever there's work, and you can pause or stop it anytime. It uses your own sign-in."

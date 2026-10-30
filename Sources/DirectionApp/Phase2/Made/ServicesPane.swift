@@ -2,9 +2,9 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Settings › Services (frame 55, specs/settings.md › 55): the OpenRouter key, the version for each kind,
+/// Settings › Engines › OpenRouter (specs/settings.md › 54): the key, the version for each kind,
 /// and the director's spend limits. Limits and versions live in the shared suite so the editor's tools follow them.
-struct ServicesPane: View {
+struct ServicesGroups: View {
     var preview = false
     @State private var state = ServicesState()
     @AppStorage(SharedSettings.SpendKey.askAbove, store: SharedSettings.defaults) private var askAbove = 5.0
@@ -12,8 +12,8 @@ struct ServicesPane: View {
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
-        SettingsPane {
-            SettingsGroup(label: "Services", note: AnyView(SettingsNote("Your key is kept in your Mac\u{2019}s keychain. The editor never sees it; Direction makes every request."))) { keyRow }
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsGroup(label: "OpenRouter", note: AnyView(SettingsNote("Your key is kept in your Mac\u{2019}s keychain. The editor never sees it; Direction makes every request."))) { keyRow }
             SettingsGroup(label: "What the editor uses", note: AnyView(SettingsNote("Slow motion and sharpening happen on this Mac and cost nothing."))) {
                 versionRow(.music, "Music", first: true)
                 versionRow(.voice, "Voice")

@@ -12,7 +12,7 @@
 - **make-graphic** — titles, lower thirds, cards and charts as JavaScript Direction renders.
 - **propose-look** — offer the director a look as an option, never apply one.
 
-When Direction starts the editor itself (Settings › Editor › Editor runs on), it copies every skill into the film's working folder (`Editor/.claude/skills/`) and names the job's own skill in the job; see [editor-runs.md](editor-runs.md).
+When Direction starts the editor itself (Settings › Engines › Editor runs on), it copies every skill into the film's working folder (`Editor/.claude/skills/`) and names the job's own skill in the job; see [editor-runs.md](editor-runs.md).
 
 Requires Apple Silicon and macOS 26+. It uses Direction's native executable; it does not embed an LLM, access a cloud service, generate footage, or install model dependencies. Apple's local speech model may download on first transcription.
 

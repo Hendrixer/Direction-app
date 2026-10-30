@@ -1,7 +1,7 @@
 import SwiftUI
 import DirectionCore
 
-/// Settings › Editor › Who edits (product-model.md › EditorSetup). App-wide, in the standard defaults.
+/// Settings › Engines › Who edits (product-model.md › EditorSetup). App-wide, in the standard defaults.
 enum EditorSetupKey {
     /// "claudeCode" | "codex" | "yourOwn". Absent until the director picks (frame 56 or Settings).
     static let runsOn = "editorRunsOn"

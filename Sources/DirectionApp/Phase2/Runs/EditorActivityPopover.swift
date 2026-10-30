@@ -127,7 +127,7 @@ struct EditorActivityPopover: View {
 
     private var footer: some View {
         HStack {
-            OpenSettingsButton(tab: .editor) { Label("Editor settings\u{2026}", systemImage: "gearshape") }
+            OpenSettingsButton(tab: .engines) { Label("Editor settings\u{2026}", systemImage: "gearshape") }
                 .buttonStyle(.gate(.ghost, .small))
                 .simultaneousGesture(TapGesture().onEnded { model.showEditorPopover = false })
             Spacer()

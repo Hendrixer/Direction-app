@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-/// What spend is for, in Settings › Services › Spent this month.
+/// What spend is for, in Settings › Engines › Spent this month.
 public enum SpendKind: String, Codable, CaseIterable, Sendable {
     case music, soundEffect, voice, still, shot, `extension`, bridge, changedShot, slowMotion, upscale, looking
     /// Legend rows: every kind of shot is "New shots".
@@ -55,7 +55,7 @@ extension SharedSettings {
         let v = (defaults.object(forKey: SpendKey.stopAt) as? Double) ?? 50
         return v > 0 ? v : nil
     }
-    /// The version Settings › Services chose for a kind; nil follows the default. Sound effects use the
+    /// The version Settings › Engines chose for a kind; nil follows the default. Sound effects use the
     /// music version; extended shots and bridges use the new-shot version (made-media.md › What the editor can make).
     public static func madeVersion(_ kind: MadeKind) -> String? {
         let shown: MadeKind = switch kind { case .soundEffect: .music; case .extension, .bridge: .shot; default: kind }

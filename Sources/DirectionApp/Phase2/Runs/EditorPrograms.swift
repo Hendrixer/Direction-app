@@ -11,7 +11,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     var command: String { self == .claudeCode ? "claude" : "codex" }
     var installCommand: String { self == .claudeCode ? "curl -fsSL https://claude.ai/install.sh | bash" : "npm install -g @openai/codex" }
 
-    /// Versions offered in Settings › Editor; "Other…" takes any string the program accepts. Codex's
+    /// Versions offered in Settings › Engines; "Other…" takes any string the program accepts. Codex's
     /// are the ones its own model menu lists, read from its cache, so they follow the installed Codex.
     var versions: [(id: String, name: String)] {
         switch self {

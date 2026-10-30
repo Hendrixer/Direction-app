@@ -7,10 +7,6 @@ import DirectionCore
 enum IndexFixtures {
     static var frames: [String: () -> SnapshotScene] {
         [
-            "54-settings-footage": {
-                SettingsKey.register()
-                return SnapshotScene(size: CGSize(width: 720, height: 724), SettingsView(initialTab: .footage, preview: true).frame(width: 720, height: 724, alignment: .top).clipped().background(Gate.Surface.ground))
-            },
             "59-dailies-shots": {
                 let m = DailiesFixtures.film()
                 m.selectedSceneID = "scene-2"

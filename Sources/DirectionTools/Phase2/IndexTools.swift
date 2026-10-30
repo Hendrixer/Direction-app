@@ -11,7 +11,7 @@ extension ToolCatalog {
     static var indexDefinitions: [ToolDefinition] {
         let range = record(["start": number, "end": number], required: ["start", "end"])
         return [
-            definition("direction_index", "Look at footage: find every shot, make each take's contact sheet, note the sounds, describe each shot and make it all searchable. Runs as a job (poll direction_job) at background priority, take by take in footage order; it starts by itself when footage arrives if Settings › Footage says so. How shots are described is the director's choice in Settings, not yours. assetIDs limits it to those takes (and retries failed ones); force looks again from scratch; cancel stops this process's index job. Returns the job and each state's count.", ["assetIDs": list(string), "force": bool, "cancel": bool], readOnly: false),
+            definition("direction_index", "Look at footage: find every shot, make each take's contact sheet, note the sounds, describe each shot and make it all searchable. Runs as a job (poll direction_job) at background priority, take by take in footage order; it starts by itself when footage arrives if Settings › Engines says so. How shots are described is the director's choice in Settings, not yours. assetIDs limits it to those takes (and retries failed ones); force looks again from scratch; cancel stops this process's index job. Returns the job and each state's count.", ["assetIDs": list(string), "force": bool, "cancel": bool], readOnly: false),
             definition("direction_shots", "Read the shots Direction found, in take order: source range (seconds and timecode), description, size, movement, people (what's visible, never names: map them to names yourself), setting, flags, the sounds in the shot, the gist of any text on screen (onScreen; direction_screen_text has all of it, with times), and small keyframe paths (10%, 50%, 90%). Filter by assetID or sceneID; page with offset and limit. Each take's index state is waiting, looking, done or failed. Log takes from these before watching anything.", ["assetID": string, "sceneID": string, "offset": integer, "limit": integer]),
             definition("direction_contact_sheet", "One image of a take: frames (4–36, default 16) evenly across it, or across range {start,end} in source seconds, each labeled with its source timecode, plus the time of each cell. Use it to see a whole take at a glance, then direction_frame with assetID and time for a real frame.", ["assetID": string, "range": range, "frames": integer], required: ["assetID"]),
             definition("direction_watch", "The closest thing to watching: a filmstrip of a passage of the cut, start to end in cut seconds (at revision, default the current edit), frames 8–24 (default 12), with timecodes, the words spoken in it, the sounds, and where the cuts fall. Watch every passage you changed before delivering a cut.", ["start": number, "end": number, "revision": integer, "sequenceID": string, "frames": integer], required: ["start", "end"]),
@@ -281,7 +281,7 @@ extension ToolRuntime {
         return job
     }
 
-    /// Footage arrived and Settings › Footage says to look at it: start, at most every few seconds.
+    /// Footage arrived and Settings › Engines says to look at it: start, at most every few seconds.
     func autoIndexIfNeeded() {
         guard SharedSettings.lookAutomatically, IndexJobs.mayAutoStart(store.url.path) else { return }
         do {

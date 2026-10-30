@@ -9,7 +9,7 @@ How Direction starts the editor (Claude Code or Codex), follows it, and shows it
 | Run and Activity records, their tables and store API | `Sources/DirectionCore/Phase2/Runs/RunsStore.swift` |
 | Tool call → Activity (every tool, by name) | `Sources/DirectionTools/Phase2/EditorActivityMapping.swift`, called from `noteToolCall` in `RunsTools.swift` |
 | Programs, versions and **every command-line flag** | `Sources/DirectionApp/Phase2/Runs/EditorPrograms.swift` |
-| Settings › Editor › Who edits values | `EditorSetup.swift` (keys `editorRunsOn`, `editorVersion…`, `editorStartWork`, `editorRunsScripts`, `editorSignedIn.<program>`) |
+| Settings › Engines › Who edits values | `EditorSetup.swift` (keys `editorRunsOn`, `editorVersion…`, `editorStartWork`, `editorRunsScripts`, `editorSignedIn.<program>`) |
 | Stream parsing, failure reasons, the run state machine | `EditorStream.swift` |
 | Processes, queue, pause/resume/stop, quit, recovery | `EditorRunner.swift` (app-wide singleton) |
 | Job text | `Resources/Editor/jobs/*.md`, filled by `EditorJobs.swift` |

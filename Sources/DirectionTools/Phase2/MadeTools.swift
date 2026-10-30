@@ -151,7 +151,7 @@ extension ToolRuntime {
         let month = SpendLedger.monthSpent(entries), cap = SharedSettings.spendStopAt
         let needsQuestion = spent + total > limit + 0.005, overCap = cap.map { month + total > $0 + 0.005 } ?? false
         let message: String
-        if overCap { message = "This plan would pass the director\u{2019}s \(MadeFormat.money(cap ?? 0)) for the month (\(MadeFormat.money(month)) spent). Only the director can change that, in Settings \u{203A} Services." }
+        if overCap { message = "This plan would pass the director\u{2019}s \(MadeFormat.money(cap ?? 0)) for the month (\(MadeFormat.money(month)) spent). Only the director can change that, in Settings \u{203A} Engines." }
         else if needsQuestion { message = "About \(MadeFormat.money(total)) would take this turnover to \(MadeFormat.money(spent + total)) of the director\u{2019}s \(MadeFormat.money(limit)) limit. Ask one spend question for the plan (spend: {estimate: \(String(format: "%.2f", total)), choiceID}) and pass its id as spendQuestionID on every step." }
         else { message = "About \(MadeFormat.money(total)), within the director\u{2019}s \(MadeFormat.money(limit)) limit for this turnover. Make it; say it in the read-back." }
         return .object(["steps": .array(priced), "total": .number(total), "turnoverSpent": .number(spent), "limit": .number(limit), "needsQuestion": .bool(needsQuestion),
@@ -268,7 +268,7 @@ extension ToolRuntime {
         let p = try store.read()
         if !version.isLocal {
             // No request reaches a service without a key saved in Settings.
-            guard OpenRouter.Key.read() != nil else { throw DirectionError("no_openrouter_key", "OpenRouter isn\u{2019}t set up. Ask the director to add a key in Settings \u{203A} Services.") }
+            guard OpenRouter.Key.read() != nil else { throw DirectionError("no_openrouter_key", "OpenRouter isn\u{2019}t set up. Ask the director to add a key in Settings \u{203A} Engines.") }
 
             // A yes to a spend question lets that plan's requests past the turnover's limit, never past the month's cap.
             var approval: String?, budget: Double?
@@ -286,7 +286,7 @@ extension ToolRuntime {
                                 "message": .string("About \(MadeFormat.money(e)) would take this turnover to \(MadeFormat.money(spent + e)) of the director\u{2019}s \(MadeFormat.money(limit)) limit. Price the whole plan with direction_estimate, ask one spend question for it (direction_ask kind spend, spend: {estimate, choiceID}) and call again with spendQuestionID once the director agrees.")])
             case let .cap(e, spent, cap):
                 return .object(["status": .string("spend_cap"), "estimate": .number(e), "monthSpent": .number(spent), "monthLimit": .number(cap), "left": .number(max(0, cap - spent)),
-                                "message": .string("Nothing more can be made this month: \(MadeFormat.money(spent)) of the director\u{2019}s \(MadeFormat.money(cap)) is spent and this would cost about \(MadeFormat.money(e)). Only the director can change the limit, in Settings \u{203A} Services.")])
+                                "message": .string("Nothing more can be made this month: \(MadeFormat.money(spent)) of the director\u{2019}s \(MadeFormat.money(cap)) is spent and this would cost about \(MadeFormat.money(e)). Only the director can change the limit, in Settings \u{203A} Engines.")])
             }
             request.spendID = entry.id
         }

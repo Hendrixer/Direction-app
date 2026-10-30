@@ -60,7 +60,7 @@ struct EditorStopActions: View {
             switch run.reason ?? .stoppedWithoutFinishing {
             case .notInstalled:
                 Button(copied ? "Copied" : "Copy install command") { SystemSupport.copy(program.installCommand); flashCopied() }.buttonStyle(.gate(.normal, size))
-                OpenSettingsButton(tab: .editor) { Text("Choose another editor\u{2026}") }.buttonStyle(.gate(.ghost, size))
+                OpenSettingsButton(tab: .engines) { Text("Choose another editor\u{2026}") }.buttonStyle(.gate(.ghost, size))
             case .notSignedIn:
                 Button { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) } label: { Label("Open Terminal", systemImage: "terminal") }.buttonStyle(.gate(.normal, size))
                 if inTurnover { takeBack(size) } else { tryAgain(size) }
@@ -74,7 +74,7 @@ struct EditorStopActions: View {
                 if !inTurnover { tryAgain(size) }
                 if model.openTurnover?.id == run.turnoverID, run.turnoverID != nil { takeBack(size) }
             case .spendCap:
-                OpenSettingsButton(tab: .services) { Text("Change limit\u{2026}") }.buttonStyle(.gate(.normal, size))
+                OpenSettingsButton(tab: .engines) { Text("Change limit\u{2026}") }.buttonStyle(.gate(.normal, size))
                 Button("Continue without services") { model.runs.continueWithoutServices(model) }.buttonStyle(.gate(.ghost, size))
             case .pausedByQuit:
                 Button("Resume") { model.setEditorPaused(false) }.buttonStyle(.gate(.normal, size))

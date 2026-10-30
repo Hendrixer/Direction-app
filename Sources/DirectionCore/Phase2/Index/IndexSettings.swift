@@ -1,6 +1,6 @@
 import Foundation
 
-/// Settings › Footage › Looking at footage, in the shared suite so the MCP server indexes the way
+/// Settings › Engines › Looking at footage, in the shared suite so the MCP server indexes the way
 /// the director chose (settings.md › 54).
 extension SharedSettings {
     public enum IndexKey {

@@ -18,7 +18,7 @@ The director's UI never says "generate", "AI", "prompt" or "model". Things are *
 Returns:
 
 - `services`: OpenRouter (`state: "ready" | "notSet"`) and This Mac (`kinds: ["slowMotion", "upscale"]`, `sharpening: "ready" | "downloadsOnFirstUse" | "downloading" | "unavailable"`).
-- `kinds`: `[{kind, label, version, versionName, service, price?, durations?, lastFrame?, others?}]`. Each kind shows the version Settings › Services chose, or the default; `others` lists up to 12 more you may name with `version`, each with its price, `lastFrame` and `takesVideo`.
+- `kinds`: `[{kind, label, version, versionName, service, price?, durations?, lastFrame?, others?}]`. Each kind shows the version Settings › Engines chose, or the default; `others` lists up to 12 more you may name with `version`, each with its price, `lastFrame` and `takesVideo`.
 - `limits`: `{askAbovePerTurnover, stopAtPerMonth}`. `stopAtPerMonth` is null for no limit.
 - `turnover`: `{id, spent, left}` for the open turnover, or null.
 - `month`: `{spent, left}`.
@@ -30,8 +30,8 @@ Defaults:
 | `music`, `soundEffect` | Lyria 3 Clip | About $0.04 per 30 s clip |
 | `voice` | The first speech version OpenRouter lists | Per character |
 | `still` | Nano Banana 2 | A few cents per image |
-| `shot`, `extension`, `bridge` | Veo 3.1 (Settings › Services › New shots) | About $0.20 a second at 1080p, silent; $0.40 with sound |
-| `changedShot` | Aleph 2.0 (Settings › Services › Changed shots) | About $0.28 a second, $0.56 at least. FLUX Video Edit is about $0.03 a second. |
+| `shot`, `extension`, `bridge` | Veo 3.1 (Settings › Engines › New shots) | About $0.20 a second at 1080p, silent; $0.40 with sound |
+| `changedShot` | Aleph 2.0 (Settings › Engines › Changed shots) | About $0.28 a second, $0.56 at least. FLUX Video Edit is about $0.03 a second. |
 | `slowMotion` | This Mac (Apple frame interpolation) | Nothing |
 | `upscale` | This Mac (Apple super resolution); FLUX Video Upscale through OpenRouter | Nothing on this Mac |
 
@@ -125,13 +125,13 @@ Rules for that approval:
 {"status": "spend_cap", "estimate": 3.2, "monthSpent": 48, "monthLimit": 50, "left": 2, "message": "…"}
 ```
 
-There's no override from your side. Tell the director in your answer or a can't-do. Only they can raise the limit in Settings › Services.
+There's no override from your side. Tell the director in your answer or a can't-do. Only they can raise the limit in Settings › Engines.
 
 ## Errors
 
 | Code | Meaning |
 |---|---|
-| `no_openrouter_key` | There's no key in Settings › Services. Nothing was sent. |
+| `no_openrouter_key` | There's no key in Settings › Engines. Nothing was sent. |
 | `openrouter_key_rejected`, `openrouter_credits`, `openrouter_error` | OpenRouter refused. The message is OpenRouter's own. |
 | `shot_failed`, `shot_timeout` | The video job failed or ran past 30 minutes. |
 | `spend_over_question` | The plan's yes is used up. Ask again for the rest. |
@@ -140,11 +140,11 @@ There's no override from your side. Tell the director in your answer or a can't-
 
 ## The key
 
-The director pastes the key once, in Settings › Services. Direction checks it with `GET /key`, which is free.
+The director pastes the key once, in Settings › Engines. Direction checks it with `GET /key`, which is free.
 
 The key is kept in the login keychain. There's one copy for the app and one for the bundled `direction` tool that runs your MCP calls. The app hands the tool its copy on standard input (`direction key save`).
 
-There are two copies because of how macOS protects keychain items. Since macOS 10.12, an item's partition list makes a second unsigned or ad-hoc-signed binary prompt for the keychain password, even when the item's access list trusts it. So each binary reads only its own copy, with keychain dialogs turned off. A rebuilt tool that can't read its copy fails instead of asking, and the app gives it the key again the next time Settings › Services opens.
+There are two copies because of how macOS protects keychain items. Since macOS 10.12, an item's partition list makes a second unsigned or ad-hoc-signed binary prompt for the keychain password, even when the item's access list trusts it. So each binary reads only its own copy, with keychain dialogs turned off. A rebuilt tool that can't read its copy fails instead of asking, and the app gives it the key again the next time Settings › Engines opens.
 
 The key never appears in tool arguments, results, job records, logs or the film. Removing it in Settings stops new requests at once, and made clips stay playable.
 

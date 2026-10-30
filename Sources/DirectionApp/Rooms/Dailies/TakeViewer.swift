@@ -247,7 +247,7 @@ struct DailiesTakeViewer: View {
                         Spacer()
                         if !lines.isEmpty, !model.isPreview, model.transcriptStatus(takeID) != .transcribing {
                             Button("Transcribe Again") { model.index.transcribeAgain(takeID, film: model) }.buttonStyle(.gate(.ghost, .small))
-                                .help("Make this take\u{2019}s words again with the engine in Settings \u{203A} Footage")
+                                .help("Make this take\u{2019}s words again with the engine in Settings \u{203A} Engines")
                         }
                     }
                     if lines.isEmpty { emptyTranscript }

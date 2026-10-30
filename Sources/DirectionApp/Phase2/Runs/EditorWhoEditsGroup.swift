@@ -1,7 +1,7 @@
 import SwiftUI
 import DirectionCore
 
-/// Settings › Editor › Who edits (frame 43, specs/editor.md › 43). Choosing a program that isn't
+/// Settings › Engines › Who edits (frame 43, specs/editor.md › 43). Choosing a program that isn't
 /// installed keeps the choice and shows how to install it; work waits with "Editor not set up".
 struct EditorWhoEditsGroup: View {
     var app: AppModel?

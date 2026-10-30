@@ -197,7 +197,7 @@ extension ProjectStore {
         }
     }
 
-    /// Dollars spent describing shots through OpenRouter, for Settings › Services' spending meter.
+    /// Dollars spent describing shots through OpenRouter, for Settings › Engines' spending meter.
     public func lookingSpend() throws -> Double { try indexTakes().values.reduce(0) { $0 + ($1.spend ?? 0) } }
 
     // MARK: Vectors as blobs

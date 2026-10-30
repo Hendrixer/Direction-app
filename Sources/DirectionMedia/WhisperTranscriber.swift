@@ -63,7 +63,7 @@ public enum WhisperTranscriber {
     """
 
     public static func transcribe(asset: MediaAsset, trackID: Int32, language: String, model: String, directory: URL) async throws -> SourceTranscript {
-        guard let tool = executable() else { throw DirectionError("whisper_unavailable", "mlx_whisper isn't installed. Install it with `pip install mlx-whisper`, or choose Apple in Settings › Footage.") }
+        guard let tool = executable() else { throw DirectionError("whisper_unavailable", "mlx_whisper isn't installed. Install it with `pip install mlx-whisper`, or choose Apple in Settings › Engines.") }
         guard let ffmpeg = ffmpeg() else { throw DirectionError("whisper_unavailable", "Whisper needs ffmpeg to read audio. Install it with `brew install ffmpeg`.") }
         let audio = try await AudioProcessor.extract(asset: asset, trackID: trackID, directory: directory)
         let output = directory.appendingPathComponent("Whisper").appendingPathComponent(newID("whisper"))

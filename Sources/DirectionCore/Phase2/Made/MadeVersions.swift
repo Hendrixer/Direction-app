@@ -110,7 +110,7 @@ public struct MadeCatalog: Codable, Sendable, Equatable {
         guard let id = Self.defaults[kind] else { return all.first }
         return all.first { $0.id == id } ?? all.first { $0.id.hasPrefix(id + "-") } ?? all.first
     }
-    /// The chosen version (Settings › Services, or the editor's `version`), else the default.
+    /// The chosen version (Settings › Engines, or the editor's `version`), else the default.
     public func version(_ kind: MadeKind, chosen: String? = nil) -> MadeVersion? {
         let all = listed(kind)
         if let chosen, let v = all.first(where: { $0.id == chosen }) ?? all.first(where: { $0.id.hasPrefix(chosen + "-") }) { return v }

@@ -79,13 +79,13 @@ Grain and gate weave depend only on the frame index (frames from the cut's start
 
 ## Folders
 
-- **The Looks folder**: Settings › Footage › Color, default `~/Movies/Direction/Looks`, created by the app when first used. Stored as `looksFolder` in the `dev.direction.shared` defaults suite, so every process reads the same one. Subfolders are groups. `Camera/` holds camera LUTs and isn't listed as looks.
+- **The Looks folder**: Settings › Cutting › Color, default `~/Movies/Direction/Looks`, created by the app when first used. Stored as `looksFolder` in the `dev.direction.shared` defaults suite, so every process reads the same one. Subfolders are groups. `Camera/` holds camera LUTs and isn't listed as looks.
 - **Looks chosen from the folder** are copied into `<film>.direction/Looks/` so the film keeps working if the folder changes.
 - **The editor's looks**: `<film>.direction/Editor/Looks/`.
 
 ## Camera LUTs
 
-Direction reads each take's log curve from its video track: Apple Log from the format description's log transfer function, otherwise S-Log3, LogC or V-Log from the transfer function, color metadata, or a Sony `M01.XML` sidecar. When Settings › Footage › "Convert log footage automatically" is on (`convertLogFootage`, default on) and `Looks/Camera/<log name>.cube` exists (`Apple Log.cube`, `S-Log3.cube`, `LogC.cube`, `V-Log.cube`), that take gets it. Direction ships no camera LUTs. The editor sets or clears one per take with `cameraLUT` (`auto`, `none`, or a file), stored by `ProjectStore.setCameraLUT`.
+Direction reads each take's log curve from its video track: Apple Log from the format description's log transfer function, otherwise S-Log3, LogC or V-Log from the transfer function, color metadata, or a Sony `M01.XML` sidecar. When Settings › Engines › "Convert log footage automatically" is on (`convertLogFootage`, default on) and `Looks/Camera/<log name>.cube` exists (`Apple Log.cube`, `S-Log3.cube`, `LogC.cube`, `V-Log.cube`), that take gets it. Direction ships no camera LUTs. The editor sets or clears one per take with `cameraLUT` (`auto`, `none`, or a file), stored by `ProjectStore.setCameraLUT`.
 
 ## For renderers
 

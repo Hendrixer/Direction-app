@@ -132,7 +132,7 @@ public actor ToolRuntime {
             let p = try store.read(), asset = try p.asset(a.requiredString("assetID"))
             guard let track = a["trackID"].int.flatMap(Int32.init(exactly:)) ?? asset.audio.first(where: { !$0.settings.muted })?.id ?? asset.audio.first?.id else { throw DirectionError("no_audio", "Choose an asset with an audio track.") }
             let language = a["language"].string ?? "en-US", directory = cacheDirectory.appendingPathComponent("Audio"), store = store
-            // Settings › Footage picks the engine; an explicit `engine` overrides it. A chosen Whisper
+            // Settings › Engines picks the engine; an explicit `engine` overrides it. A chosen Whisper
             // that isn't installed falls back to Apple and says so, so logging never stalls on setup.
             let requested = try a["engine"].string.map { value in
                 guard let e = SharedSettings.TranscriptionEngine(rawValue: value) else { throw DirectionError("invalid_arguments", "engine is apple or whisper.") }

@@ -1,15 +1,15 @@
 # Settings
 
-Frames 42–48, 54 and 55. Opens with Direction › Settings… (`⌘,`). It's a standard macOS Settings window with toolbar-style tabs, and it is not a sheet. In SwiftUI use a `Settings { TabView { … } }` scene with `.tabViewStyle(.automatic)` and the Gate styling below.
+Frames 42–48 and 54. Opens with Direction › Settings… (`⌘,`). It's a standard macOS Settings window with toolbar-style tabs, and it is not a sheet. In SwiftUI use a `Settings { TabView { … } }` scene with `.tabViewStyle(.automatic)` and the Gate styling below.
 
 ## Window
 
 | Part | Spec |
 |---|---|
 | Width | 720 pt, fixed. |
-| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 812, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. The window never grows past the screen: a pane taller than the screen's visible height (less the toolbar and a 24 pt margin) scrolls under the toolbar. On a 900 pt screen, Editor and Services scroll. |
+| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 585, Engines 1700, Cutting 800, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. The window never grows past the screen: a pane taller than the screen's visible height (less the toolbar and a 24 pt margin) scrolls under the toolbar. On a 900 pt screen, Engines scrolls. |
 | Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. In the app the title row is the window's own title bar (titled with the pane's name, in the ground color), and the tab row sits below it. Drawing both under a transparent full-size title bar shifted the content up by the title row whenever the window resized for another tab. |
-| Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘9` switch tabs while Settings is key. |
+| Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Engines, Cutting, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘8` switch tabs while Settings is key. A remembered Footage or Services tab opens Engines. |
 | Body | Padding 4/28/22. Each group is a label (`.label`, 14 above and 7 below) plus a `.set-card` (`--panel`, radius 10, hairline). |
 | Row | `.set-row`: min 44 tall, padding 10/14, hairline between rows. The label is 13/400, with an optional 11.5 text-3 sub-label under it. The control sits on the right. |
 | Notes | `.set-note`: 11.5 text-3, padding 8/2/0, under a card. |
@@ -42,7 +42,7 @@ Footer, centered 11.5 text-3: "Direction 1.0 (214) · Check for updates". The se
 
 ## 43 · Settings, Editor
 
-The **Who edits** group and the compact conflict row are specified in `editor.md › 43`. Everything below still applies to the Freedom and Before cutting groups; the conflict list moves into a popover opened by **Change…**.
+How the editor behaves: Freedom and Before cutting. Who edits (the program and its version) is in Engines (54); the compact conflict row is specified in `editor.md › 43`, and the conflict list opens in a popover from **Change…**. 720 × 585.
 
 Frame: `screens/43-settings-editor.html` · Render: `renders/43-settings-editor@2x.png`
 
@@ -81,7 +81,7 @@ Frame: `screens/43-settings-editor.html` · Render: `renders/43-settings-editor@
 ---
 
 ## 44 · Settings, Cutting
-Frame: `screens/44-settings-cutting.html` · Render: `renders/44-settings-cutting@2x.png`
+Frame: `screens/44-settings-cutting.html` · Render: `renders/44-settings-cutting@2x.png` · 720 × 800. Color moved here from Footage.
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
@@ -93,6 +93,8 @@ Frame: `screens/44-settings-cutting.html` · Render: `renders/44-settings-cuttin
 | Picture and sound (**per film**) | Transitions | Select: Hard cuts unless a note asks / Editor's choice | Hard cuts unless a note asks | Whether the editor may add dissolves or fades on its own. "Editor's choice" is still bounded by latitude. |
 | Keeping cuts | Keep earlier cuts | Select: All of them / Last 5 / Only locked and current | All of them | Older cuts beyond the limit become "Archived": the notes and changelog are kept and the renders deleted. |
 | Keeping cuts | Play from proxies | Switch | On | Use smaller files for playback. Deliveries always use the originals. |
+| Color | Looks folder | Path field (read-only, folder icon) with **Change…** and **Show in Finder** | `~/Movies/Direction/Looks` | LUTs here appear in the Look sheet (frame 63). Subfolders become groups. |
+| Color | Convert log footage automatically | Switch | On | Sub-label: "Apple Log, S-Log3, LogC and V-Log become normal video before any look. Camera LUTs live in the Camera folder." |
 
 **Acceptance:**
 - [ ] The Play changes duration updates when handles change, e.g. "0:46" at 2.0 s.
@@ -177,31 +179,45 @@ Frame: `screens/48-settings-sharing.html` · Render: `renders/48-settings-sharin
 
 Note under the links card: "These are defaults. Each link can be changed in its Share sheet."
 
-## 54 · Settings, Footage
-Frame: `screens/54-settings-footage.html` · Render: `renders/54-settings-footage@2x.png` · 720 × 724. Tab icon: `film.stack`.
+## 54 · Settings, Engines
+Rendered from the app (`54-settings-engines`) · 720 × 1700, scrolls on most screens. Tab icon: `cpu`.
+
+Everything that does the thinking, in one tab: what this Mac can run and what to use on it, the editor, transcription, looking at footage, and OpenRouter for what's made (and for looking at footage elsewhere). Groups, top to bottom: This Mac, Who edits, Transcription, Looking at footage, OpenRouter, What the editor uses, Spending. The UI never says "AI" or "model" here either (made-media.md): engines, versions, things made.
+
+**This Mac**
+
+| Row | Shows | Control |
+|---|---|---|
+| The chip ("Apple M4 Max") | "64 GB memory · 521 GB free on Macintosh HD" | — |
+| "mlx-vlm isn't installed" (only when the advice needs something missing) | Why: "Looking at footage on this Mac needs it." Claude Code the same way when no editor program is installed. | **Copy Command** |
+| Recommended | One line a job: "Looking at footage: Best (Qwen3-VL 30B-A3B), instead of Standard", "Transcription: Apple", "Editor: Claude Code". ", instead of …" only where the choice differs. | **Use Recommended** while anything differs; a "In use" chip (ok) when it all matches |
+
+Note: "Recommended from this Mac's chip, memory, free space and what's installed. Nothing changes until you choose."
+
+What it recommends (`EngineAdvice`):
+- **Looking at footage:** on Apple silicon, the largest local version the memory runs (Best at 32 GB or more, Standard at 16, else Quick) that's downloaded or has room for its download plus 2 GB, smaller ones in turn. Best is first because it's faster than Standard where it fits (footage-index.md › Speed). OpenRouter when nothing local fits and there's a key, and on a Mac without Apple silicon. mlx-vlm missing is a row with its install command, not a reason to send footage away.
+- **Transcription:** Apple. The fastest, and it keeps false starts (footage-index.md › Transcription engines).
+- **Editor:** the chosen program while it's installed, else whichever is (Claude Code first). Your own session is left alone.
+- Use Recommended sets those three and nothing else. Defaults already follow it: a Mac with 32 GB or more starts on Best.
+
+**Who edits**: as specified in `editor.md › 43` (Editor runs on, Version, Start work, Let the editor run scripts).
+
+**Transcription** and **Looking at footage**
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
 | Transcription | Transcribe with | Seg: Apple / Whisper | Apple | Apple: "Fast and built into macOS. Runs on this Mac." Whisper: "Slower, with tighter word times for cutting on a single word. Runs on this Mac." Stored in the `dev.direction.shared` defaults suite, so the editor's tools use it too. |
 | Transcription | Whisper version | Select: Large v3 Turbo / Large v3 | Large v3 Turbo | Sub-label: "Fast. Nearly as accurate as Large v3. Downloaded · 1.6 GB." or "Slower, and a little more accurate. Downloads 3.1 GB the first time it's used." Disabled while Apple is chosen. |
 | Transcription | mlx-whisper (only while Whisper is chosen) | Chip "Ready", or **Copy Command** | — | Ready shows the path (`~/.local/bin/mlx_whisper`). Missing: "mlx-whisper isn't installed" / "Install it in Terminal with pip install mlx-whisper. Until then, Apple transcribes." Missing ffmpeg: "Whisper needs ffmpeg" / "brew install ffmpeg". |
-| Looking at footage | Look with | Seg: This Mac / OpenRouter | This Mac | This Mac: "Private and free. Footage never leaves this Mac." OpenRouter: "Sends three small frames of each shot to a vision version through OpenRouter. Needs your key in Services." |
+| Looking at footage | Look with | Seg: This Mac / OpenRouter | This Mac | This Mac: "Private and free. Footage never leaves this Mac." OpenRouter: "Sends three small frames of each shot to a vision version through OpenRouter. Needs your key under OpenRouter below." |
 | Looking at footage | Detail | Select: Quick · 3.1 GB / Standard · 5.8 GB / Best · 18 GB (This Mac); or a select of OpenRouter vision versions, default Gemini 3.1 Flash Lite | Best with 32 GB of memory or more (it's faster than Standard there, footage-index.md › Speed); Standard below | Sub-label names the version and state: "Qwen3-VL 8B. Downloaded." Needs mlx-vlm: when it isn't installed, the row reads "mlx-vlm isn't installed" / "Install it in Terminal with uv tool install mlx-vlm. Until then, nothing is described; shots and sounds are still found." with **Copy Command**. |
 | Looking at footage | Look at new footage automatically | Switch | On | Off: footage is indexed only when the editor asks or you choose Film › Look at Footage. |
-| Color | Looks folder | Path field (read-only, folder icon) with **Change…** and **Show in Finder** | `~/Movies/Direction/Looks` | LUTs here appear in the Look sheet (frame 63). Subfolders become groups. |
-| Color | Convert log footage automatically | Switch | On | Sub-label: "Apple Log, S-Log3, LogC and V-Log become normal video before any look. Camera LUTs live in the Camera folder." |
 
 Note under Transcription: "Takes already transcribed keep their words. New footage uses this engine."
 Note under Looking at footage: "The editor reads what's found here to log takes, and you can search it in Dailies with ⌘F."
 
-**Acceptance:**
-- [ ] Choosing Whisper in Settings makes the next `direction_transcribe` call from the editor use Whisper, without restarting the editor.
-- [ ] A download in progress shows its percent in the Detail row's sub-label and can be cancelled from the row's context menu.
+**OpenRouter** (the group was Services)
 
----
-
-## 55 · Settings, Services
-Frame: `screens/55-settings-services.html` · Render: `renders/55-settings-services@2x.png` · 720 × 812. Tab icon: `key`.
 
 **The OpenRouter row** (`.set-row`, min 56): a 28 rounded-square monogram "O" (`--raised` fill, hairline border, radius 8, 12/700 text-2; no brand logo), "OpenRouter" (13/600) with "Music, voice, sound effects, shots and stills" under it (11.5 text-3), and on the right a chip "Ready" (ok style) with "$37.20 left" in SF Mono 11 text-3 before it, or **Add Key…** (`.btn`, key icon).
 
@@ -233,6 +249,15 @@ Note under Spending: "Check each version's terms on OpenRouter before you releas
 **Acceptance:**
 - [ ] A key is never written to UserDefaults, the film package, logs or the editor's tools.
 - [ ] Removing a key leaves made clips playable and stops new requests at once.
+
+---
+
+
+**Acceptance:**
+- [ ] Choosing Whisper here makes the next `direction_transcribe` call from the editor use Whisper, without restarting the editor.
+- [ ] A download in progress shows its percent in the Detail row's sub-label and can be cancelled from the row's context menu.
+- [ ] On a 16 GB Mac, Recommended says Standard; on a 64 GB Mac, Best; with no room for any download and a key, OpenRouter.
+- [ ] Use Recommended changes only looking at footage, transcription and the editor, and the row then shows "In use".
 
 ---
 

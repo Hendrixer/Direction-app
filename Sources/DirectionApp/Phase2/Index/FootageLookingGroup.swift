@@ -2,7 +2,7 @@ import SwiftUI
 import DirectionCore
 import DirectionMedia
 
-/// Settings › Footage › Looking at footage (frame 54, specs/settings.md › 54). Stored in the
+/// Settings › Engines › Looking at footage (frame 54, specs/settings.md › 54). Stored in the
 /// shared suite, so the editor's tools index the way the director chose.
 struct FootageLookingGroup: View {
     var preview = false
@@ -23,7 +23,7 @@ struct FootageLookingGroup: View {
 
     var body: some View {
         SettingsGroup(label: "Looking at footage", note: AnyView(SettingsNote("The editor reads what\u{2019}s found here to log takes, and you can search it in Dailies with \u{2318}F."))) {
-            SettingsRow(label: "Look with", detail: onMac ? "Private and free. Footage never leaves this Mac." : "Sends three small frames of each shot to a vision version through OpenRouter. Needs your key in Services.", first: true) {
+            SettingsRow(label: "Look with", detail: onMac ? "Private and free. Footage never leaves this Mac." : "Sends three small frames of each shot to a vision version through OpenRouter. Needs your key under OpenRouter below.", first: true) {
                 GateSegmented(options: [(SharedSettings.LookEngine.thisMac.rawValue, "This Mac"), (SharedSettings.LookEngine.openRouter.rawValue, "OpenRouter")], selection: preview ? .constant(SharedSettings.LookEngine.thisMac.rawValue) : $engine)
             }
             if onMac { localRow } else { openRouterRow }
@@ -86,7 +86,7 @@ struct FootageLookingGroup: View {
 
     private var openRouterRow: some View {
         let name = SharedSettings.lookOpenRouterVersions.first { $0.id == version }?.name ?? version
-        return SettingsRow(label: "Detail", detail: hasKey ? "\(name) through OpenRouter." : "\(name) through OpenRouter. Add your key in Services first.") {
+        return SettingsRow(label: "Detail", detail: hasKey ? "\(name) through OpenRouter." : "\(name) through OpenRouter. Add your key under OpenRouter below first.") {
             GateSelect(options: SharedSettings.lookOpenRouterVersions.map { ($0.id, $0.name) }, selection: $version)
         }
     }

@@ -108,7 +108,7 @@ public enum LookRules {
     }
 }
 
-// MARK: Settings › Footage › Color
+// MARK: Settings › Cutting › Color
 
 extension SharedSettings {
     public enum LookKey {
