@@ -40,7 +40,7 @@ struct MacFacts: Equatable, Sendable {
                 guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return nil }
                 var buffer = [CChar](repeating: 0, count: size)
                 guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else { return nil }
-                return String(cString: buffer)
+                return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
             }
             var arm: Int32 = 0, size = MemoryLayout<Int32>.size
             let appleSilicon = sysctlbyname("hw.optional.arm64", &arm, &size, nil, 0) == 0 && arm == 1
