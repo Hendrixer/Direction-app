@@ -26,19 +26,19 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// The Settings window (frames 42–48): Direction › Settings… (⌘,). A 720 pt window whose
-/// height fits the pane, toolbar tabs drawn in Gate, the tab's name as the window title,
-/// the last tab remembered, every change applied at once. esc and ⌘W close it.
+/// The Settings window (frames 42–48, 54): Direction › Settings… (⌘,). One size for every
+/// section, like System Settings: 940 wide, a sidebar of sections on the left and the section
+/// scrolling on the right, as tall as the screen allows up to 760. It never resizes, so it never
+/// runs off the screen. The section's name is the window title; the last one is remembered;
+/// every change applies at once. ⌘1…⌘8 choose a section; esc and ⌘W close it.
 struct SettingsView: View {
     var app: AppModel?
-    /// Snapshots and previews: sample numbers, no system queries.
+    /// Snapshots and previews: sample numbers, no system queries, and the whole section drawn.
     var preview = false
     /// Settings › Shortcuts starts recording this row (frame 46).
     var recording: ShortcutAction? = nil
     @AppStorage(SettingsKey.settingsTab) private var storedTab = SettingsTab.general.rawValue
     @State private var tab: SettingsTab
-    /// The pane's own height, so the window fits it, or scrolls it when the screen is shorter.
-    @State private var paneHeight: CGFloat = 0
 
     init(app: AppModel? = nil, initialTab: SettingsTab? = nil, preview: Bool = false, recording: ShortcutAction? = nil) {
         self.app = app; self.preview = preview; self.recording = recording
@@ -48,17 +48,23 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SettingsToolbar(tab: select, showsTitle: preview)
-            // A pane taller than the screen scrolls under the toolbar. Without this the window grew past
-            // the screen, macOS held it to the screen, and the overflow cut the title row off the top.
-            ScrollView(.vertical) {
-                pane.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { paneHeight = $0 }
+            // Snapshots draw the title bar's row; the real window has its own.
+            if preview {
+                Text(tab.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.secondary)
+                    .frame(maxWidth: .infinity).frame(height: 28)
+                SystemHairline()
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.automatic)
-            .frame(height: paneHeight > 0 ? min(paneHeight, maxPaneHeight) : nil)
+            HStack(spacing: 0) {
+                SettingsSidebar(tab: select)
+                Rectangle().fill(Gate.Line.subtle).frame(width: 1)
+                Group {
+                    if preview { pane.frame(maxHeight: .infinity, alignment: .top) }
+                    else { ScrollView(.vertical) { pane }.scrollIndicators(.automatic).id(tab) }
+                }
+                .frame(maxWidth: .infinity)
+            }
         }
-        .frame(width: Gate.Size.settingsWidth)
+        .frame(width: Gate.Size.settingsWidth, height: preview ? nil : windowHeight)
         .background(Gate.Surface.ground)
         .overlay { GrainOverlay().allowsHitTesting(false) }
         .background { if !preview { SettingsWindowConfigurator(title: tab.title) } }
@@ -67,17 +73,17 @@ struct SettingsView: View {
         .onChange(of: storedTab) { _, new in if let t = SettingsTab.stored(new), t != tab { select(t) } }
     }
 
-    /// The screen's height less the title bar, the toolbar and a margin. Snapshots draw every pane whole.
-    private var maxPaneHeight: CGFloat {
-        guard !preview, let screen = NSScreen.main?.visibleFrame.height else { return .infinity }
-        return max(360, screen - 28 - 49 - 24)
+    /// 760, or the screen's height less the title bar and a margin on a smaller screen.
+    private var windowHeight: CGFloat {
+        guard let screen = NSScreen.main?.visibleFrame.height else { return Gate.Size.settingsHeight }
+        return max(420, min(Gate.Size.settingsHeight, screen - 28 - 48))
     }
 
     private var select: Binding<SettingsTab> {
         Binding(get: { tab }, set: { select($0) })
     }
     private func select(_ new: SettingsTab) {
-        // No animated layout: the window resizes at once and only the pane's content fades in.
+        // Nothing moves: the window keeps its size and only the section's content fades in.
         var t = Transaction(); t.disablesAnimations = true
         withTransaction(t) { tab = new }
         if storedTab != new.rawValue { storedTab = new.rawValue }
@@ -98,7 +104,7 @@ struct SettingsView: View {
         }
     }
 
-    /// ⌘1…⌘8 switch tabs while Settings is key; esc closes the window.
+    /// ⌘1…⌘8 choose a section while Settings is key; esc closes the window.
     private var tabKeys: some View {
         ZStack {
             ForEach(Array(SettingsTab.allCases.enumerated()), id: \.offset) { i, t in
@@ -119,46 +125,42 @@ private struct PaneFadeIn: ViewModifier {
     }
 }
 
-/// The 76 pt toolbar: the pane name over a row of 76 pt tabs.
-struct SettingsToolbar: View {
+/// The sections, top to bottom: an 18 icon and a 13 pt name, 30 tall; the chosen one on a
+/// `--raised` fill, radius 7, in text-1.
+struct SettingsSidebar: View {
     @Binding var tab: SettingsTab
-    /// Snapshots draw the title row themselves; the real window shows it in its own title bar.
-    var showsTitle = false
     var body: some View {
-        VStack(spacing: 0) {
-            if showsTitle {
-                Text(tab.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.secondary)
-                    .frame(maxWidth: .infinity).frame(height: 27)
-            }
-            HStack(spacing: 2) {
-                ForEach(SettingsTab.allCases) { t in tabButton(t) }
-            }
-            .frame(maxWidth: .infinity).frame(height: 48, alignment: .top)
-            SystemHairline()
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(SettingsTab.allCases) { t in item(t) }
+            Spacer(minLength: 0)
         }
-        .background(Gate.Surface.ground)
+        .padding(.horizontal, 10).padding(.vertical, 12)
+        .frame(width: Gate.Size.settingsSidebar)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Gate.Surface.panel.opacity(0.5))
     }
 
-    private func tabButton(_ t: SettingsTab) -> some View {
+    private func item(_ t: SettingsTab) -> some View {
         let on = t == tab
         return Button { tab = t } label: {
-            VStack(spacing: 3) {
+            HStack(spacing: 9) {
                 Group {
-                    if t == .editor { RoundedRectangle(cornerRadius: 1.5).frame(width: 9, height: 9).rotationEffect(.degrees(45)) }
-                    else { Image(systemName: t.icon).font(.system(size: 15, weight: .medium)) }
+                    if t == .editor { RoundedRectangle(cornerRadius: 1.5).frame(width: 8, height: 8).rotationEffect(.degrees(45)) }
+                    else { Image(systemName: t.icon).font(.system(size: 13, weight: .medium)) }
                 }
                 .frame(width: 18, height: 18)
-                Text(t.title).font(.system(size: 11))
+                Text(t.title).font(.system(size: 13, weight: on ? .medium : .regular))
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(on ? Gate.Text.primary : Gate.Text.tertiary)
-            .frame(width: 74).padding(.top, 5).padding(.bottom, 6)
+            .foregroundStyle(on ? Gate.Text.primary : Gate.Text.secondary)
+            .padding(.horizontal, 8).frame(height: 30)
             .background { if on { RoundedRectangle(cornerRadius: 7).fill(Gate.Surface.raised) } }
             .contentShape(RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(t.title)
         .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
-        .help("\(t.title) (⌘\(SettingsTab.allCases.firstIndex(of: t)! + 1))")
+        .help("\(t.title) (\u{2318}\(SettingsTab.allCases.firstIndex(of: t)! + 1))")
     }
 }
 
@@ -175,9 +177,8 @@ struct SettingsPane<Content: View>: View {
 
 // MARK: Window
 
-/// A standard title bar in the window's ground color, titled with the tab's name, with the traffic
-/// lights at x 20. The tabs sit below it. Drawing them under a transparent full-size title bar
-/// put them out of place: each resize for another tab shifted the content up by the title row.
+/// A standard title bar in the window's ground color, titled with the section's name, with the
+/// traffic lights at x 20. The sidebar and the section sit below it.
 struct SettingsWindowConfigurator: NSViewRepresentable {
     var title: String
     func makeNSView(context: Context) -> SettingsWindowView { SettingsWindowView() }

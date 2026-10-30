@@ -26,8 +26,8 @@ enum RunsFixtures {
     private static func settings() -> SnapshotScene {
         SettingsKey.register()
         previewPrograms(chosen: true)
-        return SnapshotScene(size: CGSize(width: 720, height: 585),
-                             SettingsView(initialTab: .editor, preview: true).frame(width: 720, height: 585, alignment: .top).clipped().background(Gate.Surface.ground))
+        return SnapshotScene(size: CGSize(width: Gate.Size.settingsWidth, height: 789),
+                             SettingsView(initialTab: .editor, preview: true).frame(width: Gate.Size.settingsWidth, height: 789, alignment: .top).clipped().background(Gate.Surface.ground))
     }
 
     // MARK: 56

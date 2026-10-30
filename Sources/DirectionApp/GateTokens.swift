@@ -97,7 +97,10 @@ enum Gate {
         static let chip: CGFloat = 20, pill: CGFloat = 28
         static let windowMin = CGSize(width: 1180, height: 740)
         static let windowDesign = CGSize(width: 1440, height: 900)
-        static let settingsWidth: CGFloat = 720
+        /// Settings: a sidebar of sections and a 744 content column, one size for every section.
+        static let settingsWidth: CGFloat = 940
+        static let settingsSidebar: CGFloat = 196
+        static let settingsHeight: CGFloat = 760
         static let trafficLightsX: CGFloat = 20
     }
 

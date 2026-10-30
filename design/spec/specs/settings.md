@@ -6,10 +6,10 @@ Frames 42–48 and 54. Opens with Direction › Settings… (`⌘,`). It's a sta
 
 | Part | Spec |
 |---|---|
-| Width | 720 pt, fixed. |
-| Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 585, Engines 1700, Cutting 800, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. The window never grows past the screen: a pane taller than the screen's visible height (less the toolbar and a 24 pt margin) scrolls under the toolbar. On a 900 pt screen, Engines scrolls. |
-| Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. In the app the title row is the window's own title bar (titled with the pane's name, in the ground color), and the tab row sits below it. Drawing both under a transparent full-size title bar shifted the content up by the title row whenever the window resized for another tab. |
-| Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Engines, Cutting, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘8` switch tabs while Settings is key. A remembered Footage or Services tab opens Engines. |
+| Size | 940 wide and 760 tall, or the screen's visible height less the title bar and 48 pt on a smaller screen (at least 420). One size for every section, like System Settings: the window never resizes when the section changes, so it never runs off the screen. (It used to fit each section's height, and a tall section grew it down past the bottom of the screen.) |
+| Title bar | The window's own, in the ground color, titled with the section's name, traffic lights at x 20. |
+| Sidebar | 196 wide on the left, `--panel` at 50%, a hairline on its right. One item per section, top to bottom: an 18 icon and the 13 pt name, 30 tall, gap 2, padding 12/10. The chosen one: `--raised` fill, radius 7, text-1, medium weight; the rest text-2. Order: General, Editor, Engines, Cutting, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘8` choose a section while Settings is key. A remembered Footage or Services section opens Engines. |
+| Section | The rest of the width (743). It scrolls when it's taller than the window (Engines does); it starts at the top whenever another section is chosen, and only its content fades in (160 ms, ease-out). Snapshots draw the whole section. |
 | Body | Padding 4/28/22. Each group is a label (`.label`, 14 above and 7 below) plus a `.set-card` (`--panel`, radius 10, hairline). |
 | Row | `.set-row`: min 44 tall, padding 10/14, hairline between rows. The label is 13/400, with an optional 11.5 text-3 sub-label under it. The control sits on the right. |
 | Notes | `.set-note`: 11.5 text-3, padding 8/2/0, under a card. |

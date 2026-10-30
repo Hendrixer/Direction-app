@@ -8,13 +8,13 @@ enum SystemFixtures {
         [
             "39-share": { let m = SampleFilm.make(); m.sheet = .share; return .film(m) },
             "41-agent-popover": { popover() },
-            "42-settings-general": { settings(.general, height: 600) },
-            "54-settings-engines": { RunsFixtures.previewPrograms(chosen: true); return settings(.engines, height: 1700) },
-            "44-settings-cutting": { settings(.cutting, height: 800) },
-            "45-settings-notifications": { settings(.notifications, height: 530) },
-            "46-settings-shortcuts": { settings(.shortcuts, height: 690, recording: .region) },
-            "47-settings-storage": { settings(.storage, height: 520) },
-            "48-settings-sharing": { settings(.sharing, height: 590) },
+            "42-settings-general": { settings(.general, height: 789) },
+            "54-settings-engines": { RunsFixtures.previewPrograms(chosen: true); return settings(.engines, height: 1651) },
+            "44-settings-cutting": { settings(.cutting, height: 789) },
+            "45-settings-notifications": { settings(.notifications, height: 789) },
+            "46-settings-shortcuts": { settings(.shortcuts, height: 789, recording: .region) },
+            "47-settings-storage": { settings(.storage, height: 789) },
+            "48-settings-sharing": { settings(.sharing, height: 789) },
             "49-command": { command() },
             "50-shortcuts": { let m = SampleFilm.make(); m.showShortcuts = true; return .film(m) },
             "51-offline": { let m = SampleFilm.make(); m.offline = true; return .film(m) },
@@ -25,9 +25,9 @@ enum SystemFixtures {
 
     private static func settings(_ tab: SettingsTab, height: CGFloat, recording: ShortcutAction? = nil) -> SnapshotScene {
         SettingsKey.register()
-        return SnapshotScene(size: CGSize(width: 720, height: height),
-                             // The window fits the pane; the frame's fixed height clips at the bottom, never the top.
-                             SettingsView(initialTab: tab, preview: true, recording: recording).frame(width: 720, height: height, alignment: .top).clipped().background(Gate.Surface.ground))
+        return SnapshotScene(size: CGSize(width: Gate.Size.settingsWidth, height: height),
+                             // Snapshots draw the whole section; the frame's fixed height clips at the bottom, never the top.
+                             SettingsView(initialTab: tab, preview: true, recording: recording).frame(width: Gate.Size.settingsWidth, height: height, alignment: .top).clipped().background(Gate.Surface.ground))
     }
 
     /// Frame 41: the popover drawn where NSPopover puts it, under the pill.
