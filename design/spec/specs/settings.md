@@ -8,7 +8,7 @@ Frames 42–48, 54 and 55. Opens with Direction › Settings… (`⌘,`). It's a
 |---|---|
 | Width | 720 pt, fixed. |
 | Height | Fits the selected pane. Switching tabs resizes the window at once, with no animation; only the pane's content fades in (160 ms, ease-out). Frame heights: General 600, Editor 853, Footage 724, Cutting 650, Services 812, Notifications 530, Shortcuts 690, Storage 520, Sharing 590. The window never grows past the screen: a pane taller than the screen's visible height (less the toolbar and a 24 pt margin) scrolls under the toolbar. On a 900 pt screen, Editor and Services scroll. |
-| Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. |
+| Toolbar | `.set-tb` 76 tall: a title row 28 tall (the pane name, 13/600 text-2, centered), then a tab row. In the app the title row is the window's own title bar (titled with the pane's name, in the ground color), and the tab row sits below it. Drawing both under a transparent full-size title bar shifted the content up by the title row whenever the window resized for another tab. |
 | Tabs | 74 wide each, gap 2, with an 18 icon over an 11 pt label and gap 3. Selected: `--raised` fill, radius 7, text-1. Order: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing. `⌘1`…`⌘9` switch tabs while Settings is key. |
 | Body | Padding 4/28/22. Each group is a label (`.label`, 14 above and 7 below) plus a `.set-card` (`--panel`, radius 10, hairline). |
 | Row | `.set-row`: min 44 tall, padding 10/14, hairline between rows. The label is 13/400, with an optional 11.5 text-3 sub-label under it. The control sits on the right. |
@@ -103,7 +103,7 @@ Frame: `screens/44-settings-cutting.html` · Render: `renders/44-settings-cuttin
 ## 45 · Settings, Notifications
 Frame: `screens/45-settings-notifications.html` · Render: `renders/45-settings-notifications@2x.png`
 
-These are macOS user notifications. On first launch, Direction asks for permission after the first turnover, not at launch. If permission is denied, a banner appears at the top of this pane: "Notifications are off for Direction in System Settings." with an **Open System Settings** button, and the switches are disabled.
+These are macOS user notifications. On first launch, Direction asks for permission after the first turnover, not at launch. If permission is denied, a banner appears at the top of this pane: "Notifications are off for Direction in System Settings." with an **Open System Settings** button, and the switches are disabled. If Direction hasn't asked yet, the banner reads "Direction hasn't asked to send notifications yet." with **Turn On**, and the switches stay on. The pane asks macOS again whenever Direction comes to the front or the window becomes key, so turning notifications on in System Settings clears the banner when you come back.
 
 | Group | Setting | Control | Default | Notification text |
 |---|---|---|---|---|

@@ -54,9 +54,11 @@ enum SystemNotifications {
     }
 
     /// Asks once, after the first turnover rather than at launch (Settings › Notifications).
-    static func requestPermissionIfNeeded() {
+    static func requestPermissionIfNeeded() { requestPermission {} }
+    /// Settings › Notifications › Turn On asks now; `done` runs on the main actor once macOS answers.
+    static func requestPermission(_ done: @escaping @MainActor @Sendable () -> Void) {
         guard SystemSupport.isBundledApp else { return }
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in Task { @MainActor in done() } }
     }
 
     /// Clicking a notification opens its film in the right room. Call once at launch.

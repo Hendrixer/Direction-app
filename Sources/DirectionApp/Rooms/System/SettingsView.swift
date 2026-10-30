@@ -44,7 +44,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SettingsToolbar(tab: select)
+            SettingsToolbar(tab: select, showsTitle: preview)
             // A pane taller than the screen scrolls under the toolbar. Without this the window grew past
             // the screen, macOS held it to the screen, and the overflow cut the title row off the top.
             ScrollView(.vertical) {
@@ -57,8 +57,6 @@ struct SettingsView: View {
         .frame(width: Gate.Size.settingsWidth)
         .background(Gate.Surface.ground)
         .overlay { GrainOverlay().allowsHitTesting(false) }
-        // The toolbar is drawn under the transparent title bar, with the traffic lights in its title row.
-        .ignoresSafeArea(.container, edges: .top)
         .background { if !preview { SettingsWindowConfigurator(title: tab.title) } }
         .background { tabKeys }
         .preferredColorScheme(.dark)
@@ -68,7 +66,7 @@ struct SettingsView: View {
     /// The screen's height less the title bar, the toolbar and a margin. Snapshots draw every pane whole.
     private var maxPaneHeight: CGFloat {
         guard !preview, let screen = NSScreen.main?.visibleFrame.height else { return .infinity }
-        return max(360, screen - 28 - 76 - 24)
+        return max(360, screen - 28 - 49 - 24)
     }
 
     private var select: Binding<SettingsTab> {
@@ -121,11 +119,14 @@ private struct PaneFadeIn: ViewModifier {
 /// The 76 pt toolbar: the pane name over a row of 76 pt tabs.
 struct SettingsToolbar: View {
     @Binding var tab: SettingsTab
+    /// Snapshots draw the title row themselves; the real window shows it in its own title bar.
+    var showsTitle = false
     var body: some View {
         VStack(spacing: 0) {
-            Text(tab.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.secondary)
-                .frame(maxWidth: .infinity).frame(height: 27)
-                .background(SettingsDragArea())
+            if showsTitle {
+                Text(tab.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.secondary)
+                    .frame(maxWidth: .infinity).frame(height: 27)
+            }
             HStack(spacing: 2) {
                 ForEach(SettingsTab.allCases) { t in tabButton(t) }
             }
@@ -171,8 +172,9 @@ struct SettingsPane<Content: View>: View {
 
 // MARK: Window
 
-/// Hides the system title (it's drawn in the toolbar), keeps the traffic lights at x 20 in the
-/// 28 pt title row, and sets the window title to the tab's name for the Window menu and Mission Control.
+/// A standard title bar in the window's ground color, titled with the tab's name, with the traffic
+/// lights at x 20. The tabs sit below it. Drawing them under a transparent full-size title bar
+/// put them out of place: each resize for another tab shifted the content up by the title row.
 struct SettingsWindowConfigurator: NSViewRepresentable {
     var title: String
     func makeNSView(context: Context) -> SettingsWindowView { SettingsWindowView() }
@@ -194,8 +196,8 @@ final class SettingsWindowView: NSView {
         guard let window else { return }
         window.title = title
         window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.styleMask.insert(.fullSizeContentView)
+        window.titleVisibility = .visible
+        window.styleMask.remove(.fullSizeContentView)
         window.tabbingMode = .disallowed
         window.backgroundColor = NSColor(Gate.Surface.ground)
         window.appearance = NSAppearance(named: .darkAqua)
@@ -210,16 +212,6 @@ final class SettingsWindowView: NSView {
         }
     }
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
-}
-
-/// The title row drags the window like a normal title bar.
-private struct SettingsDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { DragView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
-    final class DragView: NSView {
-        override var mouseDownCanMoveWindow: Bool { true }
-        override func mouseDown(with event: NSEvent) { if event.clickCount == 2 { return }; window?.performDrag(with: event) }
-    }
 }
 
 /// Opens Settings at a tab (and flashes a row). Use from views; menus use `SettingsLink`-style buttons below.

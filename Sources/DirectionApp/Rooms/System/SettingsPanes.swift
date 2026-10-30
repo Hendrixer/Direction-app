@@ -384,15 +384,18 @@ struct NotificationsPane: View {
     @AppStorage(SettingsKey.holdDuringScreening) private var hold = true
     @AppStorage(SettingsKey.notificationSound) private var sound = "default"
     @State private var denied = false
+    /// Direction hasn't asked yet: the first turnover asks, or Turn On here.
+    @State private var notAsked = false
 
     var body: some View {
         SettingsPane {
-            if denied {
+            if denied || notAsked {
                 HStack(spacing: 10) {
                     Image(systemName: "bell.slash").font(.system(size: 12)).foregroundStyle(Gate.Text.secondary)
-                    Text("Notifications are off for Direction in System Settings.").font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary)
+                    Text(denied ? "Notifications are off for Direction in System Settings." : "Direction hasn\u{2019}t asked to send notifications yet.").font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary)
                     Spacer(minLength: 8)
-                    Button("Open System Settings") { SystemNotifications.openSystemSettings() }.buttonStyle(.gate(.normal, .small))
+                    if denied { Button("Open System Settings") { SystemNotifications.openSystemSettings() }.buttonStyle(.gate(.normal, .small)) }
+                    else { Button("Turn On") { SystemNotifications.requestPermission { Task { await check() } } }.buttonStyle(.gate(.normal, .small)) }
                 }
                 .padding(.horizontal, 14).frame(height: 36)
                 .background(SystemCardBackground())
@@ -417,11 +420,16 @@ struct NotificationsPane: View {
             }
             .disabled(denied)
         }
-        .task {
-            guard !preview, SystemSupport.isBundledApp else { return }
-            let settings = await UNUserNotificationCenter.current().notificationSettings()
-            denied = settings.authorizationStatus == .denied
-        }
+        .task { await check() }
+        // Coming back from System Settings: ask again, or the pane keeps the old answer.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await check() } }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in Task { await check() } }
+    }
+
+    private func check() async {
+        guard !preview, SystemSupport.isBundledApp else { return }
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        denied = status == .denied; notAsked = status == .notDetermined
     }
 }
 
