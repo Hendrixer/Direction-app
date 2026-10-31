@@ -20,7 +20,7 @@ public enum ScreenReader {
     public static let minimumConfidence: Float = 0.8
     /// A frame is read again once this share of its pixels changed since the last frame read.
     public static let changed = 0.001
-    /// Frames read at once: four in flight is about three times one at a time.
+    /// Frames read at once: four in flight is about twice as fast as one at a time (measured).
     static let concurrency = 4
 
     public struct Sample: Sendable, Equatable {
@@ -152,14 +152,18 @@ public enum ScreenReader {
     /// body text, then menus and labels), and text of one size top to bottom, left to right. Rows
     /// across a screen run through every column, so size says more than position. Language
     /// correction is off: it halves the time and changes nothing Vision is sure of.
+    ///
+    /// Vision's older request, not the Swift `RecognizeTextRequest`: several of those at once in one
+    /// process crash inside Apple's text recognition (a 17-minute screen recording took the app
+    /// down; about 1 run in 10 of 8 at once crashed, against none in 360 of these).
     public static func lines(_ image: CGImage) async throws -> [String] {
-        var request = RecognizeTextRequest()
+        let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
-        let found = try await request.perform(on: image)
-        let read = found.compactMap { o -> Read? in
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+        let read = (request.results ?? []).compactMap { o -> Read? in
             guard let c = o.topCandidates(1).first, c.confidence >= minimumConfidence, let text = clean(c.string) else { return nil }
-            return Read(text: text, rect: o.boundingBox.cgRect)
+            return Read(text: text, rect: o.boundingBox)
         }
         return ordered(read, frameHeight: Double(image.height))
     }
