@@ -184,6 +184,14 @@ enum EditorJobs {
     static func prepareFolder(film: URL, job: EditorJob) throws -> URL {
         let fm = FileManager.default, folder = film.appendingPathComponent("Editor")
         for sub in ["Graphics", "Looks", "Effects", "Transitions", "Techniques", ".direction"] { try fm.createDirectory(at: folder.appendingPathComponent(sub), withIntermediateDirectories: true) }
+        // Direction writes no settings here. Any it finds came with a film someone shared, or from an editor,
+        // and a hook in one would run as you when the editor starts, so they go to the Trash first.
+        for planted in [".claude/settings.json", ".claude/settings.local.json", ".codex"] {
+            let url = folder.appendingPathComponent(planted)
+            guard fm.fileExists(atPath: url.path) else { continue }
+            DirectionLog.warning("Moved \(planted) out of the film\u{2019}s editor folder before starting the editor", "editor")
+            if (try? fm.trashItem(at: url, resultingItemURL: nil)) == nil { try fm.removeItem(at: url) }
+        }
         let notes = folder.appendingPathComponent("NOTES.md")
         if !fm.fileExists(atPath: notes.path) { try Data("# Notes between runs\n\nWhat I\u{2019}d want to know next time I pick up this film.\n".utf8).write(to: notes) }
         // The job names its own skill; the others (make-shot, make-graphic, propose-look…) are there for it to follow too.

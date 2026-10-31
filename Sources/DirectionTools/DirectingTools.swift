@@ -54,12 +54,11 @@ extension ToolRuntime {
 
         case "direction_log_dailies":
             var d = try store.dailies()
-            if let scenes = a["scenes"].array {
-                let inputs = try scenes.map { try $0.decode(SceneInput.self) }
-                d.scenes = inputs.map { s in
-                    let existing = d.scenes.first { $0.id == s.id || $0.number == s.number }
-                    return DailiesScene(id: s.id ?? existing?.id ?? newID("scene"), number: s.number, title: s.title, setups: s.setups ?? existing?.setups ?? [])
-                }
+            // A batch adds the scenes it names or changes them; scenes logged by earlier batches stay.
+            for s in try (a["scenes"].array ?? []).map({ try $0.decode(SceneInput.self) }) {
+                let scene = { (existing: DailiesScene?) in DailiesScene(id: s.id ?? existing?.id ?? newID("scene"), number: s.number, title: s.title, setups: s.setups ?? existing?.setups ?? []) }
+                if let i = d.scenes.firstIndex(where: { $0.id == s.id }) ?? d.scenes.firstIndex(where: { $0.number == s.number }) { d.scenes[i] = scene(d.scenes[i]) }
+                else { d.scenes.append(scene(nil)) }
             }
             func sceneID(_ number: Int?, _ id: String?) throws -> String? {
                 if let id { guard d.scenes.contains(where: { $0.id == id }) else { throw DirectionError("scene_not_found", "Scene \(id) isn't logged.") }; return id }

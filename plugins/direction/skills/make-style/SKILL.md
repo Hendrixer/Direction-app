@@ -31,7 +31,6 @@ A style is four things, like a design system:
      "fonts": {"title": {"family": "Archivo", "weight": 800, "width": 112}, "captions": {"family": "Archivo", "weight": 700}},
      "motion": {"in": 0.3, "out": 0.2, "ease": "out", "hold": 2.5},
      "captions": {"on": true, "wordsAtATime": 3, "case": "upper", "position": "lower third"},
-     "transitions": {"default": "cut", "use": ["push", "whip"], "frames": 8},
      "sound": {"musicUnderSpeechDB": -24, "effectsDB": -14, "whooshOnTransitions": true, "popOnGraphics": true},
      "graphics": {"title": "title", "lowerThird": "lower-third", "captions": "captions"},
      "look": {"strength": 0.6}

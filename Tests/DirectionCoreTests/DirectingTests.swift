@@ -87,6 +87,39 @@ private func directedStore() throws -> (ProjectStore, Project, ReviewCut) {
     #expect(try store.directingState().finishing?.count == FinishingItem.defaults.count)
 }
 
+@Test func theLockedCutPlaysAndDeliversWithItsFinishing() throws {
+    let (store, p, cut) = try directedStore()
+    try store.lockPicture(cutID: cut.id, locked: true)
+    #expect(try store.playedRevision(of: cut) == cut.editRevision)
+    var grade = EditOperation("color"); grade.clipID = p.sequences[0].clips[0].id; var g = ColorGrade(); g.exposure = 0.2; grade.grade = g
+    _ = try store.apply(.init(baseEditRevision: p.editRevision, summary: "Warm it", operations: [grade]))
+    #expect(try store.playedRevision(of: cut) == cut.editRevision + 1)
+    // Unlocked, a cut plays as it was made.
+    try store.lockPicture(cutID: nil, locked: false)
+    #expect(try store.playedRevision(of: cut) == cut.editRevision)
+}
+
+@Test func aLaterLoggingBatchKeepsTheScenesBeforeIt() throws {
+    let (store, _, _) = try directedStore()
+    _ = try store.logDailies(Dailies(scenes: [DailiesScene(id: "scene-2", number: 2, title: "The ridge")], takes: [:]))
+    #expect(try store.dailies().scenes.map(\.id) == ["scene-1", "scene-2"])
+}
+
+@Test func aCutIsDeliveredWithAnAnswerForEveryNoteOrNotAtAll() throws {
+    let (store, p, cut) = try directedStore()
+    let one = try store.addComment(text: "Tighter on her.", sequenceID: nil, revision: p.editRevision, cutID: cut.id, time: .init(seconds: 1), extra: NoteFields(kind: .picture))
+    let two = try store.addComment(text: "Lose the second um.", sequenceID: nil, revision: p.editRevision, cutID: cut.id, time: .init(seconds: 2), extra: NoteFields(kind: .pace))
+    let t = try store.turnOver(noteIDs: [one.id, two.id], latitude: .faithful, waitForOK: false, cutID: cut.id, sequenceID: nil)
+    let cuts = try store.cuts().count
+    expectError("note_unanswered") { _ = try store.completeTurnover(id: t.id, revision: nil, sequenceID: nil, answers: [AnswerInput(noteID: one.id, summary: "Reframed to 1.6×.")]) }
+    // A bad answer late in the list leaves no cut and no answers behind.
+    expectError("invalid_rule") { _ = try store.completeTurnover(id: t.id, revision: nil, sequenceID: nil, answers: [AnswerInput(noteID: one.id, summary: "Reframed to 1.6×."), AnswerInput(noteID: two.id, summary: "Cut it.", rule: RuleSuggestion(text: " ", scope: "house"))]) }
+    #expect(try store.cuts().count == cuts)
+    #expect(try store.notes().first { $0.id == one.id }?.answers?.isEmpty ?? true)
+    _ = try store.completeTurnover(id: t.id, revision: nil, sequenceID: nil, answers: [AnswerInput(noteID: one.id, summary: "Reframed to 1.6×."), AnswerInput(noteID: two.id, summary: "Couldn\u{2019}t: it\u{2019}s under the music cue. Trim the cue and I can.")])
+    #expect(try store.cuts().count == cuts + 1)
+}
+
 @Test func pictureLockWaitsForOpenNotes() throws {
     let (store, p, cut) = try directedStore()
     _ = try store.addComment(text: "Open note.", sequenceID: nil, revision: p.editRevision, cutID: cut.id, time: .init(seconds: 1))

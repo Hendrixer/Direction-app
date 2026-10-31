@@ -209,7 +209,7 @@ struct PictureContextMenu: View {
     /// Renders the frame at the playhead and puts it on the pasteboard as an image.
     @MainActor static func copyFrame(_ model: FilmModel) {
         guard let runtime = model.runtime, let sequence = model.sequence else { return }
-        let revision = model.watchedCut?.editRevision ?? model.project?.editRevision ?? 0, at = model.position
+        let revision = model.watchedCut.map(model.revision(of:)) ?? model.project?.editRevision ?? 0, at = model.position
         Task {
             do {
                 let response = try await runtime.invoke("direction_frame", arguments: .object(["time": .number(at), "revision": .number(Double(revision)), "sequenceID": .string(sequence.id), "maxDimension": .number(1920)]))

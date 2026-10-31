@@ -64,6 +64,8 @@ import DirectionTools
     var pausedByQuit: EditorRun? { runs.last { $0.state == .paused && $0.pausedByQuit } }
     /// Work waiting for your Start (Start work: Ask me first, or after you stopped it).
     var held: EditorRun? { runs.last { $0.state == .queued && $0.held } }
+    /// Logging you stopped: nothing more is logged until you Start it again.
+    var stoppedLogging: EditorRun? { runs.last { $0.job == .logFootage }.flatMap { $0.state == .stopped ? $0 : nil } }
     func run(for turnover: Turnover?) -> EditorRun? { turnover.flatMap { t in runs.last { $0.turnoverID == t.id } } }
     func activity(of run: EditorRun?) -> [EditorActivity] { run.map { r in activity.filter { $0.runID == r.id } } ?? activity }
 
@@ -235,6 +237,8 @@ import DirectionTools
     func start(_ film: FilmModel) {
         guard let store = film.store else { return }
         if let h = held { _ = try? store.updateRun(h.id) { $0.held = false }; refresh(film); return }
+        // Logging you stopped starts again on the same takes; what's logged already stays.
+        if let r = stoppedLogging { _ = try? store.updateRun(r.id) { $0.state = .queued; $0.held = false; $0.reason = nil }; refresh(film); return }
         // A turnover you stopped waits for Start: it gets a new run.
         if let t = film.openTurnover, let program = EditorSetup.runsOn.program, run(for: t)?.state == .stopped {
             create(t.kind == "assembly" ? .assemble : .turnover, program: program, turnoverID: t.id, store: store)

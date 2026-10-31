@@ -267,7 +267,8 @@ extension ProjectStore {
                 else { s.locked = false; s.lockedAt = nil }
                 scenes.append(s)
             }
-            for old in d.scenes where old.locked && !scenes.contains(where: { $0.id == old.id }) { scenes.append(old) }
+            // A scene is never dropped by logging: the editor logs in batches, and the director's scenes stay.
+            for old in d.scenes where !scenes.contains(where: { $0.id == old.id }) { scenes.append(old) }
             d.scenes = scenes.sorted { $0.number < $1.number }
             for (id, var t) in update.takes {
                 guard assets.contains(id) else { throw DirectionError("asset_not_found", "Take \(id) is not footage in this film.") }
@@ -299,6 +300,16 @@ extension ProjectStore {
             s.pictureLocked = locked; s.pictureLockedAt = locked ? Date().timeIntervalSince1970 : nil; s.pictureLockedCutID = locked ? cutID : nil
             if locked && s.finishing == nil { s.finishing = FinishingItem.defaults }
         }
+    }
+    /// The revision a cut plays and delivers: its own, or once picture is locked on it, the newest one whose
+    /// picture is still the cut's, so the color and sound finished after the lock come with it.
+    public func playedRevision(of cut: ReviewCut) throws -> Int {
+        let state = try directingState()
+        guard state.pictureLocked, state.pictureLockedCutID == cut.id else { return cut.editRevision }
+        let head = try read()
+        guard head.editRevision > cut.editRevision, let now = try? head.sequence(cut.sequenceID),
+              let then = try? read(revision: cut.editRevision).sequence(cut.sequenceID), TimelineLocks.samePicture(then, now) else { return cut.editRevision }
+        return head.editRevision
     }
     public func updateFinishing(_ items: [FinishingItem]) throws -> DirectingState {
         try updateDirectingState(summary: "Updated finishing") { s in
@@ -578,26 +589,39 @@ extension ProjectStore {
         // Two ways are two revisions, so the director can put either one in the cut. Choices that aren't
         // versions of the cut (looks) carry none.
         let delivered = try revision ?? self.revision()
-        for a in answers {
+        // Everything is checked before anything is written, so a mistake leaves no cut or answers behind
+        // and the editor can send it again.
+        if t.kind == "notes", t.waitForOK, !t.readBackApproved { throw DirectionError("readback_not_approved", "The director asked to OK the read-back before cutting.") }
+        var rules: [Int: RuleSuggestion] = [:]
+        for (i, a) in answers.enumerated() {
+            if let noteID = a.noteID, !t.noteIDs.contains(noteID) { throw DirectionError("feedback_not_found", "Answer refers to a note outside this turnover.") }
+            if var rule = a.rule {
+                rule.text = rule.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !rule.text.isEmpty, rule.text.count <= 300, rule.scope == nil || ["style", "house"].contains(rule.scope!) else { throw DirectionError("invalid_rule", "A rule is one sentence of up to 300 characters; scope is style or house.") }
+                rules[i] = rule
+            }
             guard let options = a.options, !options.isEmpty else { continue }
             let kept = options.compactMap(\.revision)
             guard Set(options.map(\.label)).count == options.count, kept.isEmpty || kept.count == options.count, kept.allSatisfy({ $0 <= delivered }) else {
                 throw DirectionError("invalid_options", "Give each option its own label. Two versions of the cut each need the revision you committed them at, so the director can put either one in; looks carry none.")
             }
         }
+        // Every note the director still has open gets an answer, one the editor couldn't do included,
+        // or it would stay turned over with nothing to read.
+        let answered = Set(answers.compactMap(\.noteID))
+        let unanswered = try notes().filter { t.noteIDs.contains($0.id) && !answered.contains($0.id) && ![.accepted, .dropped].contains($0.lifecycle) }
+        guard unanswered.isEmpty else {
+            let which = unanswered.compactMap(\.number).sorted().map { "#\($0)" }.joined(separator: ", ")
+            throw DirectionError("note_unanswered", "Answer every note in the turnover\(which.isEmpty ? "" : " (\(which) \(unanswered.count == 1 ? "has" : "have") none)"); for one you couldn't do, say why and what would.")
+        }
         let priorCuts = try cuts().count
         let name = t.kind == "assembly" || priorCuts == 0 ? "Assembly" : "Cut \(priorCuts + 1)"
         let cut = try createCut(name: name, sequenceID: sequenceID ?? t.sequenceID, revision: revision)
-        for a in answers {
+        for (i, a) in answers.enumerated() {
             let range = a.start.flatMap { s in a.end.map { MediaRange(start: s, end: $0) } }
             var answer = NoteAnswer(cutID: cut.id, revision: cut.editRevision, summary: a.summary, delta: a.delta, range: range, options: a.options, preferred: a.preferred)
-            if var rule = a.rule {
-                rule.text = rule.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !rule.text.isEmpty, rule.text.count <= 300, rule.scope == nil || ["style", "house"].contains(rule.scope!) else { throw DirectionError("invalid_rule", "A rule is one sentence of up to 300 characters; scope is style or house.") }
-                answer.rule = rule
-            }
+            answer.rule = rules[i]
             if let noteID = a.noteID {
-                guard t.noteIDs.contains(noteID) else { throw DirectionError("feedback_not_found", "Answer refers to a note outside this turnover.") }
                 try modifyNote(noteID, summary: "Answered a note") { c, _ in
                     c.answers = (c.answers ?? []) + [answer]; c.status = "addressed"; c.noteState = .answered
                     c.replies.append(.init(id: newID("reply"), author: "Editor", text: a.summary, revision: cut.editRevision, createdAt: Date().timeIntervalSince1970))

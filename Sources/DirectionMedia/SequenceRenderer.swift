@@ -93,9 +93,28 @@ public enum SequenceRenderer {
                     // Transition handles come along so both sides of the cut have picture.
                     let start = CMTimeMaximum(.zero, CMTimeSubtract(clip.sourceRange.start.cmTime, cm(head * clip.speed)))
                     let duration = CMTimeAdd(CMTimeSubtract(clip.sourceRange.end.cmTime, start), cm(tail * clip.speed))
-                    let at = CMTimeSubtract(clip.start.cmTime, cm(head))
-                    try destination.insertTimeRange(CMTimeRange(start: start, duration: duration), of: sourceTrack, at: at)
-                    if clip.speed != 1 { destination.scaleTimeRange(CMTimeRange(start: at, duration: duration), toDuration: CMTimeMultiplyByFloat64(duration, multiplier: 1 / clip.speed)) }
+                    let wanted = CMTimeRange(start: start, duration: duration)
+                    // A take's length is its longest track, and the sound often runs a frame or two past the
+                    // picture: only the picture there goes in, and its first and last frames hold over the rest.
+                    let range = CMTimeRangeGetIntersection(wanted, otherRange: try await sourceTrack.load(.timeRange))
+                    guard range.duration > .zero else { continue }
+                    func onCut(_ t: CMTime) -> CMTime { CMTimeAdd(CMTimeSubtract(clip.start.cmTime, cm(head)), CMTimeMultiplyByFloat64(CMTimeSubtract(t, start), multiplier: 1 / clip.speed)) }
+                    let at = CMTimeMaximum(.zero, onCut(range.start))
+                    let frameLength = try await sourceTrack.load(.minFrameDuration)
+                    let one = frameLength.isValid && frameLength > .zero && frameLength < range.duration ? frameLength : CMTimeMultiplyByFloat64(range.duration, multiplier: 0.5)
+                    // In order, each at the track's end: an insert pushes back whatever is after it.
+                    if CMTimeSubtract(range.start, wanted.start).seconds > 1e-4, onCut(wanted.start) >= .zero {
+                        let from = onCut(wanted.start)
+                        try destination.insertTimeRange(CMTimeRange(start: range.start, duration: one), of: sourceTrack, at: from)
+                        destination.scaleTimeRange(CMTimeRange(start: from, duration: one), toDuration: CMTimeSubtract(at, from))
+                    }
+                    try destination.insertTimeRange(range, of: sourceTrack, at: at)
+                    if clip.speed != 1 { destination.scaleTimeRange(CMTimeRange(start: at, duration: range.duration), toDuration: CMTimeMultiplyByFloat64(range.duration, multiplier: 1 / clip.speed)) }
+                    if CMTimeSubtract(wanted.end, range.end).seconds > 1e-4 {
+                        let from = onCut(range.end)
+                        try destination.insertTimeRange(CMTimeRange(start: CMTimeSubtract(range.end, one), duration: one), of: sourceTrack, at: from)
+                        destination.scaleTimeRange(CMTimeRange(start: from, duration: one), toDuration: CMTimeSubtract(onCut(wanted.end), from))
+                    }
                     layers.append(layer(destination.trackID, nil, try await sourceTrack.load(.preferredTransform), lut))
                 }
             }

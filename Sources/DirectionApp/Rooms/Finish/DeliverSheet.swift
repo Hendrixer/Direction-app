@@ -102,6 +102,8 @@ final class Delivery {
         task = Task { [weak self, weak model] in
             guard let self else { return }
             if let folder = self.folder { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+            // The locked cut with everything finished since (color, mix), every file the same.
+            let revision = model?.revision(of: cut) ?? cut.editRevision
             for i in self.items.indices where self.items[i].state == .queued {
                 if Task.isCancelled { self.items[i].state = .failed("Stopped"); continue }
                 self.items[i].state = .writing
@@ -109,7 +111,7 @@ final class Delivery {
                 do {
                     var args: [String: JSONValue] = [
                         "path": .string(item.url.path), "preset": .string(item.output.preset),
-                        "revision": .number(Double(cut.editRevision)), "sequenceID": .string(cut.sequenceID),
+                        "revision": .number(Double(revision)), "sequenceID": .string(cut.sequenceID),
                     ]
                     if let size = self.size { args["width"] = .number(Double(size.width)); args["height"] = .number(Double(size.height)) }
                     let response = try await runtime.invoke("direction_export", arguments: .object(args))

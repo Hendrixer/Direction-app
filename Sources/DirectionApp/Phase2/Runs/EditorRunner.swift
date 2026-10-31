@@ -57,7 +57,8 @@ import DirectionTools
         guard (programs.checked && !programs.checking) || !programOverride.isEmpty else { return }
         for store in stores.values {
             guard live.count < Self.maxConcurrent, let runs = try? store.runs() else { continue }
-            guard !runs.contains(where: { $0.state.isActive && isLive($0.id) }) else { continue }
+            // Any program still alive, a stopped one included while it winds down, keeps the next one waiting.
+            guard !runs.contains(where: { isLive($0.id) }) else { continue }
             guard let next = runs.first(where: { $0.state == .queued && !$0.held }) else { continue }
             launch(next, store: store)
         }

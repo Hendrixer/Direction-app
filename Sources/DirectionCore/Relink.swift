@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 // Footage is linked, never copied, so a take can go missing when a drive is unplugged.
 // Relinking points a take at its file's new location. It goes through `update`, so it is
@@ -58,6 +59,21 @@ extension ProjectStore {
     /// Footage whose original file can't be reached right now.
     public func missingAssets(fileManager: FileManager = .default) throws -> [MediaAsset] {
         try read().assets.filter { !FootageMatch.isReachable($0, fileManager: fileManager) }
+    }
+
+    /// An older revision with each take where the latest one has it, so a take relinked once plays and
+    /// delivers from its new place in every saved cut.
+    static func withCurrentLocations(_ db: Database, _ project: Project) throws -> Project {
+        struct Assets: Decodable { var assets: [MediaAsset] }
+        guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM state WHERE id = 1") else { return project }
+        let now = Dictionary(try JSONDecoder().decode(Assets.self, from: data).assets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var p = project
+        for i in p.assets.indices {
+            guard let a = now[p.assets[i].id], a.path != p.assets[i].path || a.bookmark != p.assets[i].bookmark else { continue }
+            p.assets[i].path = a.path; p.assets[i].name = a.name; p.assets[i].fileSize = a.fileSize
+            p.assets[i].modifiedAt = a.modifiedAt; p.assets[i].bookmark = a.bookmark
+        }
+        return p
     }
 
     /// Points missing takes at their files' new locations. Every candidate must match its take's

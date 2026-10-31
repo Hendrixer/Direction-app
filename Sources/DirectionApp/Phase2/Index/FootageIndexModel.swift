@@ -44,7 +44,8 @@ import DirectionMedia
     @ObservationIgnored private var startingSync = false
     /// Opening a film counts as work having finished, so its old decoded audio goes too.
     @ObservationIgnored private var workedSinceAudioDrop = true
-    @ObservationIgnored private var syncAttempts = 0
+    /// Tries per set of takes still to compare, so new footage is always compared.
+    @ObservationIgnored private var syncAttempts: [String: Int] = [:]
     /// Takes with sound whose sound hasn't been compared with the others yet.
     var unsynced = 0
 
@@ -117,16 +118,18 @@ import DirectionMedia
 
     /// Takes that recorded the same moment are found by their sound before logging, so the editor
     /// logs them as angles of one moment (footage-index.md › Sync). Seconds of work on this Mac;
-    /// tried twice at most in a session.
+    /// tried twice at most for the same takes in a session.
     private func sync(_ film: FilmModel, assets: [MediaAsset]) {
         let checked = Set(film.dailies.syncChecked ?? [])
         let speaking = assets.filter { !$0.audio.isEmpty && $0.duration.seconds >= 10 }
         let running = film.jobs.contains { $0.kind == "sync" && !$0.isTerminal }
         // Something compared before that isn't footage now counts too: the takes are compared again without it.
         let stray = checked.isSubset(of: speaking.map(\.id)) ? 0 : 1
-        unsynced = film.isPreview || syncAttempts >= 2 ? 0 : speaking.filter { !checked.contains($0.id) }.count + stray
+        let waiting = speaking.filter { !checked.contains($0.id) }.map(\.id).sorted()
+        let attempt = waiting.joined(separator: ",") + (stray > 0 ? "+" : "")
+        unsynced = film.isPreview || syncAttempts[attempt, default: 0] >= 2 ? 0 : waiting.count + stray
         guard unsynced > 0, !running, !startingSync, let runtime = film.runtime else { return }
-        startingSync = true; syncAttempts += 1
+        startingSync = true; syncAttempts[attempt, default: 0] += 1
         Task {
             do { _ = try await runtime.invoke("direction_sync_takes") }
             catch { DirectionLog.error("Couldn\u{2019}t compare the takes\u{2019} sound: \(error.localizedDescription)", "sync") }

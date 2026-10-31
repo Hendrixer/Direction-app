@@ -85,10 +85,11 @@ public enum ScreenActivity {
         generator.requestedTimeToleranceBefore = tolerance; generator.requestedTimeToleranceAfter = tolerance
         var out: [(t: Double, pixels: [UInt8], w: Int, h: Int)] = []
         for t in times {
-            // A busy Mac sometimes drops a frame; one more try before leaving that look out.
+            // A busy Mac sometimes drops a frame; two more tries, the last after a moment, before leaving that look out.
             let at = CMTime(seconds: t, preferredTimescale: 600)
             var got = try? await generator.image(at: at).image
             if got == nil { got = try? await generator.image(at: at).image }
+            if got == nil { try? await Task.sleep(for: .milliseconds(50)); got = try? await generator.image(at: at).image }
             guard let image = got else { continue }
             let w = width, h = max(2, Int((Double(width) * Double(image.height) / Double(max(1, image.width))).rounded()))
             var pixels = [UInt8](repeating: 0, count: w * h)

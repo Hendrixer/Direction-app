@@ -17,8 +17,7 @@ enum TimelineLocks {
     static func check(before: Project, after: Project, si: Int, context: EditContext) throws {
         let b = before.sequences[si], a = after.sequences[si]
         if context.state.pictureLocked {
-            func timing(_ s: Sequence) -> [String] { s.clips.filter { $0.kind != .audio }.map { c in "\(c.id)|\(c.assetID ?? "")|\(c.start.seconds)|\(c.sourceRange.start.seconds)|\(c.sourceRange.duration.seconds)|\(c.speed)|\(c.layer)|\(c.hold?.seconds ?? -1)|\(json(c.effects))|\(json(c.transition))|\(c.blend ?? "")|\(c.aboveLook ?? false)|\(json(c.framing))" }.sorted() }
-            guard timing(b) == timing(a), b.width == a.width, b.height == a.height, b.frameRate == a.frameRate else { throw DirectionError("picture_locked", "Picture is locked. Finishing changes color and sound, not timing.") }
+            guard samePicture(b, a) else { throw DirectionError("picture_locked", "Picture is locked. Finishing changes color and sound, not timing.") }
         }
         let locked = context.dailies.lockedAssetIDs
         guard !locked.isEmpty else { return }
@@ -36,6 +35,12 @@ enum TimelineLocks {
             let d = shift ?? 0
             guard signature(b, before, span.start, span.end) == signature(a, after, span.start + d, span.end + d) else { throw fail }
         }
+    }
+
+    /// The same picture: every clip that isn't sound cut, placed and treated the same, in the same frame.
+    static func samePicture(_ b: Sequence, _ a: Sequence) -> Bool {
+        func timing(_ s: Sequence) -> [String] { s.clips.filter { $0.kind != .audio }.map { c in "\(c.id)|\(c.assetID ?? "")|\(c.start.seconds)|\(c.sourceRange.start.seconds)|\(c.sourceRange.duration.seconds)|\(c.speed)|\(c.layer)|\(c.hold?.seconds ?? -1)|\(json(c.effects))|\(json(c.transition))|\(c.blend ?? "")|\(c.aboveLook ?? false)|\(json(c.framing))" }.sorted() }
+        return timing(b) == timing(a) && b.width == a.width && b.height == a.height && b.frameRate == a.frameRate
     }
 
     struct Span { var start: Double; var end: Double; var clipIDs: [String]; var assetID: String? }

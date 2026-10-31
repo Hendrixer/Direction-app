@@ -146,7 +146,7 @@ struct ShareSheet: View {
         export = .running
         Task {
             do {
-                let response = try await runtime.invoke("direction_export", arguments: .object(["path": .string(url.path), "preset": .string("h264"), "revision": .number(Double(cut.editRevision)), "sequenceID": .string(cut.sequenceID)]))
+                let response = try await runtime.invoke("direction_export", arguments: .object(["path": .string(url.path), "preset": .string("h264"), "revision": .number(Double(model.revision(of: cut))), "sequenceID": .string(cut.sequenceID)]))
                 let job = try response.value.decode(JobRecord.self)
                 ScreeningCopy.jobIDs.insert(job.id)
                 _ = try await runtime.waitForJob(job.id)

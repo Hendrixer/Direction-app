@@ -246,7 +246,7 @@ final class FilmModel {
     /// Loads the project at the watched cut's revision and prepares playback.
     func loadDisplayed(force: Bool = false) {
         guard let store else { return }
-        let revision = watchedCut?.editRevision ?? project?.editRevision ?? 0
+        let revision = watchedCut.map(revision(of:)) ?? project?.editRevision ?? 0
         if force || displayed?.editRevision != revision || displayed == nil {
             displayed = (try? store.read(revision: revision)) ?? project
         }
@@ -256,6 +256,8 @@ final class FilmModel {
     // MARK: Derived: cuts and sequences
 
     var latestCut: ReviewCut? { cuts.last }
+    /// What a cut plays and delivers: the picture-locked cut with its finishing (ProjectStore.playedRevision).
+    func revision(of cut: ReviewCut) -> Int { (try? store?.playedRevision(of: cut)) ?? cut.editRevision }
     var watchedCut: ReviewCut? { watchedCutID.flatMap { id in cuts.first { $0.id == id } } ?? latestCut }
     var previousCut: ReviewCut? { watchedCut.flatMap { w in cuts.last { $0.createdAt < w.createdAt } } }
     var sequence: DirectionCore.Sequence? { try? (displayed ?? project)?.sequence(watchedCut?.sequenceID) }
@@ -361,6 +363,7 @@ final class FilmModel {
             if runs.failed != nil { return .stopped }
             if !runs.ready { return .notSetUp }
             if let h = runs.held { return .readyToCut(h.job == .logFootage ? "Ready to log" : "Ready to cut") }
+            if runs.stoppedLogging != nil { return .readyToCut("Ready to log") }
             if openTurnover.map({ runs.run(for: $0)?.state == .stopped }) == true { return .readyToCut("Ready to cut") }
         }
         // Spend questions (made-media.md) count as questions.
@@ -461,13 +464,15 @@ final class FilmModel {
 
     func preparePlayback(force: Bool = false) {
         guard !isPreview, let p = displayed, let sequence, let runtime else { return }
-        let key = "\(p.editRevision):\(sequence.id)"
+        // The look is kept outside the revisions, so choosing one (or undoing it) changes the key too.
+        let looks = try? runtime.store.lookContext()
+        let key = "\(p.editRevision):\(sequence.id):\(looks?.hashValue ?? 0)"
         guard force || key != renderKey else { return }
         renderKey = key; renderTask?.cancel(); isPreparing = true; pendingSeek = position
         if sequence.clips.isEmpty { player.pause(); player.replaceCurrentItem(with: nil); compiled = nil; isPreparing = false; return }
         renderTask = Task {
             do {
-                let result = try await SequenceRenderer.compile(project: p, sequenceID: sequence.id, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1920, looks: try? runtime.store.lookContext())
+                let result = try await SequenceRenderer.compile(project: p, sequenceID: sequence.id, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1920, looks: looks)
                 try Task.checkCancellation()
                 guard renderKey == key else { return }
                 let target = pendingSeek ?? position

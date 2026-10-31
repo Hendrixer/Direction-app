@@ -144,7 +144,8 @@ extension ToolRuntime {
         guard (8...24).contains(frames) else { throw DirectionError("invalid_arguments", "frames is 8–24.") }
         let fps = sequence.frameRate.value
         let layout = ContactSheet.layout(frames: frames, start: start, end: stop, aspect: Double(sequence.width) / Double(max(1, sequence.height)))
-        let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequence.id, cacheDirectory: cacheDirectory, previewMaxDimension: 960)
+        // As the director sees it: camera LUTs and the look (direction_frame does the same).
+        let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequence.id, cacheDirectory: cacheDirectory, previewMaxDimension: 960, looks: try? store.lookContext())
         let folder = cacheDirectory.appendingPathComponent("Watch").appendingPathComponent(newID("watch"))
         defer { try? FileManager.default.removeItem(at: folder) }
         var images: [CGImage?] = []

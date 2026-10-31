@@ -321,15 +321,28 @@ public enum OpenRouter {
         VideoJob(try await send("GET", "videos/\(id)", key: key).json)
     }
     /// The finished file. The URL isn't presigned, so it takes the key like every other call.
+    /// A shot is paid for once it's made, so a dropped download is tried twice more.
     public static func videoContent(_ id: String, index: Int = 0, key: String? = nil) async throws -> Data {
-        try await send("GET", "videos/\(id)/content", query: [URLQueryItem(name: "index", value: String(index))], key: key, timeout: 600).data
+        for attempt in 1...3 {
+            do { return try await send("GET", "videos/\(id)/content", query: [URLQueryItem(name: "index", value: String(index))], key: key, timeout: 600).data }
+            catch where !(error is CancellationError) && attempt < 3 { try await Task.sleep(for: .seconds(overrides.pollInterval ?? 2)) }
+        }
+        throw CancellationError()
     }
     /// Polls until the job finishes. `progress` hears each status.
     public static func waitForVideo(_ id: String, key: String? = nil, timeout: TimeInterval = 1_800, progress: @Sendable (VideoJob) -> Void = { _ in }) async throws -> VideoJob {
         let start = Date()
+        var misses = 0
         while true {
             try Task.checkCancellation()
-            let job = try await video(id, key: key)
+            let job: VideoJob
+            // A shot takes minutes; one dropped poll mustn't lose it.
+            do { job = try await video(id, key: key); misses = 0 }
+            catch where !(error is CancellationError) && misses < 4 {
+                misses += 1
+                try await Task.sleep(for: .seconds(overrides.pollInterval ?? pollInterval))
+                continue
+            }
             progress(job)
             switch job.status {
             case "completed": return job

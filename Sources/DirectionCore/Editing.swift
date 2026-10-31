@@ -1080,7 +1080,8 @@ struct EditWork {
         guard at >= c.start, at < c.end else { throw bad("at must be inside \(label(c)), \(tc(c.start))–\(tc(c.end)).") }
         let held = frames(max(1, Int((seconds / frame).rounded())))
         var hold = c
-        hold.id = newID("clip"); hold.effects = EditReducer.reIDed(c.effects)
+        // A lineage of its own: it shows the same source frame as the clip after it, and notes there would match both.
+        hold.id = newID("clip"); hold.lineageID = hold.id; hold.effects = EditReducer.reIDed(c.effects)
         hold.start = at; hold.sourceRange = .init(start: c.sourceTime(at: at), duration: frames(1).scaled(by: c.speed)); hold.hold = held
         // Keys on a held frame play over the hold, so the frame keeps the values it had: a follow stays put.
         let frozen = hold.sourceRange.start.seconds
@@ -1441,15 +1442,20 @@ struct EditWork {
     /// the group's sound take by default (a recorder, or the better mic), or `assetID`. Naming the
     /// clip's own take puts its own sound back (footage-index.md › Sync).
     mutating func syncSound(_ op: EditOperation) throws -> Outcome {
-        let i = try clipIndex(op.clipID); let c = s.clips[i]
+        let c = s.clips[try clipIndex(op.clipID)]
         guard c.kind == .video, c.layer == 0, c.hold == nil, let baseID = c.assetID, let own = assetOf(c) else { throw bad("syncSound plays sound in sync under a story clip on V1.") }
         guard let group = (context?.dailies ?? Dailies()).syncGroup(for: baseID) else { throw DirectionError("not_in_sync", "\(label(c)) isn't in sync with another take. See direction_dailies › syncGroups.") }
         let soundID = op.assetID ?? group.soundAssetID
         guard group.takes.contains(where: { $0.assetID == soundID }) else { throw DirectionError("not_in_sync", "That take isn't in sync with \(label(c)).") }
-        // Sound already laid in sync under this clip makes way.
+        // Sound already laid in sync under this clip makes way, under this clip only: after a split, the
+        // other half keeps its sound.
         let under = { (x: Clip) in x.synced == true && x.kind == .audio && x.start < c.end && x.end > c.start }
         let had = s.clips.contains(where: under)
+        let laid = s.clips.filter(under)
         s.clips.removeAll(where: under)
+        s.clips += EditReducer.removing(c.range, from: laid, ripple: false)
+        // Found again: the clips moved.
+        let i = try clipIndex(op.clipID)
         if soundID == baseID {
             guard had else { throw bad("\(label(c)) already plays its own sound.") }
             for stream in own.audio { var m = c.audioOverrides[String(stream.id)] ?? stream.settings; m.muted = false; s.clips[i].audioOverrides[String(stream.id)] = m }

@@ -67,7 +67,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
 
     // MARK: Flags (checked against `--help` by EditorProgramTests)
 
-    static let claudeFlags = ["--print", "--output-format", "--verbose", "--model", "--effort", "--mcp-config", "--strict-mcp-config", "--allowedTools", "--append-system-prompt", "--resume", "--permission-mode", "--settings", "--tools", "--no-session-persistence"]
+    static let claudeFlags = ["--print", "--output-format", "--verbose", "--model", "--effort", "--mcp-config", "--strict-mcp-config", "--allowedTools", "--disallowedTools", "--append-system-prompt", "--resume", "--permission-mode", "--settings", "--tools", "--no-session-persistence"]
     static let codexExecFlags = ["--json", "--model", "--cd", "--sandbox", "--config", "--output-schema", "--skip-git-repo-check", "--ignore-user-config", "--ephemeral"]
     static let codexResumeFlags = ["--json", "--model", "--config", "--output-schema", "--skip-git-repo-check", "--ignore-user-config"]
 
@@ -101,6 +101,8 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             var allowed = ["mcp__direction", "Read", "Glob", "Grep", "Edit(./**)", "Write(./**)"]
             if i.scripts { allowed.append("Bash") }
             args += ["--allowedTools", allowed.joined(separator: ","), "--append-system-prompt", i.role, "--permission-mode", "dontAsk"]
+            // Its own settings stay Direction's: a hook written there would run outside the sandbox next time.
+            args += ["--disallowedTools", "Edit(./.claude/**),Write(./.claude/**),Edit(./.codex/**),Write(./.codex/**)"]
             // Scripts run in Claude Code's sandbox: this folder only, no network.
             if i.scripts { args += ["--settings", #"{"sandbox":{"enabled":true,"autoAllowBashIfSandboxed":true,"allowUnsandboxedCommands":false}}"#] }
             if let s = i.session { args += ["--resume", s] }

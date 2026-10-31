@@ -47,7 +47,7 @@ extension ToolRuntime {
                 files.append((try workingFile(from), to))
             }
             let folder = SharedSettings.stylesFolder
-            var s = try StyleLibrary.save(id: a["id"].string, name: a["name"].string, summary: a["summary"].string, tokens: a["tokens"] == .null ? nil : a["tokens"], guide: a["guide"].string, files: files, in: folder)
+            var s = try StyleLibrary.save(id: a["id"].string, name: a["name"].string, summary: a["summary"].string, tokens: a["tokens"] == .null ? nil : a["tokens"], guide: nil, files: files, in: folder)
             if let gone = a["removeRules"].array?.compactMap(\.string), !gone.isEmpty { s = try StyleLibrary.remove(rules: Set(gone), from: s.id, folder: folder) }
             for r in a["rules"].array ?? [] {
                 guard let text = r["text"].string else { throw DirectionError("invalid_arguments", "Each rule is {area, text}.") }

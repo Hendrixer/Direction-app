@@ -178,6 +178,37 @@ struct TimelineRenderTests {
     }
 }
 
+/// A take whose sound runs on past its picture (AAC often does) plays and exports whole: the last frame
+/// holds over the sound that's left, instead of the export stopping at the picture's end.
+@Test func aTakeWhoseSoundOutlastsItsPictureExportsWhole() async throws {
+    let f = try await MediaFixture.make(); defer { f.cleanup() }
+    // The fixture's first second of picture over 1.2 s of its sound.
+    let original = AVURLAsset(url: f.source), composition = AVMutableComposition()
+    let take = try await original.loadTracks(withMediaType: .video)[0], sound = try await original.loadTracks(withMediaType: .audio)[0]
+    try composition.addMutableTrack(withMediaType: .video, preferredTrackID: 1)!.insertTimeRange(CMTimeRange(start: .zero, duration: CMTime(seconds: 1, preferredTimescale: 48_000)), of: take, at: .zero)
+    try composition.addMutableTrack(withMediaType: .audio, preferredTrackID: 2)!.insertTimeRange(CMTimeRange(start: .zero, duration: CMTime(seconds: 1.2, preferredTimescale: 48_000)), of: sound, at: .zero)
+    let source = f.directory.appendingPathComponent("sound-runs-on.mov")
+    try await AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough)!.export(to: source, as: .mov)
+    let store = try ProjectStore.create(at: f.directory.appendingPathComponent("RunsOn.direction"), name: "Runs on")
+    let runtime = try ToolRuntime(store: store)
+    _ = try await runtime.invoke("direction_import", arguments: .object(["path": .string(source.path), "append": .bool(true)]))
+    var format = EditOperation("format"); format.width = 320; format.height = 180
+    _ = try store.apply(.init(baseEditRevision: store.revision(), operations: [format]))
+    let clip = try store.read().sequences[0].clips.first { $0.kind == .video }
+    #expect(abs((clip?.duration.seconds ?? 0) - 1.2) < 0.03)
+    let path = f.directory.appendingPathComponent("runs-on.mp4")
+    let job = try await runtime.invoke("direction_export", arguments: .object(["path": .string(path.path)]))
+    let done = try await runtime.waitForJob(job.value.requiredString("id"))
+    #expect(done.status == "completed")
+    #expect(abs((try done.result?["duration"].decode(MediaTime.self).seconds ?? 0) - 1.2) < 0.06)
+    // The held last frame: the fixture's red, not black.
+    let generator = AVAssetImageGenerator(asset: AVURLAsset(url: path)); generator.requestedTimeToleranceBefore = .zero; generator.requestedTimeToleranceAfter = .zero
+    let still = f.directory.appendingPathComponent("held.png")
+    try MediaInspector.writePNG(try await generator.image(at: CMTime(seconds: 1.12, preferredTimescale: 600)).image, to: still)
+    let color = try meanColor(still)
+    #expect(color.0 > 120 && color.2 < 90)
+}
+
 /// The editor reads the timeline; it changes the cut only through edit functions.
 @Test func noToolTakesATimelineDocument() async throws {
     for d in ToolCatalog.definitions where !d.readOnly {

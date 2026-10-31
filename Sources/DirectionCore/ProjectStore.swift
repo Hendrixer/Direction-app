@@ -63,8 +63,11 @@ public final class ProjectStore: Sendable {
         try database.read { db in
             let data = try revision.map { try Data.fetchOne(db, sql: "SELECT payload FROM revisions WHERE revision = ?", arguments: [$0]) } ?? Data.fetchOne(db, sql: "SELECT payload FROM state WHERE id = 1")
             guard let data else { throw DirectionError("revision_not_found", "Project revision not found.") }
-            // Graphics play their current render in every revision (Phase2/Graphics/GraphicsStore.swift).
-            return try Self.withCurrentGraphics(db, JSONDecoder().decode(Project.self, from: data))
+            var p = try JSONDecoder().decode(Project.self, from: data)
+            // Relinked footage plays from where it is now in every revision (Relink.swift), and graphics
+            // play their current render (Phase2/Graphics/GraphicsStore.swift).
+            if revision != nil { p = try Self.withCurrentLocations(db, p) }
+            return try Self.withCurrentGraphics(db, p)
         }
     }
 

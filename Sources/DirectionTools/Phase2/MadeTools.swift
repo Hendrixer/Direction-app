@@ -335,6 +335,8 @@ extension ToolRuntime {
 
     /// One made file: where it is, what OpenRouter reported, which way it is, and the size it was sharpened from.
     private struct Piece { var url: URL; var cost: Double?; var way: Int; var sharpenedFrom: String? = nil }
+    /// Something went wrong after the service had made (and charged for) it: the charge stays in the ledger.
+    private struct PaidThenFailed: Error { var underlying: Error; var cost: Double? }
 
     private func perform(_ request: MadeRequest, job: JobRecord) async throws -> JSONValue {
         var r = request
@@ -375,9 +377,11 @@ extension ToolRuntime {
                 made.append(piece); spent += piece.cost ?? r.estimate.spend / Double(r.ways)
             }
         } catch {
-            // Clips already made were paid for; the rest of the hold goes back.
-            if !r.version.isLocal { try? SpendLedger.release(r.spendID, charged: made.isEmpty ? nil : spent) }
-            throw error
+            // Clips already made were paid for, and so was one that failed after it was made; the rest of the hold goes back.
+            var charged = made.isEmpty ? nil : spent, failure = error
+            if let paid = error as? PaidThenFailed { charged = (charged ?? 0) + (paid.cost ?? r.estimate.spend / Double(r.ways)); failure = paid.underlying }
+            if !r.version.isLocal { try? SpendLedger.release(r.spendID, charged: charged) }
+            throw failure
         }
         // Direction looks at each way itself before the editor does (decisions.md); a failed look never fails the job.
         var checks: [Int: Result<(check: MadeCheck, others: [MadeCheck]), Error>] = [:]
@@ -393,32 +397,38 @@ extension ToolRuntime {
         }
         progress(job, "Bringing it into the film", 0.97)
         var results: [JSONValue] = [], ids: [String] = []
-        for (i, m) in made.enumerated() {
-            let asset = try await importMade(m.url)
-            let seconds = asset.duration.seconds > 0 ? asset.duration.seconds : nil
-            let each = r.version.isLocal ? 0 : m.cost ?? r.estimate.spend / Double(r.ways)
-            var record = MadeRecord(assetID: asset.id, kind: r.kind, service: r.version.isLocal ? "local" : "openrouter", version: r.version.id, versionName: r.version.name, asked: r.ask, seconds: seconds ?? r.seconds,
-                                    spend: each, estimate: r.estimate.spend / Double(r.ways), noteID: r.noteID, turnoverID: r.turnoverID, from: r.from, first: r.first?.frame, last: r.last?.frame,
-                                    references: r.references.map(\.asset.id), factor: r.factor, sharpenedFrom: m.sharpenedFrom, file: "Made/" + m.url.lastPathComponent, way: r.ways > 1 ? m.way : nil, jobID: job.id)
-            var check: JSONValue?
-            switch checks[i] {
-            case .success(let (c, others))?:
-                record.check = c
-                record.otherChecks = others.isEmpty ? nil : others
-                check = c.forEditor
-                let also = others.map { "; \($0.version) says \($0.verdict.rawValue)" }.joined()
-                DirectionLog.info("Checked \(record.file): \(c.verdict.rawValue)\(c.findings.isEmpty ? "" : " (" + c.findings.joined(separator: " ") + ")") by \(c.version)\(also)", "made")
-            case .failure(let e)?:
-                check = .object(["verdict": .string("unchecked"), "why": .string(e.localizedDescription)])
-                DirectionLog.info("Couldn\u{2019}t check \(record.file): \(e.localizedDescription)", "made")
-            case nil: break
+        // Paid for already: if bringing it in fails, the charge is still settled.
+        do {
+            for (i, m) in made.enumerated() {
+                let asset = try await importMade(m.url)
+                let seconds = asset.duration.seconds > 0 ? asset.duration.seconds : nil
+                let each = r.version.isLocal ? 0 : m.cost ?? r.estimate.spend / Double(r.ways)
+                var record = MadeRecord(assetID: asset.id, kind: r.kind, service: r.version.isLocal ? "local" : "openrouter", version: r.version.id, versionName: r.version.name, asked: r.ask, seconds: seconds ?? r.seconds,
+                                        spend: each, estimate: r.estimate.spend / Double(r.ways), noteID: r.noteID, turnoverID: r.turnoverID, from: r.from, first: r.first?.frame, last: r.last?.frame,
+                                        references: r.references.map(\.asset.id), factor: r.factor, sharpenedFrom: m.sharpenedFrom, file: "Made/" + m.url.lastPathComponent, way: r.ways > 1 ? m.way : nil, jobID: job.id)
+                var check: JSONValue?
+                switch checks[i] {
+                case .success(let (c, others))?:
+                    record.check = c
+                    record.otherChecks = others.isEmpty ? nil : others
+                    check = c.forEditor
+                    let also = others.map { "; \($0.version) says \($0.verdict.rawValue)" }.joined()
+                    DirectionLog.info("Checked \(record.file): \(c.verdict.rawValue)\(c.findings.isEmpty ? "" : " (" + c.findings.joined(separator: " ") + ")") by \(c.version)\(also)", "made")
+                case .failure(let e)?:
+                    check = .object(["verdict": .string("unchecked"), "why": .string(e.localizedDescription)])
+                    DirectionLog.info("Couldn\u{2019}t check \(record.file): \(e.localizedDescription)", "made")
+                case nil: break
+                }
+                try store.saveMade(record)
+                ids.append(asset.id)
+                var o: [String: JSONValue] = ["assetID": .string(asset.id), "file": .string(record.file), "provenance": try .wrapping(record)]
+                if let check { o["check"] = check }
+                if r.kind.isMadeShot && m.sharpenedFrom == nil && Double(r.cut.height) >= Double(asset.video.first?.height ?? r.cut.height) * 1.5 { o["sharpened"] = .bool(false) }
+                results.append(.object(o))
             }
-            try store.saveMade(record)
-            ids.append(asset.id)
-            var o: [String: JSONValue] = ["assetID": .string(asset.id), "file": .string(record.file), "provenance": try .wrapping(record)]
-            if let check { o["check"] = check }
-            if r.kind.isMadeShot && m.sharpenedFrom == nil && Double(r.cut.height) >= Double(asset.video.first?.height ?? r.cut.height) * 1.5 { o["sharpened"] = .bool(false) }
-            results.append(.object(o))
+        } catch {
+            if !r.version.isLocal { try? SpendLedger.settle(r.spendID, spend: spent, assetIDs: ids) }
+            throw error
         }
         if !r.version.isLocal {
             let reported = made.allSatisfy { $0.cost != nil }
@@ -455,7 +465,9 @@ extension ToolRuntime {
             let audio: JSONValue = clipVersion ? .object(["format": .string("wav")]) : .object(["voice": .string("alloy"), "format": .string("pcm16")])
             let body: JSONValue = .object(["model": .string(r.version.id), "modalities": .array([.string("text"), .string("audio")]), "audio": audio,
                                            "messages": .array([.object(["role": .string("user"), "content": .string(prompt)])])])
-            let reply = try await OpenRouter.audioChat(body)
+            let reply: OpenRouter.AudioReply
+            do { reply = try await OpenRouter.audioChat(body) }
+            catch where i > 0 { throw PaidThenFailed(underlying: error, cost: reported ? cost : nil) }
             let (data, ext) = MadeMedia.assemble(reply.audio)
             let file = scratch.appendingPathComponent(UUID().uuidString + "." + ext)
             try data.write(to: file)
@@ -525,13 +537,16 @@ extension ToolRuntime {
         let done = try await OpenRouter.waitForVideo(submitted.id) { [weak self] j in
             self?.progress(job, j.status == "in_progress" ? "\(name) is \(making)\(label)" : "Waiting for \(name)\(label)", j.status == "in_progress" ? 0.5 : 0.1)
         }
-        progress(job, "Downloading the shot\(label)", 0.8)
-        let data = try await OpenRouter.videoContent(submitted.id)
-        let downloaded = scratch.appendingPathComponent(UUID().uuidString + ".mp4")
-        try data.write(to: downloaded)
-        defer { try? FileManager.default.removeItem(at: downloaded) }
-        let (output, sharpenedFrom) = try await finish(downloaded, r, folder: folder, job: job, label: label)
-        return Piece(url: output, cost: done.cost, way: 1, sharpenedFrom: sharpenedFrom)
+        // Made, so paid for, from here on.
+        do {
+            progress(job, "Downloading the shot\(label)", 0.8)
+            let data = try await OpenRouter.videoContent(submitted.id)
+            let downloaded = scratch.appendingPathComponent(UUID().uuidString + ".mp4")
+            try data.write(to: downloaded)
+            defer { try? FileManager.default.removeItem(at: downloaded) }
+            let (output, sharpenedFrom) = try await finish(downloaded, r, folder: folder, job: job, label: label)
+            return Piece(url: output, cost: done.cost, way: 1, sharpenedFrom: sharpenedFrom)
+        } catch { throw PaidThenFailed(underlying: error, cost: done.cost) }
     }
 
     /// Finishing a made shot (made-media.md): sharpen it to the cut's size when the cut is 1.5× taller and this Mac can,

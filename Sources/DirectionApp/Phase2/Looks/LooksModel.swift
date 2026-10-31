@@ -171,9 +171,11 @@ import DirectionMedia
         generation += 1
         let token = generation
         current = nil; stills = []; rendered = Rendered(); plainKey = nil
+        // No look, but log footage still through its camera LUT, as it plays under any look.
+        let cameras = (try? runtime.store.lookContext()).map { LookContext(look: FilmLook(), sceneForAsset: $0.sceneForAsset, cameraLUTs: $0.cameraLUTs) }
         Task {
             do {
-                let compiled = try await SequenceRenderer.compile(project: project, sequenceID: sequence.id, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1440)
+                let compiled = try await SequenceRenderer.compile(project: project, sequenceID: sequence.id, cacheDirectory: runtime.cacheDirectory, previewMaxDimension: 1440, looks: cameras)
                 let folder = runtime.cacheDirectory.appendingPathComponent("Looks/Sheet")
                 func plain(_ t: Double, _ size: Int) async throws -> CIImage? {
                     let url = folder.appendingPathComponent(newID("frame") + ".png")

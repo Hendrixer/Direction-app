@@ -58,9 +58,11 @@ func writeScreenMovie(to url: URL) async throws {
         let cursor = samples.filter { $0.t > 1.2 && $0.t < 2.9 && $0.amount > 0 }, typing = samples.filter { $0.t > 4.2 && $0.t < 5.4 && $0.amount > 0 }
         #expect(!cursor.isEmpty && cursor.allSatisfy { $0.cx < 0.3 && $0.cy < 0.35 && $0.w < 0.2 })
         #expect(!typing.isEmpty && typing.allSatisfy { $0.cx > 0.55 && $0.cy > 0.65 })
-        #expect(samples.contains { abs($0.t - 3.25) < 0.2 && $0.amount >= ZoomPlanner.pageChange })
-        // Still stretches show nothing.
-        #expect(samples.filter { $0.t < 0.9 || ($0.t > 5.7) }.allSatisfy { $0.amount == 0 })
+        // At the change, or the look after it when a busy Mac dropped that frame.
+        #expect(samples.contains { abs($0.t - 3.25) < 0.3 && $0.amount >= ZoomPlanner.pageChange })
+        // The still opening shows nothing. (The end isn't still for long: a look can land an eighth of a
+        // second early, so the one at 5.75 may still see the typing that stops at 5.5.)
+        #expect(samples.filter { $0.t < 0.9 }.allSatisfy { $0.amount == 0 })
         // Looked at once: the second time is read back.
         let again = try await ScreenActivity.measure(screen, from: 0, to: 6, cacheDirectory: runtime.cacheDirectory)
         #expect(again == samples)

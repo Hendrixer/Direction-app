@@ -41,8 +41,9 @@ private func filmWithFootage() throws -> (ProjectStore, URL, MediaAsset) {
     #expect(after.sequences == before.sequences)
     #expect(try store.missingAssets().isEmpty)
     #expect(try store.events().last?.summary == "Relinked A001_C002.mov")
-    // The previous revision still points at the old path: history keeps both.
-    #expect(try store.read(revision: before.editRevision).asset(asset.id).path == asset.path)
+    // Every saved cut plays the take from its new place, the ones before the relink too.
+    #expect(try store.read(revision: before.editRevision).asset(asset.id).path == moved.standardizedFileURL.path)
+    #expect(try store.read(revision: before.editRevision).asset(asset.id).fileSize == 11)
 }
 
 @Test func relinkOnlyAcceptsAFileOfTheSameLengthWithinOneFrame() throws {

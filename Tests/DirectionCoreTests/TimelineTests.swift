@@ -680,6 +680,19 @@ struct TwoWays {
     #expect(back.operations[0].summary.contains("own sound again"))
 }
 
+@Test func ownSoundBackOnHalfASplitClipLeavesTheOtherHalfInSync() throws {
+    var cut = TimelineCut.make()
+    cut.context.dailies.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "a", takes: [SyncedTake(assetID: "a", offset: 0, match: 1), SyncedTake(assetID: "d", offset: 1.5, match: 0.98)], method: "sound", createdAt: 0)]
+    try cut.apply(#"{"op":"syncSound","clipID":"c1","assetID":"d"}"#)
+    try cut.apply(#"{"op":"split","clipID":"c1","at":2}"#)
+    let right = try #require(cut.project.sequences[0].clips.first { $0.layer == 0 && $0.kind == .video && $0.id != "c1" && close($0.start.seconds, 2) })
+    try cut.apply(#"{"op":"syncSound","clipID":"c1","assetID":"a"}"#)
+    // d's sound is gone from under c1 only: the right half still plays it, lined up.
+    let laid = cut.project.sequences[0].clips.filter { $0.synced == true && $0.kind == .audio }
+    #expect(laid.count == 1 && close(laid[0].start.seconds, 2) && close(laid[0].end.seconds, 4, 0.001) && close(laid[0].sourceRange.start.seconds, 2.5, 0.001))
+    #expect(clip(cut.project, "c1").audioOverrides["2"]?.muted == false && clip(cut.project, right.id).audioOverrides["2"]?.muted == true)
+}
+
 @Test func theDirectorShapesSyncAndDirectionKeepsTheirChoices() throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-sync-" + UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: dir) }
