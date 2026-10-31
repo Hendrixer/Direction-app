@@ -53,7 +53,7 @@ enum MadeFixtures {
                            noteID: "note-3", turnoverID: "turnover-3", first: MadeFrame(assetID: "take-3a-t2", at: 12), file: "Made/shot-slow-push-in-dusk-9c1e.mp4", way: 2, createdAt: SampleFilm.date(10, 28, 14, 4))
         let moments = MadeChecker.moments(duration: 5)
         r.check = MadeChecker.check(from: Decisions.Reply(answers: ["look1": .init(choice: "clean"), "look2": .init(choice: "clean"), "look3": .init(choice: "minor"), "look4": .init(choice: "broken"), "look5": .init(choice: "broken"),
-                                                                     "morph": .init(choice: "moves"), "same": .init(choice: "drifted"), "asked": .init(choice: "yes")], version: Decisions.version, cost: 0.0004),
+                                                                     "morph": .init(choice: "moves"), "same": .init(choice: "drifted"), "asked": .init(choice: "yes")], version: Decisions.luna, cost: 0.0004),
                                     moments: moments, now: Date(timeIntervalSince1970: SampleFilm.date(10, 28, 14, 4)))
         return r
     }()

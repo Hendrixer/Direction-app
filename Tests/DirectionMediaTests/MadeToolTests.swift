@@ -268,16 +268,19 @@ private struct MadeFixture {
 
     /// A version that turns a request down for what's in it hands it to the next-best one, and the
     /// result says so (made-media.md › Choosing a version).
-    @Test func eachWayIsCheckedAndACheckThatFailsNeverFailsTheShot() async throws {
+    @Test func eachWayIsCheckedByBothVersionsAndEitherCanStandIn() async throws {
         let movie = try Data(contentsOf: try await MediaFixture.make().source)
-        let asked = Counter()
+        let lunaAsked = Counter()
         let stub = OpenRouterStub { r, n in
             let path = r.url!.path
             if path.hasSuffix("/api/alpha/decisions") {
-                // One way's frames come back broken at the three-quarter mark (0:02 of the 3 s fixture); the other can't be checked.
-                guard asked.next() == 0 else { return (502, data(.object(["error": .object(["message": .string("Provider returned error")])])), [:]) }
-                let answers: [String: JSONValue] = ["look1": "clean", "look2": "clean", "look3": "clean", "look4": "broken", "look5": "clean", "morph": "moves", "same": "same", "asked": "yes"].mapValues { .object(["type": .string("choice"), "choice": .string($0)]) }
-                return (200, data(.object(["model": .string("typesafe/jev-1.14"), "answers": .object(answers), "usage": .object(["cost": .number(0.0004)])])), [:])
+                let model = (try? JSONDecoder().decode(JSONValue.self, from: r.httpBody ?? Data()))?["model"].string
+                // Luna can't answer its first request and finds the three-quarter frame broken after that
+                // (0:02 of the 3 s fixture); Jev finds every way clean.
+                if model == Decisions.luna, lunaAsked.next() == 0 { return (502, data(.object(["error": .object(["message": .string("Provider returned error")])])), [:]) }
+                let broken = model == Decisions.luna
+                let answers: [String: JSONValue] = ["look1": "clean", "look2": "clean", "look3": "clean", "look4": broken ? "broken" : "clean", "look5": "clean", "morph": "moves", "same": "same", "asked": "yes"].mapValues { .object(["type": .string("choice"), "choice": .string($0)]) }
+                return (200, data(.object(["model": .string(model ?? ""), "answers": .object(answers), "usage": .object(["cost": .number(broken ? 0.002 : 0.0004)])])), [:])
             }
             if r.httpMethod == "POST" && path.hasSuffix("/videos") { return (202, data(.object(["id": .string("vid-\(n)"), "status": .string("pending")])), [:]) }
             if path.hasSuffix("/content") { return (200, movie, ["Content-Type": "video/mp4"]) }
@@ -288,27 +291,30 @@ private struct MadeFixture {
         let done = try await f.finish(try await f.make(shot))
         #expect(done.status == "completed", "\(done.error ?? "")")
 
-        // Five frames a way, each a JPEG Jev will take (256 to 1,568 px a side), cited by name.
+        // Each way goes to both versions: five frames inline, each a JPEG they'll take (256 to 1,568 px a side).
         let sent = stub.bodies("/api/alpha/decisions")
-        #expect(sent.count == 2)
+        #expect(sent.map { $0["model"].string ?? "" }.sorted() == [Decisions.luna, Decisions.luna, Decisions.jev, Decisions.jev])
         for body in sent {
-            #expect(body["model"].string == "typesafe/jev-1.14" && body["state"].string?.contains("frame_5") == true && body["questions"]["asked"] != .null)
-            for i in 1...5 {
-                let b64 = try #require(body["assets"]["frame_\(i)"]["data_base64"].string)
-                let jpeg = try #require(Data(base64Encoded: b64))
+            let images = (body["state"].array ?? []).compactMap { $0["image_url"]["url"].string }
+            #expect(images.count == 5 && body["questions"]["asked"] != .null && body["assets"] == .null)
+            for url in images {
+                let jpeg = try #require(Data(base64Encoded: String(url.dropFirst("data:image/jpeg;base64,".count))))
                 let source = try #require(CGImageSourceCreateWithData(jpeg as CFData, nil))
                 let props = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
                 let w = props[kCGImagePropertyPixelWidth] as? Int ?? 0, h = props[kCGImagePropertyPixelHeight] as? Int ?? 0
-                #expect(min(w, h) >= 256 && max(w, h) <= 1568, "frame_\(i) is \(w) × \(h)")
+                #expect(min(w, h) >= 256 && max(w, h) <= 1568, "a frame is \(w) × \(h)")
             }
         }
+        // Luna's answer is the check where it gave one; where it couldn't, Jev's stands in.
         let checks = try #require(done.result?["made"].array).map { $0["check"] }
-        #expect(Set(checks.compactMap { $0["verdict"].string }) == ["broken", "unchecked"])
+        #expect(checks.compactMap { $0["verdict"].string }.sorted() == ["broken", "clean"])
         #expect(checks.contains { $0["findings"].array?.first?.string == "Something looks broken at 0:02." })
         let records = try f.media.store.madeRecords()
-        #expect(records.count == 2 && records.compactMap(\.check).count == 1 && records.compactMap(\.check).first?.short == "Looks broken at 0:02")
-        // The check's spend is in the month, under Checking; the shots are what they cost.
-        #expect(f.ledger.filter { $0.kind == .checking }.map(\.amount) == [0.0004])
+        let byLuna = try #require(records.first { $0.check?.version == Decisions.luna }), byJev = try #require(records.first { $0.check?.version == Decisions.jev })
+        #expect(byLuna.check?.short == "Looks broken at 0:02" && byLuna.otherChecks?.map(\.version) == [Decisions.jev] && byLuna.otherChecks?.first?.verdict == .clean)
+        #expect(byJev.check?.verdict == .clean && byJev.otherChecks == nil)
+        // Every answer's spend is in the month, under Checking, by the version that gave it.
+        #expect(f.ledger.filter { $0.kind == .checking }.map(\.version).sorted() == [Decisions.luna, Decisions.jev, Decisions.jev])
         #expect(f.ledger.filter { $0.kind == .shot }.reduce(0) { $0 + $1.amount } == 0.8)
     }
 

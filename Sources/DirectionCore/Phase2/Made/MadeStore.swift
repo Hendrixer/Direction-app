@@ -57,6 +57,8 @@ public struct MadeRecord: Codable, Hashable, Sendable, Identifiable {
     public var createdAt: Double
     /// Direction's own look at it when it arrived (MadeCheck); nil when it wasn't checked.
     public var check: MadeCheck?
+    /// The other versions' answers to the same questions, kept to compare them on what the director keeps.
+    public var otherChecks: [MadeCheck]?
     public init(assetID: String, kind: MadeKind, service: String = "openrouter", version: String, versionName: String, asked: String, seconds: Double?, spend: Double, estimate: Double, noteID: String?, turnoverID: String?, from: MadeFrom? = nil, first: MadeFrame? = nil, last: MadeFrame? = nil, references: [String] = [], factor: Int? = nil, sharpenedFrom: String? = nil, file: String, way: Int? = nil, jobID: String? = nil, createdAt: Double = Date().timeIntervalSince1970) {
         self.assetID = assetID; self.kind = kind; self.service = service; self.version = version; self.versionName = versionName; self.asked = asked; self.seconds = seconds; self.spend = spend; self.estimate = estimate
         self.noteID = noteID; self.turnoverID = turnoverID; self.from = from; self.first = first; self.last = last; self.references = references; self.factor = factor; self.sharpenedFrom = sharpenedFrom

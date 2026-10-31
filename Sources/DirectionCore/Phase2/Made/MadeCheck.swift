@@ -63,37 +63,36 @@ public enum MadeChecker {
         return [0, duration * 0.25, duration * 0.5, duration * 0.75, max(0, duration - 0.1)]
     }
 
-    static func image(_ i: Int) -> String { "frame_\(i + 1)" }
+    /// "frame 3 of 5", or "the still" for one frame.
+    static func name(_ i: Int, of n: Int) -> String { n == 1 ? "the picture" : "frame \(i + 1) of \(n)" }
 
-    /// The state and questions for one way. Frame keys are named in the state, so every image is cited.
-    public static func questions(kind: MadeKind, ask: String, moments: [Double]) -> (state: String, questions: [String: Decisions.Question]) {
-        let ask = ask.trimmingCharacters(in: .whitespacesAndNewlines)
-        var state: String
-        if moments.count == 1 {
-            state = "A \(kind == .still ? "still" : "frame") made for a film: \(image(0))."
-        } else {
-            let listed = moments.indices.map { i in
-                "\(image(i)) (\(MadeFormat.length(moments[i]))\(i == 0 ? ", the start" : i == moments.count - 1 ? ", the end" : ""))"
-            }
-            state = "\(moments.count) frames of one shot made for a film, in order: " + listed.joined(separator: ", ") + "."
+    /// What one way is asked: its frames, each labelled with its place and time, then the ask; and the questions.
+    public static func request(kind: MadeKind, ask: String, moments: [Double], frames: [Data]) -> (state: [Decisions.Part], questions: [String: Decisions.Question]) {
+        let ask = ask.trimmingCharacters(in: .whitespacesAndNewlines), n = moments.count
+        var state: [Decisions.Part] = [.text(n == 1 ? "A \(kind == .still ? "still" : "frame") made for a film:" : "\(n) frames of one shot made for a film, in order.")]
+        for (i, frame) in zip(moments.indices, frames) {
+            if n > 1 { state.append(.text("Frame \(i + 1) of \(n), at \(MadeFormat.length(moments[i]))\(i == 0 ? ", the start" : i == n - 1 ? ", the end" : ""):")) }
+            state.append(.image(frame))
         }
-        if !ask.isEmpty { state += " It was made from this description: \u{201C}\(ask)\u{201D}" }
+        if !ask.isEmpty { state.append(.text("It was made from this description: \u{201C}\(ask)\u{201D}")) }
+        return (state, questions(kind: kind, ask: ask, count: n))
+    }
 
+    static func questions(kind: MadeKind, ask: String, count n: Int) -> [String: Decisions.Question] {
         var q: [String: Decisions.Question] = [:]
-        for i in moments.indices {
-            q["look\(i + 1)"] = .init("Look only at \(image(i)). Is anything in it broken the way made pictures break?", [
+        for i in 0..<n {
+            q["look\(i + 1)"] = .init("Look only at \(name(i, of: n)). Is anything in it broken the way made pictures break?", [
                 ("clean", "Everything looks physically real: faces, hands, bodies, objects, edges and the horizon are whole and correctly shaped."),
                 ("minor", "Slightly soft, smeared or odd in a small area, but nothing a viewer would notice at a glance."),
                 ("broken", "A face, hand or body is melted, warped, doubled or has the wrong number of parts; an object is malformed or fused into another; or the picture is garbled."),
             ])
         }
-        if moments.count > 1 {
-            let all = moments.indices.map(image).joined(separator: ", "), last = image(moments.count - 1)
-            q["morph"] = .init("\(all) are moments of one shot, in order. Do the things in it move the way real things move?", [
+        if n > 1 {
+            q["morph"] = .init("Frames 1 to \(n) are moments of one shot, in order. Do the things in it move the way real things move?", [
                 ("moves", "People, objects and the place keep their shape and identity; what changes comes from motion, the camera moving, or light."),
                 ("morphs", "Something changes shape or turns into something else, appears from nothing, vanishes, or melts between frames."),
             ])
-            q["same"] = .init("Compare \(image(0)) with \(last). Is anyone in them still the same person, and is it still the same place?", [
+            q["same"] = .init("Compare frame 1 with frame \(n). Is anyone in them still the same person, and is it still the same place?", [
                 ("same", "The same people (face, hair, clothes) in the same place. A camera move that shows more of the place is still the same place, and a shot with no people can be the same."),
                 ("drifted", "Someone's face, hair or clothes have turned into a different person's, or the place has become a different place."),
             ])
@@ -105,7 +104,7 @@ public enum MadeChecker {
                 ("no", "It shows something else."),
             ])
         }
-        return (state, q)
+        return q
     }
 
     /// The check from the answers: the worst thing any of them found, in words.
@@ -130,20 +129,37 @@ public enum MadeChecker {
                          checkedAt: now.timeIntervalSince1970, shadow: !MadeCheck.holdsBack)
     }
 
-    /// Checks one made file. Throws when it couldn't be checked; a made way never fails because of it.
-    public static func check(_ url: URL, kind: MadeKind, ask: String, filmID: String?, turnoverID: String?) async throws -> MadeCheck {
+    /// Checks one made file with every frame version at once. The first in `Decisions.frameVersions` that
+    /// answers is the check; the others are kept beside it for comparing. Throws when none could check it;
+    /// a made way never fails because of it.
+    public static func check(_ url: URL, kind: MadeKind, ask: String, filmID: String?, turnoverID: String?, versions: [String] = Decisions.frameVersions) async throws -> (check: MadeCheck, others: [MadeCheck]) {
         if let cap = SharedSettings.spendStopAt, SpendLedger.monthSpent(SpendLedger.entries()) >= cap {
             throw DirectionError("spend_cap", "This month\u{2019}s limit is reached.")
         }
         let still = kind == .still
         let moments = still ? [0] : moments(duration: await MadeMedia.duration(url) ?? 0)
-        var images: [String: Data] = [:]
-        for (i, t) in moments.enumerated() {
-            images[image(i)] = fitted(try await MadeMedia.frame(of: url.path, at: t, isImage: still, maxDimension: Decisions.frameSize), longSide: Decisions.frameSize)
+        var frames: [Data] = []
+        for t in moments { frames.append(fitted(try await MadeMedia.frame(of: url.path, at: t, isImage: still, maxDimension: Decisions.frameSize), longSide: Decisions.frameSize)) }
+        let (state, questions) = request(kind: kind, ask: ask, moments: moments, frames: frames)
+        let replies = await withTaskGroup(of: (Int, Result<Decisions.Reply, Error>).self) { group in
+            for (i, v) in versions.enumerated() {
+                group.addTask {
+                    do { return (i, .success(try await Decisions.ask(questions, state: state, version: v, spend: .checking, filmID: filmID, turnoverID: turnoverID))) }
+                    catch { return (i, .failure(error)) }
+                }
+            }
+            return await group.reduce(into: [Int: Result<Decisions.Reply, Error>]()) { $0[$1.0] = $1.1 }
         }
-        let (state, questions) = questions(kind: kind, ask: ask, moments: moments)
-        let reply = try await Decisions.ask(questions, state: state, images: images, spend: .checking, filmID: filmID, turnoverID: turnoverID)
-        return check(from: reply, moments: moments)
+        var checks: [MadeCheck] = [], failures: [String] = []
+        for i in versions.indices {
+            switch replies[i] {
+            case .success(let r)?: checks.append(check(from: r, moments: moments))
+            case .failure(let e)?: failures.append("\(versions[i]): \(e.localizedDescription)")
+            case nil: break
+            }
+        }
+        guard let first = checks.first else { throw DirectionError("unchecked", failures.joined(separator: " ")) }
+        return (first, Array(checks.dropFirst()))
     }
 
     /// Jev turns away frames under 256 px a side, so small ones are drawn up to `longSide`.

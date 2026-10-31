@@ -5,11 +5,27 @@ import Foundation
 /// written back. Same key, same ledger as made media; OpenRouter serves them at `/api/alpha/decisions`.
 public enum Decisions {
     public static let base = URL(string: "https://openrouter.ai/api/alpha")!
-    /// Direction picks the version, as for made media. TypeSafe's Jev 1.14 reads frames as well as words, at
-    /// $0.042 a million tokens in and nothing out. Pinned: OpenRouter's "latest" alias moves.
-    public static let version = "typesafe/jev-1.14"
-    /// Jev takes PNG or JPEG, each side 256 to 1,568 px.
+    /// Direction picks the versions, as for made media, and pins them: OpenRouter's "latest" aliases move.
+    /// OpenAI's GPT-6 Luna decisions is built on a model that sees; TypeSafe calls Jev 1.14's images
+    /// experimental. Until Direction has compared them on what the director keeps, frames go to both.
+    public static let luna = "openai/gpt-6-luna-decisions"
+    public static let jev = "typesafe/jev-1.14"
+    public static let frameVersions = [luna, jev]
+    /// Jev takes PNG or JPEG, each side 256 to 1,568 px; Luna takes those sizes too.
     public static let frameSize = 1024
+
+    /// What the questions are about: words, and JPEG frames in the order they're listed. Frames go inline as
+    /// `image_url` parts, the one shape every version takes, so questions name them by place ("frame 3 of 5").
+    public enum Part: Sendable, Equatable {
+        case text(String)
+        case image(Data)
+        var json: JSONValue {
+            switch self {
+            case .text(let s): .string(s)
+            case .image(let d): .object(["type": .string("image_url"), "image_url": .object(["url": .string(MadeMedia.dataURL(d, mime: "image/jpeg"))])])
+            }
+        }
+    }
 
     /// A question with the answers to choose from, each described in plain words.
     public struct Question: Sendable, Equatable {
@@ -41,13 +57,10 @@ public enum Decisions {
     }
 
     /// Asks every question about the same `state` at once; they're answered in parallel and can't see each
-    /// other. `images` are JPEGs, each named in `state` or a question by its key. With `spend`, the cost goes
-    /// in the ledger under that kind.
-    public static func ask(_ questions: [String: Question], state: String, images: [String: Data] = [:], spend: SpendKind? = nil, filmID: String? = nil, turnoverID: String? = nil, key: String? = nil) async throws -> Reply {
-        let assets = images.mapValues { JSONValue.object(["type": .string("image"), "format": .string("jpg"), "data_base64": .string($0.base64EncodedString())]) }
-        var body: [String: JSONValue] = ["model": .string(version), "state": .string(state), "questions": .object(questions.mapValues(\.json))]
-        if !assets.isEmpty { body["assets"] = .object(assets) }
-        let json = try await OpenRouter.send("POST", "decisions", body: .object(body), key: key, timeout: 30, root: base).json
+    /// other. With `spend`, the cost goes in the ledger under that kind.
+    public static func ask(_ questions: [String: Question], state: [Part], version: String, spend: SpendKind? = nil, filmID: String? = nil, turnoverID: String? = nil, key: String? = nil) async throws -> Reply {
+        let body: JSONValue = .object(["model": .string(version), "state": .array(state.map(\.json)), "questions": .object(questions.mapValues(\.json))])
+        let json = try await OpenRouter.send("POST", "decisions", body: body, key: key, timeout: 30, root: base).json
         var answers: [String: Answer] = [:]
         for name in questions.keys {
             let a = json["answers"][name]

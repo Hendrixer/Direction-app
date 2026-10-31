@@ -380,11 +380,11 @@ extension ToolRuntime {
             throw error
         }
         // Direction looks at each way itself before the editor does (decisions.md); a failed look never fails the job.
-        var checks: [Int: Result<MadeCheck, Error>] = [:]
+        var checks: [Int: Result<(check: MadeCheck, others: [MadeCheck]), Error>] = [:]
         if MadeChecker.checks(r.kind) {
             progress(job, "Checking what came back", 0.95)
             let filmID = try? store.read().id, kind = r.kind, ask = r.ask, turnoverID = r.turnoverID
-            checks = await withTaskGroup(of: (Int, Result<MadeCheck, Error>).self) { group in
+            checks = await withTaskGroup(of: (Int, Result<(check: MadeCheck, others: [MadeCheck]), Error>).self) { group in
                 for (i, m) in made.enumerated() {
                     group.addTask { do { return (i, .success(try await MadeChecker.check(m.url, kind: kind, ask: ask, filmID: filmID, turnoverID: turnoverID))) } catch { return (i, .failure(error)) } }
                 }
@@ -402,10 +402,12 @@ extension ToolRuntime {
                                     references: r.references.map(\.asset.id), factor: r.factor, sharpenedFrom: m.sharpenedFrom, file: "Made/" + m.url.lastPathComponent, way: r.ways > 1 ? m.way : nil, jobID: job.id)
             var check: JSONValue?
             switch checks[i] {
-            case .success(let c)?:
+            case .success(let (c, others))?:
                 record.check = c
+                record.otherChecks = others.isEmpty ? nil : others
                 check = c.forEditor
-                DirectionLog.info("Checked \(record.file): \(c.verdict.rawValue)\(c.findings.isEmpty ? "" : " (" + c.findings.joined(separator: " ") + ")") by \(c.version)", "made")
+                let also = others.map { "; \($0.version) says \($0.verdict.rawValue)" }.joined()
+                DirectionLog.info("Checked \(record.file): \(c.verdict.rawValue)\(c.findings.isEmpty ? "" : " (" + c.findings.joined(separator: " ") + ")") by \(c.version)\(also)", "made")
             case .failure(let e)?:
                 check = .object(["verdict": .string("unchecked"), "why": .string(e.localizedDescription)])
                 DirectionLog.info("Couldn\u{2019}t check \(record.file): \(e.localizedDescription)", "made")

@@ -8,21 +8,24 @@ struct MadeCheckTests {
     private func reply(_ answers: [String: String]) -> Decisions.Reply {
         var all = ["look1": "clean", "look2": "clean", "look3": "clean", "look4": "clean", "look5": "clean", "morph": "moves", "same": "same", "asked": "yes"]
         all.merge(answers) { _, b in b }
-        return Decisions.Reply(answers: all.mapValues { Decisions.Answer(choice: $0) }, version: Decisions.version, cost: 0.0003)
+        return Decisions.Reply(answers: all.mapValues { Decisions.Answer(choice: $0) }, version: Decisions.luna, cost: 0.0003)
     }
 
     @Test func everyFrameIsNamedAndAskedAbout() {
         #expect(moments == [0, 1.25, 2.5, 3.75, 4.9])
-        let (state, questions) = MadeChecker.questions(kind: .shot, ask: "Slow push in. Steam rises from the cup.", moments: moments)
+        let frames = (1...5).map { Data([UInt8($0)]) }
+        let (state, questions) = MadeChecker.request(kind: .shot, ask: "Slow push in. Steam rises from the cup.", moments: moments, frames: frames)
         #expect(Set(questions.keys) == ["look1", "look2", "look3", "look4", "look5", "morph", "same", "asked"])
-        // Each image is cited in the state, and each frame's question names only its own.
-        for i in 1...5 { #expect(state.contains("frame_\(i)")) }
-        #expect(questions["look3"]!.instructions.contains("frame_3") && !questions["look3"]!.instructions.contains("frame_2"))
-        #expect(questions["same"]!.instructions.contains("frame_1") && questions["same"]!.instructions.contains("frame_5"))
-        #expect(state.contains("\u{201C}Slow push in. Steam rises from the cup.\u{201D}"))
+        // Every frame inline, after a label with its place and time, so questions name it by place in any version.
+        #expect(state.count == 1 + 2 * 5 + 1)
+        #expect(state[5] == .text("Frame 3 of 5, at 0:03:") && state[6] == .image(frames[2]))
+        #expect(state.last == .text("It was made from this description: \u{201C}Slow push in. Steam rises from the cup.\u{201D}"))
+        #expect(questions["look3"]!.instructions.contains("frame 3 of 5") && !questions["look3"]!.instructions.contains("frame 2"))
+        #expect(questions["same"]!.instructions == "Compare frame 1 with frame 5. Is anyone in them still the same person, and is it still the same place?")
         // A still is one frame: broken or not, and whether it's what was asked.
-        let still = MadeChecker.questions(kind: .still, ask: "A coffee cup at dawn.", moments: [0])
-        #expect(Set(still.questions.keys) == ["look1", "asked"] && still.state.hasPrefix("A still made for a film: frame_1."))
+        let still = MadeChecker.request(kind: .still, ask: "A coffee cup at dawn.", moments: [0], frames: [frames[0]])
+        #expect(Set(still.questions.keys) == ["look1", "asked"] && still.state.prefix(2) == [.text("A still made for a film:"), .image(frames[0])])
+        #expect(still.questions["look1"]!.instructions.hasPrefix("Look only at the picture."))
         // Sharpening and slow motion work on real footage; they aren't checked.
         #expect(MadeChecker.checks(.bridge) && MadeChecker.checks(.still) && !MadeChecker.checks(.slowMotion) && !MadeChecker.checks(.upscale) && !MadeChecker.checks(.music))
     }
@@ -59,7 +62,7 @@ struct MadeCheckTests {
         let frame = Data([0xFF, 0xD8, 0xFF, 0xD9])
         let question = Decisions.Question("Look only at frame_1. Is anything in it broken?", [("clean", "Whole."), ("minor", "A little off."), ("broken", "Melted.")])
         let reply = try await OpenRouter.$overrides.withValue(OpenRouter.Overrides(transport: transport, key: "sk-or-v1-stub-secret", ledger: ledger)) {
-            try await Decisions.ask(["look1": question], state: "A still made for a film: frame_1.", images: ["frame_1": frame], spend: .checking, filmID: "film-1", turnoverID: "turnover-1")
+            try await Decisions.ask(["look1": question], state: [.text("A still made for a film:"), .image(frame)], version: Decisions.luna, spend: .checking, filmID: "film-1", turnoverID: "turnover-1")
         }
         #expect(reply.answers["look1"] == Decisions.Answer(choice: "broken", probabilities: ["clean": 0.1, "minor": 0.2, "broken": 0.7], confidence: 0.42))
         #expect(reply.version == "typesafe/jev-1.14-20261014" && reply.cost == 0.00004)
@@ -67,13 +70,14 @@ struct MadeCheckTests {
         let request = try #require(sent.all.first)
         #expect(request.url?.absoluteString == "https://openrouter.ai/api/alpha/decisions" && request.value(forHTTPHeaderField: "Authorization") == "Bearer sk-or-v1-stub-secret")
         let body = try JSONDecoder().decode(JSONValue.self, from: try #require(request.httpBody))
-        #expect(body["model"].string == "typesafe/jev-1.14")
-        // Plain base64, no data: prefix; the key appears in the state so the frame is cited.
-        #expect(body["assets"]["frame_1"] == .object(["type": .string("image"), "format": .string("jpg"), "data_base64": .string(frame.base64EncodedString())]))
+        #expect(body["model"].string == "openai/gpt-6-luna-decisions")
+        // Frames go inline as image_url parts with a data URL, the shape every version takes.
+        #expect(body["state"] == .array([.string("A still made for a film:"), .object(["type": .string("image_url"), "image_url": .object(["url": .string("data:image/jpeg;base64," + frame.base64EncodedString())])])]))
+        #expect(body["assets"] == .null)
         #expect(body["questions"]["look1"]["type"].string == "choice" && body["questions"]["look1"]["criteria"]["broken"].string == "Melted.")
 
         let entries = OpenRouter.$overrides.withValue(OpenRouter.Overrides(ledger: ledger)) { SpendLedger.entries() }
-        #expect(entries.count == 1 && entries[0].kind == .checking && entries[0].spend == 0.00004 && entries[0].turnoverID == "turnover-1")
+        #expect(entries.count == 1 && entries[0].kind == .checking && entries[0].spend == 0.00004 && entries[0].turnoverID == "turnover-1" && entries[0].version == Decisions.luna)
         #expect(SpendKind.checking.group == "Checking")
     }
 
