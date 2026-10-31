@@ -16,8 +16,10 @@ public enum OpenRouter {
         public var catalog: URL?
         public var limits: SpendLimits?
         public var pollInterval: Double?
-        public init(transport: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil, key: String? = nil, service: String? = nil, ledger: URL? = nil, catalog: URL? = nil, limits: SpendLimits? = nil, pollInterval: Double? = nil) {
-            self.transport = transport; self.key = key; self.service = service; self.ledger = ledger; self.catalog = catalog; self.limits = limits; self.pollInterval = pollInterval
+        public var quality: MadeQuality?
+        public var refusals: URL?
+        public init(transport: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil, key: String? = nil, service: String? = nil, ledger: URL? = nil, catalog: URL? = nil, limits: SpendLimits? = nil, pollInterval: Double? = nil, quality: MadeQuality? = nil, refusals: URL? = nil) {
+            self.transport = transport; self.key = key; self.service = service; self.ledger = ledger; self.catalog = catalog; self.limits = limits; self.pollInterval = pollInterval; self.quality = quality; self.refusals = refusals
         }
     }
     @TaskLocal public static var overrides = Overrides()

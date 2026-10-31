@@ -23,26 +23,37 @@ The way people get good results from video services (2026) is the same everywher
 
 ## What the editor can make
 
-| Kind | Label | For | Made with | Default version |
+| Kind | Label | For | Made with | Version |
 |---|---|---|---|---|
 | `music` | Music | Beds and stings | OpenRouter | Lyria 3 Clip |
-| `soundEffect` | Sound effect | Rain on glass, a door | OpenRouter | The music version |
+| `soundEffect` | Sound effect | Rain on glass, a door | OpenRouter | Lyria 3 Clip |
 | `voice` | Voice | Scratch narration, temp lines | OpenRouter | The first speech version listed |
-| `still` | Still | Plates, backgrounds, a shot's first frame | OpenRouter | Nano Banana 2 |
-| `shot` | New shot | Inserts, B-roll, establishing shots, a pickup | OpenRouter | Veo 3.1 |
-| `extension` | Extended shot | "Hold on her a beat longer" | OpenRouter | The new-shot version |
-| `bridge` | Bridge | "Get us from the car to the door" | OpenRouter | The new-shot version |
-| `changedShot` | Changed shot | Remove, replace, relight or restyle something in a take | OpenRouter | Aleph 2.0 |
+| `still` | Still | Plates, backgrounds, a shot's first frame | OpenRouter | Chosen (below) |
+| `shot` | New shot | Inserts, B-roll, establishing shots, a pickup | OpenRouter | Chosen |
+| `extension` | Extended shot | "Hold on her a beat longer" | OpenRouter | Chosen |
+| `bridge` | Bridge | "Get us from the car to the door" | OpenRouter | Chosen, from those that take a last frame |
+| `changedShot` | Changed shot | Remove, replace, relight or restyle something in a take | OpenRouter | Chosen: Aleph 2.0 or FLUX Video Edit |
 | `slowMotion` | Slow motion | "Slow that down" | This Mac | Apple frame interpolation |
-| `upscale` | Sharpened | A soft take, a small made shot | This Mac, or OpenRouter | This Mac |
+| `upscale` | Sharpened | A soft take, a small made shot | This Mac, or OpenRouter | This Mac up to 1920 × 1080; FLUX Video Upscale above |
+
+### Choosing a version
+
+Nobody picks versions: there are dozens, they change monthly, and what's best depends on the request. The director chooses one thing, **Made with** (Settings › Engines): **Best** (the best-rated version that can make it, whatever it costs), **Balanced** (the default: the cheapest of the versions rated within 50 of the best one that can make it) or **Cheapest** (the cheapest rated at least 1000). Direction then picks each request's version (`MadeCatalog.route`):
+
+1. **What can make it.** From OpenRouter's list, the versions for the kind that take the frames it sends (`supported_frame_images`; a last frame always comes with a first), offer its length, and take a person if a frame shows one.
+2. **A person in a frame.** Direction looks at every frame and reference it will send, on this Mac (Vision's faces and bodies; the back of a head counts). ByteDance's service (Seedance, Seedream) refuses input images that may show a real person unless that person was registered with ByteDance, so those are left out. A version that turned down a frame with a person is skipped for a week (`made-refusals.json` beside the spend ledger).
+3. **How good.** Ratings are the Artificial Analysis arenas, read 31 Oct 2026 (image to video for shots, image editing for stills), in `MadeRanking.ratings`. Versions without a rating come after every rated one.
+4. **If it's turned down.** A request a version refuses for what's in it (a person, a policy) goes to the next one, up to two more, and the result's `note` says so: "Seedance 2.5 wouldn't take a frame with a person in it, so this used MiniMax H3." A refusal costs nothing.
+
+The editor never names a version; `direction_services` tells it what Direction would use. Music and voice keep the defaults in the table.
 
 - **New shot** starts from words, from a `first` frame, or from `first` and `last` frames. A frame is a still or a moment of a take. With references, the version sees up to four frames of the film.
-- **Extended shot** continues a take from its out point (`side: tail`: the take's frame at `end` is the first frame) or leads into its in point (`side: head`: the frame at `start` is the last frame, so the version must take a last frame). Direction drops the one frame that would repeat, so the join is seamless.
-- **Bridge** needs a version that takes a last frame. If the chosen one doesn't, Direction uses Veo 3.1 and says so in the result.
+- **Extended shot** continues a take from its out point (`side: tail`: the take's frame at `end` is the first frame). Direction drops the one frame that would repeat, so the join is seamless. Leading into a take (`side: head`) isn't possible: OpenRouter turns down a last frame without a first one, so the editor makes a still for the first frame and a bridge from it.
+- **Bridge** needs first and last frames; Direction picks from the versions that take a last frame.
 - **Changed shot** sends the range itself (up to 10 seconds; `from: {assetID, start, end}`) to a version that changes video (Aleph 2.0 or FLUX Video Edit). The made clip is the same length as the range, with no sound; it goes on V2 over the original, and the take's own sound keeps playing.
 - **Slow motion** makes the in-between frames for a range of a take (`factor` 2, 3 or 4) with Apple's frame interpolation. It costs nothing.
 - **Sharpened** enlarges a range up to the cut's size. On this Mac it uses Apple's super resolution (4×, then fitted to the cut); the first use downloads Apple's sharpening files once. FLUX Video Upscale is the paid alternative.
-- **Sound:** shots are made silent unless `sound: true` (half the price on Veo 3.1). Ambience is usually better from the footage or a sound effect.
+- **Sound:** shots are made silent unless `sound: true` (cheaper on most versions). Ambience is usually better from the footage or a sound effect.
 - **Two ways:** `ways` is 1 or 2, and up to 4 for stills.
 
 ### Finishing a made shot
@@ -67,7 +78,7 @@ Every paid service goes through **OpenRouter**: one key, one bill, many versions
 | looking at footage | `POST /chat/completions` with keyframes and `response_format: {type: "json_schema"}` | Only when Settings › Footage › Look with is OpenRouter. |
 
 - Versions come from OpenRouter's lists (`GET /models?output_modalities=audio|speech|image`, `GET /videos/models`), cached for a day. From `/videos/models` Direction keeps each version's durations, resolutions, aspect ratios, `supported_frame_images`, `upscale_factor` and pricing SKUs.
-- **Which versions change video:** versions whose listing has no durations and no frame images, or a SKU priced "with video input" (Aleph 2.0, FLUX Video Edit, Seedance). The Changed shots select lists those that return the range changed (Aleph, FLUX Video Edit).
+- **Which versions change video:** versions whose listing has no durations and no frame images, or a SKU priced "with video input" (Aleph 2.0, FLUX Video Edit, Seedance). Changed shots go to those that return the range changed (Aleph, FLUX Video Edit).
 - **Estimates** come from each version's listed price: per second of video at the chosen resolution and sound, with any per-generation minimum; per clip; per image; per token. **Spend** is what OpenRouter reports (`usage.cost`). The month's total is Direction's own record.
 - OpenRouter's video services aren't covered by zero data retention; the Services note says frames and ranges sent for a shot leave this Mac.
 - The key is stored in the macOS Keychain as Direction's own item, readable by the Direction app and its bundled `direction` tool. It never appears in the film, the logs, or any tool's arguments or results.
@@ -90,9 +101,9 @@ Every paid service goes through **OpenRouter**: one key, one bill, many versions
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `direction_services` | — | Ready services, the version for each kind with its price, what changes video and takes a last frame, the limits, what's left in the open turnover and this month |
+| `direction_services` | — | Ready services, the version Direction would use for each kind (and `withAPerson` when that differs) with its price, `madeWith`, the limits, what's left in the open turnover and this month |
 | `direction_estimate` | `turnover`, `steps` (each a `direction_make` call's arguments) | Each step's version, seconds and spend; the plan's `total`; `turnoverSpent`, `limit`, `needsQuestion`; `monthLeft`. Spends nothing. |
-| `direction_make` | `kind`, `ask`, `version?`, `seconds?`, `from?` (`{assetID, start?, end?, side?}`), `first?` / `last?` (`{assetID, at?}`), `references?` (asset ids, or `{assetID, at}`), `sound?`, `factor?`, `ways?`, `note`, `turnover`, `estimateOnly?`, `spendQuestionID?` | With `estimateOnly`: `{spend, seconds}`. Otherwise a job; when done, each made clip's `assetID` and provenance. |
+| `direction_make` | `kind`, `ask`, `seconds?`, `from?` (`{assetID, start?, end?, side?}`), `first?` / `last?` (`{assetID, at?}`), `references?` (asset ids, or `{assetID, at}`), `sound?`, `factor?`, `ways?`, `note`, `turnover`, `estimateOnly?`, `spendQuestionID?` | With `estimateOnly`: `{spend, seconds}`. Otherwise a job; when done, each made clip's `assetID` and provenance. |
 
 - `from` is the take range a changed shot, slow motion or sharpening works on, and the take an extended shot continues (`side`).
 - Over the turnover's limit, `direction_make` returns `spend_over_limit` with the estimate. The editor should have priced the plan first with `direction_estimate`; it asks one spend question (`direction_ask` kind `spend`, with `spend: {estimate: <plan total>, choiceID}`) and passes `spendQuestionID` on every step.

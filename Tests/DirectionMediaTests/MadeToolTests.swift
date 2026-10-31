@@ -250,7 +250,8 @@ private struct MadeFixture {
         let take = JSONValue.string(f.assetID)
         let bridge: [String: JSONValue] = ["kind": .string("bridge"), "ask": .string("The camera drifts from the car to the front door."), "seconds": .number(4),
                                            "first": .object(["assetID": take, "at": .number(0.5)]), "last": .object(["assetID": take, "at": .number(2.5)])]
-        await expectCode("unknown_version") { _ = try await f.make(bridge.merging(["version": .string("runway/gen-4.5")]) { _, b in b }) }
+        // The editor doesn't name versions; Direction picks one that takes a last frame.
+        await expectCode("invalid_arguments") { _ = try await f.make(bridge.merging(["version": .string("runway/gen-4.5")]) { _, b in b }) }
         await expectCode("invalid_arguments") { _ = try await f.make(bridge.merging(["last": .null]) { _, b in b }) }
         let done = try await f.finish(try await f.make(bridge))
         #expect(done.status == "completed", "\(done.error ?? "")")
@@ -260,6 +261,41 @@ private struct MadeFixture {
         let madeID = try #require(done.result?["assetID"].string)
         let record = try #require(try f.media.store.madeRecord(madeID))
         #expect(record.kind == .bridge && record.first == MadeFrame(assetID: f.assetID, at: 0.5) && record.last == MadeFrame(assetID: f.assetID, at: 2.5) && record.spend == 0.8)
+    }
+
+    /// A version that turns a request down for what's in it hands it to the next-best one, and the
+    /// result says so (made-media.md › Choosing a version).
+    @Test func aVersionThatTurnsItDownHandsItToTheNext() async throws {
+        let movie = try Data(contentsOf: try await MediaFixture.make().source)
+        let refusal = data(.object(["error": .object(["code": .string("InputImageSensitiveContentDetected.PrivacyInformation"), "message": .string("The request failed because the input image 'content[1]' may contain real person.")])]))
+        let stub = OpenRouterStub { r, n in
+            let path = r.url!.path
+            if r.httpMethod == "POST" && path.hasSuffix("/videos") {
+                let model = (try? JSONDecoder().decode(JSONValue.self, from: r.httpBody ?? Data()))?["model"].string
+                return model == "bytedance/seedance-2.5" ? (400, refusal, [:]) : (202, data(.object(["id": .string("vid-\(n)"), "status": .string("pending")])), [:])
+            }
+            if path.hasSuffix("/content") { return (200, movie, ["Content-Type": "video/mp4"]) }
+            return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "usage": .object(["cost": .number(0.65)])])), [:])
+        }
+        var f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        f.overrides.quality = .best
+        f.overrides.refusals = f.media.directory.appendingPathComponent("refusals.json")
+        var catalog = MadeCatalog.builtIn; catalog.fetchedAt = Date().timeIntervalSince1970
+        catalog.versions += [MadeVersion(id: "bytedance/seedance-2.5", name: "Seedance 2.5", listing: .video, skus: ["duration_seconds": "0.23"], durations: Array(4...30), resolutions: ["720p"], frames: ["first_frame", "last_frame"]),
+                             MadeVersion(id: "minimax/hailuo-3", name: "H3", listing: .video, skus: ["duration_seconds": "0.13"], durations: Array(5...15), resolutions: ["2K"], frames: ["first_frame", "last_frame"])]
+        try JSONEncoder.direction.encode(catalog).write(to: try #require(f.overrides.catalog))
+        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("Slow push in on the desk."), "seconds": .number(5), "first": .object(["assetID": .string(f.assetID), "at": .number(1)])]
+        // The fixture's frames show no one, so the best-rated version is tried first.
+        #expect(try await f.call("direction_estimate", ["turnover": .string(f.turnover.id), "steps": .array([.object(shot)])])["steps"].array?.first?["version"].string == "bytedance/seedance-2.5")
+        let done = try await f.finish(try await f.make(shot))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+        #expect(stub.bodies("/videos").map { $0["model"].string ?? "" } == ["bytedance/seedance-2.5", "minimax/hailuo-3"])
+        #expect(done.result?["note"].string == "Seedance 2.5 wouldn\u{2019}t take a frame with a person in it, so this used H3.")
+        let madeID = try #require(done.result?["assetID"].string)
+        let record = try #require(try f.media.store.madeRecord(madeID))
+        #expect(record.version == "minimax/hailuo-3" && record.spend == 0.65)
+        // It said a person, so it's skipped for a week when a frame shows one.
+        #expect(OpenRouter.$overrides.withValue(f.overrides) { MadeRefusals.refusedPeople() } == ["bytedance/seedance-2.5"])
     }
 
     @Test func aChangedShotSendsTheRangeItself() async throws {
@@ -358,7 +394,9 @@ private struct MadeFixture {
         // Arguments the editor gets wrong.
         await expectCode("invalid_arguments") { _ = try await f.make(["kind": .string("changedShot"), "ask": .string("Dusk."), "seconds": .number(8)]) }
         await expectCode("invalid_arguments") { _ = try await f.make(["kind": .string("music"), "ask": .string("Piano.")]) }
-        await expectCode("unknown_version") { _ = try await f.make(["kind": .string("music"), "ask": .string("Piano."), "seconds": .number(10), "version": .string("nobody/nothing")]) }
+        await expectCode("invalid_arguments") { _ = try await f.make(["kind": .string("music"), "ask": .string("Piano."), "seconds": .number(10), "version": .string("nobody/nothing")]) }
+        // OpenRouter turns down a last frame without a first one: said before anything is spent.
+        await expectCode("invalid_arguments") { _ = try await f.make(["kind": .string("shot"), "ask": .string("Push in."), "seconds": .number(5), "last": .object(["assetID": .string(f.assetID), "at": .number(1)])]) }
         await expectCode("feedback_not_found") { _ = try await f.call("direction_make", ["kind": .string("music"), "ask": .string("Piano."), "seconds": .number(10), "note": .string("note-x"), "turnover": .string(f.turnover.id)]) }
     }
 }

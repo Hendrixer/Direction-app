@@ -9,7 +9,11 @@ The director's UI never says "generate", "AI", "prompt" or "model". Things are *
 1. Search the footage (`direction_search_footage`) before making anything. Make something only when a note asks for what the footage doesn't have, or with latitude `free` (then the answer is Unasked).
 2. For picture, plan in steps with the `make-shot` skill: frames of the film as references, stills before motion, short shots with small motion, and change a take rather than replace it.
 3. Price the whole plan with one `direction_estimate` call. Under the director's limit, make it. Over it, ask one spend question for the plan.
-4. Say it in the read-back, with the version and about what it costs: "Note 3: change the sky to dusk cloud with Aleph 2.0, about $1.40." When you use a sound effect, say that quality varies.
+4. Say it in the read-back, with what Direction will use and about what it costs: "Note 3: change the sky to dusk cloud with Aleph 2.0, about $1.40." When you use a sound effect, say that quality varies.
+
+## You don't choose versions
+
+Direction picks the version for every request from what it needs and the director's **Made with** setting (Best, Balanced or Cheapest): the frames it sends, its length, and whether a frame shows a person (ByteDance's Seedance and Seedream refuse those). If a version turns a request down, Direction moves to the next one and the result's `note` says so; say that in your answer. There is no `version` argument. `direction_services` and `direction_estimate` tell you what will be used.
 
 ## Tools
 
@@ -18,22 +22,23 @@ The director's UI never says "generate", "AI", "prompt" or "model". Things are *
 Returns:
 
 - `services`: OpenRouter (`state: "ready" | "notSet"`) and This Mac (`kinds: ["slowMotion", "upscale"]`, `sharpening: "ready" | "downloadsOnFirstUse" | "downloading" | "unavailable"`).
-- `kinds`: `[{kind, label, version, versionName, service, price?, durations?, lastFrame?, others?}]`. Each kind shows the version Settings › Engines chose, or the default; `others` lists up to 12 more you may name with `version`, each with its price, `lastFrame` and `takesVideo`.
+- `kinds`: `[{kind, label, version, versionName, service, price?, durations?, lastFrame?, withAPerson?}]`. The version Direction would use now for a typical request of the kind (shots from a first frame); `withAPerson` is the one it would use when a frame shows a person, if different.
+- `madeWith`: `best`, `balanced` or `cheapest`, the director's choice.
 - `limits`: `{askAbovePerTurnover, stopAtPerMonth}`. `stopAtPerMonth` is null for no limit.
 - `turnover`: `{id, spent, left}` for the open turnover, or null.
 - `month`: `{spent, left}`.
 
-Defaults:
+What's used:
 
-| Kind | Default version | Price |
+| Kind | Version | Price |
 |---|---|---|
 | `music`, `soundEffect` | Lyria 3 Clip | About $0.04 per 30 s clip |
 | `voice` | The first speech version OpenRouter lists | Per character |
-| `still` | Nano Banana 2 | A few cents per image |
-| `shot`, `extension`, `bridge` | Veo 3.1 (Settings › Engines › New shots) | About $0.20 a second at 1080p, silent; $0.40 with sound |
-| `changedShot` | Aleph 2.0 (Settings › Engines › Changed shots) | About $0.28 a second, $0.56 at least. FLUX Video Edit is about $0.03 a second. |
+| `still` | Chosen: GPT Image 2.5, Nano Banana 2.1 and others, by Made with | A few cents to about 20 cents per image |
+| `shot`, `extension`, `bridge` | Chosen: Seedance 2.5, MiniMax H3, Wan 3.0 and others, by Made with and whether a frame shows a person | About $0.08 to $0.25 a second |
+| `changedShot` | Chosen: Aleph 2.0, or FLUX Video Edit on Cheapest | About $0.28 a second ($0.56 at least); FLUX Video Edit about $0.03 |
 | `slowMotion` | This Mac (Apple frame interpolation) | Nothing |
-| `upscale` | This Mac (Apple super resolution); FLUX Video Upscale through OpenRouter | Nothing on this Mac |
+| `upscale` | This Mac (Apple super resolution) up to 1920 × 1080; FLUX Video Upscale above | Nothing on this Mac |
 
 Versions and prices come from OpenRouter's model lists, cached for a day in `~/Library/Application Support/Direction/openrouter-models.json`.
 
@@ -49,14 +54,13 @@ Versions and prices come from OpenRouter's model lists, cached for a day in `~/L
 | `ask` | except slow motion and sharpening | What to make, or for a changed shot what to change, in plain words. For `voice`, the words to say. The director reads it as "What the editor asked for", so write it for them. |
 | `note` | yes | The note ID it's for (a note number also works), or `"unasked"`. |
 | `turnover` | yes | The turnover ID. |
-| `seconds` | music, sound effects, shots, extensions, bridges | The length. Music and effects up to 600 s; shots up to 60 s, rounded up to a length the version offers (Veo 3.1 offers 4, 6 or 8 s). |
-| `from` | changed shots, slow motion, sharpening, extensions | `{assetID, start, end}` in source seconds: the range to change (up to 10 s), slow down (up to 20 s) or sharpen (up to 60 s). For an extension, `{assetID, end, side: "tail"}` continues from `end`, and `{assetID, start, side: "head"}` leads into `start`. |
-| `first`, `last` | bridges need both | `{assetID, at?}`: the frame a shot starts or ends on, from a still (no `at`) or a take at `at` seconds. |
+| `seconds` | music, sound effects, shots, extensions, bridges | The length. Music and effects up to 600 s; shots up to 60 s, rounded up to a length the version offers. Keep shots 4–6 s. |
+| `from` | changed shots, slow motion, sharpening, extensions | `{assetID, start, end}` in source seconds: the range to change (up to 10 s), slow down (up to 20 s) or sharpen (up to 60 s). For an extension, `{assetID, end, side: "tail"}` continues from `end`. |
+| `first`, `last` | bridges need both | `{assetID, at?}`: the frame a shot starts or ends on, from a still (no `at`) or a take at `at` seconds. A `last` always needs a `first`: OpenRouter turns it down otherwise, so to land on a take, make a still for the first frame and a bridge from it. |
 | `references` | no | Up to 4 stills or takes (`assetID`, or `{assetID, at}`) that ground a still or shot in the film. |
 | `sound` | no | Shots, extensions and bridges are silent unless true. |
 | `factor` | slow motion | 2 (default), 3 or 4. |
 | `ways` | no | 1 (default) or 2; up to 4 for stills. Each way costs the same again. |
-| `version` | no | A version id from `direction_services`. A bridge, or an extension with `side: "head"`, needs one that takes a last frame; without `version`, Direction uses Veo 3.1 and says so in `note`. |
 | `estimateOnly` | no | Returns `{spend, seconds, version, versionName, requests, priced}` and spends nothing. |
 | `spendQuestionID` | no | A spend question the director answered yes to (below). |
 
@@ -136,7 +140,8 @@ There's no override from your side. Tell the director in your answer or a can't-
 | `shot_failed`, `shot_timeout` | The video job failed or ran past 30 minutes. |
 | `spend_over_question` | The plan's yes is used up. Ask again for the rest. |
 | `nothing_to_sharpen`, `cant_sharpen` | The take is already the cut's size, or bigger than Apple's sharpening takes (use FLUX Video Upscale). |
-| `unknown_version`, `invalid_arguments`, `feedback_not_found`, `turnover_not_found` | Fix the call. |
+| `invalid_arguments`, `feedback_not_found`, `turnover_not_found` | Fix the call. |
+| `unknown_version` | No version on OpenRouter can make it as asked (too long, or a frame no version takes). Make it shorter, or plan it another way. |
 
 ## The key
 

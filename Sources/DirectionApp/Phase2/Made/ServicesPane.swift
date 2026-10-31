@@ -2,26 +2,25 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Settings › Engines › OpenRouter (specs/settings.md › 54): the key, the version for each kind,
-/// and the director's spend limits. Limits and versions live in the shared suite so the editor's tools follow them.
+/// Settings › Engines › OpenRouter (specs/settings.md › 54): the key, how good against how cheap made
+/// things are, and the director's spend limits. Direction picks each request's version itself
+/// (made-media.md › Choosing a version). Both live in the shared suite so the editor's tools follow them.
 struct ServicesGroups: View {
     var preview = false
     @State private var state = ServicesState()
     @AppStorage(SharedSettings.SpendKey.askAbove, store: SharedSettings.defaults) private var askAbove = 5.0
     @AppStorage(SharedSettings.SpendKey.stopAt, store: SharedSettings.defaults) private var stopAt = 50.0
+    @AppStorage(SharedSettings.madeQualityKey, store: SharedSettings.defaults) private var quality = MadeQuality.balanced
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsGroup(label: "OpenRouter", note: AnyView(SettingsNote("Your key is kept in your Mac\u{2019}s keychain. The editor never sees it; Direction makes every request."))) { keyRow }
-            SettingsGroup(label: "What the editor uses", note: AnyView(SettingsNote("Slow motion and sharpening happen on this Mac and cost nothing."))) {
-                versionRow(.music, "Music", first: true)
-                versionRow(.voice, "Voice")
-                versionRow(.shot, "New shots")
-                    .help("Extended shots and bridges use this version too. Frames of your takes are sent to OpenRouter, so they leave this Mac.")
-                versionRow(.changedShot, "Changed shots")
-                    .help("The take\u{2019}s range itself is sent to OpenRouter, so it leaves this Mac.")
-                versionRow(.still, "Stills")
+            SettingsGroup(label: "What the editor makes", note: AnyView(SettingsNote("Direction picks the version for each shot and still from what it needs, and tries the next one if a version turns it down. Frames of your takes are sent to OpenRouter, so they leave this Mac. Slow motion and sharpening happen on this Mac and cost nothing."))) {
+                SettingsRow(label: "Made with", detail: qualityDetail, first: true) {
+                    GateSelect(options: MadeQuality.allCases.map { ($0, $0.label) }, selection: preview ? .constant(.balanced) : $quality)
+                }
+                usesRow
             }
             SettingsGroup(label: "Spending", note: AnyView(SettingsNote("Check each version\u{2019}s terms on OpenRouter before you release a film. Some don\u{2019}t cover film or TV."))) {
                 SettingsRow(label: "Ask before spending more than", detail: "The editor prices each turnover\u{2019}s plan first, and asks only when it goes over.", first: true) {
@@ -125,36 +124,39 @@ struct ServicesGroups: View {
         .onAppear { fieldFocused = true }
     }
 
-    // MARK: Versions
+    // MARK: Made with
 
-    private func versionRow(_ kind: MadeKind, _ label: String, first: Bool = false) -> some View {
-        let choices = state.catalog.choices(kind)
-        let current = state.catalog.version(kind, chosen: preview ? nil : state.chosen[kind])
-        let price = current.flatMap { MadeFormat.priceLine(kind, $0) }
-        // `.set-row` with a sub-label whose money is SF Mono ("About $0.04 a 30 s clip").
-        return HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(Gate.Font.body).foregroundStyle(Gate.Text.primary).cssLineHeight(1.45, size: 13)
-                if let price { MadeText.money(in: price, size: 11.5, mono: 11).foregroundStyle(Gate.Text.tertiary).cssLineHeight(1.4, size: 11.5) }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Group {
-                if choices.isEmpty {
-                    Text("Not listed").font(.system(size: 12.5)).foregroundStyle(Gate.Text.tertiary)
-                } else {
-                    GateSelect(options: choices.map { ($0.id, $0.name) }, selection: Binding(get: { current?.id ?? choices[0].id }, set: { id in
-                        guard !preview else { return }
-                        state.choose(kind, id)
-                    }))
+    private var shown: MadeQuality { preview ? .balanced : quality }
+    private var qualityDetail: String {
+        switch shown {
+        case .best: "The best-rated version for each shot, whatever it costs."
+        case .balanced: "The cheapest of the versions rated close to the best."
+        case .cheapest: "The cheapest version that\u{2019}s still rated good."
+        }
+    }
+
+    /// What Direction would use right now, so the choice isn't blind: "New shots: Seedance 2.5 ·
+    /// with a person: MiniMax H3 · Stills: Nano Banana 2.1". Prices in SF Mono.
+    private var usesRow: some View {
+        let c = state.catalog
+        func pick(_ needs: MadeNeeds) -> MadeVersion? { c.route(needs, quality: shown).first }
+        let shot = pick(MadeNeeds(kind: .shot, firstFrame: true, seconds: 5)), person = pick(MadeNeeds(kind: .shot, firstFrame: true, person: true, seconds: 5))
+        let still = pick(MadeNeeds(kind: .still)), changed = pick(MadeNeeds(kind: .changedShot, seconds: 5))
+        let rows: [(String, MadeKind, MadeVersion?)] = [("New shots", .shot, shot), ("With you in the frame", .shot, person == shot ? nil : person), ("Stills", .still, still), ("Changed shots", .changedShot, changed)]
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(rows.filter { $0.2 != nil }, id: \.0) { label, kind, v in
+                HStack(spacing: 8) {
+                    Text(label).foregroundStyle(Gate.Text.secondary).frame(width: 150, alignment: .leading)
+                    Text(v!.name).foregroundStyle(Gate.Text.primary)
+                    Spacer(minLength: 8)
+                    if let price = MadeFormat.priceLine(kind, v!) { MadeText.money(in: price, size: 11.5, mono: 11).foregroundStyle(Gate.Text.tertiary) }
                 }
+                .font(.system(size: 12))
             }
-            .fixedSize()
-            .accessibilityLabel(label).accessibilityHint(price ?? "")
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
-        .frame(minHeight: 44)
-        .overlay(alignment: .top) { if !first { SystemHairline() } }
-        .accessibilityElement(children: .contain)
+        .overlay(alignment: .top) { SystemHairline() }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -216,12 +218,9 @@ struct SpendMeterRow: View {
     var error: String?
     var catalog: MadeCatalog = .builtIn
     var entries: [SpendEntry] = []
-    /// Chosen versions by kind (the shared suite).
-    var chosen: [MadeKind: String] = [:]
 
     func load(preview: Bool) async {
         if preview { applyPreview(); return }
-        chosen = Dictionary(uniqueKeysWithValues: MadeKind.allCases.compactMap { k in SharedSettings.madeVersion(k).map { (k, $0) } })
         catalog = MadeVersions.cached() ?? .builtIn
         entries = SpendLedger.entries()
         await check()
@@ -259,11 +258,6 @@ struct SpendMeterRow: View {
     func remove() {
         key = .notSet; editing = false
         Task.detached { OpenRouter.Key.remove() }
-    }
-
-    func choose(_ kind: MadeKind, _ id: String) {
-        chosen[kind] = id
-        SharedSettings.defaults.set(id, forKey: SharedSettings.SpendKey.version(kind))
     }
 
     /// OpenRouter's own message, without "OpenRouter said:" or the status code.

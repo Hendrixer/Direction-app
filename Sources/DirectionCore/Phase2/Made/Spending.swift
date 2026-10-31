@@ -41,7 +41,6 @@ public struct SpendEntry: Codable, Hashable, Sendable, Identifiable {
 extension SharedSettings {
     public enum SpendKey {
         public static let askAbove = "spendAskAbovePerTurnover", stopAt = "spendStopAtPerMonth"
-        public static func version(_ kind: MadeKind) -> String { "madeVersion." + kind.rawValue }
     }
     public static let askAboveChoices: [Double] = [1, 5, 10, 25, 50]
     /// 0 is "No limit".
@@ -54,12 +53,6 @@ extension SharedSettings {
         if let limits = OpenRouter.overrides.limits { return limits.stopAt }
         let v = (defaults.object(forKey: SpendKey.stopAt) as? Double) ?? 50
         return v > 0 ? v : nil
-    }
-    /// The version Settings › Engines chose for a kind; nil follows the default. Sound effects use the
-    /// music version; extended shots and bridges use the new-shot version (made-media.md › What the editor can make).
-    public static func madeVersion(_ kind: MadeKind) -> String? {
-        let shown: MadeKind = switch kind { case .soundEffect: .music; case .extension, .bridge: .shot; default: kind }
-        return defaults.string(forKey: SpendKey.version(shown)).flatMap { $0.isEmpty ? nil : $0 }
     }
 }
 

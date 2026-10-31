@@ -223,19 +223,14 @@ Note under Looking at footage: "The editor reads what's found here to log takes,
 
 **Editing the key:** the row grows to show a secure `.input` (placeholder "Paste your OpenRouter key"), a text link "Get a key" with an arrow-up-right icon (opens openrouter.ai/keys), and Cancel (plain) / **Save** (`.btn`, not steel; the window has no steel button). After Save, Direction checks the key (`GET /key`) and shows Ready or "That key didn't work: <OpenRouter's message>". The row's context menu has Replace Key…, Remove Key, and Show Credits (opens openrouter.ai/credits).
 
-**What the editor uses** (a card under the key, one row per kind, each a select of OpenRouter versions with the default first):
+**What the editor makes** (a card under the key; made-media.md › Choosing a version):
 
-| Kind | Default | Sub-label | Lists |
-|---|---|---|---|
-| Music | Lyria 3 Clip | "About $0.04 a 30 s clip" | Audio versions |
-| Voice | (first speech version) | — | Speech versions |
-| New shots | Veo 3.1 | "About $0.20 a second at 1080p" | Video versions that make shots. Extended shots and bridges use it too. |
-| Changed shots | Aleph 2.0 | "About $0.28 a second" | Versions that change video (Aleph 2.0, FLUX Video Edit) |
-| Stills | Nano Banana 2 | — | Image versions |
+- **Made with**: a select of Best · Balanced · Cheapest (default Balanced). Detail: "The best-rated version for each shot, whatever it costs." / "The cheapest of the versions rated close to the best." / "The cheapest version that's still rated good."
+- Under it, what Direction would use right now, one line each with its price in SF Mono: New shots, With you in the frame (only when it differs), Stills, Changed shots. "New shots · MiniMax H3 Max · About $0.08 a second at 768p."
 
-Note under the card: "Slow motion and sharpening happen on this Mac and cost nothing."
+Note under the card: "Direction picks the version for each shot and still from what it needs, and tries the next one if a version turns it down. Frames of your takes are sent to OpenRouter, so they leave this Mac. Slow motion and sharpening happen on this Mac and cost nothing."
 
-Prices in sub-labels come from OpenRouter's listing and update with it.
+There are no per-kind version selects: the director chooses how good against how cheap, never a version.
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
