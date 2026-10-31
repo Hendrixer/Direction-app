@@ -89,7 +89,11 @@ public final class GPUCompositor: NSObject, AVVideoCompositing, @unchecked Senda
                     if let image = layer.image { original = image }
                     else if let id = layer.trackID, let frame = request.sourceFrame(byTrackID: id) { original = CIImage(cvPixelBuffer: frame) }
                     else { request.finish(with: DirectionError("missing_frame", "A source frame is unavailable for this edit.")); return }
-                    track = ClipRendering.render(layer, source: original, t: t, frameIndex: frameIndex, bounds: bounds, scale: scale).composited(over: track)
+                    let picture = ClipRendering.render(layer, source: original, t: t, frameIndex: frameIndex, bounds: bounds, scale: scale)
+                    // A push, a wipe or the editor's own transition draws the two shots together.
+                    if let tr = layer.clip.transition, let progress = ClipRendering.progress(tr, cut: layer.clip.start.seconds, t: t) {
+                        track = TransitionShader.apply(from: track, to: picture, progress: progress, transition: tr, bounds: bounds)
+                    } else { track = picture.composited(over: track) }
                     if layer.clip.layer == 0 && layer.clip.range.contains(.init(seconds: t)) { story = layer.clip.assetID }
                 }
                 guard let top = group.last else { continue }

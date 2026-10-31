@@ -25,24 +25,46 @@ public enum EditCatalog {
     public struct Operation: Codable, Hashable, Sendable { public var op: String; public var group: String; public var arguments: [Argument]; public var does: String }
 
     public static let blendModes = ["normal", "screen", "multiply", "overlay", "add"]
-    public static let transitions = ["dissolve", "dipToBlack", "dipToWhite"]
+    public static let transitions = ["dissolve", "dipToBlack", "dipToWhite"] + builtInTransitions.map(\.name) + ["shader"]
+    /// Direction's own transitions (agent-timeline.md › Transitions): Metal functions that ship with it,
+    /// drawn from both shots at once, so like a dissolve they need handle on both sides.
+    public static let builtInTransitions: [(name: String, params: [Param], note: String)] = {
+        let way = [number("x", -1, 1, -1, keyable: false), number("y", -1, 1, 0, keyable: false)]
+        return [
+            ("push", way, "The new shot pushes the old one out of frame. x and y are the way they travel: x −1 to the left, y 1 down."),
+            ("slide", way, "The new shot slides in over the old one, which stays where it is."),
+            ("whip", way + [number("blur", 0, 1, 0.7, keyable: false)], "A whip pan: a fast push smeared along the way it travels. Put a whoosh under it."),
+            ("zoom", [number("amount", 1.2, 6, 2.5, keyable: false)], "The old shot rushes toward the middle and the new one settles out of the rush, blurred along it."),
+            ("wipe", [number("angle", -180, 180, 0, keyable: false), number("softness", 0, 0.5, 0.08, keyable: false)], "An edge crosses the frame onto the new shot; angle 0 travels left to right, 90 top to bottom."),
+            ("iris", [number("x", 0, 1, 0.5, keyable: false), number("y", 0, 1, 0.5, keyable: false), number("softness", 0, 0.5, 0.04, keyable: false)], "A circle opens from x, y (fractions of the frame from its top left) onto the new shot."),
+        ]
+    }()
+    public static func builtInTransition(_ name: String) -> (name: String, params: [Param], note: String)? { builtInTransitions.first { $0.name == name } }
     /// looks.md › Filters, in their fixed order, with each one's option.
     public static let filters: [(kind: String, options: [String]?)] = [("blackAndWhite", nil), ("splitTone", ["warmTeal", "coolAmber"]), ("fade", nil), ("halation", nil), ("bloom", nil), ("soften", nil), ("chromaticAberration", nil), ("vignette", nil), ("grain", ["fine", "medium", "coarse"]), ("gateWeave", nil), ("letterbox", ["2.39", "2.00", "1.85"])]
 
     static func number(_ name: String, _ min: Double, _ max: Double, _ value: Double, keyable: Bool) -> Param { .init(name: name, kind: "number", min: min, max: max, defaultValue: .number(value), keyable: keyable) }
     public static let effects: [Effect] = [
-        .init(name: "transform", params: [number("scale", 0.1, 8, 1, keyable: true), number("x", -1, 1, 0, keyable: true), number("y", -1, 1, 0, keyable: true), number("rotation", -180, 180, 0, keyable: true), number("opacity", 0, 1, 1, keyable: true), .init(name: "crop", kind: "crop", min: 0, max: 0.5, defaultValue: .object(["l": .number(0), "r": .number(0), "t": .number(0), "b": .number(0)]), keyable: true)], keys: true, note: "Scale over the fitted frame; x and y are fractions of the frame (y down); rotation in degrees, clockwise; crop {l, r, t, b} keys as crop.l…. reframe writes this."),
+        .init(name: "transform", params: [number("scale", 0.1, 8, 1, keyable: true), number("x", -8, 8, 0, keyable: true), number("y", -8, 8, 0, keyable: true), number("rotation", -180, 180, 0, keyable: true), number("opacity", 0, 1, 1, keyable: true), .init(name: "crop", kind: "crop", min: 0, max: 0.5, defaultValue: .object(["l": .number(0), "r": .number(0), "t": .number(0), "b": .number(0)]), keyable: true)], keys: true, note: "Scale over the fitted frame; x and y are fractions of the frame (y down); rotation in degrees, clockwise; crop {l, r, t, b} keys as crop.l…. reframe writes this."),
         .init(name: "blend", params: [.init(name: "mode", kind: "choice", defaultValue: .string("normal"), choices: blendModes)], keys: false, note: "On V2+ clips."),
         .init(name: "mask", params: [.init(name: "shape", kind: "choice", defaultValue: .string("rect"), choices: ["rect", "ellipse"]), number("x", 0, 1, 0.25, keyable: true), number("y", 0, 1, 0.25, keyable: true), number("w", 0, 1, 0.5, keyable: true), number("h", 0, 1, 0.5, keyable: true), number("feather", 0, 0.5, 0.05, keyable: true), .init(name: "invert", kind: "bool", defaultValue: .bool(false))], keys: true, note: "Limits the clip's other effects to the shape. x y w h are fractions of the frame, from its top left."),
         .init(name: "blur", params: [number("radius", 0, 100, 0, keyable: true)], keys: true, note: "Pixels at the cut's size."),
         .init(name: "sharpen", params: [number("amount", 0, 1, 0, keyable: false)], keys: false, note: ""),
         .init(name: "stabilize", params: [number("amount", 0, 1, 0.5, keyable: false)], keys: false, note: "Vision homographic registration, measured and cached per clip."),
+        pin,
     ] + filters.map { f in
         .init(name: "filter." + f.kind, params: (f.kind == "letterbox" ? [] : [number("amount", 0, 1, 0.5, keyable: true)]) + (f.options.map { [.init(name: "option", kind: "choice", defaultValue: .string($0[0]), choices: $0)] } ?? []), keys: f.kind != "letterbox", note: "The look's \(f.kind) filter on this clip alone, apart from the director's look.")
     } + [
         .init(name: "shader", params: [.init(name: "file", kind: "text")], keys: true, note: "Your Metal function in Effects/<name>.metal; its header declares the rest of its parameters."),
     ]
     public static func effect(_ name: String) -> Effect? { effects.first { $0.name == name } }
+    /// The pin effect's corners, in the order its parameters and the corners argument take them.
+    public static let pinCorners = ["tl", "tr", "br", "bl"]
+    static let pin: Effect = {
+        var params: [Param] = []
+        for (c, x, y) in [("tl", 0.0, 0.0), ("tr", 1.0, 0.0), ("br", 1.0, 1.0), ("bl", 0.0, 1.0)] { params += [number(c + ".x", -1, 2, x, keyable: true), number(c + ".y", -1, 2, y, keyable: true)] }
+        return Effect(name: "pin", params: params, keys: true, note: "Puts the clip's whole picture into four corners of the frame (fractions from its top left, y down), in perspective: onto a screen, a window, a sign. It takes the place of the clip's framing and transform; crop and opacity still apply. The pin operation finds the corners and follows them for you.")
+    }()
 
     static func op(_ name: String, _ group: String, _ args: String, _ does: String) -> Operation {
         .init(op: name, group: group, arguments: args.split(separator: " ").map { a in
@@ -75,9 +97,11 @@ public enum EditCatalog {
         op("addEffect", "Picture", "target:clip|track effect params:object keys?:object", "Returns the effect's id."),
         op("setEffect", "Picture", "effectID params?:object keys?:object", "Changes an effect's parameters or keys."),
         op("removeEffect", "Picture", "effectID", "Takes an effect off."),
-        op("transition", "Picture", "editPoint type:dissolve|dipToBlack|dipToWhite frames:int", "Centered on the cut. A dissolve uses handles on both sides; \"|<clip>\" dips in at a clip's head."),
+        op("transition", "Picture", "editPoint type:dissolve|dipToBlack|dipToWhite|push|slide|whip|zoom|wipe|iris|shader frames:int params?:object", "Centered on the cut. Everything but the dips draws both shots, so it needs handles on both sides. push, slide, whip, zoom, wipe and iris take params (see transitions); shader is your own, params.file \"Transitions/<name>.metal\" and the parameters its header declares. \"|<clip>\" dips in at a clip's head."),
         op("removeTransition", "Picture", "editPoint", "Makes it a straight cut."),
         op("cutaway", "Layers", "assetID sourceRange?:range seconds?:number at?:seconds cover?:clip|editPoint", "Puts picture on V2 or above; the sound underneath keeps playing. With cover, it's centered over the cut. Without sourceRange, give seconds: a take in sync with V1 there (direction_dailies › syncGroups) plays the same moment, which is how you switch angles or put a screen recording under the words that describe it. It stays in sync as the cut changes: Direction lines it up again after every edit and splits it where V1 jumps; slipping it, or a V1 it can't follow, makes it a plain cutaway, with a warning."),
+        op("pin", "Layers", "clipID corners?:[[x,y]×4] follow?:screen", "Puts a clip on V2 or above into a screen, window or sign in the shot under it, in perspective. Without corners Direction finds the biggest one in that shot and follows it as the camera moves; with corners it stays there, unless follow: screen follows it from them. Writes the clip's pin effect."),
+        op("zoomThrough", "Layers", "editPoint seconds?:number corners?:[[x,y]×4]", "Pushes into a screen (or window, frame, doorway) in the left shot over its last seconds (default 1) until it fills the frame at the cut, with the right shot's first frame pinned in it, so the cut lands inside the screen. Without corners Direction finds the biggest one near the cut and follows it. Adds a transform to the left clip and the right shot's first frame on V2 or above."),
         op("placeGraphic", "Layers", "graphic at:seconds seconds?:number aboveLook?:bool", "Places a checked graphic on the first free layer at V2 or above, above the look by default."),
         op("placeMade", "Layers", "madeID at:seconds track:track sourceRange?:range", "Places a made clip like footage."),
         op("gain", "Sound", "target:clip|track dB:number keys?:{dB:[{t,v}]}", "Clip or track gain, with keys in dB."),
@@ -104,6 +128,7 @@ public enum EditCatalog {
         ("words_are_yours", "Changing a graphic's words the director set, without a note that names it (direction_graphic)."),
         ("shader_invalid", "A shader that doesn't compile, or makes NaN."),
         ("shader_too_slow", "A shader slower than 40 ms a frame at 1080p."),
+        ("no_screen", "pin or zoomThrough without corners, in a shot where Direction can't find a screen, window or sign."),
     ]
 
     public static func json(custom: [JSONValue] = [], problems: [JSONValue] = []) -> JSONValue {
@@ -111,7 +136,12 @@ public enum EditCatalog {
         let fx = (try? JSONValue.wrapping(effects)) ?? .array([])
         return .object([
             "operations": ops, "effects": fx, "customEffects": .array(custom), "customEffectProblems": .array(problems),
-            "transitions": .array(transitions.map { .object(["type": .string($0), "otio": .string($0 == "dissolve" ? "SMPTE_Dissolve" : "Direction_" + $0)]) }),
+            "transitions": .array(transitions.map { t in
+                var v: [String: JSONValue] = ["type": .string(t), "otio": .string(t == "dissolve" ? "SMPTE_Dissolve" : "Direction_" + t)]
+                if let b = builtInTransition(t) { v["params"] = (try? .wrapping(b.params)) ?? .array([]); v["does"] = .string(b.note) }
+                if t == "shader" { v["does"] = .string("Your own, from Transitions/<name>.metal: params.file and the parameters its header declares (customTransitions lists the ones that compile).") }
+                return .object(v)
+            }),
             "blendModes": .array(blendModes.map(JSONValue.string)),
             "errors": .array(errors.map { .object(["code": .string($0.code), "when": .string($0.when)]) }),
             "conventions": .object([

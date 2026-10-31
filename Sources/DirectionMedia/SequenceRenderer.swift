@@ -45,7 +45,7 @@ public enum SequenceRenderer {
         clockTrack.scaleTimeRange(.init(start: .zero, duration: clockRange.duration), toDuration: sequence.duration.cmTime)
         let fps = sequence.frameRate.value
         func cm(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: 600_000) }
-        // The transition into the next clip on the same track: a dissolve plays this clip's tail past its end.
+        // The transition into the next clip on the same track: a dissolve, a push or a wipe plays this clip's tail past its end.
         let picture = Dictionary(grouping: sequence.clips.filter { $0.kind != .audio }, by: \.layer)
         func outgoing(_ c: Clip) -> ClipTransition? { picture[c.layer]?.first { $0.id != c.id && abs($0.start.seconds - c.end.seconds) < 0.5 / fps }?.transition }
         func trackSettings(_ c: Clip) -> [ClipEffect] { sequence.tracks?[c.trackName]?.effects ?? [] }
@@ -54,8 +54,9 @@ public enum SequenceRenderer {
         var layers: [RenderLayer] = [], audioParameters: [AVMutableAudioMixInputParameters] = []
         for clip in sequence.clips.sorted(by: { ($0.layer, $0.start.seconds, $0.id) < ($1.layer, $1.start.seconds, $1.id) }) {
             try Task.checkCancellation()
-            let head = clip.transition?.type == "dissolve" ? clip.transition!.before : 0
-            let next = outgoing(clip), tail = next?.type == "dissolve" ? next!.after : 0
+            // Every transition but a dip shows both shots, so each plays its handle across the cut.
+            let head = clip.transition.map { $0.isDip ? 0 : $0.before } ?? 0
+            let next = outgoing(clip), tail = next.map { $0.isDip ? 0 : $0.after } ?? 0
             func layer(_ track: CMPersistentTrackID?, _ image: CIImage?, _ transform: CGAffineTransform, _ lut: CameraLUTFile?) -> RenderLayer {
                 .init(trackID: track, image: image, transform: transform, grade: clip.grade, framing: clip.framing, clip: clip, start: clip.start.seconds - head, end: clip.end.seconds + tail, outgoing: next, trackEffects: trackSettings(clip), aboveLook: above(clip), lut: lut)
             }
@@ -89,7 +90,7 @@ public enum SequenceRenderer {
                     layers.append(layer(nil, CIImage(cgImage: try await generator.image(at: clip.sourceRange.start.cmTime).image), .identity, lut))
                 } else {
                     guard let destination = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw DirectionError("track_allocation", "Cannot allocate video layer.") }
-                    // Dissolve handles come along so both sides of the cut have picture.
+                    // Transition handles come along so both sides of the cut have picture.
                     let start = CMTimeMaximum(.zero, CMTimeSubtract(clip.sourceRange.start.cmTime, cm(head * clip.speed)))
                     let duration = CMTimeAdd(CMTimeSubtract(clip.sourceRange.end.cmTime, start), cm(tail * clip.speed))
                     let at = CMTimeSubtract(clip.start.cmTime, cm(head))

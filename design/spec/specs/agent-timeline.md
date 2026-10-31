@@ -101,7 +101,7 @@ The editor may export the document to its working folder and analyze it in a scr
 | `addEffect` | `target` (clip id or track), `effect`, `params`, `keys?` | Returns the effect's id |
 | `setEffect` | `effectID`, `params?`, `keys?` | |
 | `removeEffect` | `effectID` | |
-| `transition` | `editPoint`, `type`, `frames` | |
+| `transition` | `editPoint`, `type`, `frames`, `params?` | See Transitions below |
 | `removeTransition` | `editPoint` | |
 
 **Layers**
@@ -109,6 +109,8 @@ The editor may export the document to its working folder and analyze it in a scr
 | Op | Arguments | What Direction does |
 |---|---|---|
 | `cutaway` | `assetID`, `sourceRange?`, `seconds?`, `at`, `cover?` (a clip id or edit point) | Puts picture on V2 over the story; the sound underneath keeps playing. With `cover`, Direction centers it over a jump cut. Without `sourceRange`, `seconds` long: a take in sync with V1 there plays the same moment, lined up to the frame (switching angles, a screen recording under the words about it, picture-in-picture with `reframe`). It stays lined up as the cut changes (footage-index.md › Sync). |
+| `pin` | `clipID` (V2+), `corners?`, `follow?` (`screen`) | Puts the clip into a screen, window or sign in the shot under it, in perspective. Without corners Direction finds the biggest rectangle in that shot with Vision and follows it; with corners it stays, or follows from them with `follow: screen`. Writes the clip's `pin` effect |
+| `zoomThrough` | `editPoint` (V1), `seconds?` (0.2–5, default 1), `corners?` | Pushes into a screen in the left shot until it fills the frame at the cut, with the right shot's first frame held in the screen and opening out to the whole frame by the cut (see Zoom through) |
 | `placeGraphic` | `graphic`, `at`, `seconds?`, `aboveLook` (default true) | Places a checked graphic (`graphics.md`) on the first free layer at V2 or above |
 | `placeMade` | `madeID`, `at`, `track`, `sourceRange?` | Places a made clip like footage |
 
@@ -139,6 +141,8 @@ Every operation is checked before anything commits:
 | `not_in_sync` | A `cutaway` without `sourceRange` from a take that isn't in sync with the story clip under it |
 | `look_is_yours` | Anything that would change the director's look |
 | `words_are_yours` | Changing a graphic's words the director set, without a note that names it |
+| `shader_invalid`, `shader_too_slow` | An effect or transition shader that doesn't compile, makes NaN, or takes over 40 ms a frame at 1080p |
+| `no_screen` | `pin` or `zoomThrough` without corners, in a shot where Vision finds no screen, window or sign |
 
 ### Effects catalog
 
@@ -146,16 +150,41 @@ Used by `addEffect` and `setEffect`.
 
 | Effect | Parameters (range, default) | Keys | Notes |
 |---|---|---|---|
-| `transform` | `scale` (0.1–8, 1), `x`, `y` (−1–1, 0; fraction of frame), `rotation` (−180–180, 0), `opacity` (0–1, 1), `crop` (`l r t b`, 0–0.5, 0) | yes | `reframe` writes this |
+| `transform` | `scale` (0.1–8, 1), `x`, `y` (−8–8, 0; fraction of frame), `rotation` (−180–180, 0), `opacity` (0–1, 1), `crop` (`l r t b`, 0–0.5, 0) | yes | `reframe` writes this |
 | `blend` | `mode`: normal, screen, multiply, overlay, add | no | On V2+ clips |
 | `mask` | `shape`: rect, ellipse; `x y w h` (0–1); `feather` (0–0.5, 0.05); `invert` (false) | yes | Limits the clip's other effects to the shape: "brighten her face" |
 | `blur` | `radius` (0–100 px, 0) | yes | |
 | `sharpen` | `amount` (0–1, 0) | no | |
 | `stabilize` | `amount` (0–1, 0.5) | no | Vision homographic registration, cached per clip |
+| `pin` | `tl.x tl.y tr.x tr.y br.x br.y bl.x bl.y` (−1–2; the frame's corners) | yes | The whole picture into four corners of the frame, in perspective, in place of its framing and transform; crop and opacity still apply. `pin` and `zoomThrough` write it |
 | `filter.<kind>` | Every filter in `looks.md` | yes | Per-clip texture, apart from the director's look |
 | `shader` | `file` (`Effects/<name>.metal`) and the parameters it declares | yes | Custom; see below |
 
-Balance and camera LUTs have their own operations. Transitions: `dissolve`, `dipToBlack`, `dipToWhite` (shown in OTIO as `SMPTE_Dissolve` and Direction-named types). Settings › Cutting › Transitions still decides whether the editor may add them without a note.
+Balance and camera LUTs have their own operations. Keys on a held frame (a freeze) play over the hold, so a freeze can push in; `freeze` keeps the values the clip had at that frame, so a follow stays put.
+
+### Transitions
+
+Settings › Cutting › Transitions still decides whether the editor may add them without a note, and the film's style (`styles.md`) says which.
+
+- `dissolve`, `dipToBlack`, `dipToWhite`: as before (OTIO `SMPTE_Dissolve` and Direction-named types). Dips need no handles.
+- **Direction's own**, drawn from both shots at once by Metal functions that ship with it: `push` and `slide` (`x`, `y` −1–1: the way they travel), `whip` (the same, plus `blur` 0–1), `zoom` (`amount` 1.2–6), `wipe` (`angle` −180–180, `softness` 0–0.5), `iris` (`x`, `y` 0–1 from the top left, `softness`). Like a dissolve they need handle on both sides.
+- **The editor's own**: `type: shader`, `params.file` `Transitions/<name>.metal` in its working folder, and the parameters its header declares. One stitchable function of both pictures and how far through it is:
+
+```metal
+// direction: param softness 0 0.5 0.1
+[[ stitchable ]] float4 wipe(coreimage::sampler from, coreimage::sampler to, float progress, float softness, coreimage::destination dest) { … }
+```
+
+  `direction::uv`, `direction::at` and `direction::ratio` count 0–1 from the bottom left, as GLSL transitions do, so gl-transitions.com's port line for line. Each is compiled and checked like a custom effect (3 frames at 1080p, a quarter, half and three quarters through) before it touches the cut, and kept with the cut (`source`, `params`, `file`) so every revision draws the same. The compositor draws the incoming clip and the outgoing one through the function instead of laying one over the other.
+
+### Zoom through
+
+`zoomThrough` is the push into a laptop that becomes the park someone walks into. Vision finds the biggest rectangle near the cut in the left shot (or takes `corners`) and follows it to the cut. The left clip gets transform keys, one a frame: scale grows evenly to the point where the screen's box covers the frame (refused past 8×), and the screen's middle travels to the frame's middle. The right shot's first frame goes on the first free layer above V1 for the length of the push, held, with its pin keyed to the screen's corners under the push; over the last 40% the corners open out to the frame's, so at the cut it is the whole frame and the right shot carries on from it. The left clip can't already have a transform.
+
+**Acceptance:**
+- [ ] A push halfway through shows the old shot on one side and the new on the other; a wipe and an iris bring the new one in from where they say.
+- [ ] A transition whose shader doesn't compile is refused with its line, and the cut keeps the one it had.
+- [ ] A pinned clip sits in its corners; zoomThrough shows the new shot in the screen as the push begins and fills the frame by the cut, with no jump at it.
 
 ### Custom effects (shaders)
 

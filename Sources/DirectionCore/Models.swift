@@ -175,21 +175,31 @@ public struct ClipEffect: Codable, Hashable, Sendable, Identifiable {
     /// A numeric parameter at a time (source seconds for clips), keyed or not.
     public func number(_ param: String, at t: Double?, default value: Double) -> Double {
         if let t, let k = keys?[param], let v = Keyframe.value(k, at: t) { return v }
+        if let v = params[param]?.double { return v }
+        // crop.l is the l of the crop object; pin's tl.x is a name of its own.
         let parts = param.split(separator: ".", maxSplits: 1).map(String.init)
-        if parts.count == 2 { return params[parts[0]]?[parts[1]].double ?? value }
-        return params[param]?.double ?? (params[param]?.bool.map { $0 ? 1 : 0 }) ?? value
+        if parts.count == 2, case .object = params[parts[0]] { return params[parts[0]]?[parts[1]].double ?? value }
+        return (params[param]?.bool.map { $0 ? 1 : 0 }) ?? value
     }
 }
 
 /// A transition at the cut before a clip: `before` seconds of it play before the cut and `after` after it
 /// (OTIO's in_offset and out_offset). A dissolve uses handles on both sides; dips don't need any.
 public struct ClipTransition: Codable, Hashable, Sendable {
-    /// dissolve, dipToBlack or dipToWhite.
+    /// dissolve, dipToBlack, dipToWhite, one of Direction's own (push, slide, whip, zoom, wipe, iris),
+    /// or shader: the editor's own, from Transitions/<name>.metal.
     public var type: String
     public var frames: Int
     public var before: Double
     public var after: Double
+    /// The Metal function that draws it, kept with the cut so it renders the same later (shader
+    /// transitions, Direction's own included); its parameters; and the editor's file for its own.
+    public var source: String? = nil
+    public var params: [String: JSONValue]? = nil
+    public var file: String? = nil
     public init(type: String, frames: Int, before: Double, after: Double) { self.type = type; self.frames = frames; self.before = before; self.after = after }
+    /// Dips play over one clip; every other transition shows both, so it needs handle on both sides.
+    public var isDip: Bool { type == "dipToBlack" || type == "dipToWhite" }
 }
 
 /// A track's own settings: effects over every clip on it, the above-look flag, gain and keys (cut seconds).

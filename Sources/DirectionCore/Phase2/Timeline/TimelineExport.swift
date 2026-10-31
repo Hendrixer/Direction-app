@@ -81,7 +81,7 @@ public enum TimelineExport {
         }
         func transition(_ c: Clip) -> JSONValue? {
             guard let t = c.transition else { return nil }
-            return .object(["OTIO_SCHEMA": .string("Transition.1"), "name": .string(t.type), "transition_type": .string(t.type == "dissolve" ? "SMPTE_Dissolve" : "Direction_" + t.type), "in_offset": rt(t.before), "out_offset": rt(t.after), "metadata": .object(["direction": .object(["type": .string(t.type), "frames": .number(Double(t.frames)), "clipID": .string(c.id)])])])
+            return .object(["OTIO_SCHEMA": .string("Transition.1"), "name": .string(t.type), "transition_type": .string(t.type == "dissolve" ? "SMPTE_Dissolve" : "Direction_" + t.type), "in_offset": rt(t.before), "out_offset": rt(t.after), "metadata": .object(["direction": .object(["type": .string(t.type), "frames": .number(Double(t.frames)), "clipID": .string(c.id), "params": t.params.map(JSONValue.object) ?? .null, "file": t.file.map(JSONValue.string) ?? .null])])])
         }
         func overlaps(_ a: Double, _ b: Double) -> Bool { input.range.map { a < $0.end.seconds && b > $0.start.seconds } ?? true }
         func lanes(_ items: [Item]) -> [[Item]] {
@@ -157,7 +157,7 @@ public enum TimelineExport {
                 parts.append("src \(tc(c.sourceRange.start.seconds))–\(tc(srcEnd))")
             }
             if c.synced == true { parts.append("in sync") }
-            if let t = c.transition { parts.append("\(t.type) \(t.frames)f in") }
+            if let t = c.transition { parts.append("\(t.type == "shader" ? t.file ?? "shader" : t.type) \(t.frames)f in") }
             for e in c.effects ?? [] {
                 switch e.name {
                 case "transform": parts.append("reframe(\(String(format: "%g", e.number("scale", at: nil, default: 1)))\(e.keys?["x"] != nil ? ", keyed" : ""))")

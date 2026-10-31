@@ -4,12 +4,15 @@ import Synchronization
 import DirectionCore
 
 /// One clip's picture at one frame (agent-timeline.md › What Direction renders): stabilize, camera LUT and
-/// balance, crop and placement, then its other effects in order (limited by any mask), opacity and the
-/// transitions at its cuts. Preview, direction_frame and export all come through here.
+/// balance, crop and placement (or a pin into four corners), then its other effects in order (limited by
+/// any mask), opacity and the dissolves and dips at its cuts. Preview, direction_frame and export all come
+/// through here; transitions drawn from both shots happen where the track is composited.
 enum ClipRendering {
     static func render(_ l: RenderLayer, source: CIImage, t: Double, frameIndex: Int, bounds: CGRect, scale: CGFloat) -> CIImage {
         let c = l.clip
         let s = c.hold != nil ? c.sourceRange.start.seconds : c.sourceRange.start.seconds + (t - c.start.seconds) * c.speed
+        // Keys play on over a held frame (a freeze that pushes in), while the picture stays the one frame.
+        let k = c.hold != nil ? c.sourceRange.start.seconds + (t - c.start.seconds) * c.speed : s
         var image = source.transformed(by: l.transform)
         let e0 = image.extent
         guard e0.width > 0, e0.height > 0, e0.width.isFinite, e0.height.isFinite else { return .empty() }
@@ -34,30 +37,40 @@ enum ClipRendering {
 
         // Crop keeps the picture where it was; placement fits it to the frame, then the transform moves it.
         let tr = effects.first { $0.name == "transform" }
-        let cl = tr?.number("crop.l", at: s, default: 0) ?? 0, cr = tr?.number("crop.r", at: s, default: 0) ?? 0
-        let ct = tr?.number("crop.t", at: s, default: 0) ?? 0, cb = tr?.number("crop.b", at: s, default: 0) ?? 0
+        let cl = tr?.number("crop.l", at: k, default: 0) ?? 0, cr = tr?.number("crop.r", at: k, default: 0) ?? 0
+        let ct = tr?.number("crop.t", at: k, default: 0) ?? 0, cb = tr?.number("crop.b", at: k, default: 0) ?? 0
         if cl + cr + ct + cb > 0 { image = image.cropped(to: CGRect(x: cl * w, y: cb * h, width: max(1, w * (1 - cl - cr)), height: max(1, h * (1 - ct - cb)))) }
         let f = l.framing
-        let ts = tr?.number("scale", at: s, default: 1) ?? 1, tx = tr?.number("x", at: s, default: 0) ?? 0, ty = tr?.number("y", at: s, default: 0) ?? 0
-        let rotation = tr?.number("rotation", at: s, default: 0) ?? 0
-        let ratio = (f.fit ? min(bounds.width / w, bounds.height / h) : max(bounds.width / w, bounds.height / h)) * f.scale * ts
-        image = image.transformed(by: .init(scaleX: ratio, y: ratio))
-        let ox = (bounds.width - w * ratio) / 2 + (f.offsetX + tx) * bounds.width, oy = (bounds.height - h * ratio) / 2 - (f.offsetY + ty) * bounds.height
-        image = image.transformed(by: .init(translationX: bounds.minX + ox, y: bounds.minY + oy))
-        if rotation != 0 {
-            let cx = bounds.minX + ox + w * ratio / 2, cy = bounds.minY + oy + h * ratio / 2
-            image = image.transformed(by: CGAffineTransform(translationX: -cx, y: -cy).concatenating(.init(rotationAngle: -rotation * .pi / 180)).concatenating(.init(translationX: cx, y: cy)))
+        if let pin = effects.first(where: { $0.name == "pin" }) {
+            // Pinned: the whole picture goes into four corners of the frame, in perspective.
+            let e = image.extent
+            image = image.transformed(by: .init(translationX: -e.minX, y: -e.minY))
+            func corner(_ name: String, _ x: Double, _ y: Double) -> CIVector {
+                CIVector(x: bounds.minX + pin.number(name + ".x", at: k, default: x) * bounds.width, y: bounds.maxY - pin.number(name + ".y", at: k, default: y) * bounds.height)
+            }
+            image = image.applyingFilter("CIPerspectiveTransform", parameters: ["inputTopLeft": corner("tl", 0, 0), "inputTopRight": corner("tr", 1, 0), "inputBottomRight": corner("br", 1, 1), "inputBottomLeft": corner("bl", 0, 1)])
+        } else {
+            let ts = tr?.number("scale", at: k, default: 1) ?? 1, tx = tr?.number("x", at: k, default: 0) ?? 0, ty = tr?.number("y", at: k, default: 0) ?? 0
+            let rotation = tr?.number("rotation", at: k, default: 0) ?? 0
+            let ratio = (f.fit ? min(bounds.width / w, bounds.height / h) : max(bounds.width / w, bounds.height / h)) * f.scale * ts
+            image = image.transformed(by: .init(scaleX: ratio, y: ratio))
+            let ox = (bounds.width - w * ratio) / 2 + (f.offsetX + tx) * bounds.width, oy = (bounds.height - h * ratio) / 2 - (f.offsetY + ty) * bounds.height
+            image = image.transformed(by: .init(translationX: bounds.minX + ox, y: bounds.minY + oy))
+            if rotation != 0 {
+                let cx = bounds.minX + ox + w * ratio / 2, cy = bounds.minY + oy + h * ratio / 2
+                image = image.transformed(by: CGAffineTransform(translationX: -cx, y: -cy).concatenating(.init(rotationAngle: -rotation * .pi / 180)).concatenating(.init(translationX: cx, y: cy)))
+            }
         }
-        image = apply(effects, to: image.cropped(to: bounds), at: s, frameIndex: frameIndex, bounds: bounds, scale: scale)
+        image = apply(effects, to: image.cropped(to: bounds), at: k, frameIndex: frameIndex, bounds: bounds, scale: scale)
 
-        var alpha = f.opacity * (tr?.number("opacity", at: s, default: 1) ?? 1)
+        var alpha = f.opacity * (tr?.number("opacity", at: k, default: 1) ?? 1)
         var dip: (amount: Double, white: Bool)?
         if let tin = c.transition {
             let cut = c.start.seconds
             if tin.type == "dissolve" { let span = tin.before + tin.after; if span > 0 && t < cut + tin.after { alpha *= min(1, max(0, (t - (cut - tin.before)) / span)) } }
-            else if tin.after > 0 && t >= cut - 1e-9 && t < cut + tin.after { dip = (1 - (t - cut) / tin.after, tin.type == "dipToWhite") }
+            else if tin.isDip && tin.after > 0 && t >= cut - 1e-9 && t < cut + tin.after { dip = (1 - (t - cut) / tin.after, tin.type == "dipToWhite") }
         }
-        if let tout = l.outgoing, tout.type != "dissolve", tout.before > 0 {
+        if let tout = l.outgoing, tout.isDip, tout.before > 0 {
             let cut = c.end.seconds
             if t >= cut - tout.before && t < cut { dip = ((t - (cut - tout.before)) / tout.before, tout.type == "dipToWhite") }
         }
@@ -67,6 +80,14 @@ enum ClipRendering {
             image = CIImage(color: CIColor(red: v, green: v, blue: v, alpha: min(1, dip.amount))).cropped(to: bounds).applyingFilter("CISourceAtopCompositing", parameters: [kCIInputBackgroundImageKey: image])
         }
         return image.cropped(to: bounds)
+    }
+
+    /// How far through a transition drawn from both shots a frame is, 0–1, or nil outside it.
+    static func progress(_ tr: ClipTransition, cut: Double, t: Double) -> Double? {
+        guard tr.source != nil, !tr.isDip else { return nil }
+        let span = tr.before + tr.after, start = cut - tr.before
+        guard span > 0, t >= start - 1e-9, t < cut + tr.after - 1e-9 else { return nil }
+        return min(1, max(0, (t - start) / span))
     }
 
     static func opacity(_ image: CIImage, _ a: Double) -> CIImage { image.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: a)]) }

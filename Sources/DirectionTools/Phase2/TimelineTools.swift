@@ -37,7 +37,7 @@ extension ToolRuntime {
             return ToolResponse(.object(value))
 
         case "direction_edit_catalog":
-            var custom: [JSONValue] = [], problems: [JSONValue] = []
+            var custom: [JSONValue] = [], problems: [JSONValue] = [], transitions: [JSONValue] = []
             for file in editorFiles("Effects", "metal") {
                 let path = "Effects/" + file.lastPathComponent
                 do {
@@ -45,8 +45,16 @@ extension ToolRuntime {
                     custom.append(.object(["effect": .string("shader"), "file": .string(path), "params": try .wrapping(params)]))
                 } catch let e as DirectionError { problems.append(.object(["file": .string(path), "code": .string(e.code), "message": .string(e.message)])) }
             }
+            for file in editorFiles("Transitions", "metal") {
+                let path = "Transitions/" + file.lastPathComponent
+                do {
+                    let params = try TransitionShader.declared(source: try String(contentsOf: file, encoding: .utf8))
+                    transitions.append(.object(["type": .string("shader"), "file": .string(path), "params": try .wrapping(params)]))
+                } catch let e as DirectionError { problems.append(.object(["file": .string(path), "code": .string(e.code), "message": .string(e.message)])) }
+            }
             var value = EditCatalog.json(custom: custom, problems: problems)
             if case .object(var fields) = value {
+                fields["customTransitions"] = .array(transitions)
                 let state = try store.directingState()
                 fields["transitionsSetting"] = .string(SharedSettings.defaults.string(forKey: "transitions") ?? "hard")
                 fields["transitionsMeaning"] = .string("Settings › Cutting › Transitions: “hard” means hard cuts unless a note asks for a dissolve or a dip; “editor” lets you choose them, still within latitude.")
@@ -104,13 +112,32 @@ extension ToolRuntime {
             if name == "shader" {
                 let params = (current?.params ?? [:]).merging(op.params ?? [:]) { _, b in b }
                 let source: String
-                if let file = op.params?["file"]?.string { source = try shaderSource(file) }
+                if let file = op.params?["file"]?.string { source = try editorSource(file, folder: "Effects") }
                 else if let kept = current?.source { source = kept }
                 else { throw DirectionError("bad_argument", "A shader effect takes params.file, like \"Effects/warm.metal\".") }
                 // Every shader is compiled and timed on 3 frames at 1080p before it touches the cut.
                 _ = try ShaderEffect.check(source: source, params: params.filter { $0.key != "file" })
                 op.resolved = .init(source: source)
             }
+        case "transition":
+            // Direction's own and the editor's are compiled and timed before they touch the cut.
+            guard let type = op.transitionType, type != "dissolve", type != "dipToBlack", type != "dipToWhite" else { return }
+            let source: String
+            if type == "shader" {
+                guard let file = op.params?["file"]?.string else { throw DirectionError("bad_argument", "A shader transition takes params.file, like \"Transitions/flash.metal\".") }
+                source = try editorSource(file, folder: "Transitions")
+            } else if let own = TransitionShader.builtIn(type) { source = own } else { return }
+            _ = try TransitionShader.check(source: source, params: (op.params ?? [:]).filter { $0.key != "file" })
+            op.resolved = .init(source: source)
+        case "pin":
+            guard op.corners == nil || op.follow == "screen", let c = clip(op.clipID), c.layer > 0 else { return }
+            guard let story = s.clips.filter({ $0.layer == 0 && $0.kind == .video && $0.start <= c.start && c.start < $0.end }).first, let a = asset(story), !a.video.isEmpty else {
+                throw DirectionError("bad_argument", "There's no shot on V1 under \(c.name) to pin it into.")
+            }
+            op.resolved = try await TimelineAnalysis.pin(clip: c, story: story, asset: a, corners: op.corners, frame: CGSize(width: s.width, height: s.height), fps: s.frameRate.value)
+        case "zoomThrough":
+            guard let point = op.editPoint, let left = clip(point.split(separator: "|").first.map(String.init)), left.layer == 0, let a = asset(left), !a.video.isEmpty, left.hold == nil else { return }
+            op.resolved = try await TimelineAnalysis.zoomThrough(left: left, asset: a, seconds: op.seconds ?? 1, corners: op.corners, frame: CGSize(width: s.width, height: s.height), fps: s.frameRate.value)
         case "tightenPauses":
             guard let r = op.range else { return }
             if let quiet = try? await TimelineAnalysis.quietRanges(project: p, sequence: s, range: r, cacheDirectory: cacheDirectory) { op.resolved = .init(quiet: quiet) }
@@ -120,12 +147,12 @@ extension ToolRuntime {
         }
     }
 
-    /// `Effects/<name>.metal` in the editor's folder (`<film>/Editor/`, where it works), or in the film
-    /// itself for films from before, and nowhere else.
-    private func shaderSource(_ file: String) throws -> String {
+    /// `Effects/<name>.metal` or `Transitions/<name>.metal` in the editor's folder (`<film>/Editor/`,
+    /// where it works), or in the film itself for films from before, and nowhere else.
+    private func editorSource(_ file: String, folder: String) throws -> String {
         let parts = file.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-        guard parts.count == 2, parts[0] == "Effects", parts[1].hasSuffix(".metal"), !parts[1].hasPrefix(".") else { throw DirectionError("bad_argument", "A shader lives in the Effects folder of your working folder: \"Effects/<name>.metal\".") }
-        guard let url = editorFiles("Effects", "metal").first(where: { $0.lastPathComponent == parts[1] }), let text = try? String(contentsOf: url, encoding: .utf8) else { throw DirectionError("missing_media", "There's no \(file) in this film.") }
+        guard parts.count == 2, parts[0] == folder, parts[1].hasSuffix(".metal"), !parts[1].hasPrefix(".") else { throw DirectionError("bad_argument", "It lives in the \(folder) folder of your working folder: \"\(folder)/<name>.metal\".") }
+        guard let url = editorFiles(folder, "metal").first(where: { $0.lastPathComponent == parts[1] }), let text = try? String(contentsOf: url, encoding: .utf8) else { throw DirectionError("missing_media", "There's no \(file) in this film.") }
         return text
     }
 

@@ -13,7 +13,7 @@ desk-talk/
   style.json          the values (required: name)
   guide.md            the rest, in words
   graphics/<name>/    Direction graphics (index.html calling direction.graphic)
-  transitions/*.metal transitions (agent-timeline.md › Custom transitions)
+  transitions/*.metal transitions (agent-timeline.md › Transitions)
   effects/*.metal     effects (agent-timeline.md › Custom effects)
   sounds/*            sound effects and stings: wav, aif, m4a, mp3, caf
   music/*             music beds

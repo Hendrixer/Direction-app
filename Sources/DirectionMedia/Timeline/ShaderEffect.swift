@@ -39,6 +39,13 @@ public enum ShaderEffect {
         inline float4 premultiply(float4 c) { return float4(c.rgb * c.a, c.a); }
         inline float4 unpremultiply(float4 c) { return c.a > 0 ? float4(c.rgb / c.a, c.a) : c; }
     }
+    // Pictures as 0–1 from their bottom left, the way GLSL transitions count, so they port line for line.
+    namespace direction {
+        inline float2 uv(coreimage::sampler s, coreimage::destination d) { float4 e = s.extent(); return (d.coord() - e.xy) / e.zw; }
+        inline float4 at(coreimage::sampler s, float2 uv) { float4 e = s.extent(); return s.sample(e.xy + uv * e.zw); }
+        inline float ratio(coreimage::sampler s) { float4 e = s.extent(); return e.z / e.w; }
+        inline bool inside(float2 uv) { return all(uv >= 0.0) && all(uv <= 1.0); }
+    }
     #line 1
 
     """

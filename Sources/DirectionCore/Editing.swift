@@ -77,6 +77,8 @@ public struct EditOperation: Hashable, Sendable {
     public var attack: Double?
     public var release: Double?
     public var endOn: JSONValue?
+    /// `pin` and `zoomThrough`: four corners [[x, y], …] as fractions of the frame (y down), top left first, clockwise.
+    public var corners: [[Double]]?
     /// What Direction's tools measured before the batch runs: face keys, a matched balance, a checked
     /// shader, quiet stretches, a graphic's render. Never taken from the editor.
     public var resolved: ResolvedValues?
@@ -98,7 +100,7 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
 }
 
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -140,6 +142,7 @@ extension EditOperation: Codable {
         cover = try str("cover"); graphic = try str("graphic"); aboveLook = try bool("aboveLook"); madeID = try str("madeID")
         dB = try num("dB"); fadeIn = try int("in"); fadeOut = try int("out"); under = try str("under"); attack = try num("attack"); release = try num("release")
         endOn = value("endOn")
+        corners = try decoded("corners", [[Double]].self, "four [x, y] corners, fractions of the frame from its top left, top left first and clockwise")
         resolved = try decoded("resolved", ResolvedValues.self, "Direction's own measurements")
     }
 
@@ -159,7 +162,7 @@ extension EditOperation: Codable {
         put("toClipID", toClipID); put("lut", lut); put("target", target); put("effect", effect); if let params { f["params"] = .object(params) }; put("keys", any: keys); put("effectID", effectID)
         if !legacy { put("type", transitionType) }
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
-        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("resolved", any: resolved)
+        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("resolved", any: resolved)
         return .object(f)
     }
 
@@ -429,7 +432,7 @@ public enum EditReducer {
                 guard f.scale.isFinite && (0.05...10).contains(f.scale), f.offsetX.isFinite && (-2...2).contains(f.offsetX), f.offsetY.isFinite && (-2...2).contains(f.offsetY), f.opacity.isFinite && (0...1).contains(f.opacity) else { throw DirectionError("invalid_framing", "Framing values are outside supported ranges.") }
                 for audio in c.audioOverrides.values { try validateAudio(audio) }
                 guard [c.gainDB, c.fadeIn, c.fadeOut, c.soundLead, c.soundTail].allSatisfy({ $0?.isFinite ?? true }), (c.gainDB ?? 0) >= -96 && (c.gainDB ?? 0) <= 24, (c.fadeIn ?? 0) >= 0, (c.fadeOut ?? 0) >= 0, c.blend.map(EditCatalog.blendModes.contains) ?? true else { throw DirectionError("invalid_clip", "\(c.name) has sound or blend settings outside supported ranges.") }
-                if let t = c.transition { guard EditCatalog.transitions.contains(t.type), t.frames > 0, t.before >= 0, t.after >= 0 else { throw DirectionError("invalid_clip", "Invalid transition on \(c.name).") } }
+                if let t = c.transition { guard EditCatalog.transitions.contains(t.type), t.frames > 0, t.before >= 0, t.after >= 0, t.isDip || t.type == "dissolve" || t.source != nil else { throw DirectionError("invalid_clip", "Invalid transition on \(c.name).") } }
             }
             let groups = Dictionary(grouping: s.clips, by: { "\($0.kind.rawValue):\($0.layer)" })
             for group in groups.values { let ordered = group.sorted { $0.start < $1.start }; for i in ordered.indices.dropFirst() where ordered[i].start.seconds < ordered[i - 1].end.seconds - 1e-9 { throw DirectionError("overlap", "\(ordered[i - 1].name) and \(ordered[i].name) would overlap on \(ordered[i].trackName). Put one on another track.") } }
@@ -574,8 +577,8 @@ struct EditWork {
             guard let t = s.clips[i].transition else { continue }
             let r = s.clips[i]
             let left = s.clips.first { $0.id != r.id && on($0, track(of: r)) && abs($0.end.seconds - r.start.seconds) < frame / 2 }
-            if t.type == "dissolve" {
-                guard let left, handleAfter(left) + 1e-6 >= t.after, handleBefore(r) + 1e-6 >= t.before, t.after <= r.duration.seconds + 1e-6 else { s.clips[i].transition = nil; warnings.append("The dissolve into \(label(r)) no longer had picture on both sides, so it's a straight cut now."); continue }
+            if !t.isDip {
+                guard let left, handleAfter(left) + 1e-6 >= t.after, handleBefore(r) + 1e-6 >= t.before, t.after <= r.duration.seconds + 1e-6 else { s.clips[i].transition = nil; warnings.append("The \(t.type == "shader" ? "transition" : t.type) into \(label(r)) no longer had picture on both sides, so it's a straight cut now."); continue }
             } else if left == nil && t.before > 0 { s.clips[i].transition?.before = 0 }
         }
         return warnings
@@ -617,6 +620,8 @@ struct EditWork {
             s.clips[ri].transition = nil
             return change("Took the transition out before \(label(s.clips[ri]))", s.clips[ri], head: true)
         case "cutaway": return try cutaway(op)
+        case "pin": return try pin(op)
+        case "zoomThrough": return try zoomThrough(op)
         case "syncSound": return try syncSound(op)
         case "placeGraphic": return try placeGraphic(op)
         case "placeMade": return try placeMade(op)
@@ -1026,6 +1031,15 @@ struct EditWork {
         var hold = c
         hold.id = newID("clip"); hold.effects = EditReducer.reIDed(c.effects)
         hold.start = at; hold.sourceRange = .init(start: c.sourceTime(at: at), duration: frames(1).scaled(by: c.speed)); hold.hold = held
+        // Keys on a held frame play over the hold, so the frame keeps the values it had: a follow stays put.
+        let frozen = hold.sourceRange.start.seconds
+        hold.effects = hold.effects?.map { e in
+            guard e.name != "stabilize", let keys = e.keys, !keys.isEmpty else { return e }
+            var e = e
+            for k in keys.keys { e.params[k] = .number(e.number(k, at: frozen, default: 0)) }
+            e.keys = nil
+            return e
+        }
         hold.transition = nil; hold.soundLead = nil; hold.soundTail = nil; hold.fadeIn = nil; hold.fadeOut = nil
         let sp = insertGap(at: at, held)
         s.clips.append(hold)
@@ -1135,7 +1149,7 @@ struct EditWork {
         else { guard let e = EditCatalog.effect(effect), e.keys else { throw bad("\(effect) can't be keyed.") }; specs = e.params }
         for (k, list) in keys {
             let base = k.split(separator: ".").first.map(String.init) ?? k
-            guard let p = specs.first(where: { $0.name == base && ($0.kind == "number" || $0.kind == "crop") }), p.keyable else { throw bad("\(effect) can't key \(k).") }
+            guard let p = specs.first(where: { $0.name == k && $0.kind == "number" }) ?? specs.first(where: { $0.name == base && ($0.kind == "number" || $0.kind == "crop") }), p.keyable else { throw bad("\(effect) can't key \(k).") }
             if p.kind == "crop" { guard k.split(separator: ".").count == 2, ["l", "r", "t", "b"].contains(String(k.split(separator: ".")[1])) else { throw bad("Key the crop as crop.l, crop.r, crop.t or crop.b.") } }
             guard !list.isEmpty, list.count <= 10_000 else { throw bad("\(k) needs 1–10,000 keys.") }
             for key in list { guard key.t.isFinite, key.v.isFinite, key.v >= (p.kind == "crop" ? 0 : p.min ?? -.infinity), key.v <= (p.kind == "crop" ? 0.5 : p.max ?? .infinity) else { throw bad("Keys for \(k) are \(p.kind == "crop" ? "0–0.5" : p.rangeText), at times in cut seconds.") }; if let e = key.ease { guard ["linear", "hold", "smooth"].contains(e) else { throw bad("ease is linear, hold or smooth.") } } }
@@ -1222,23 +1236,39 @@ struct EditWork {
 
     mutating func transition(_ op: EditOperation) throws -> Outcome {
         let (li, ri) = try editPoint(op.editPoint, needsLeft: false)
-        guard let type = op.transitionType, EditCatalog.transitions.contains(type) else { throw bad("type is dissolve, dipToBlack or dipToWhite.") }
+        guard let type = op.transitionType, EditCatalog.transitions.contains(type) else { throw bad("type is \(EditCatalog.transitions.joined(separator: ", ")).") }
         guard let n = op.frames, (1...600).contains(n) else { throw bad("frames is the transition's length, 1–600.") }
         let R = s.clips[ri]
         guard R.kind != .audio else { throw bad("Transitions are for picture; fade sound with fade.") }
-        if li == nil && type == "dissolve" { throw bad("A dissolve needs a clip on each side. Use dipToBlack to fade in.") }
-        let beforeFrames = li == nil ? 0 : n / 2, afterFrames = n - beforeFrames
-        let before = secs(beforeFrames), after = secs(afterFrames)
-        if type == "dissolve", let li {
-            let L = s.clips[li]
-            guard handleAfter(L) + 1e-6 >= after else { throw bad("\(label(L)) has only \(framesText(handleAfter(L))) after its out point; a \(n)-frame dissolve needs \(afterFrames).") }
-            guard handleBefore(R) + 1e-6 >= before else { throw bad("\(label(R)) has only \(framesText(handleBefore(R))) before its in point; a \(n)-frame dissolve needs \(beforeFrames).") }
+        var t = ClipTransition(type: type, frames: n, before: 0, after: 0)
+        if !t.isDip, li == nil { throw bad("A \(type == "shader" ? "transition" : type) needs a clip on each side. Use dipToBlack to fade in.") }
+        // Everything but the dips is drawn from both shots: a Metal function Direction checked first.
+        if !t.isDip && type != "dissolve" {
+            guard let source = op.resolved?.source else { throw bad("\(type) is drawn and checked by Direction's tools; send it through direction_edit.") }
+            var params = op.params ?? [:]
+            if type == "shader" { t.file = params["file"]?.string; params["file"] = nil; params = try checkedParams("shader", params, source: source) }
+            else {
+                let specs = EditCatalog.builtInTransition(type)!.params
+                for (k, v) in params {
+                    guard let p = specs.first(where: { $0.name == k }) else { throw bad("\(type) has no parameter \(k). It takes \(specs.map(\.name).joined(separator: ", ")).") }
+                    guard let x = v.double, x.isFinite, x >= (p.min ?? -.infinity), x <= (p.max ?? .infinity) else { throw bad("\(type).\(k) is \(p.rangeText).") }
+                }
+            }
+            t.source = source; t.params = params.isEmpty ? nil : params
         }
-        guard after <= R.duration.seconds + 1e-6, li.map({ before <= s.clips[$0].duration.seconds + 1e-6 }) ?? true else { throw bad("The transition is longer than the clips beside it.") }
-        s.clips[ri].transition = ClipTransition(type: type, frames: n, before: before, after: after)
+        let beforeFrames = li == nil ? 0 : n / 2, afterFrames = n - beforeFrames
+        t.before = secs(beforeFrames); t.after = secs(afterFrames)
+        let name = type == "shader" ? (t.file.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "transition") : type
+        if !t.isDip, let li {
+            let L = s.clips[li]
+            guard handleAfter(L) + 1e-6 >= t.after else { throw bad("\(label(L)) has only \(framesText(handleAfter(L))) after its out point; a \(n)-frame \(name) needs \(afterFrames).") }
+            guard handleBefore(R) + 1e-6 >= t.before else { throw bad("\(label(R)) has only \(framesText(handleBefore(R))) before its in point; a \(n)-frame \(name) needs \(beforeFrames).") }
+        }
+        guard t.after <= R.duration.seconds + 1e-6, li.map({ t.before <= s.clips[$0].duration.seconds + 1e-6 }) ?? true else { throw bad("The transition is longer than the clips beside it.") }
+        s.clips[ri].transition = t
         let cut = R.start.seconds
-        let words = ["dissolve": "Dissolved", "dipToBlack": "Dipped to black", "dipToWhite": "Dipped to white"][type]!
-        return .init(summary: "\(words) into \(label(R)) over \(n) frames", changes: [.init(before: (cut - before, cut + after), after: (cut - before, cut + after), tracks: [R.trackName])])
+        let words = ["dissolve": "Dissolved", "dipToBlack": "Dipped to black", "dipToWhite": "Dipped to white", "push": "Pushed", "slide": "Slid", "whip": "Whipped", "zoom": "Zoomed", "wipe": "Wiped", "iris": "Irised"][type] ?? "Used \(name)"
+        return .init(summary: "\(words) into \(label(R)) over \(n) frames", changes: [.init(before: (cut - t.before, cut + t.after), after: (cut - t.before, cut + t.after), tracks: [R.trackName])])
     }
 
     // MARK: Layers
@@ -1265,6 +1295,66 @@ struct EditWork {
         for stream in a.audio { var m = stream.settings; m.muted = true; clip.audioOverrides[String(stream.id)] = m }
         s.clips.append(clip)
         return .init(summary: "Cut away to \(label(clip)) at \(tc(at))" + (op.cover != nil ? ", over the jump cut" : ""), changes: [.init(before: (at.seconds, clip.end.seconds), after: (at.seconds, clip.end.seconds), tracks: [clip.trackName])], clipIDs: [clip.id])
+    }
+
+    /// Four corners as pin's parameters: tl, tr, br, bl, each .x and .y.
+    static func pinParams(_ corners: [[Double]]) -> [String: JSONValue] {
+        var p: [String: JSONValue] = [:]
+        for (name, c) in zip(EditCatalog.pinCorners, corners) { p[name + ".x"] = .number(c[0]); p[name + ".y"] = .number(c[1]) }
+        return p
+    }
+    func checkedCorners(_ corners: [[Double]]?) throws -> [[Double]]? {
+        guard let corners else { return nil }
+        guard corners.count == 4, corners.allSatisfy({ $0.count == 2 && $0.allSatisfy { $0.isFinite && (-1...2).contains($0) } }) else { throw bad("corners is four [x, y] points, fractions of the frame from its top left: top left, top right, bottom right, bottom left.") }
+        return corners
+    }
+
+    /// A clip on V2 or above, in perspective inside a screen, window or sign of the shot under it.
+    mutating func pin(_ op: EditOperation) throws -> Outcome {
+        let i = try clipIndex(op.clipID); let c = s.clips[i]
+        guard c.kind == .video, c.layer > 0 else { throw bad("pin puts a clip on V2 or above into the shot under it.") }
+        if let f = op.follow, f != "screen" { throw bad("follow is screen.") }
+        let corners = try checkedCorners(op.corners)
+        var fx = c.effects?.first { $0.name == "pin" } ?? ClipEffect(name: "pin", params: [:])
+        if let keys = op.resolved?.keys {
+            fx.params = [:]; fx.keys = try checkedKeys("pin", keys, c)
+        } else if let corners, op.follow == nil {
+            fx.params = try checkedParams("pin", Self.pinParams(corners)); fx.keys = nil
+        } else { throw bad("Without corners, pin finds and follows the screen with Direction's tools; send it through direction_edit.") }
+        setEffect(fx, on: i)
+        var out = change("Pinned \(label(c)) into the shot under it" + (fx.keys != nil ? ", following it" : ""), s.clips[i]); out.effectID = fx.id
+        out.warnings = op.resolved?.warnings ?? []
+        return out
+    }
+
+    /// Pushes into a screen in the left shot until it fills the frame at the cut, with the right shot's
+    /// first frame pinned in it, so the cut lands inside the screen (agent-timeline.md › Zoom through).
+    mutating func zoomThrough(_ op: EditOperation) throws -> Outcome {
+        let (li, ri) = try editPoint(op.editPoint)
+        guard let li else { throw bad("zoomThrough needs a shot on each side of the cut.") }
+        let A = s.clips[li], B = s.clips[ri]
+        guard A.layer == 0, B.layer == 0, A.kind == .video, B.kind == .video, B.assetID != nil else { throw bad("zoomThrough works at a cut on V1.") }
+        guard let keys = op.resolved?.keys, keys["scale"] != nil, keys["tl.x"] != nil else { throw bad("zoomThrough finds the screen and works out the push with Direction's tools; send it through direction_edit.") }
+        let seconds = op.seconds ?? 1
+        guard (0.2...5).contains(seconds), seconds <= A.duration.seconds + 1e-6 else { throw bad("seconds is how long the push takes, 0.2–5, and no longer than \(label(A)).") }
+        if A.effects?.contains(where: { $0.name == "transform" }) == true { throw bad("\(label(A)) already has a transform. Take it off with removeEffect, then zoom through.") }
+        let start = snap(A.end - MediaTime(seconds: seconds)), length = A.end - start
+        // The left shot pushes in: scale, x and y, in its own source seconds.
+        var push = ClipEffect(name: "transform", params: [:])
+        push.keys = try checkedKeys("transform", keys.filter { ["scale", "x", "y"].contains($0.key) }, A)
+        setEffect(push, on: li)
+        // The right shot's first frame, held over the push and pinned into the screen.
+        var held = Clip(assetID: B.assetID, name: B.name, kind: .video, layer: firstFree(audio: false, from: 1, .init(start: start, duration: length)), start: start, sourceRange: .init(start: B.sourceRange.start, duration: frames(1).scaled(by: B.speed)))
+        held.hold = length; held.grade = B.grade
+        if let crop = B.effects?.first(where: { $0.name == "transform" })?.params["crop"] { held.effects = [ClipEffect(name: "transform", params: ["crop": crop])] }
+        if let a = assetOf(B) { for stream in a.audio { var m = stream.settings; m.muted = true; held.audioOverrides[String(stream.id)] = m } }
+        var pin = ClipEffect(name: "pin", params: [:])
+        pin.keys = try checkedKeys("pin", keys.filter { $0.key.contains(".") }, held)
+        held.effects = (held.effects ?? []) + [pin]
+        s.clips.append(held)
+        var out = Outcome(summary: "Pushed into the screen in \(label(A)) and through to \(label(B)) over \(String(format: "%.1f", length.seconds)) s", changes: [.init(before: (start.seconds, A.end.seconds), after: (start.seconds, A.end.seconds), tracks: ["V1", held.trackName])], clipIDs: [held.id])
+        out.warnings = op.resolved?.warnings ?? []
+        return out
     }
 
     /// The part of `a` that recorded the same moment as V1 at `at` (footage-index.md › Sync).
