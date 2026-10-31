@@ -85,6 +85,10 @@ public struct EditOperation: Hashable, Sendable {
     public var layoutName: String?
     /// `punchIn`: the framings in turn on each jump cut; `slowPush`: where it starts and ends.
     public var scales: [Double]?
+    /// `zoomTo`: where to look: "action", {x, y} (fractions of the picture) or {text} (words on screen).
+    public var focus: JSONValue?
+    /// `transition` by the name of one of the style's ("Chapter"), until Direction's tools look it up.
+    public var transitionName: String?
     /// What Direction's tools measured before the batch runs: face keys, a matched balance, a checked
     /// shader, quiet stretches, a graphic's render. Never taken from the editor.
     public var resolved: ResolvedValues?
@@ -105,12 +109,19 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
     public var layout: LayoutMeasure?
     /// Moves (`punchIn`, `emphasisPunch`, `slowPush`): where the face is in each take they frame.
     public var faces: [String: FaceTrack]?
+    /// Screen zooms: what changed on each screen recording, the style's zoom, and words found on screen ([x, y, w, h]).
+    public var activity: [String: [ActivitySample]]?
+    public var zoom: StyleMoves.Zoom?
+    public var box: [Double]?
+    /// A style's transition: the sound under it, and its level.
+    public var sound: MediaAsset?
+    public var soundDB: Double?
     public var warnings: [String]?
     public init(keys: [String: [Keyframe]]? = nil, grade: ColorGrade? = nil, source: String? = nil, quiet: [MediaRange]? = nil, assetID: String? = nil, layout: LayoutMeasure? = nil, faces: [String: FaceTrack]? = nil, warnings: [String]? = nil) { self.keys = keys; self.grade = grade; self.source = source; self.quiet = quiet; self.assetID = assetID; self.layout = layout; self.faces = faces; self.warnings = warnings }
 }
 
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "layout", "scales", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "layout", "scales", "focus", "name", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -156,6 +167,9 @@ extension EditOperation: Codable {
         if let v = value("layout"), let n = v.string ?? (v["kind"] == .null ? v["name"].string : nil) { layoutName = n }
         else { layout = try decoded("layout", FrameLayout.self, "the name of one of the style's layouts, or {kind: screenAndYou|you|screen|sideBySide, corner?: topLeft|topRight|bottomLeft|bottomRight, size?: small|medium|large, shape?: circle|rounded|wide, screen?: full|framed}") }
         scales = try decoded("scales", [Double].self, "a list of scales, like [1, 1.15]")
+        focus = value("focus")
+        if let f = focus { guard f.string == "action" || (f["x"].double != nil && f["y"].double != nil) || f["text"].string?.isEmpty == false else { throw bad("focus", "\"action\", {x, y} or {text}") } }
+        transitionName = try str("name")
         resolved = try decoded("resolved", ResolvedValues.self, "Direction's own measurements")
     }
 
@@ -175,7 +189,7 @@ extension EditOperation: Codable {
         put("toClipID", toClipID); put("lut", lut); put("target", target); put("effect", effect); if let params { f["params"] = .object(params) }; put("keys", any: keys); put("effectID", effectID)
         if !legacy { put("type", transitionType) }
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
-        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); put("resolved", any: resolved)
+        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("resolved", any: resolved)
         return .object(f)
     }
 
@@ -649,6 +663,8 @@ struct EditWork {
         case "punchIn": return try punchIn(op)
         case "emphasisPunch": return try emphasisPunch(op)
         case "slowPush": return try slowPush(op)
+        case "autoZoom": return try autoZoom(op)
+        case "zoomTo": return try zoomTo(op)
         case "pin": return try pin(op)
         case "zoomThrough": return try zoomThrough(op)
         case "syncSound": return try syncSound(op)
@@ -1265,7 +1281,8 @@ struct EditWork {
 
     mutating func transition(_ op: EditOperation) throws -> Outcome {
         let (li, ri) = try editPoint(op.editPoint, needsLeft: false)
-        guard let type = op.transitionType, EditCatalog.transitions.contains(type) else { throw bad("type is \(EditCatalog.transitions.joined(separator: ", ")).") }
+        if op.transitionType == nil, let name = op.transitionName { throw bad("\(name) is one of the style's transitions, found by Direction's tools; send it through direction_edit.") }
+        guard let type = op.transitionType, EditCatalog.transitions.contains(type) else { throw bad("type is \(EditCatalog.transitions.joined(separator: ", ")), or name is one of the style's transitions.") }
         guard let n = op.frames, (1...600).contains(n) else { throw bad("frames is the transition's length, 1–600.") }
         let R = s.clips[ri]
         guard R.kind != .audio else { throw bad("Transitions are for picture; fade sound with fade.") }
@@ -1297,7 +1314,22 @@ struct EditWork {
         s.clips[ri].transition = t
         let cut = R.start.seconds
         let words = ["dissolve": "Dissolved", "dipToBlack": "Dipped to black", "dipToWhite": "Dipped to white", "push": "Pushed", "slide": "Slid", "whip": "Whipped", "zoom": "Zoomed", "wipe": "Wiped", "iris": "Irised"][type] ?? "Used \(name)"
-        return .init(summary: "\(words) into \(label(R)) over \(n) frames", changes: [.init(before: (cut - t.before, cut + t.after), after: (cut - t.before, cut + t.after), tracks: [R.trackName])])
+        var tracks = [R.trackName], summary = "\(words) into \(label(R)) over \(n) frames"
+        if let named = op.transitionName { summary = "\(named): " + summary.prefix(1).lowercased() + summary.dropFirst() }
+        // A style's transition brings its sound, centered on the cut on a free sound track over the music.
+        if let sound = op.resolved?.sound {
+            if !project.assets.contains(where: { $0.path == sound.path }) { project.assets.append(sound) }
+            let a = project.assets.first { $0.path == sound.path }!
+            let length = a.duration.seconds, start = max(0, snap(MediaTime(seconds: cut - length / 2)).seconds)
+            var layer = 2
+            while s.clips.contains(where: { $0.kind == .audio && $0.layer == layer && $0.start.seconds < start + length && $0.end.seconds > start }) { layer += 1 }
+            var clip = Clip(assetID: a.id, name: a.name, kind: .audio, layer: layer, start: MediaTime(seconds: start), sourceRange: .init(start: .zero, duration: a.duration))
+            clip.gainDB = op.resolved?.soundDB
+            s.clips.append(clip)
+            tracks.append(clip.trackName)
+            summary += ", \(URL(fileURLWithPath: a.path).deletingPathExtension().lastPathComponent) under it"
+        }
+        return .init(summary: summary, changes: [.init(before: (cut - t.before, cut + t.after), after: (cut - t.before, cut + t.after), tracks: tracks)])
     }
 
     // MARK: Layers

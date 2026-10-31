@@ -71,6 +71,15 @@ struct StyleToolTests {
             "layouts": .array([.object(["name": .string("Talking"), "kind": .string("you")]), .object(["name": .string("Showing"), "kind": .string("screenAndYou"), "corner": .string("topRight"), "shape": .string("rounded"), "edge": .string("#FFD43B")])]),
             "moves": .object(["punchIn": .object(["scales": .array([.number(1), .number(1.2)])])]),
         ]), guide: nil, in: styles)
+        // Its Chapter transition is its own Metal with a whoosh under it.
+        let parts = f.directory.appendingPathComponent("parts")
+        try FileManager.default.createDirectory(at: parts, withIntermediateDirectories: true)
+        try Data(Self.glint.utf8).write(to: parts.appendingPathComponent("glint.metal"))
+        try MediaFixture.writeTone(to: parts.appendingPathComponent("whoosh.wav"), frequency: 660, seconds: 0.6)
+        _ = try StyleLibrary.save(id: "desk-screen", name: nil, summary: nil, tokens: .object(["transitions": .array([
+            .object(["name": .string("Chapter"), "type": .string("shader"), "file": .string("transitions/glint.metal"), "frames": .number(10), "sound": .string("sounds/whoosh.wav"), "soundDB": .number(-20)]),
+            .object(["name": .string("New section"), "type": .string("slide"), "frames": .number(8), "params": .object(["x": .number(-1)])]),
+        ])]), guide: nil, files: [(parts.appendingPathComponent("glint.metal"), "transitions/glint.metal"), (parts.appendingPathComponent("whoosh.wav"), "sounds/whoosh.wav")], in: styles)
         var brief = Brief(); brief.logline = "A demo."; brief.feeling = "Clear."; brief.style = "desk-screen"
         try f.store.saveBrief(brief, styles: styles)
 
@@ -102,5 +111,34 @@ struct StyleToolTests {
         _ = try await edit([.object(["op": .string("layout"), "range": range, "layout": .string("Talking")]), .object(["op": .string("punchIn"), "range": range])])
         let cameras = try f.store.read().sequences[0].clips.filter { $0.layout?.role == .camera }.sorted { $0.start < $1.start }
         #expect(cameras.map { $0.effects?.first { $0.name == "transform" }?.params["scale"]?.double }.prefix(2) == [1, 1.2])
+
+        // The style's Chapter at the jump cut: its Metal from the film's copy of the style, its whoosh under the cut.
+        let shots = try f.store.read().sequences[0].clips.filter { $0.layer == 0 && $0.kind == .video }.sorted { $0.start < $1.start }
+        let point = "\(shots[0].id)|\(shots[1].id)"
+        do { _ = try await edit([.object(["op": .string("transition"), "editPoint": .string(point), "name": .string("Finale")])]); Issue.record("The style has no Finale") }
+        catch let e as DirectionError { #expect(e.message.contains("Chapter, New section")) }
+        _ = try await edit([.object(["op": .string("transition"), "editPoint": .string(point), "name": .string("chapter")])])
+        p = try f.store.read()
+        let cut = try #require(p.sequences[0].clips.first { $0.id == shots[1].id })
+        #expect(cut.transition?.type == "shader" && cut.transition?.file == "transitions/glint.metal" && cut.transition?.frames == 10)
+        let whoosh = try #require(p.sequences[0].clips.first { $0.kind == .audio && $0.layer >= 2 })
+        #expect(whoosh.gainDB == -20 && p.assets.first { $0.id == whoosh.assetID }?.path.hasPrefix(f.store.url.appendingPathComponent("Style").path) == true)
+        #expect(abs(whoosh.start.seconds + whoosh.duration.seconds / 2 - cut.start.seconds) < 0.05)
     }
+
+    static let glint = """
+    // direction: param angle -90 90 25
+    // direction: param strength 0 1 0.55
+    [[ stitchable ]] float4 glint(coreimage::sampler from, coreimage::sampler to, float progress, float angle, float strength, coreimage::destination dest) {
+        float2 uv = direction::uv(from, dest);
+        float r = angle * 3.14159265 / 180.0;
+        float2 d = float2(cos(r), sin(r));
+        float along = dot(uv - 0.5, d) / (0.5 * (abs(d.x) + abs(d.y)));
+        float band = exp(-pow((along - mix(-1.5, 1.5, progress)) / 0.22, 2.0));
+        float4 c = mix(direction::at(from, uv), direction::at(to, uv), smoothstep(0.38, 0.62, progress));
+        float glow = clamp(strength * band * sin(3.14159265 * progress), 0.0, 1.0);
+        float3 warm = float3(1.0, 0.95, 0.84) * c.a;
+        return float4(mix(c.rgb, warm, glow), c.a);
+    }
+    """
 }

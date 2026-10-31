@@ -34,6 +34,11 @@ public struct Style: Hashable, Sendable, Identifiable {
         guard case .array(let list) = tokens["layouts"] else { return [] }
         return list.compactMap { try? $0.decode(FrameLayout.self) }.filter { $0.name?.isEmpty == false }
     }
+    /// The style's transitions by name ("Chapter", "New section"), each with its sound (styles.md › Transitions).
+    public var transitions: [StyleTransition] {
+        guard case .array(let list) = tokens["transitions"] else { return [] }
+        return list.compactMap { try? $0.decode(StyleTransition.self) }.filter { !$0.name.isEmpty }
+    }
     /// The moves Direction carries out for this style, as written (unset ones come from the house style).
     public var moves: StyleMoves {
         var m = (try? tokens["moves"].decode(StyleMoves.self)) ?? StyleMoves()
@@ -76,6 +81,23 @@ public struct StyleRule: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
+/// A transition a style names for a kind of moment: which one, how long, its settings, and the sound under it.
+/// `file` and `sound` are paths inside the style (transitions/glint.metal, sounds/whoosh.wav).
+public struct StyleTransition: Codable, Hashable, Sendable {
+    public var name: String
+    /// dissolve, dipToBlack, dipToWhite, push, slide, whip, zoom, wipe, iris, or shader (with `file`).
+    public var type: String
+    public var frames: Int
+    public var params: [String: JSONValue]?
+    public var file: String?
+    public var sound: String?
+    /// The sound's level, in dB.
+    public var soundDB: Double?
+    public init(name: String, type: String, frames: Int, params: [String: JSONValue]? = nil, file: String? = nil, sound: String? = nil, soundDB: Double? = nil) {
+        self.name = name; self.type = type; self.frames = frames; self.params = params; self.file = file; self.sound = sound; self.soundDB = soundDB
+    }
+}
+
 /// What Direction carries out for a style without the editor working it out: punch-ins on jump cuts, the
 /// emphasis punch, the slow push, and how tight the pauses go (agent-timeline.md › Moves).
 public struct StyleMoves: Codable, Hashable, Sendable {
@@ -102,18 +124,27 @@ public struct StyleMoves: Codable, Hashable, Sendable {
         public var longerThan: Double, to: Double
         public init(longerThan: Double, to: Double) { self.longerThan = longerThan; self.to = to }
     }
+    /// Zooms on a screen recording: how far (min to max), how long in and out, and the shortest hold.
+    public struct Zoom: Codable, Hashable, Sendable {
+        public var min: Double, max: Double
+        public var `in`: Double, out: Double
+        public var hold: Double
+        public init(min: Double, max: Double, in: Double, out: Double, hold: Double) { self.min = min; self.max = max; self.in = `in`; self.out = out; self.hold = hold }
+    }
     public var punchIn: PunchIn?
     public var emphasisPunch: Emphasis?
     public var slowPush: Push?
     public var tightenPauses: Pauses?
-    public init(punchIn: PunchIn? = nil, emphasisPunch: Emphasis? = nil, slowPush: Push? = nil, tightenPauses: Pauses? = nil) {
-        self.punchIn = punchIn; self.emphasisPunch = emphasisPunch; self.slowPush = slowPush; self.tightenPauses = tightenPauses
+    public var screenZoom: Zoom?
+    public init(punchIn: PunchIn? = nil, emphasisPunch: Emphasis? = nil, slowPush: Push? = nil, tightenPauses: Pauses? = nil, screenZoom: Zoom? = nil) {
+        self.punchIn = punchIn; self.emphasisPunch = emphasisPunch; self.slowPush = slowPush; self.tightenPauses = tightenPauses; self.screenZoom = screenZoom
     }
     /// Direction's own, under the house style.
-    public static let standard = StyleMoves(punchIn: .init(scales: [1, 1.15], keepIn: "thirds"), emphasisPunch: .init(scale: 1.3, everySeconds: 45), slowPush: .init(from: 1, to: 1.05, longerThan: 8), tightenPauses: .init(longerThan: 0.35, to: 0.15))
+    public static let standard = StyleMoves(punchIn: .init(scales: [1, 1.15], keepIn: "thirds"), emphasisPunch: .init(scale: 1.3, everySeconds: 45), slowPush: .init(from: 1, to: 1.05, longerThan: 8), tightenPauses: .init(longerThan: 0.35, to: 0.15),
+                                            screenZoom: .init(min: 1.4, max: 2, in: 0.6, out: 0.5, hold: 1.5))
     /// These moves, with any left unset taken from `base`.
     public func over(_ base: StyleMoves) -> StyleMoves {
-        StyleMoves(punchIn: punchIn ?? base.punchIn, emphasisPunch: emphasisPunch ?? base.emphasisPunch, slowPush: slowPush ?? base.slowPush, tightenPauses: tightenPauses ?? base.tightenPauses)
+        StyleMoves(punchIn: punchIn ?? base.punchIn, emphasisPunch: emphasisPunch ?? base.emphasisPunch, slowPush: slowPush ?? base.slowPush, tightenPauses: tightenPauses ?? base.tightenPauses, screenZoom: screenZoom ?? base.screenZoom)
     }
 }
 
@@ -139,6 +170,14 @@ public struct AppliedStyle: Sendable {
     public func layout(named name: String) -> FrameLayout? {
         let n = name.trimmingCharacters(in: .whitespaces).lowercased()
         return layouts.first { $0.name?.lowercased() == n }
+    }
+    /// The style's transitions, or the house style's when it has none.
+    public var transitions: [StyleTransition] { (style?.transitions).flatMap { $0.isEmpty ? nil : $0 } ?? house.transitions }
+    /// A transition by name, and the style it comes from (its file and sound are paths inside it).
+    public func transition(named name: String) -> (transition: StyleTransition, style: Style)? {
+        let n = name.trimmingCharacters(in: .whitespaces).lowercased()
+        if let s = style, let t = s.transitions.first(where: { $0.name.lowercased() == n }) { return (t, s) }
+        return house.transitions.first { $0.name.lowercased() == n }.map { ($0, house) }
     }
     /// Each move from the style, else the house style, else Direction's own.
     public var moves: StyleMoves { (style?.moves ?? StyleMoves()).over(house.moves).over(.standard) }
@@ -323,7 +362,10 @@ public enum StyleLibrary {
                 }
             }
             if let moves = changes["moves"], moves != .null, (try? moves.decode(StyleMoves.self)) == nil {
-                throw DirectionError("invalid_arguments", "moves is {punchIn?: {scales, keepIn?}, emphasisPunch?: {scale, everySeconds?}, slowPush?: {from, to, longerThan}}.")
+                throw DirectionError("invalid_arguments", "moves is {punchIn?: {scales, keepIn?}, emphasisPunch?: {scale, everySeconds?}, slowPush?: {from, to, longerThan}, screenZoom?: {min, max, in, out, hold}}.")
+            }
+            if case .array(let list) = changes["transitions"], !list.allSatisfy({ (try? $0.decode(StyleTransition.self)).map { !$0.name.isEmpty } == true }) {
+                throw DirectionError("invalid_arguments", "transitions is a list of named transitions: [{name, type, frames, params?, file? (transitions/<name>.metal), sound? (sounds/<name>.wav), soundDB?}].")
             }
         }
         else if tokens != nil && tokens != .null { throw DirectionError("invalid_arguments", "tokens is an object of the style's values, like {\"colors\": {\"accent\": \"#FFC800\"}}.") }

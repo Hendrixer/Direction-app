@@ -21,6 +21,10 @@ enum StyleSamples {
         return [
             Style(id: "desk-screen", url: folder.appendingPathComponent("desk-screen"), name: "Desk + Screen", summary: "Talking to camera, then showing it on screen, you in the corner when it helps.", updatedAt: 0, tokens: .object([
                 "format": .number(2), "layouts": screenLayouts,
+                "transitions": .array([
+                    .object(["name": .string("New section"), "type": .string("slide"), "frames": .number(8), "sound": .string("sounds/whoosh.wav")]),
+                    .object(["name": .string("Chapter"), "type": .string("shader"), "file": .string("transitions/glint.metal"), "frames": .number(10), "sound": .string("sounds/whoosh.wav")]),
+                ]),
                 "moves": .object(["punchIn": .object(["scales": .array([.number(1), .number(1.15)]), "keepIn": .string("thirds")]), "emphasisPunch": .object(["scale": .number(1.32)])]),
                 "rules": rules([("pace", "Cut waiting on screen down to its last half second."), ("layouts", "Talking for the talk, Showing when the screen comes in, Detail for code and forms."),
                                 ("picture", "Zoom to what I'm talking about whenever its text would be under 24 px at 1080p."), ("captions", "Captions over the screen only where they don't cover what's shown.")]),
@@ -418,6 +422,18 @@ struct StyleEditSheet: View {
                 }
             }
         }
+        if !s.transitions.isEmpty {
+            field("Transitions", detail: "Ask for them by name; each brings its sound.") {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(s.transitions, id: \.name) { t in
+                        HStack(spacing: 8) {
+                            Text(t.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Gate.Text.primary)
+                            Text(Self.transitionLine(t)).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                        }
+                    }
+                }
+            }
+        }
         let lines = Self.moveLines(moves)
         if !lines.isEmpty {
             field("Moves", detail: "Direction makes these itself when the editor asks for them.") {
@@ -436,7 +452,14 @@ struct StyleEditSheet: View {
             m.emphasisPunch.map { "Emphasis \(n($0.scale))\u{00D7}" },
             m.slowPush.map { "Slow push to \(n($0.to))\u{00D7} on shots over \(n($0.longerThan)) s" },
             m.tightenPauses.map { "Pauses over \(n($0.longerThan)) s to \(n($0.to)) s" },
+            m.screenZoom.map { "Screen zooms \(n($0.min))\u{2013}\(n($0.max))\u{00D7}" },
         ].compactMap { $0 }
+    }
+
+    /// "Glint, 10 frames, whoosh under it".
+    static func transitionLine(_ t: StyleTransition) -> String {
+        let kind = t.type == "shader" ? (t.file.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent.capitalized } ?? "Its own") : t.type.prefix(1).uppercased() + t.type.dropFirst()
+        return "\(kind), \(t.frames) frames" + (t.sound.map { ", \(URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent) under it" } ?? "")
     }
 
     private func add() {

@@ -120,10 +120,37 @@ extension ToolRuntime {
                 op.resolved = .init(source: source)
             }
         case "transition":
+            // A style's transition by name: its kind, length, settings and Metal from the style, and its sound.
+            var styleSource: String?, sound: MediaAsset?, soundDB: Double?
+            if op.transitionType == nil, let name = op.transitionName {
+                let applied = try store.appliedStyle()
+                guard let (t, style) = applied.transition(named: name) else {
+                    let names = applied.transitions.map(\.name)
+                    throw DirectionError("bad_argument", names.isEmpty ? "This film\u{2019}s style has no transitions by name. Give a type." : "The style has no transition called \(name). It has \(names.joined(separator: ", ")).")
+                }
+                op.transitionType = t.type
+                if op.frames == nil { op.frames = t.frames }
+                var params = t.params ?? [:]
+                for (k, v) in op.params ?? [:] { params[k] = v }
+                if t.type == "shader" {
+                    guard let file = t.file, StyleLibrary.isSafe(file), let text = try? String(contentsOf: style.url.appendingPathComponent(file), encoding: .utf8) else { throw DirectionError("missing_media", "\(style.name)\u{2019}s \(t.name) has no Metal file.") }
+                    styleSource = text; params["file"] = .string(file)
+                }
+                op.params = params.isEmpty ? nil : params
+                if let file = t.sound, StyleLibrary.isSafe(file) {
+                    let url = style.url.appendingPathComponent(file)
+                    guard FileManager.default.fileExists(atPath: url.path) else { throw DirectionError("missing_media", "\(style.name)\u{2019}s \(t.name) plays \(file), which isn\u{2019}t in the style.") }
+                    if let had = p.assets.first(where: { $0.path == url.path }) { sound = had }
+                    else { sound = try await MediaInspector.inspect(url: url, thumbnailDirectory: cacheDirectory.appendingPathComponent("Thumbnails")) }
+                    soundDB = t.soundDB ?? -20
+                }
+            }
+            defer { if sound != nil { if op.resolved == nil { op.resolved = .init() }; op.resolved?.sound = sound; op.resolved?.soundDB = soundDB } }
             // Direction's own and the editor's are compiled and timed before they touch the cut.
             guard let type = op.transitionType, type != "dissolve", type != "dipToBlack", type != "dipToWhite" else { return }
             let source: String
-            if type == "shader" {
+            if let styleSource { source = styleSource }
+            else if type == "shader" {
                 guard let file = op.params?["file"]?.string else { throw DirectionError("bad_argument", "A shader transition takes params.file, like \"Transitions/flash.metal\".") }
                 source = try editorSource(file, folder: "Transitions")
             } else if let own = TransitionShader.builtIn(type) { source = own } else { return }
@@ -160,6 +187,30 @@ extension ToolRuntime {
             }
             guard op.layout != nil else { return }
             op.resolved = .init(layout: try await LayoutAnalysis.measure(project: p, sequence: s, dailies: try store.dailies(), range: op.range, cacheDirectory: cacheDirectory))
+        case "autoZoom", "zoomTo":
+            // Screen zooms take the style's numbers and look at what changes on the screen recordings under them.
+            op.resolved = .init()
+            op.resolved?.zoom = ((try? store.appliedStyle())?.moves ?? .standard).screenZoom
+            guard let r = op.range else { return }
+            var screens = Set(s.clips.filter { $0.layout?.role == .screen }.compactMap(\.assetID))
+            if let c = clip(op.clipID), let id = c.assetID { screens.insert(id) }
+            if let measured = try? await LayoutAnalysis.measure(project: p, sequence: s, dailies: try store.dailies(), range: r, cacheDirectory: cacheDirectory) { screens.formUnion(measured.screens) }
+            for c in s.clips where c.layer == 0 && c.kind == .video && c.start < r.end && c.end > r.start { if let a = asset(c), LayoutAnalysis.looksLikeScreen(a) { screens.insert(a.id) } }
+            let looking = op.type == "autoZoom" || op.focus == nil || op.focus?.string == "action"
+            var activity: [String: [ActivitySample]] = [:]
+            for c in s.clips where c.kind == .video && c.hold == nil && c.start < r.end && c.end > r.start {
+                guard let id = c.assetID, screens.contains(id), let a = asset(c), !a.video.isEmpty else { continue }
+                let from = c.sourceTime(at: max(c.start, r.start)).seconds, to = c.sourceTime(at: min(c.end, r.end)).seconds
+                activity[id, default: []] += looking ? try await ScreenActivity.measure(a, from: from, to: to, cacheDirectory: cacheDirectory) : []
+            }
+            op.resolved?.activity = activity
+            if op.type == "zoomTo", let words = op.focus?["text"].string {
+                let showing = s.clips.filter { $0.kind == .video && $0.start <= r.start && $0.end > r.start && screens.contains($0.assetID ?? "") }.sorted { ($0.layout?.role == .screen ? 0 : 1, -$0.layer) < ($1.layout?.role == .screen ? 0 : 1, -$1.layer) }
+                guard let c = showing.first, let a = asset(c) else { throw DirectionError("bad_argument", "There\u{2019}s no screen recording showing at \(r.start.seconds) s to find \u{201C}\(words)\u{201D} on.") }
+                let at = c.sourceTime(at: r.start).seconds
+                guard let box = try await ScreenActivity.find(words, in: a, at: at) else { throw DirectionError("bad_argument", "\u{201C}\(words)\u{201D} isn\u{2019}t on screen at \(String(format: "%.1f", r.start.seconds)) s. Give focus {x, y}, or other words that are.") }
+                op.resolved?.box = box
+            }
         case "punchIn", "emphasisPunch", "slowPush":
             // Moves take the style's numbers unless the editor gives its own, and frame on the faces layouts track.
             let moves = (try? store.appliedStyle())?.moves ?? .standard

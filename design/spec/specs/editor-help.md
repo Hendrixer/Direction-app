@@ -17,7 +17,7 @@ What Direction already does that they built by hand: timecoded notes that reach 
 
 ## Moves in code (built 31 Oct 2026)
 
-The same split as layouts, for what a style does to the picture: the editor names the moment, Direction does the math. `punchIn` (framing changes on every jump cut, on the face), `emphasisPunch` (one line cut in and out) and `slowPush` (a creep across a long take), with the style's numbers (agent-timeline.md). Next in that order: transitions chosen by moment with their sound under them, then screen zooms Screen Studio-style (the cursor found in the picture, since OBS records it there, and what changes around it; zoom to a word from the screen's text) and speeding up stretches where the screen doesn't change.
+The same split as layouts, for what a style does to the picture: the editor names the moment, Direction does the math. `punchIn` (framing changes on every jump cut, on the face), `emphasisPunch` (one line cut in and out) and `slowPush` (a creep across a long take), with the style's numbers (agent-timeline.md). Then the style's transitions by name with their sound under the cut, and screen zooms Screen Studio-style: `autoZoom` finds where the action is from what changes on screen four times a second (the cursor OBS records into the picture, clicks, typing; a new page ends a moment) and `zoomTo` a point or words found on screen. On the director's real 4K screen recording a minute is looked at in 17 s the first time, then read back. Next: speeding up stretches where the screen doesn't change, and techniques learned from tutorial videos (techniques.md).
 
 ## Not worth it
 

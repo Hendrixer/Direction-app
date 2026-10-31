@@ -80,8 +80,8 @@ enum EditorJobs {
     static func styleLines(_ applied: AppliedStyle) -> [String] {
         var b: [String] = []
         if let style = applied.style {
-            let n = style.rules.count, layouts = style.layouts.compactMap(\.name)
-            b.append("- Style: \(style.name)\(style.summary.isEmpty ? "" : ". \(style.summary)") It has \(n) rule\(n == 1 ? "" : "s")\(layouts.isEmpty ? "" : ", layouts \(layouts.joined(separator: ", "))") and its moves. Read it with `direction_style` before you cut, and follow it wherever the brief and the notes leave a choice open.")
+            let n = style.rules.count, layouts = style.layouts.compactMap(\.name), transitions = style.transitions.map(\.name)
+            b.append("- Style: \(style.name)\(style.summary.isEmpty ? "" : ". \(style.summary)") It has \(n) rule\(n == 1 ? "" : "s")\(layouts.isEmpty ? "" : ", layouts \(layouts.joined(separator: ", "))")\(transitions.isEmpty ? "" : ", transitions \(transitions.joined(separator: ", "))") and its moves. Read it with `direction_style` before you cut, and follow it wherever the brief and the notes leave a choice open. Use its layouts, transitions and moves by name; Direction does the rest.")
         }
         let house = applied.house.rules
         if !house.isEmpty {

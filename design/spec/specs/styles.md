@@ -44,11 +44,12 @@ desk-screen/
 |---|---|---|
 | `rules` | `[{id, area, text, kept?}]`: one sentence each in the director's words. Areas, in order: general, pace, picture, layouts, graphics, captions, transitions, sound, music, color, avoid. `kept` says which film and note a kept rule came from | Direction (Settings, Keep as a rule) and the editor |
 | `layouts` | Named layouts (layouts.md › In a style): `[{name, kind, corner?, size?, shape?, screen?, edge?}]` | Direction: the picker, Dailies, `layout` by name |
-| `moves` | `punchIn {scales, keepIn?}`, `emphasisPunch {scale, everySeconds?}`, `slowPush {from, to, longerThan}` | Direction: the moves' numbers when the editor leaves theirs out |
+| `transitions` | Named transitions for kinds of moments: `[{name, type, frames, params?, file?, sound?, soundDB?}]`, `file` (a shader) and `sound` paths inside the style. A style written before keeps an object of values here, read by the editor only | Direction: `transition` by name, its sound centered on the cut |
+| `moves` | `punchIn {scales, keepIn?}`, `emphasisPunch {scale, everySeconds?}`, `slowPush {from, to, longerThan}`, `screenZoom {min, max, in, out, hold}` | Direction: the moves' numbers when the editor leaves theirs out |
 | `pace` | `tightenPauses {longerThan, to}`, and `averageShotSeconds`, `longestShotSeconds`, `hookBySeconds` for the editor | Direction (`tightenPauses`) and the editor |
 | `colors`, `fonts`, `motion`, `captions`, `transitions`, `sound`, `graphics` (which part plays which role), `look` | Exact values | The editor |
 
-Each move comes from the style, else the house style, else Direction's own (`StyleMoves.standard`: punch-ins 1× and 1.15×, emphasis 1.3×, a push from 1× to 1.05× on shots over 8 s, pauses over 0.35 s to 0.15 s). Layouts come from the style, else the house style.
+Each move comes from the style, else the house style, else Direction's own (`StyleMoves.standard`: punch-ins 1× and 1.15×, emphasis 1.3×, a push from 1× to 1.05× on shots over 8 s, pauses over 0.35 s to 0.15 s, screen zooms 1.4–2× in 0.6 s, out 0.5 s, held at least 1.5 s). Layouts and transitions come from the style, else the house style.
 
 **Older styles** (format 1) kept their words in `guide.md`. They still read: each bullet or paragraph under a heading is a rule in that heading's area, the template's placeholder lines left out. The first change writes them into style.json; guide.md is no longer read after that.
 
@@ -75,7 +76,7 @@ Once the answer is accepted, Changes shows **Keep as a Rule…** (changes.md). T
 
 "Every film": the house style, with how many rules every film follows and Edit…. "Your styles": one row per style (name; sentence; rules, layout names and parts under it; Edit… and a folder button), New Style… under the list, and a note on what a style is. "Where they live": the Styles folder with Change… and Show in Finder.
 
-**The edit sheet** (style-edit, style-house): name and sentence (not for the house style, which says what it is instead), then **Rules** grouped by area, each editable in place and removable, a kept rule showing the film it came from, and a line to add one (area menu, text, Add). A style shows its **Layouts** drawn by name and its **Moves** in a line ("Punch in 1–1.15× on jump cuts · Emphasis 1.32× · …"), changed by the editor; then its parts.
+**The edit sheet** (style-edit, style-house): name and sentence (not for the house style, which says what it is instead), then **Rules** grouped by area, each editable in place and removable, a kept rule showing the film it came from, and a line to add one (area menu, text, Add). A style shows its **Layouts** drawn by name, its **Transitions** by name with what each is ("Glint, 10 frames, whoosh under it"), and its **Moves** in a line ("Punch in 1–1.15× on jump cuts · Emphasis 1.32× · …"), changed by the editor; then its parts.
 
 **Acceptance:**
 - [x] A style is a folder with style.json; one without a readable name isn't listed; the house style isn't listed and no style takes its id.

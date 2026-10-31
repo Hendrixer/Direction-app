@@ -7,7 +7,7 @@ You are the editor. A style is a folder in the director's Styles folder, and the
 
 A style is four things, like a design system:
 - **Rules** (`rules`): one sentence each, in the director's words, with an area: pace, picture, layouts, graphics, captions, transitions, sound, music, color or avoid. Instructions an editor can follow without asking, with numbers: "Tighten every pause longer than 0.35 s to about 0.15 s." "Talking for the talk, Showing when the screen comes in, Detail for code and forms." Not "dynamic, engaging". Rules say what and when; they never describe by hand what Direction already does (a corner camera, a punch-in's transform).
-- **What Direction carries out** (`tokens`): named `layouts` for a camera and a screen recording in sync, the `moves` (punch-ins on jump cuts, the emphasis punch, the slow push) and `pace.tightenPauses`. The editor asks for them by name and Direction does the tracking and the keyframes.
+- **What Direction carries out** (`tokens`): named `layouts` for a camera and a screen recording in sync, named `transitions` for kinds of moments (each with its sound), the `moves` (punch-ins on jump cuts, the emphasis punch, the slow push, zooms on screen recordings) and `pace.tightenPauses`. The editor asks for them by name and Direction does the tracking and the keyframes.
 - **Values** (`tokens`): the numbers the editor holds to everywhere else. Colors as hex, fonts by family, weight and width, times in seconds, levels in dB.
 - **Parts** (`files`): what the editor reuses as is. Graphics (Direction graphics whose colors and fonts come from the values), transitions and effects (Metal, as in the `transitions` skill and custom effects), sounds and music the director gave you, fonts they own, a look (`look.cube`), and stills that show what it looks like.
 
@@ -21,7 +21,11 @@ A style is four things, like a design system:
        {"name": "Showing", "kind": "screenAndYou", "corner": "bottomRight", "size": "medium", "shape": "rounded"},
        {"name": "Detail", "kind": "screen"}
      ],
-     "moves": {"punchIn": {"scales": [1, 1.15], "keepIn": "thirds"}, "emphasisPunch": {"scale": 1.32, "everySeconds": 45}, "slowPush": {"from": 1, "to": 1.05, "longerThan": 8}},
+     "transitions": [
+       {"name": "New section", "type": "slide", "frames": 8, "params": {"x": -1}, "sound": "sounds/whoosh.wav", "soundDB": -20},
+       {"name": "Chapter", "type": "shader", "file": "transitions/glint.metal", "frames": 10, "sound": "sounds/whoosh.wav", "soundDB": -20}
+     ],
+     "moves": {"punchIn": {"scales": [1, 1.15], "keepIn": "thirds"}, "emphasisPunch": {"scale": 1.32, "everySeconds": 45}, "slowPush": {"from": 1, "to": 1.05, "longerThan": 8}, "screenZoom": {"min": 1.4, "max": 2, "in": 0.6, "out": 0.5, "hold": 1.5}},
      "pace": {"tightenPauses": {"longerThan": 0.35, "to": 0.15}, "averageShotSeconds": 3.5, "longestShotSeconds": 8, "hookBySeconds": 8},
      "colors": {"text": "#FFFFFF", "accent": "#FFC800", "backing": "#000000B3"},
      "fonts": {"title": {"family": "Archivo", "weight": 800, "width": 112}, "captions": {"family": "Archivo", "weight": 700}},
@@ -33,7 +37,7 @@ A style is four things, like a design system:
      "look": {"strength": 0.6}
    }
    ```
-   Layouts are only for films with a camera and a screen recording in sync: name each for what it's for, and give the bubble an `edge` color (#RRGGBB) when it should stand apart from what's on screen. Leave out a move the style never makes.
+   Layouts are only for films with a camera and a screen recording in sync: name each for what it's for, and give the bubble an `edge` color (#RRGGBB) when it should stand apart from what's on screen. Name each transition for the moment it marks ("Chapter", "Skip ahead"); its `file` and `sound` are paths in the style. Leave out a move the style never makes.
 4. **Write the rules.** One sentence each, grouped by area, from what they asked for and what you measured. Ten to forty is usual.
 5. **Make the parts in your working folder.** Graphics in `Graphics/<name>/` from the closest example (`make-graphic` skill), with every visible word in `words`, then `direction_graphic` with note `"unasked"` until it has no problems. Transitions in `Transitions/<name>.metal` and effects in `Effects/<name>.metal`, checked by using them once on a cut you then undo with `direction_restore` if it's a real film. Sounds, music and fonts only from files the director gave you or their footage; never make them with a service in a style job, and never bundle a font they don't own.
 6. **Save it once.** `direction_save_style` with `name`, a one-sentence `summary`, `rules`, `tokens` and `files` (`from` in your working folder, `to` in the style: `graphics/<name>`, `transitions/<name>.metal`, `effects/<name>.metal`, `sounds/<name>.wav`, `music/<name>.m4a`, `fonts/<name>.otf`, `look.cube`, `stills/<name>.jpg`). Read the result back and fix anything missing with one more call using its `id` (`removeRules` takes rules out by id).

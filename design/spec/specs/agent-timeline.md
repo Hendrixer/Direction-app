@@ -98,13 +98,15 @@ The editor may export the document to its working folder and analyze it in a scr
 | `punchIn` | `range`, `scales?` (`[1, 1.15]`), `keepIn?` | Moves. On every jump cut over `range` (a take cut to itself) the framing changes to the next of `scales`, framed on the face (eyes on the upper third with `thirds`); a cut to another take starts from the first again; it carries on from the shot before `range`. Shots that already move are left alone, with a warning. Numbers default to the film's style (styles.md › Moves) |
 | `emphasisPunch` | `range`, `scale?`, `keepIn?` | Moves. Cuts in to `scale` on the face for `range` (one line, inside one shot on V1) and back out: two cuts on the same take, nothing else moves |
 | `slowPush` | `range`, `scales?` (`[from, to]`), `longerThan?`, `keepIn?` | Moves. On each still shot over `range` at least `longerThan` long, scale keys from the first to the second across the shot, toward the face. A punched-in shot is left alone |
+| `autoZoom` | `range`, `clipID?`, `scale?` | Moves. Screen Studio-style zooms over `range` on the screen recording showing there (a layout's screen, or the take on V1). Direction looks at what changes four times a second (`ScreenActivity`: the cursor, clicks landing, typing; a new page ends a moment), keeps moments where the action stays in one area for about ¾ s, zooms so it fills about half the view (the style's `screenZoom` min to max), pans between moments close together, and eases out after. Keys go on the clip's transform (scale, x, y), never past the picture's edges |
+| `zoomTo` | `range`, `focus?` (`"action"`, `{x, y}`, `{text}`), `clipID?`, `scale?` | Moves. One zoom: in at `range`'s start, out by its end, to the action there, a point, or words found on screen with Vision at the start |
 | `balance` | `clipID`, `exposure?`, `contrast?`, `saturation?`, `temperature?`, `tint?` | Shot matching (today's `color`) |
 | `matchBalance` | `clipID`, `toClipID` | Direction measures both shots and sets the balance that matches the reference |
 | `cameraLUT` | `assetID`, `lut` (`auto`, a file, or `none`) | Per take, not per clip |
 | `addEffect` | `target` (clip id or track), `effect`, `params`, `keys?` | Returns the effect's id |
 | `setEffect` | `effectID`, `params?`, `keys?` | |
 | `removeEffect` | `effectID` | |
-| `transition` | `editPoint`, `type`, `frames`, `params?` | See Transitions below |
+| `transition` | `editPoint`, `type`, `frames`, `params?` | See Transitions below. With `name`, one of the style's transitions: its kind, length, settings and Metal from the style, and its sound centered on the cut on the first free sound track from A3 |
 | `removeTransition` | `editPoint` | |
 
 **Layers**

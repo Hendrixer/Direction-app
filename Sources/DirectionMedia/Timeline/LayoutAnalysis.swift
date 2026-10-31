@@ -52,7 +52,7 @@ public enum LayoutAnalysis {
         return ["camera", "webcam", "facecam", "cam-", "cam_", "a-cam", "a cam"].contains(where: name.contains) && !looksLikeScreen(a)
     }
 
-    static func looksLikeScreen(_ a: MediaAsset) -> Bool {
+    public static func looksLikeScreen(_ a: MediaAsset) -> Bool {
         let name = a.name.lowercased()
         if ["screen", "recording", "capture", "display", "cleanshot"].contains(where: name.contains) { return true }
         guard let v = a.video.first, v.height > 0 else { return false }
