@@ -1,0 +1,22 @@
+# Helping the editor (plan)
+
+Not built. Planned 31 Oct 2026, after looking at how others have a coding agent edit video: Ajené Pinnock's Claude Code setup (HyperFrames, style skills, a review app that sends notes to a waiting session), browser-use's video-use, Tella's skills, Brooke Lacey's cut lists, ButterCut, and Palmier Pro (a Swift editor with a local MCP). The director's side of Direction is in good shape; this is about making the editor faster, better informed and harder to get wrong.
+
+What Direction already does that they built by hand: timecoded notes that reach the editor without copy and paste, a session that continues when the director answers, its own renderer for JavaScript graphics with checks (words that overflow, title safe, contrast, small text), sync by sound, a footage index, and now layouts and a check on made shots.
+
+## Worth building, in order
+
+1. **Learned rules ("save this to the skill").** The single biggest lever in Pinnock's setup: after a round of notes he says "save this to the skill", and the mistake never comes back. Direction keeps per-film NOTES.md but nothing carries between films. On an accepted answer, Changes offers **Keep as a rule** ("Text never covers my face", "No captions over full-screen graphics", "Music 25 dB under the voice"), worded by the editor and confirmed by the director, saved to the director's house rules (beside Styles) and read by every job. One-off notes stay one-off (Lacey keeps the two apart for the same reason).
+2. **Direction checks every edit, like it now checks made shots.** video-use re-checks every cut after rendering and measures loudness because the agent can't listen. Direction can do it in the edit itself and return findings in the `direction_edit` result, so the editor fixes them before the director sees them: a cut inside a word or breath, a flash frame (a clip under 3 frames), a jump in loudness across a cut, black or frozen frames, a graphic or caption over a face (from the face tracks layouts already measure), a cutaway that runs past its take.
+3. **A turnover packet.** Every turnover starts with the editor fetching the same things. Direction puts them in the job: for each note, its range in the cut, three frames, the words said there, the clips under it with their takes, and what's on screen. Fewer tool calls before the first edit, and the editor reads the note against the picture the director saw.
+4. **Words as phrases by default.** video-use hands the agent a 12 KB "packed" transcript, one line per phrase split on pauses (`[002.52–005.36] …`), with word-level detail on demand. `direction_transcript` gives every word with its id; the phrase view becomes the default, words when an edit needs ids.
+5. **Where things can go.** Placement is guesswork today ("text never covers my face", "put it where I'm pointing"). `direction_shots` and `direction_frame` add the face box per shot (from the layouts' face tracks) and the free regions left over, and `placeGraphic` warns when a graphic covers a face.
+6. **You in front of things.** Pinnock's "Depth UI": he's cut out and an interface sits behind him. Apple's Vision separates a person from the background on this Mac (`VNGeneratePersonSegmentationRequest`), so a `behind` layer (a graphic or screen placed between the background and the person) is one effect, with no service or download. HyperFrames does the same with a cut-out and its inverse plate.
+7. **Graphics in parallel.** Turnovers with several graphics make them one at a time. Claude Code can hand work to subagents; Direction allows its subagent tool for graphics only, each writing its own folder, and Codex gets the same through its own agents.
+8. **More thinking where it counts.** Pinnock runs Opus at high effort. Settings › Engines › Effort now sets it; High is the recommendation for turnovers.
+
+## Not worth it
+
+- **HyperFrames for graphics.** It renders HTML in headless Chrome with FFmpeg; Direction already renders JavaScript graphics itself, checked and cached, with no Chrome. Its lessons are already here (seek-based rendering, no clocks or randomness, findings with crops).
+- **720p review renders.** Direction plays the cut live; nothing waits on a render to review.
+- **Runway's MCP for the editor.** Its developer MCP doesn't make media, and its generation MCP bills the director's Runway app plan, needs a browser sign-in, and would go around Direction's estimates and spend limits.
