@@ -83,6 +83,61 @@ struct SyncTests {
         #expect(try store.dailies().syncGroups?.first?.take(ids["late"]!) != nil)
     }
 
+    /// Finishing muted every track of one take (the cut's sound came from a mix) and brought its mix
+    /// into the film. Neither may undo the link: the mix isn't footage, and a muted take still
+    /// recorded the moment.
+    @Test func theEditorsMixAndAMutedTakeLeaveTheLinkAlone() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-sync-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let room = Self.signal(seconds: 30, seed: 3)
+        try Self.wav(room, to: dir.appendingPathComponent("room.wav"))
+        try Self.wav(Array(room[Int(4.25 * 8_000)..<Int(24.25 * 8_000)]).map { $0 * 0.5 }, to: dir.appendingPathComponent("late.wav"))
+        let store = try ProjectStore.create(at: dir.appendingPathComponent("Sync.direction"), name: "Sync")
+        let runtime = try ToolRuntime(store: store)
+        func importing(_ url: URL) async throws -> String { try #require(try await runtime.invoke("direction_import", arguments: .object(["path": .string(url.path)])).value["asset"]["id"].string) }
+        let roomID = try await importing(dir.appendingPathComponent("room.wav")), lateID = try await importing(dir.appendingPathComponent("late.wav"))
+        _ = try await runtime.waitForJob(try #require(try await runtime.invoke("direction_sync_takes").value["id"].string))
+        #expect(try store.dailies().syncGroups?.first?.take(lateID) != nil)
+
+        let mixURL = store.url.appendingPathComponent("Editor/Deliveries/mix.wav")
+        try FileManager.default.createDirectory(at: mixURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Self.wav(Array(room[0..<Int(20 * 8_000)]), to: mixURL)
+        let mixID = try await importing(mixURL)
+        let p = try store.read()
+        _ = try store.update(expectedRevision: p.editRevision, key: UUID().uuidString, request: Data(), summary: "Muted the late recorder") { p in
+            let i = p.assets.firstIndex { $0.id == lateID }!
+            for t in p.assets[i].audio.indices { p.assets[i].audio[t].settings.muted = true }
+        }
+        #expect(try store.read().footage(film: store.url).map(\.id) == [roomID, lateID])
+        #expect(try await runtime.invoke("direction_sync_takes").value["note"].string != nil)
+
+        // Before Direction told them apart, the mix was compared and the link was lost. The next pass
+        // compares the footage again without it, the muted take heard on its muted tracks.
+        try store.saveSync([], checked: [roomID, lateID, mixID])
+        _ = try await runtime.waitForJob(try #require(try await runtime.invoke("direction_sync_takes").value["id"].string))
+        let d = try store.dailies()
+        #expect(d.syncGroups?.count == 1 && d.syncGroups?.first?.take(roomID) != nil && d.syncGroups?.first?.take(lateID) != nil)
+        #expect(Set(d.syncChecked ?? []) == [roomID, lateID])
+        #expect(try await runtime.invoke("direction_sync_takes").value["note"].string != nil)
+    }
+
+    @Test func footageIsWhatTheDirectorBroughtIn() throws {
+        let film = URL(fileURLWithPath: "/Films/Demo.direction"), styles = URL(fileURLWithPath: "/Styles")
+        SharedSettings.stylesFolderOverride = styles
+        defer { SharedSettings.stylesFolderOverride = nil }
+        func asset(_ path: String) -> MediaAsset { MediaAsset(name: "a", path: path, duration: MediaTime(seconds: 10)) }
+        #expect(asset("/Footage/camera.mp4").isFootage(film: film))
+        #expect(asset("/Films/Demo.direction/Made/shot.mov").isFootage(film: film))
+        #expect(!asset("/Films/Demo.direction/Editor/Deliveries/mix.wav").isFootage(film: film))
+        #expect(!asset("/Films/Demo.direction/Style/sounds/whoosh.wav").isFootage(film: film))
+        #expect(!asset("/Styles/desk-talk/sounds/pop.wav").isFootage(film: film))
+        // A sibling folder that only starts with the film's name is footage.
+        #expect(asset("/Films/Demo.direction copy/camera.mp4").isFootage(film: film))
+        var graphic = asset("/Elsewhere/title.mov"); graphic.graphic = "title"
+        #expect(!graphic.isFootage(film: film))
+    }
+
     // MARK: Fixtures
 
     static func standardized(_ x: [Float]) -> [Float] {

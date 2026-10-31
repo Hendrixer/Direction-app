@@ -501,7 +501,7 @@ struct ScriptRoomContent: View {
 
     private func emptyPage(_ doc: ScriptDocument) -> some View {
         let running = model.jobs.filter { $0.kind == "transcription" && !$0.isTerminal }
-        let total = model.dailies.takes.isEmpty ? (model.project?.assets.count ?? 0) : model.dailies.takes.count
+        let total = model.dailies.takes.isEmpty ? model.footage.count : model.dailies.takes.count
         return VStack(spacing: 0) {
             if !running.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {

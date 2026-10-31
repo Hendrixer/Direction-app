@@ -98,7 +98,7 @@ public enum FootageIndexer {
         let assets = try store.read().assets, index = try store.indexTakes()
         return assets.filter { a in
             if let ids = assetIDs, !ids.contains(a.id) { return false }
-            guard !a.isImage else { return false }
+            guard !a.isImage, a.isFootage(film: store.url) else { return false }
             guard let t = index[a.id] else { return true }
             if force || t.fingerprint != TakeIndex.fingerprint(a) { return true }
             switch t.state {

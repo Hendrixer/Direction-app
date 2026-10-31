@@ -236,7 +236,7 @@ extension FilmModel {
     /// Progress is real where it's known (shots described, an estimate from how fast Whisper has run
     /// on this Mac); elsewhere the row says how long it's been, never a bar that only loops.
     var loggingRows: [LoggingRow] {
-        let assets = project?.assets ?? []
+        let assets = footage
         let byAsset = Dictionary(grouping: transcripts, by: \.assetID)
         let transcribed = Set(transcripts.filter { !$0.words.isEmpty }.map(\.assetID))
         let running = jobs.filter { !$0.isTerminal && $0.kind == "transcription" }
@@ -301,7 +301,7 @@ extension FilmModel {
     /// The stage line under the progress (footage-index.md › 05): the latest of Reading → Finding
     /// shots → Looking at footage → Listening → Sorting into scenes to have started. Counts in SF Mono.
     var loggingStage: (text: Text, spoken: String)? {
-        let assets = (project?.assets ?? []).filter { !$0.isImage }
+        let assets = footage.filter { !$0.isImage }
         guard !assets.isEmpty else { return nil }
         func line(_ words: String, _ n: Int? = nil, _ of: Int? = nil) -> (Text, String) {
             guard let n, let of else { return (Text(words), words) }
@@ -322,7 +322,7 @@ extension FilmModel {
 
     /// "About 6 minutes left." from how fast the editor has logged so far.
     var loggingEstimate: String? {
-        let total = project?.assets.count ?? 0, logged = loggedCount
+        let total = footage.count, logged = loggedCount
         guard logged > 0, logged < total else { return nil }
         let logEvents = events.filter { $0.kind == "dailies.updated" && $0.summary.contains("logged") }
         guard let first = logEvents.map(\.createdAt).min() else { return nil }
@@ -377,16 +377,16 @@ struct OnboardingLoggingView: View {
         .onDisappear {
             // Logging finished while it was on screen: say so once, on the way to Dailies.
             guard model.hasFootage, !model.isLogging, !model.onboardingDismissed, !model.isPreview else { return }
-            model.toast = Toast(title: "\(DailiesFormat.count(model.project?.assets.count ?? 0, "take")) logged.", detail: "\(DailiesFormat.count(model.dailies.scenes.count, "scene")), \(model.dailiesUnsorted.count) unsorted.", editor: true)
+            model.toast = Toast(title: "\(DailiesFormat.count(model.footage.count, "take")) logged.", detail: "\(DailiesFormat.count(model.dailies.scenes.count, "scene")), \(model.dailiesUnsorted.count) unsorted.", editor: true)
         }
     }
 
     // MARK: Summary
 
     private func summary(_ rows: [LoggingRow]) -> some View {
-        let total = model.project?.assets.count ?? 0, logged = model.loggedCount, finished = !model.isLogging
+        let total = model.footage.count, logged = model.loggedCount, finished = !model.isLogging
         let seconds = model.dailiesTotalSeconds
-        let loggedSeconds = (model.project?.assets ?? []).filter { model.dailies.takes[$0.id] != nil }.reduce(0) { $0 + $1.duration.seconds }
+        let loggedSeconds = model.footage.filter { model.dailies.takes[$0.id] != nil }.reduce(0) { $0 + $1.duration.seconds }
         let problems = rows.filter { if case .needsYou = $0.status { true } else { false } }.count
         let fraction = total > 0 ? Double(logged) / Double(total) : 0
         return VStack(alignment: .leading, spacing: 14) {

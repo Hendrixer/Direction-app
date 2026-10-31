@@ -264,6 +264,11 @@ final class FilmModel {
     var scenes: [DailiesScene] { dailies.scenes.sorted { $0.number < $1.number } }
     func scene(_ id: String?) -> DailiesScene? { id.flatMap { id in dailies.scenes.first { $0.id == id } } }
     var hasFootage: Bool { !(project?.assets.isEmpty ?? true) }
+    /// The takes: what the director brought in, not the editor's graphics or its own sound files.
+    var footage: [MediaAsset] {
+        guard let p = project else { return [] }
+        return store.map { p.footage(film: $0.url) } ?? p.assets
+    }
 
     /// Scenes as they sit in the watched cut, from the clips on the bottom video layer.
     var stripScenes: [StripScene] {
@@ -382,7 +387,7 @@ final class FilmModel {
         // Before logging, the index looks at every take (footage-index.md).
         if let l = index.looking { return .looking(l.done, l.total) }
         if let l = index.listening, isLogging { return .listening(l.done, l.total) }
-        if isLogging, let total = project?.assets.count, total > 0, cuts.isEmpty || runs.active?.job == .logFootage {
+        if isLogging, case let total = footage.count, total > 0, cuts.isEmpty || runs.active?.job == .logFootage {
             return .working("Logging \(loggedCount) of \(total)", Double(loggedCount) / Double(total))
         }
         // Any other work: what the editor is doing right now, whether Direction started it or you did.
@@ -413,8 +418,8 @@ final class FilmModel {
     /// Snapshots of the first look once the assembly is in.
     var previewAssemblyReady = false
     /// Takes the editor has logged, out of all footage.
-    var loggedCount: Int { project?.assets.filter { dailies.takes[$0.id] != nil }.count ?? 0 }
-    var isLogging: Bool { hasFootage && (project?.assets.contains { dailies.takes[$0.id] == nil } ?? false) }
+    var loggedCount: Int { footage.filter { dailies.takes[$0.id] != nil }.count }
+    var isLogging: Bool { hasFootage && footage.contains { dailies.takes[$0.id] == nil } }
     var defaultRoom: Room {
         if !unreviewedAnswers.isEmpty { return .changes }
         if cuts.isEmpty { return .dailies }

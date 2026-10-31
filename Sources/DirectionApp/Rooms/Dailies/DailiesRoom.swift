@@ -200,7 +200,7 @@ struct DailiesSidebar: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: "film").font(.system(size: 10.5)).frame(width: 12)
-                Text("\(DailiesFormat.count(model.project?.assets.count ?? 0, "take")) \u{00B7} \(DailiesFormat.hoursMinutes(model.dailiesTotalSeconds))")
+                Text("\(DailiesFormat.count(model.footage.count, "take")) \u{00B7} \(DailiesFormat.hoursMinutes(model.dailiesTotalSeconds))")
             }
             HStack(spacing: 8) {
                 RingMark(size: 8)

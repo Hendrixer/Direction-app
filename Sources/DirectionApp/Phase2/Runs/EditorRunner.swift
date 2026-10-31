@@ -96,13 +96,18 @@ import DirectionTools
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
             let l = LiveRun(runID: run.id, store: store, program: program, process: p)
+            // At the end of a pipe the handler is called again and again with nothing, so each one
+            // stops itself there, on its own thread: left to the main queue, a finished run kept a
+            // core spinning for as long as the app stayed open.
             out.fileHandleForReading.readabilityHandler = { [weak self] h in
                 let d = h.availableData
+                if d.isEmpty { h.readabilityHandler = nil }
                 DispatchQueue.main.async { MainActor.assumeIsolated { self?.output(l, d) } }
             }
             err.fileHandleForReading.readabilityHandler = { h in
                 let d = h.availableData
-                DispatchQueue.main.async { MainActor.assumeIsolated { if d.isEmpty { h.readabilityHandler = nil } else { l.stderrTail = Array((l.stderrTail + String(decoding: d, as: UTF8.self).split(separator: "\n").map(String.init)).suffix(20)) } } }
+                guard !d.isEmpty else { h.readabilityHandler = nil; return }
+                DispatchQueue.main.async { MainActor.assumeIsolated { l.stderrTail = Array((l.stderrTail + String(decoding: d, as: UTF8.self).split(separator: "\n").map(String.init)).suffix(20)) } }
             }
             p.terminationHandler = { [weak self] proc in
                 let status = proc.terminationStatus

@@ -6,6 +6,8 @@ A coding agent can't watch video. Instead of handing it raw files, Direction doe
 
 Direction runs the index itself, the same way every time. The editor doesn't decide how footage gets indexed; it reads the result.
 
+**Footage** is what the director brought in. A graphic's render, and any file the editor wrote into the film's folder or took from a style (a delivery's mixed sound, a whoosh), isn't: Direction doesn't look at it, listen to it, compare its sound or log it as a take, and it doesn't count in "N takes". Made clips are footage.
+
 ---
 
 ## What runs when footage comes in
@@ -111,7 +113,7 @@ The editor logs footage in runs of up to 20 takes, each a fresh session, so no r
 
 Takes that recorded the same moment (two cameras, a camera and a screen recording, a camera and a separate sound recorder, takes against a song) are found by their sound, as part of listening. Nothing is a "multicam" or "screen share" mode: takes are linked only when their sound matches, so a single-camera film, B-roll or silent footage is never linked and nothing about it changes.
 
-- **How.** Every take with sound at least 10 s long becomes a loudness curve: its loudest unmuted track (a silent desktop-audio track is skipped), decoded at 8 kHz on Direction's own clock (the one it plays on), averaged every 10 ms and standardized. Every pair of curves is cross-correlated through the FFT. A pair is the same moment when the curves correlate at 0.6 or more over at least 10 s of overlap; the peak is placed between samples with a parabola. Pairs chain into groups. Curves are kept in the cache, so new footage costs only its own decoding. On this Mac, at no cost: two 3-minute takes take about a second.
+- **How.** Every take with sound at least 10 s long becomes a loudness curve: its loudest unmuted track (a silent desktop-audio track is skipped; when every track is muted, because the cut takes its sound from elsewhere, all of them, since the take still recorded the moment), decoded at 8 kHz on Direction's own clock (the one it plays on), averaged every 10 ms and standardized. Every pair of curves is cross-correlated through the FFT. A pair is the same moment when the curves correlate at 0.6 or more over at least 10 s of overlap; the peak is placed between samples with a parabola. Pairs chain into groups. Curves are kept in the cache, so new footage costs only its own decoding. On this Mac, at no cost: two 3-minute takes take about a second.
 - **The sound take.** One take in each group carries the sound the cut uses: a sound-only take if there is one (a recorder beats a camera mic), otherwise the loudest. Every take's offset is on its clock: sound take's time = take's time + offset. The director can change it (**Use This Take's Sound**); Direction keeps that choice when it compares again.
 - **The director's say.** **Not in Sync** takes a take out of its group, and the pair is never linked again.
 - **When.** By itself when footage arrives, alongside looking and listening; a take isn't ready to log until it's been compared. Checked takes and every pair's answer are remembered (see Speed), so new footage is compared only against what's there. The editor can run it with `direction_sync_takes`.

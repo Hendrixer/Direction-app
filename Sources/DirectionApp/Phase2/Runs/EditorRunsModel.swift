@@ -114,7 +114,7 @@ import DirectionTools
         }
         // Footage arriving: log it in batches as takes are ready, one fresh session per batch.
         if film.isLogging, let batch = nextLogBatch(film, store: store) {
-            create(.logFootage, program: program, assetCount: film.project?.assets.count ?? 0, assetIDs: batch, store: store)
+            create(.logFootage, program: program, assetCount: film.footage.count, assetIDs: batch, store: store)
         }
         // Lock picture: finishing, once.
         if film.isPictureLocked, latest(.finish) == nil, !EditorRunner.finished(EditorRun(job: .finish, program: program.rawValue, version: ""), store: store) {
@@ -135,8 +135,7 @@ import DirectionTools
     private func nextLogBatch(_ film: FilmModel, store: ProjectStore) -> [String]? {
         let logging = runs.filter { $0.job == .logFootage }
         guard logging.allSatisfy({ $0.state == .done }) else { return nil }
-        let assets = film.project?.assets ?? []
-        let unlogged = assets.filter { film.dailies.takes[$0.id] == nil }
+        let unlogged = film.footage.filter { film.dailies.takes[$0.id] == nil }
         var tries: [String: Int] = [:]
         for r in logging { for id in r.assetIDs ?? [] { tries[id, default: 0] += 1 } }
         let decision = Self.logBatch(unlogged: unlogged.map(\.id), ready: Set(unlogged.filter { film.index.readyToLog($0) }.map(\.id)), tries: tries, firstRun: logging.isEmpty) { film.dailies.syncGroup(for: $0)?.takes.map(\.assetID) ?? [] }

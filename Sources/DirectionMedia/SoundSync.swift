@@ -24,7 +24,9 @@ public enum SoundSync {
     }
 
     public static func curve(asset: MediaAsset) async throws -> Curve? {
-        let tracks = asset.audio.filter { !$0.settings.muted }
+        // Muting is the mix's choice: a take with every track muted (the cut's sound comes from
+        // somewhere else) still recorded the moment, so it's heard on all of them.
+        let unmuted = asset.audio.filter { !$0.settings.muted }, tracks = unmuted.isEmpty ? asset.audio : unmuted
         guard !tracks.isEmpty else { return nil }
         let access = try MediaAccess(assets: [asset]); defer { withExtendedLifetime(access) {} }
         let source = AVURLAsset(url: try MediaInspector.checkedURL(asset))

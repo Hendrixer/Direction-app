@@ -62,6 +62,22 @@ public struct MediaAsset: Codable, Hashable, Sendable, Identifiable {
     public init(id: String = newID("asset"), name: String, path: String, duration: MediaTime, video: [VideoStream] = [], audio: [AudioStream] = [], fileSize: Int64 = 0, modifiedAt: Double = 0, bookmark: Data? = nil, thumbnailPath: String? = nil) {
         self.id = id; self.name = name; self.path = path; self.duration = duration; self.video = video; self.audio = audio; self.fileSize = fileSize; self.modifiedAt = modifiedAt; self.bookmark = bookmark; self.thumbnailPath = thumbnailPath
     }
+
+    /// Footage: what the director brought in, which Direction looks at, listens to, syncs and logs as
+    /// takes. Not a graphic's render, and not a file the editor wrote into the film's folder or took
+    /// from a style (a delivery's mixed sound, a whoosh). Made clips are footage.
+    public func isFootage(film: URL) -> Bool {
+        guard graphic == nil else { return false }
+        let path = URL(fileURLWithPath: self.path).standardizedFileURL.path
+        let inside = { (folder: URL) in path.hasPrefix(folder.standardizedFileURL.path + "/") }
+        if madeID != nil || inside(film.appendingPathComponent("Made")) { return true }
+        return !inside(film) && !inside(SharedSettings.stylesFolder)
+    }
+}
+
+extension Project {
+    /// The takes: footage the director brought in (`MediaAsset.isFootage`).
+    public func footage(film: URL) -> [MediaAsset] { assets.filter { $0.isFootage(film: film) } }
 }
 
 public struct ColorGrade: Codable, Hashable, Sendable {

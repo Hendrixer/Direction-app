@@ -16,12 +16,15 @@ extension ToolRuntime {
     func invokeSync(_ name: String, _ a: JSONValue) async throws -> ToolResponse? {
         guard name == "direction_sync_takes" else { return nil }
         let p = try store.read(), d = try store.dailies()
-        let speaking = p.assets.filter { !$0.isImage && !$0.audio.isEmpty && $0.duration.seconds >= SoundSync.minimumOverlap }
+        let speaking = p.footage(film: store.url).filter { !$0.isImage && !$0.audio.isEmpty && $0.duration.seconds >= SoundSync.minimumOverlap }
         let checked = a["force"].bool == true ? [] : Set(d.syncChecked ?? [])
         let fresh = speaking.filter { !checked.contains($0.id) }
+        // Something compared before isn't footage now (a removed take, or the editor's own sound
+        // from before Direction told them apart): compare again without it.
+        let stray = !checked.isSubset(of: speaking.map(\.id))
         // Nothing new, or nothing to pair it with: note it as compared and stop.
-        guard !fresh.isEmpty, speaking.count > 1 else {
-            if !fresh.isEmpty { try store.saveSync(d.syncGroups ?? [], checked: fresh.map(\.id)) }
+        guard !fresh.isEmpty || stray, speaking.count > 1 else {
+            if !fresh.isEmpty || stray { try store.saveSync(d.syncGroups ?? [], checked: speaking.map(\.id), replacing: true) }
             return ToolResponse(.object(["syncGroups": try .wrapping(d.syncGroups ?? []), "note": .string("Nothing new to compare.")]))
         }
         let store = store, cache = cacheDirectory.appendingPathComponent("Sync")
@@ -70,7 +73,7 @@ enum SyncPass {
         try? JSONEncoder().encode(known).write(to: pairsFile, options: .atomic)
         let audioOnly = Set(assets.filter { $0.video.isEmpty }.map(\.id))
         let groups = SoundSync.groups(matches, curves: curves, audioOnly: audioOnly)
-        try store.saveSync(groups, checked: assets.map(\.id))
+        try store.saveSync(groups, checked: assets.map(\.id), replacing: true)
         let names = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0.name) })
         for g in groups {
             DirectionLog.info("In sync by sound: " + g.takes.map { "\(names[$0.assetID] ?? $0.assetID) \($0.offset >= 0 ? "+" : "")\(String(format: "%.3f", $0.offset)) s (\($0.match))" }.joined(separator: ", ") + "; sound from \(names[g.soundAssetID] ?? g.soundAssetID)", "sync")

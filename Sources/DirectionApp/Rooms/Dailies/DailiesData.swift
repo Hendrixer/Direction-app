@@ -135,7 +135,7 @@ extension FilmModel {
         if let n = scene(t?.sceneID)?.number ?? scene(t?.guessSceneID)?.number { return FootageArt.forScene(n) }
         return .room
     }
-    var dailiesTotalSeconds: Double { (project?.assets ?? []).reduce(0) { $0 + $1.duration.seconds } }
+    var dailiesTotalSeconds: Double { footage.reduce(0) { $0 + $1.duration.seconds } }
     func dailiesIsTranscribed(_ id: String) -> Bool { transcripts.contains { $0.assetID == id && !$0.words.isEmpty } }
 
     // MARK: Transcript

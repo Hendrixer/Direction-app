@@ -104,14 +104,16 @@ extension ProjectStore {
 
     /// Direction's sync pass: groups found among the takes it checked. Groups the director has
     /// already shaped (their sound take) keep it when the same takes come back together.
-    public func saveSync(_ groups: [SyncGroup], checked: [String]) throws {
+    /// `replacing`: `checked` is every take with sound now (a whole pass), so takes compared before
+    /// that aren't footage any more drop off the list.
+    public func saveSync(_ groups: [SyncGroup], checked: [String], replacing: Bool = false) throws {
         try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: groups.isEmpty ? "Compared the takes' sound" : "Found \(groups.count == 1 ? "takes" : "\(groups.count) sets of takes") in sync") { d in
             let previous = d.syncGroups ?? []
             d.syncGroups = groups.map { g in
                 guard let old = previous.first(where: { Set($0.takes.map(\.assetID)) == Set(g.takes.map(\.assetID)) }), old.soundAssetID != g.soundAssetID else { return g }
                 return Self.resound(g, to: old.soundAssetID)
             }
-            d.syncChecked = Array(Set(d.syncChecked ?? []).union(checked)).sorted()
+            d.syncChecked = Array(replacing ? Set(checked) : Set(d.syncChecked ?? []).union(checked)).sorted()
         }
     }
 

@@ -114,7 +114,7 @@ extension ToolRuntime {
                                 "score": .number(h.score), "why": .string(h.why.rawValue), "text": .string(h.text), "matched": .array(h.matched.map(JSONValue.string)),
                                 "start": .number(h.start), "end": .number(h.end), "range": .string(SourceTimecode.range(h.start, h.end, fps: fps)), "keyframes": .array(h.keyframes.map(JSONValue.string))])
             }
-            let still = p.assets.filter { !$0.isImage && states[$0.id] != .done && states[$0.id] != .failed }.count
+            let still = p.footage(film: store.url).filter { !$0.isImage && states[$0.id] != .done && states[$0.id] != .failed }.count
             return ToolResponse(.object(["results": .array(results), "stillLooking": .number(Double(still))]))
 
         default: return nil
@@ -200,7 +200,7 @@ extension ToolRuntime {
     func indexStates() throws -> [String: IndexState] {
         let takes = try store.indexTakes(), live = try liveIndexJob() != nil
         var out: [String: IndexState] = [:]
-        for a in try store.read().assets where !a.isImage {
+        for a in try store.read().footage(film: store.url) where !a.isImage {
             guard let t = takes[a.id], t.fingerprint == TakeIndex.fingerprint(a) else { out[a.id] = live ? .looking : .waiting; continue }
             out[a.id] = t.state == .looking && !live ? .waiting : t.state
         }

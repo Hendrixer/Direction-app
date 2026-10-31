@@ -51,11 +51,11 @@ import DirectionMedia
     /// Called from `FilmModel.refresh()` whenever the store changes.
     func refresh(_ film: FilmModel) {
         self.film = film
-        guard let store = film.store, let project = film.project else { return }
+        guard let store = film.store, film.project != nil else { return }
         do {
             takes = try store.indexTakes()
             job = film.jobs.first { $0.kind == "index" && !$0.isTerminal }
-            let assets = project.assets.filter { !$0.isImage }
+            let assets = film.footage.filter { !$0.isImage }
             var s: [String: IndexState] = [:]
             for a in assets {
                 guard let t = takes[a.id], t.fingerprint == TakeIndex.fingerprint(a) else { s[a.id] = job != nil ? .looking : .waiting; continue }
@@ -122,7 +122,9 @@ import DirectionMedia
         let checked = Set(film.dailies.syncChecked ?? [])
         let speaking = assets.filter { !$0.audio.isEmpty && $0.duration.seconds >= 10 }
         let running = film.jobs.contains { $0.kind == "sync" && !$0.isTerminal }
-        unsynced = film.isPreview || syncAttempts >= 2 ? 0 : speaking.filter { !checked.contains($0.id) }.count
+        // Something compared before that isn't footage now counts too: the takes are compared again without it.
+        let stray = checked.isSubset(of: speaking.map(\.id)) ? 0 : 1
+        unsynced = film.isPreview || syncAttempts >= 2 ? 0 : speaking.filter { !checked.contains($0.id) }.count + stray
         guard unsynced > 0, !running, !startingSync, let runtime = film.runtime else { return }
         startingSync = true; syncAttempts += 1
         Task {

@@ -89,7 +89,7 @@ public enum WhisperTranscriber {
         process.environment = environment
         // Keep reading what it says so a chatty run can't fill the pipe and stall.
         let errors = Pipe(), tail = ErrorTail()
-        errors.fileHandleForReading.readabilityHandler = { h in tail.append(h.availableData) }
+        errors.fileHandleForReading.readabilityHandler = { h in let d = h.availableData; if d.isEmpty { h.readabilityHandler = nil } else { tail.append(d) } }
         defer { errors.fileHandleForReading.readabilityHandler = nil }
         process.standardError = errors
         process.standardOutput = FileHandle.nullDevice

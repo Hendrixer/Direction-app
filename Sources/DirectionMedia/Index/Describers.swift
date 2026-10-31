@@ -90,7 +90,8 @@ public actor LocalVisionHelper {
         let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
         p.standardInput = stdin; p.standardOutput = stdout; p.standardError = stderr
         let tail = ErrorTail(); errors = tail
-        stderr.fileHandleForReading.readabilityHandler = { h in tail.append(h.availableData) }
+        // Stops at the end of the pipe, where it would otherwise be called with nothing forever.
+        stderr.fileHandleForReading.readabilityHandler = { h in let d = h.availableData; if d.isEmpty { h.readabilityHandler = nil } else { tail.append(d) } }
         let lines = LineReader(stdout.fileHandleForReading)
         try p.run()
         process = p; input = stdin.fileHandleForWriting; reader = lines
