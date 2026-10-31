@@ -25,6 +25,7 @@ extension EditorRunsModel {
             case .assemble: body = "It ended without delivering the assembly."
             case .logFootage: body = "It ended before every take was logged."
             case .finish: body = "It ended before finishing was done."
+            case .style: body = "It ended before the style was saved."
             }
             return body
         case .spendCap: return run.detail ?? "Services can\u{2019}t make anything more this month."

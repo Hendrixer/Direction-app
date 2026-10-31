@@ -163,6 +163,7 @@ enum QuitGuard {
         case .assemble: return "The editor is building the assembly."
         case .logFootage: return "The editor is logging your footage."
         case .finish: return "The editor is finishing \(film.filmName)."
+        case .style: return "The editor is making a style."
         }
     }
 }

@@ -11,6 +11,7 @@ enum SystemFixtures {
             "42-settings-general": { settings(.general, height: 789) },
             "54-settings-engines": { RunsFixtures.previewPrograms(chosen: true); return settings(.engines, height: 1651) },
             "44-settings-cutting": { settings(.cutting, height: 789) },
+            "65-settings-styles": { settings(.styles, height: 789) },
             "45-settings-notifications": { settings(.notifications, height: 789) },
             "46-settings-shortcuts": { settings(.shortcuts, height: 789, recording: .region) },
             "47-settings-storage": { settings(.storage, height: 789) },

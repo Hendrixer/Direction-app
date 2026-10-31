@@ -78,4 +78,5 @@ window.FRAMES = [
   { id: "62-notes-spend", group: "Made", title: "Notes, a spend question", spec: "made-media.md" },
   { id: "63-look", group: "Looks", title: "The Look sheet", spec: "looks.md" },
   { id: "64-changes-graphic", group: "Graphics", title: "Changes, a title's words", spec: "graphics.md" },
+  { id: "65-settings-styles", group: "Styles", title: "Settings, Styles", spec: "styles.md", size: "940x789" },
 ];

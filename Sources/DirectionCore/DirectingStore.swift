@@ -56,9 +56,23 @@ extension ProjectStore {
     private func currentRevision(_ db: Database) throws -> Int { try Int.fetchOne(db, sql: "SELECT revision FROM state WHERE id = 1") ?? 0 }
 
     public func brief() throws -> Brief { try database.read { try Self.value($0, DirectingKey.brief, as: Brief.self) } ?? Brief() }
-    public func saveBrief(_ brief: Brief) throws {
+    /// A brief that names another style gives the film its own copy of it (styles.md).
+    public func saveBrief(_ brief: Brief, styles: URL = SharedSettings.stylesFolder) throws {
         var b = brief; b.updatedAt = Date().timeIntervalSince1970
+        if let id = b.style, !StyleLibrary.isSafe(id) { throw DirectionError("style_not_found", "There's no style \(id).") }
+        if b.style != (try self.brief()).style || (b.style != nil && StyleLibrary.film(url, id: b.style) == nil) {
+            try StyleLibrary.use(b.style.map { try StyleLibrary.read(styles.appendingPathComponent($0, isDirectory: true)) }, film: url)
+        }
         try database.write { db in try Self.setValue(db, DirectingKey.brief, b); try Self.event(db, kind: "brief.updated", revision: try currentRevision(db), summary: "Updated the brief") }
+    }
+
+    /// The film's style, from its own copy.
+    public func style() throws -> Style? { StyleLibrary.film(url, id: try brief().style) }
+    /// Copies the film's style again from the Styles folder, for changes made there since it was picked.
+    public func refreshStyle(styles: URL = SharedSettings.stylesFolder) throws {
+        guard let id = try brief().style else { return }
+        try StyleLibrary.use(try StyleLibrary.read(styles.appendingPathComponent(id, isDirectory: true)), film: url)
+        try database.write { db in try Self.event(db, kind: "brief.updated", revision: try currentRevision(db), summary: "Updated the style") }
     }
 
     public func dailies() throws -> Dailies { try database.read { try Self.value($0, DirectingKey.dailies, as: Dailies.self) } ?? Dailies() }

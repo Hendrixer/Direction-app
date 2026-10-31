@@ -41,7 +41,8 @@ extension ToolRuntime {
         switch name {
         case "direction_brief":
             let state = try store.directingState()
-            return ToolResponse(.object(["brief": try .wrapping(store.brief()), "latitude": .string(state.latitude.rawValue), "pictureLocked": .bool(state.pictureLocked), "editorPaused": .bool(state.editorPaused), "preferences": try .wrapping(state.preferences ?? EditorPreferences())]))
+            return ToolResponse(.object(["brief": try .wrapping(store.brief()), "latitude": .string(state.latitude.rawValue), "pictureLocked": .bool(state.pictureLocked), "editorPaused": .bool(state.editorPaused), "preferences": try .wrapping(state.preferences ?? EditorPreferences()),
+                                         "style": try store.style().map { .object(["id": .string($0.id), "name": .string($0.name), "summary": .string($0.summary), "read": .string("direction_style has its values, its guide and its parts. Follow it wherever the brief and the notes leave a choice open.")]) } ?? .null]))
 
         case "direction_dailies":
             let p = try store.read()

@@ -285,6 +285,10 @@ import DirectionTools
         case .finish:
             guard let s = try? store.directingState(), s.pictureLocked, let items = s.finishing else { return false }
             return items.filter { $0.by.contains("editor") }.allSatisfy { ["done", "needsYou"].contains($0.state) }
+        case .style:
+            // A style was written into the Styles folder since the run began.
+            let since = (run.startedAt ?? run.createdAt) - 1
+            return StyleLibrary.list(in: SharedSettings.stylesFolder).contains { $0.updatedAt >= since }
         }
     }
 

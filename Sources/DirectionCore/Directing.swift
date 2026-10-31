@@ -42,6 +42,8 @@ public struct Brief: Codable, Hashable, Sendable {
     public var mustKeep: [String] = []
     public var references: [BriefReference] = []
     public var avoid: String?
+    /// The style it's cut in (styles.md): a folder in the Styles folder, copied into the film as Style/.
+    public var style: String?
     public var updatedAt: Double?
     public init() {}
     public var isComplete: Bool { !logline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !feeling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

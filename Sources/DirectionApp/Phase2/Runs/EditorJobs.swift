@@ -5,10 +5,10 @@ import DirectionTools
 /// The job text Direction writes for each run, from the versioned templates in
 /// Resources/Editor/jobs (specs/editor.md › The job text), and the working folder it runs in.
 enum EditorJobs {
-    static let templateNames = ["log-footage", "assemble", "turnover", "continue", "finish", "editor-role"]
+    static let templateNames = ["log-footage", "assemble", "turnover", "continue", "finish", "style", "editor-role"]
 
     static func templateName(_ job: EditorJob) -> String {
-        switch job { case .logFootage: "log-footage"; case .assemble: "assemble"; case .turnover: "turnover"; case .finish: "finish" }
+        switch job { case .logFootage: "log-footage"; case .assemble: "assemble"; case .turnover: "turnover"; case .finish: "finish"; case .style: "style" }
     }
 
     /// A template's text. SwiftPM flattens processed resources, so look both ways.
@@ -32,7 +32,7 @@ enum EditorJobs {
     /// The first invocation's text for a run.
     static func text(for run: EditorRun, store: ProjectStore) throws -> String {
         let p = try store.read(), brief = try store.brief(), state = try store.directingState(), dailies = try store.dailies()
-        var v = common(run.job, film: p.name, brief: brief, state: state)
+        var v = common(run.job, film: p.name, brief: brief, state: state, style: try store.style())
         switch run.job {
         case .logFootage:
             let logged = p.assets.filter { dailies.takes[$0.id] != nil }.count
@@ -62,6 +62,13 @@ enum EditorJobs {
             v["lockedCut"] = state.pictureLockedCutID.flatMap { id in (try? store.cuts())?.first { $0.id == id }?.name } ?? "the latest cut"
             let lufs = UserDefaults.standard.object(forKey: "loudnessTarget") as? Double ?? -14
             v["loudness"] = "\(Int(lufs)) LUFS"
+        case .style:
+            v["request"] = run.request.map { $0.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n") } ?? "> Make a style from this film."
+            let cuts = try store.cuts()
+            v["source"] = run.fromFilm == true && !cuts.isEmpty
+                ? "Learn it from this film as well: watch \(cuts.last!.name) (`direction_timeline`, `direction_watch`), measure how it's cut, and keep what makes it this director's."
+                : "Make it from their words and whatever they point you to. Don't take it from this film's cut."
+            v["stylesFolder"] = SharedSettings.stylesFolder.path
         }
         return fill(template(templateName(run.job)) ?? "", v)
     }
@@ -91,11 +98,11 @@ enum EditorJobs {
 
     /// A continuation of the same session: an answer, an approval, Resume or Try again.
     static func continuation(_ answer: String, job: EditorJob) -> String {
-        let what: String = switch job { case .logFootage: "logging the footage"; case .assemble: "the assembly"; case .turnover: "the turnover"; case .finish: "finishing" }
+        let what: String = switch job { case .logFootage: "logging the footage"; case .assemble: "the assembly"; case .turnover: "the turnover"; case .finish: "finishing"; case .style: "the style" }
         return fill(template("continue") ?? "{{answer}}", ["answer": answer, "skill": job.skill, "skillPath": skillPath(job), "job": what])
     }
 
-    private static func common(_ job: EditorJob, film: String, brief: Brief, state: DirectingState) -> [String: String] {
+    private static func common(_ job: EditorJob, film: String, brief: Brief, state: DirectingState, style: Style?) -> [String: String] {
         var b: [String] = []
         if !brief.logline.isEmpty { b.append("- In one sentence: \(brief.logline)") }
         if !brief.feeling.isEmpty { b.append("- How it should feel: \(brief.feeling)") }
@@ -104,6 +111,7 @@ enum EditorJobs {
         for k in brief.mustKeep { b.append("- Must keep: \(k)") }
         for r in brief.references { b.append("- Reference: \(r.title). \(r.why)") }
         if let a = brief.avoid, !a.isEmpty { b.append("- Avoid: \(a)") }
+        if let style { b.append("- Style: \(style.name)\(style.summary.isEmpty ? "" : ". \(style.summary)") Read it with `direction_style` before you cut, and follow it wherever the brief and the notes leave a choice open.") }
         let prefs = state.preferences ?? EditorPreferences()
         let order = prefs.conflictOrder.map(\.label).joined(separator: " \u{203A} ")
         return [
@@ -135,7 +143,7 @@ enum EditorJobs {
     /// `<film>.direction/Editor/`: everything the editor writes, and the skill it follows.
     static func prepareFolder(film: URL, job: EditorJob) throws -> URL {
         let fm = FileManager.default, folder = film.appendingPathComponent("Editor")
-        for sub in ["Graphics", "Looks", "Effects", ".direction"] { try fm.createDirectory(at: folder.appendingPathComponent(sub), withIntermediateDirectories: true) }
+        for sub in ["Graphics", "Looks", "Effects", "Transitions", ".direction"] { try fm.createDirectory(at: folder.appendingPathComponent(sub), withIntermediateDirectories: true) }
         let notes = folder.appendingPathComponent("NOTES.md")
         if !fm.fileExists(atPath: notes.path) { try Data("# Notes between runs\n\nWhat I\u{2019}d want to know next time I pick up this film.\n".utf8).write(to: notes) }
         // The job names its own skill; the others (make-shot, make-graphic, propose-look…) are there for it to follow too.

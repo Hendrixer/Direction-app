@@ -2,9 +2,9 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Settings › General, Editor, Engines, Cutting, Notifications, Shortcuts, Storage, Sharing.
+/// Settings › General, Editor, Engines, Cutting, Styles, Notifications, Shortcuts, Storage, Sharing.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, editor, engines, cutting, notifications, shortcuts, storage, sharing
+    case general, editor, engines, cutting, styles, notifications, shortcuts, storage, sharing
     var id: String { rawValue }
     /// A remembered tab; Footage and Services went into Engines.
     static func stored(_ raw: String?) -> SettingsTab? {
@@ -18,6 +18,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .editor: "gem"
         case .engines: "cpu"
         case .cutting: "film"
+        case .styles: "swatchpalette"
         case .notifications: "bell"
         case .shortcuts: "keyboard"
         case .storage: "externaldrive"
@@ -30,7 +31,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 /// section, like System Settings: 940 wide, a sidebar of sections on the left and the section
 /// scrolling on the right, as tall as the screen allows up to 760. It never resizes, so it never
 /// runs off the screen. The section's name is the window title; the last one is remembered;
-/// every change applies at once. ⌘1…⌘8 choose a section; esc and ⌘W close it.
+/// every change applies at once. ⌘1…⌘9 choose a section; esc and ⌘W close it.
 struct SettingsView: View {
     var app: AppModel?
     /// Snapshots and previews: sample numbers, no system queries, and the whole section drawn.
@@ -97,6 +98,7 @@ struct SettingsView: View {
         case .editor: EditorPane(app: app)
         case .engines: EnginesPane(app: app, preview: preview)
         case .cutting: CuttingPane(app: app, preview: preview)
+        case .styles: StylesPane(app: app, preview: preview)
         case .notifications: NotificationsPane(preview: preview)
         case .shortcuts: ShortcutsPane(recording: recording)
         case .storage: StoragePane(app: app, preview: preview)
@@ -104,7 +106,7 @@ struct SettingsView: View {
         }
     }
 
-    /// ⌘1…⌘8 choose a section while Settings is key; esc closes the window.
+    /// ⌘1…⌘9 choose a section while Settings is key; esc closes the window.
     private var tabKeys: some View {
         ZStack {
             ForEach(Array(SettingsTab.allCases.enumerated()), id: \.offset) { i, t in

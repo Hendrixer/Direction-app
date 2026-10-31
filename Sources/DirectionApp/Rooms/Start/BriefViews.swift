@@ -66,7 +66,7 @@ struct BriefSheet: View {
     }
 }
 
-/// The questions, in visual order: title, logline, feeling, length and audience, must keep, references, avoid.
+/// The questions, in visual order: title, logline, feeling, length and audience, style, must keep, references, avoid.
 struct BriefForm: View {
     var model: FilmModel
     @Binding var title: String
@@ -129,6 +129,7 @@ struct BriefForm: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            question("Style", "Optional. How your videos look, sound and move") { BriefStylePicker(model: model, style: $brief.style) }
             question("Must keep", "The editor will never cut these") { mustKeep }
             question("References", "Drop clips, stills or links. Say why.", accessory: {
                 Button("Add\u{2026}", action: chooseReference).buttonStyle(.gate(.ghost, .small)).help("Add a clip or still")

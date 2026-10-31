@@ -164,6 +164,19 @@ import DirectionTools
         return .run(batch)
     }
 
+    /// Make a style (styles.md › Making a style): the director asked, so it starts now, not held.
+    /// False when Direction doesn't start the editor (Your own session) or it isn't set up.
+    @discardableResult
+    func makeStyle(_ film: FilmModel, request: String, fromFilm: Bool) -> Bool {
+        guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program else { return false }
+        var run = EditorRun(job: .style, program: program.rawValue, version: EditorSetup.version(program))
+        run.request = request; run.fromFilm = fromFilm
+        try? store.saveRun(run)
+        runs.append(run)
+        film.refresh(force: true)
+        return true
+    }
+
     private func create(_ job: EditorJob, program: EditorProgram, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, store: ProjectStore) {
         var run = EditorRun(job: job, program: program.rawValue, version: EditorSetup.version(program), turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
         run.held = EditorSetup.asksFirst
@@ -276,6 +289,7 @@ import DirectionTools
         case .assemble: "The assembly isn\u{2019}t finished. Your circles stay, and you can start again."
         case .logFootage: "Logging isn\u{2019}t finished. Your footage stays, and you can start again."
         case .finish: "Finishing isn\u{2019}t done. Picture stays locked, and you can start again."
+        case .style: "The style isn\u{2019}t saved. Your film is as it was, and you can ask again."
         }
     }
 

@@ -8,9 +8,11 @@ import GRDB
 /// One job the editor is given. A continuation keeps the job it continues.
 public enum EditorJob: String, Codable, Sendable, CaseIterable {
     case logFootage, assemble, turnover, finish
+    /// Writing a style the director asked for (styles.md › Making a style).
+    case style
     /// The skill each job follows (plugins/direction/skills/<name>/SKILL.md).
     public var skill: String {
-        switch self { case .logFootage: "start-project"; case .assemble: "assemble"; case .turnover: "take-turnover"; case .finish: "finish" }
+        switch self { case .logFootage: "start-project"; case .assemble: "assemble"; case .turnover: "take-turnover"; case .finish: "finish"; case .style: "make-style" }
     }
 }
 
@@ -67,6 +69,9 @@ public struct EditorRun: Codable, Hashable, Sendable, Identifiable {
     public var invocations = 0
     /// A logging run's batch: the takes it logs (footage-index.md › Logging in batches). Older runs logged everything.
     public var assetIDs: [String]?
+    /// A style run: what the director asked for, in their words, and whether to learn from this film's cut.
+    public var request: String?
+    public var fromFilm: Bool?
     public init(id: String = newID("run"), job: EditorJob, state: EditorRunState = .queued, program: String, version: String, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, createdAt: Double = Date().timeIntervalSince1970) {
         self.id = id; self.job = job; self.state = state; self.program = program; self.version = version; self.turnoverID = turnoverID; self.assetCount = assetCount; self.assetIDs = assetIDs; self.createdAt = createdAt; self.updatedAt = createdAt
     }

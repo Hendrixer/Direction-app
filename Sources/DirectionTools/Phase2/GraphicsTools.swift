@@ -26,7 +26,11 @@ extension ToolRuntime {
                 let list = try GraphicResources.examples().map { e -> JSONValue in
                     .object(["name": .string(e.name), "title": .string(e.title), "summary": .string(e.summary), "libraries": .array((e.libraries ?? []).map(JSONValue.string))])
                 }
+                // The film's style comes first: its graphics are the director's own, made to match.
+                let style = try store.style()
+                let styled: [JSONValue] = (style?.contents.graphics ?? []).map { .object(["name": .string($0), "style": .string(style!.name), "path": .string(style!.url.appendingPathComponent("graphics/" + $0).path)]) }
                 return ToolResponse(.object([
+                    "fromStyle": .array(styled),
                     "examples": .array(list),
                     "folder": .string(store.graphicsFolder.path),
                     "contract": .string("index.html calls direction.graphic({ duration (s), words: { key: { label, text, max } }, render(t, words) }). render draws the whole frame for time t and may be async. Every visible word comes from words. Helpers: direction.ease.{linear,in,out,inOut,spring}, direction.clamp, direction.lerp, direction.random(seed). Time is Direction's: Date.now, performance.now and requestAnimationFrame advance only per frame, Math.random is seeded, and CSS and Web Animations are seeked to t. Nothing loads from the internet."),

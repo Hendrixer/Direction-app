@@ -216,6 +216,17 @@ struct EditorJobTests {
             #expect(text.contains("`\(job.skill)`"))
             #expect(text.contains("Tired, then proud."))
         }
+        // A style run carries the director's words and is done once a style is saved after it began.
+        let styles = dir.appendingPathComponent("Styles")
+        SharedSettings.stylesFolderOverride = styles
+        defer { SharedSettings.stylesFolderOverride = nil }
+        var style = EditorRun(job: .style, program: "claudeCode", version: "")
+        style.request = "Fast and friendly.\nYellow captions."; style.fromFilm = true; style.startedAt = Date().timeIntervalSince1970
+        let asked = try EditorJobs.text(for: style, store: store)
+        #expect(asked.contains("> Fast and friendly.\n> Yellow captions.") && asked.contains(styles.path) && asked.contains("Don't take it from this film's cut."))
+        #expect(!EditorRunner.finished(style, store: store))
+        try StyleLibrary.create(name: "Desk Talk", summary: "", in: styles)
+        #expect(EditorRunner.finished(style, store: store))
         let more = EditorJobs.continuation("I approved your read-back. Cut it.", job: .turnover)
         #expect(more.hasPrefix("I approved your read-back.") && !more.contains("{{"))
         #expect(!EditorJobs.role.contains("{{") && EditorJobs.role.contains("\"finished\""))
