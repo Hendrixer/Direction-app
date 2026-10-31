@@ -96,6 +96,8 @@ extension ToolRuntime {
         func clip(_ id: String?) -> Clip? { id.flatMap { id in s.clips.first { $0.id == id } } }
         func asset(_ c: Clip) -> MediaAsset? { c.assetID.flatMap { id in p.assets.first { $0.id == id } } }
         func existing(_ id: String?) -> ClipEffect? { id.flatMap { id in s.clips.lazy.compactMap { $0.effect(id) }.first ?? s.tracks?.values.lazy.compactMap { $0.effects?.first { $0.id == id } }.first } }
+        // A technique becomes the transition or effect it makes; an effect may still need measuring below.
+        if op.type == "technique", try await resolveTechnique(&op, p) { return }
         switch op.type {
         case "reframe":
             guard let follow = op.follow, ["face", "subject"].contains(follow), let c = clip(op.clipID), let a = asset(c), !a.video.isEmpty, (0.1...8).contains(op.scale ?? 0) else { return }
@@ -108,6 +110,13 @@ extension ToolRuntime {
             let name = op.type == "addEffect" ? op.effect : current?.name
             if name == "stabilize", op.type == "addEffect", let c = clip(op.target ?? op.clipID), let a = asset(c), !a.video.isEmpty, c.hold == nil {
                 op.resolved = .init(keys: try await TimelineAnalysis.stabilize(asset: a, clip: c, cacheDirectory: cacheDirectory))
+            }
+            // A pixel grid finds the subject square by square, again when the squares change.
+            if name == "pixelGrid", op.type == "addEffect" || op.params?["cells"] != nil,
+               let c = op.type == "addEffect" ? clip(op.target ?? op.clipID) : s.clips.first(where: { $0.effect(op.effectID ?? "") != nil }), let a = asset(c), !a.video.isEmpty {
+                let cells = Int(((current?.params ?? [:]).merging(op.params ?? [:]) { _, b in b })["cells"]?.double ?? 16)
+                if op.resolved == nil { op.resolved = .init() }
+                op.resolved?.data = try await SubjectCells.measure(a, from: c.sourceRange.start.seconds, to: c.sourceRange.end.seconds, cols: min(64, max(4, cells)), aspect: Double(s.width) / Double(s.height), cacheDirectory: cacheDirectory)
             }
             if name == "shader" {
                 let params = (current?.params ?? [:]).merging(op.params ?? [:]) { _, b in b }
@@ -127,6 +136,26 @@ extension ToolRuntime {
                 guard let (t, style) = applied.transition(named: name) else {
                     let names = applied.transitions.map(\.name)
                     throw DirectionError("bad_argument", names.isEmpty ? "This film\u{2019}s style has no transitions by name. Give a type." : "The style has no transition called \(name). It has \(names.joined(separator: ", ")).")
+                }
+                if let named = t.technique {
+                    // Made by a technique: its Metal and sound, with the style's own settings over it.
+                    guard let tech = TechniqueLibrary.find(named, in: SharedSettings.techniquesFolder) else { throw DirectionError("technique_not_found", "\(style.name)\u{2019}s \(t.name) is made by the technique \(named), which isn\u{2019}t in the Techniques folder.") }
+                    let own = (t.params ?? [:]).merging(op.params ?? [:]) { _, b in b }
+                    let made = try await techniqueTransition(tech, variant: t.variant, frames: op.frames ?? (t.frames > 0 ? t.frames : nil), params: own.isEmpty ? nil : own, project: p)
+                    op.transitionType = made.type; op.frames = made.frames; op.params = made.params.isEmpty ? nil : made.params
+                    op.resolved = .init()
+                    if let source = made.source ?? TransitionShader.builtIn(made.type) {
+                        _ = try TransitionShader.check(source: source, params: made.params.filter { $0.key != "file" })
+                        op.resolved?.source = source
+                    }
+                    if t.sound == nil { op.resolved?.sound = made.sound; op.resolved?.soundDB = made.soundDB }
+                    else if let file = t.sound, StyleLibrary.isSafe(file) {
+                        let url = style.url.appendingPathComponent(file)
+                        if let had = p.assets.first(where: { $0.path == url.path }) { op.resolved?.sound = had }
+                        else if FileManager.default.fileExists(atPath: url.path) { op.resolved?.sound = try await MediaInspector.inspect(url: url, thumbnailDirectory: cacheDirectory.appendingPathComponent("Thumbnails")) }
+                        op.resolved?.soundDB = t.soundDB ?? -20
+                    }
+                    return
                 }
                 op.transitionType = t.type
                 if op.frames == nil { op.frames = t.frames }

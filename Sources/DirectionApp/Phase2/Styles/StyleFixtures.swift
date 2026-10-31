@@ -12,6 +12,7 @@ enum StyleFixtures {
             "keep-rule": { keep() },
             "changes-keep-rule": { .film(answered()) },
             "layout-picker-style": { picker() },
+            "learn-technique": { SnapshotScene(size: CGSize(width: 520, height: 400), LearnTechniqueSheet(model: ChangesFixtures.cut4()).frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground)) },
         ]
     }
 

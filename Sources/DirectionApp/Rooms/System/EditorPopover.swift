@@ -104,6 +104,7 @@ struct EditorPopover: View {
         case .finish: "Picture is locked"
         case .logFootage: "Your footage is in"
         case .style: "You asked for a style"
+        case .technique: "You gave it a video to learn from"
         }
     }
 

@@ -44,7 +44,7 @@ desk-screen/
 |---|---|---|
 | `rules` | `[{id, area, text, kept?}]`: one sentence each in the director's words. Areas, in order: general, pace, picture, layouts, graphics, captions, transitions, sound, music, color, avoid. `kept` says which film and note a kept rule came from | Direction (Settings, Keep as a rule) and the editor |
 | `layouts` | Named layouts (layouts.md › In a style): `[{name, kind, corner?, size?, shape?, screen?, edge?}]` | Direction: the picker, Dailies, `layout` by name |
-| `transitions` | Named transitions for kinds of moments: `[{name, type, frames, params?, file?, sound?, soundDB?}]`, `file` (a shader) and `sound` paths inside the style. A style written before keeps an object of values here, read by the editor only | Direction: `transition` by name, its sound centered on the cut |
+| `transitions` | Named transitions for kinds of moments: `[{name, type, frames, params?, file?, sound?, soundDB?}]`, `file` (a shader) and `sound` paths inside the style; or made by a technique, `{name, technique, variant?}` with any of the rest over it (techniques.md). A style written before keeps an object of values here, read by the editor only | Direction: `transition` by name, its sound centered on the cut |
 | `moves` | `punchIn {scales, keepIn?}`, `emphasisPunch {scale, everySeconds?}`, `slowPush {from, to, longerThan}`, `screenZoom {min, max, in, out, hold}` | Direction: the moves' numbers when the editor leaves theirs out |
 | `pace` | `tightenPauses {longerThan, to}`, and `averageShotSeconds`, `longestShotSeconds`, `hookBySeconds` for the editor | Direction (`tightenPauses`) and the editor |
 | `colors`, `fonts`, `motion`, `captions`, `transitions`, `sound`, `graphics` (which part plays which role), `look` | Exact values | The editor |

@@ -93,8 +93,24 @@ public struct StyleTransition: Codable, Hashable, Sendable {
     public var sound: String?
     /// The sound's level, in dB.
     public var soundDB: Double?
-    public init(name: String, type: String, frames: Int, params: [String: JSONValue]? = nil, file: String? = nil, sound: String? = nil, soundDB: Double? = nil) {
-        self.name = name; self.type = type; self.frames = frames; self.params = params; self.file = file; self.sound = sound; self.soundDB = soundDB
+    /// A technique from the Techniques folder that makes it (techniques.md); its own settings above win.
+    public var technique: String?
+    /// One of the technique's named variants.
+    public var variant: String?
+    public init(name: String, type: String, frames: Int, params: [String: JSONValue]? = nil, file: String? = nil, sound: String? = nil, soundDB: Double? = nil, technique: String? = nil, variant: String? = nil) {
+        self.name = name; self.type = type; self.frames = frames; self.params = params; self.file = file; self.sound = sound; self.soundDB = soundDB; self.technique = technique; self.variant = variant
+    }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        technique = try c.decodeIfPresent(String.self, forKey: .technique)
+        variant = try c.decodeIfPresent(String.self, forKey: .variant)
+        // A style's transition made by a technique needs only the technique's name.
+        type = try c.decodeIfPresent(String.self, forKey: .type) ?? (technique == nil ? { throw DecodingError.keyNotFound(CodingKeys.type, .init(codingPath: c.codingPath, debugDescription: "type")) }() : "technique")
+        frames = try c.decodeIfPresent(Int.self, forKey: .frames) ?? 0
+        guard technique != nil || frames > 0 else { throw DecodingError.dataCorruptedError(forKey: .frames, in: c, debugDescription: "frames") }
+        params = try c.decodeIfPresent([String: JSONValue].self, forKey: .params)
+        file = try c.decodeIfPresent(String.self, forKey: .file); sound = try c.decodeIfPresent(String.self, forKey: .sound); soundDB = try c.decodeIfPresent(Double.self, forKey: .soundDB)
     }
 }
 

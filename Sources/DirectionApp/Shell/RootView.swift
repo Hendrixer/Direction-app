@@ -86,6 +86,7 @@ struct FilmWindow: View {
         case .brief: BriefSheet(model: model)
         case .look: LookSheet(model: model)
         case .editorSetup: EditorSetupSheet(model: model)
+        case .learnTechnique: LearnTechniqueSheet(model: model)
         }
     }
 

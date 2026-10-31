@@ -316,6 +316,10 @@ import DirectionTools
             // A style was written into the Styles folder since the run began.
             let since = (run.startedAt ?? run.createdAt) - 1
             return StyleLibrary.list(in: SharedSettings.stylesFolder).contains { $0.updatedAt >= since }
+        case .technique:
+            // A technique was written into the Techniques folder since the run began.
+            let since = (run.startedAt ?? run.createdAt) - 1
+            return TechniqueLibrary.list(in: SharedSettings.techniquesFolder).contains { $0.updatedAt >= since }
         }
     }
 

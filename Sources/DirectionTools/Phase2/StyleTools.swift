@@ -62,7 +62,7 @@ extension ToolRuntime {
     }
 
     /// A path the editor names: in its working folder (`<film>/Editor/`), or anywhere inside the film.
-    private func workingFile(_ path: String) throws -> URL {
+    func workingFile(_ path: String) throws -> URL {
         let film = store.url.standardizedFileURL.path, editor = store.url.appendingPathComponent("Editor").standardizedFileURL
         let url = path.hasPrefix("/") ? URL(fileURLWithPath: path).standardizedFileURL : editor.appendingPathComponent(path).standardizedFileURL
         guard url.path.hasPrefix(film + "/"), FileManager.default.fileExists(atPath: url.path) else { throw DirectionError("invalid_arguments", "\(path) isn't in your working folder. Give a path like Graphics/lower-third.") }

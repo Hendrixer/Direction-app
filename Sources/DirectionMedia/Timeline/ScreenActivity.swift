@@ -36,7 +36,8 @@ public enum ScreenActivity {
         let times = stride(from: max(0, start - 1 / fps), to: end, by: 1 / fps).map { ($0 * 1000).rounded() / 1000 }
         let frames = try await grey(a, at: times)
         var out: [ActivitySample] = []
-        for (previous, current) in zip(frames, frames.dropFirst()) where current.t >= start - 1e-6 {
+        // Only neighbors are compared: a look that didn't decode would make two a half second apart look busy.
+        for (previous, current) in zip(frames, frames.dropFirst()) where current.t >= start - 1e-6 && current.t - previous.t <= 1.5 / fps {
             out.append(compare(previous.pixels, current.pixels, w: current.w, h: current.h, t: current.t))
         }
         LayoutAnalysis.save(out, to: file)
@@ -84,7 +85,11 @@ public enum ScreenActivity {
         generator.requestedTimeToleranceBefore = tolerance; generator.requestedTimeToleranceAfter = tolerance
         var out: [(t: Double, pixels: [UInt8], w: Int, h: Int)] = []
         for t in times {
-            guard let image = try? await generator.image(at: CMTime(seconds: t, preferredTimescale: 600)).image else { continue }
+            // A busy Mac sometimes drops a frame; one more try before leaving that look out.
+            let at = CMTime(seconds: t, preferredTimescale: 600)
+            var got = try? await generator.image(at: at).image
+            if got == nil { got = try? await generator.image(at: at).image }
+            guard let image = got else { continue }
             let w = width, h = max(2, Int((Double(width) * Double(image.height) / Double(max(1, image.width))).rounded()))
             var pixels = [UInt8](repeating: 0, count: w * h)
             let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in

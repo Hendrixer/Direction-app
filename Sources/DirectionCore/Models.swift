@@ -188,7 +188,9 @@ public struct ClipEffect: Codable, Hashable, Sendable, Identifiable {
     public var keys: [String: [Keyframe]]?
     /// A shader's Metal source, kept with the effect so every revision renders the same.
     public var source: String?
-    public init(id: String = newID("fx"), name: String, params: [String: JSONValue] = [:], keys: [String: [Keyframe]]? = nil, source: String? = nil) { self.id = id; self.name = name; self.params = params; self.keys = keys; self.source = source }
+    /// What Direction measured for a built-in effect to play from (pixelGrid: where the subject is, square by square).
+    public var data: String?
+    public init(id: String = newID("fx"), name: String, params: [String: JSONValue] = [:], keys: [String: [Keyframe]]? = nil, source: String? = nil, data: String? = nil) { self.id = id; self.name = name; self.params = params; self.keys = keys; self.source = source; self.data = data }
 
     /// A numeric parameter at a time (source seconds for clips), keyed or not.
     public func number(_ param: String, at t: Double?, default value: Double) -> Double {

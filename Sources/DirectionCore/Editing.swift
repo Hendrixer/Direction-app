@@ -87,8 +87,11 @@ public struct EditOperation: Hashable, Sendable {
     public var scales: [Double]?
     /// `zoomTo`: where to look: "action", {x, y} (fractions of the picture) or {text} (words on screen).
     public var focus: JSONValue?
-    /// `transition` by the name of one of the style's ("Chapter"), until Direction's tools look it up.
+    /// `transition` by the name of one of the style's ("Chapter"), until Direction's tools look it up;
+    /// `technique` by its name.
     public var transitionName: String?
+    /// `technique`: one of its named variants.
+    public var variant: String?
     /// What Direction's tools measured before the batch runs: face keys, a matched balance, a checked
     /// shader, quiet stretches, a graphic's render. Never taken from the editor.
     public var resolved: ResolvedValues?
@@ -113,6 +116,8 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
     public var activity: [String: [ActivitySample]]?
     public var zoom: StyleMoves.Zoom?
     public var box: [Double]?
+    /// pixelGrid: where the subject is in each square over time.
+    public var data: String?
     /// A style's transition: the sound under it, and its level.
     public var sound: MediaAsset?
     public var soundDB: Double?
@@ -121,7 +126,7 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
 }
 
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "layout", "scales", "focus", "name", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "layout", "scales", "focus", "name", "variant", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -169,7 +174,7 @@ extension EditOperation: Codable {
         scales = try decoded("scales", [Double].self, "a list of scales, like [1, 1.15]")
         focus = value("focus")
         if let f = focus { guard f.string == "action" || (f["x"].double != nil && f["y"].double != nil) || f["text"].string?.isEmpty == false else { throw bad("focus", "\"action\", {x, y} or {text}") } }
-        transitionName = try str("name")
+        transitionName = try str("name"); variant = try str("variant")
         resolved = try decoded("resolved", ResolvedValues.self, "Direction's own measurements")
     }
 
@@ -189,7 +194,7 @@ extension EditOperation: Codable {
         put("toClipID", toClipID); put("lut", lut); put("target", target); put("effect", effect); if let params { f["params"] = .object(params) }; put("keys", any: keys); put("effectID", effectID)
         if !legacy { put("type", transitionType) }
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
-        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("resolved", any: resolved)
+        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("variant", variant); put("resolved", any: resolved)
         return .object(f)
     }
 
@@ -664,6 +669,7 @@ struct EditWork {
         case "emphasisPunch": return try emphasisPunch(op)
         case "slowPush": return try slowPush(op)
         case "autoZoom": return try autoZoom(op)
+        case "technique": throw bad("\(op.transitionName ?? "A technique") is set up from the Techniques folder by Direction's tools; send it through direction_edit.")
         case "zoomTo": return try zoomTo(op)
         case "pin": return try pin(op)
         case "zoomThrough": return try zoomThrough(op)
@@ -1224,6 +1230,7 @@ struct EditWork {
         }
         if effect == "shader" { guard op.resolved?.source != nil else { throw bad("A shader is compiled and checked by Direction's tools; send it through direction_edit.") } }
         if effect == "stabilize" { guard case .clip(_) = target, op.resolved?.keys != nil else { throw bad("stabilize is measured per clip by Direction's tools; send it through direction_edit.") } }
+        if effect == "pixelGrid" { guard case .clip(_) = target, op.resolved?.data != nil else { throw bad("pixelGrid finds the subject square by square with Direction's tools; send it through direction_edit.") } }
         guard effect == "shader" || EditCatalog.effect(effect) != nil else { throw bad("There's no effect \(effect). direction_edit_catalog lists them.") }
         let source = op.resolved?.source
         var fx = ClipEffect(name: effect, params: try checkedParams(effect, op.params ?? [:], source: source), source: source)
@@ -1233,6 +1240,7 @@ struct EditWork {
             if effect == "transform", c.effects?.contains(where: { $0.name == "transform" }) == true { throw bad("\(c.id) already has a transform; change it with setEffect or reframe.") }
             if let k = op.keys { fx.keys = try checkedKeys(effect, k, c, source: source) }
             if effect == "stabilize" { fx.keys = op.resolved?.keys }
+            if effect == "pixelGrid" { fx.data = op.resolved?.data }
             setEffect(fx, on: i)
             var out = change("Added \(effect) to \(label(c))", c); out.effectID = fx.id; return out
         case .track(let name):
@@ -1263,6 +1271,7 @@ struct EditWork {
         }
         if let p = op.params { fx.params = try checkedParams(fx.name, p, over: fx.params, source: fx.source) }
         if fx.name == "stabilize", let found = op.resolved?.keys { fx.keys = found }
+        if fx.name == "pixelGrid", let found = op.resolved?.data { fx.data = found }
         if let keys = op.keys { var all = fx.keys ?? [:]; all.merge(try checkedKeys(fx.name, keys, ci.map { s.clips[$0] }, source: fx.source)) { _, b in b }; fx.keys = all }
         if let ci { s.clips[ci].effects![k] = fx; var out = change("Changed \(fx.name) on \(label(s.clips[ci]))", s.clips[ci]); out.effectID = fx.id; return out }
         s.tracks![tn!]!.effects![k] = fx

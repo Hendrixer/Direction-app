@@ -183,6 +183,7 @@ enum QuitGuard {
         case .logFootage: return "The editor is logging your footage."
         case .finish: return "The editor is finishing \(film.filmName)."
         case .style: return "The editor is making a style."
+        case .technique: return "The editor is learning a technique."
         }
     }
 }

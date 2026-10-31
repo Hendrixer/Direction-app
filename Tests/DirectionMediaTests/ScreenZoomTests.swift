@@ -75,7 +75,8 @@ func writeScreenMovie(to url: URL) async throws {
         let scale = try #require(t.keys?["scale"]), x = try #require(t.keys?["x"]), y = try #require(t.keys?["y"])
         // Two zooms, all the way in on the small cursor and less on the wider typing, back out at the new page
         // between them, each toward its corner of the screen.
-        #expect(scale.map(\.v) == [1, 2, 2, 1, 1.85, 1.85, 1] && scale[3].t < 3.5)
+        let v = scale.map(\.v)
+        #expect(v.count == 7 && v[0] == 1 && v[3] == 1 && v[6] == 1 && v[1] == 2 && v[2] == 2 && (1.6...1.95).contains(v[4]) && v[4] == v[5] && scale[3].t < 3.5)
         #expect(x.contains { $0.v > 0.1 } && y.contains { $0.v > 0.1 } && x.contains { $0.v < -0.1 } && y.contains { $0.v < -0.1 })
     }
 

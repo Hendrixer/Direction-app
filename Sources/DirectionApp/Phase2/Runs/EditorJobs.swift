@@ -5,10 +5,10 @@ import DirectionTools
 /// The job text Direction writes for each run, from the versioned templates in
 /// Resources/Editor/jobs (specs/editor.md › The job text), and the working folder it runs in.
 enum EditorJobs {
-    static let templateNames = ["log-footage", "assemble", "turnover", "continue", "finish", "style", "editor-role"]
+    static let templateNames = ["log-footage", "assemble", "turnover", "continue", "finish", "style", "technique", "editor-role"]
 
     static func templateName(_ job: EditorJob) -> String {
-        switch job { case .logFootage: "log-footage"; case .assemble: "assemble"; case .turnover: "turnover"; case .finish: "finish"; case .style: "style" }
+        switch job { case .logFootage: "log-footage"; case .assemble: "assemble"; case .turnover: "turnover"; case .finish: "finish"; case .style: "style"; case .technique: "technique" }
     }
 
     /// A template's text. SwiftPM flattens processed resources, so look both ways.
@@ -71,6 +71,14 @@ enum EditorJobs {
                 ? "Learn it from this film as well: watch \(cuts.last!.name) (`direction_timeline`, `direction_watch`), measure how it's cut, and keep what makes it this director's."
                 : "Make it from their words and whatever they point you to. Don't take it from this film's cut."
             v["stylesFolder"] = SharedSettings.stylesFolder.path
+        case .technique:
+            v["request"] = run.request.map { $0.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n") } ?? "> Learn the technique this video teaches."
+            let folder = URL(fileURLWithPath: run.learnFolder ?? store.url.appendingPathComponent("Editor/Learn").path)
+            v["video"] = run.learnVideo ?? folder.appendingPathComponent("video.mp4").path
+            v["packet"] = folder.path
+            let info = (try? Data(contentsOf: folder.appendingPathComponent("video.info.json"))).flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) }
+            v["videoSource"] = info.map { i in "It\u{2019}s \u{201C}\(i["title"].string ?? "untitled")\u{201D} by \(i["channel"].string ?? i["uploader"].string ?? "someone"), \(i["webpage_url"].string ?? ""). Its description is in `video.info.json`." } ?? "The director gave you the file."
+            v["techniquesFolder"] = SharedSettings.techniquesFolder.path
         }
         return fill(template(templateName(run.job)) ?? "", v)
     }
@@ -125,7 +133,7 @@ enum EditorJobs {
 
     /// A continuation of the same session: an answer, an approval, Resume or Try again.
     static func continuation(_ answer: String, job: EditorJob) -> String {
-        let what: String = switch job { case .logFootage: "logging the footage"; case .assemble: "the assembly"; case .turnover: "the turnover"; case .finish: "finishing"; case .style: "the style" }
+        let what: String = switch job { case .logFootage: "logging the footage"; case .assemble: "the assembly"; case .turnover: "the turnover"; case .finish: "finishing"; case .style: "the style"; case .technique: "the technique" }
         return fill(template("continue") ?? "{{answer}}", ["answer": answer, "skill": job.skill, "skillPath": skillPath(job), "job": what])
     }
 
@@ -170,7 +178,7 @@ enum EditorJobs {
     /// `<film>.direction/Editor/`: everything the editor writes, and the skill it follows.
     static func prepareFolder(film: URL, job: EditorJob) throws -> URL {
         let fm = FileManager.default, folder = film.appendingPathComponent("Editor")
-        for sub in ["Graphics", "Looks", "Effects", "Transitions", ".direction"] { try fm.createDirectory(at: folder.appendingPathComponent(sub), withIntermediateDirectories: true) }
+        for sub in ["Graphics", "Looks", "Effects", "Transitions", "Techniques", ".direction"] { try fm.createDirectory(at: folder.appendingPathComponent(sub), withIntermediateDirectories: true) }
         let notes = folder.appendingPathComponent("NOTES.md")
         if !fm.fileExists(atPath: notes.path) { try Data("# Notes between runs\n\nWhat I\u{2019}d want to know next time I pick up this film.\n".utf8).write(to: notes) }
         // The job names its own skill; the others (make-shot, make-graphic, propose-look…) are there for it to follow too.

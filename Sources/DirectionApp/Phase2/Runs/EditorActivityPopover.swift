@@ -34,6 +34,7 @@ struct EditorActivityPopover: View {
         case .logFootage: "Logging footage"
         case .finish: "Finishing \(model.filmName)"
         case .style: "Making a style"
+        case .technique: "Learning a technique"
         }
     }
 

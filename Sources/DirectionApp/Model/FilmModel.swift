@@ -18,6 +18,8 @@ enum ActiveSheet: String, Identifiable { case turnover, lockPicture, deliver, sh
     case look
     /// Who's editing? (frame 56)
     case editorSetup
+    /// Learn a technique from a video (techniques.md).
+    case learnTechnique
     var id: String { rawValue }
 }
 
@@ -68,6 +70,8 @@ final class FilmModel {
     /// Where esc goes back to from Screening.
     var previousRoom: Room?
     var sheet: ActiveSheet?
+    /// What Direction is doing to get a tutorial video ready to learn from, while it does.
+    var learning: String?
     var toast: Toast?
     var showEditorPopover = false
     var showCommandMenu = false

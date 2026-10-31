@@ -109,6 +109,7 @@ enum ClipRendering {
                 let a = e.number("amount", at: nil, default: 0)
                 if a > 0 { out = out.applyingFilter("CIUnsharpMask", parameters: ["inputRadius": 2.5 * scale, "inputIntensity": a * 1.5]).cropped(to: image.extent) }
             case "shader": out = ShaderEffect.apply(out.cropped(to: bounds), effect: e, at: t)
+            case "pixelGrid": out = PixelGrid.apply(out.cropped(to: bounds), e, at: t, bounds: bounds)
             case let name where name.hasPrefix("filter."):
                 out = LookPipeline.filter(out, kind: String(name.dropFirst(7)), amount: e.number("amount", at: t, default: 0.5), option: e.params["option"]?.string, frameIndex: frameIndex)
             default: break

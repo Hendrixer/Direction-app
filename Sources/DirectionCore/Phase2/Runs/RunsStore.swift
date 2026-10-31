@@ -10,9 +10,11 @@ public enum EditorJob: String, Codable, Sendable, CaseIterable {
     case logFootage, assemble, turnover, finish
     /// Writing a style the director asked for (styles.md › Making a style).
     case style
+    /// Learning a technique from a video the director gave (techniques.md › Learning one).
+    case technique
     /// The skill each job follows (plugins/direction/skills/<name>/SKILL.md).
     public var skill: String {
-        switch self { case .logFootage: "start-project"; case .assemble: "assemble"; case .turnover: "take-turnover"; case .finish: "finish"; case .style: "make-style" }
+        switch self { case .logFootage: "start-project"; case .assemble: "assemble"; case .turnover: "take-turnover"; case .finish: "finish"; case .style: "make-style"; case .technique: "learn-technique" }
     }
 }
 
@@ -72,6 +74,9 @@ public struct EditorRun: Codable, Hashable, Sendable, Identifiable {
     /// A style run: what the director asked for, in their words, and whether to learn from this film's cut.
     public var request: String?
     public var fromFilm: Bool?
+    /// A technique job: the folder Direction got the video ready in, and the video itself.
+    public var learnFolder: String?
+    public var learnVideo: String?
     public init(id: String = newID("run"), job: EditorJob, state: EditorRunState = .queued, program: String, version: String, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, createdAt: Double = Date().timeIntervalSince1970) {
         self.id = id; self.job = job; self.state = state; self.program = program; self.version = version; self.turnoverID = turnoverID; self.assetCount = assetCount; self.assetIDs = assetIDs; self.createdAt = createdAt; self.updatedAt = createdAt
     }

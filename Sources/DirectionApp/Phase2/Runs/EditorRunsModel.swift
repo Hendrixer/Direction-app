@@ -176,6 +176,18 @@ import DirectionTools
         return true
     }
 
+    /// Learn a technique from a video (techniques.md › Learning one), once Direction has it ready in `folder`.
+    @discardableResult
+    func learnTechnique(_ film: FilmModel, request: String, folder: URL, video: URL) -> Bool {
+        guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program else { return false }
+        var run = EditorRun(job: .technique, program: program.rawValue, version: EditorSetup.version(program))
+        run.request = request; run.learnFolder = folder.path; run.learnVideo = video.path
+        try? store.saveRun(run)
+        runs.append(run)
+        film.refresh(force: true)
+        return true
+    }
+
     private func create(_ job: EditorJob, program: EditorProgram, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, store: ProjectStore) {
         var run = EditorRun(job: job, program: program.rawValue, version: EditorSetup.version(program), turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
         run.held = EditorSetup.asksFirst
@@ -289,6 +301,7 @@ import DirectionTools
         case .logFootage: "Logging isn\u{2019}t finished. Your footage stays, and you can start again."
         case .finish: "Finishing isn\u{2019}t done. Picture stays locked, and you can start again."
         case .style: "The style isn\u{2019}t saved. Your film is as it was, and you can ask again."
+        case .technique: "The technique isn\u{2019}t saved. Your film is as it was, and you can ask again."
         }
     }
 
