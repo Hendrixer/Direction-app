@@ -30,6 +30,12 @@ public enum ShotDetector {
         }
     }
 
+    /// Several frames' prints, on Vision's own threads (`VisionWork`): Vision blocks while it works.
+    static func featurePrints(_ images: [CGImage]) async throws -> [[Float]] {
+        let frames = images.map(VisionImage.init)
+        return try await VisionWork.run { try frames.map { try featurePrint($0.image) } }
+    }
+
     public static func distance(_ a: [Float], _ b: [Float]) -> Float {
         guard a.count == b.count else { return .infinity }
         var d: Float = 0
@@ -74,7 +80,8 @@ public enum ShotDetector {
         // Decode in batches so a long take doesn't hold every frame in memory at once.
         for chunk in stride(from: 0, to: times.count, by: 48).map({ Array(times[$0..<min(times.count, $0 + 48)]) }) {
             let images = try await SourceFrames.images(asset, at: chunk, maxDimension: sampleSize, tolerance: 0.5 / rate)
-            for (time, image) in zip(chunk, images) { samples.append(Sample(time: time, print: try featurePrint(image), luma: SourceFrames.luminance(image))) }
+            let prints = try await featurePrints(images)
+            for ((time, image), print) in zip(zip(chunk, images), prints) { samples.append(Sample(time: time, print: print, luma: SourceFrames.luminance(image))) }
             progress?(Double(samples.count) / Double(times.count))
         }
         var distances: [Float] = [0]
@@ -107,8 +114,8 @@ public enum ShotDetector {
             return b.time
         }
         var previous = a.print, best = (frame: last, d: Float(0))
-        for (n, image) in zip(frames, images) {
-            let p = try featurePrint(image), d = distance(previous, p)
+        for (n, p) in zip(frames, try await featurePrints(images)) {
+            let d = distance(previous, p)
             if d > best.d { best = (n, d) }
             previous = p
         }

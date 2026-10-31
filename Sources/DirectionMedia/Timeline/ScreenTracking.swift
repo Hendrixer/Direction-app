@@ -68,9 +68,24 @@ extension TimelineAnalysis {
     }
 
     /// The quad to follow in the first frame: near the corners given (in the frame), or the biggest one.
-    static func start(_ image: CGImage, near corners: [[Double]]?, placement: Placement) throws -> Quad? {
-        guard let corners else { return try quads(in: image).first }
+    static func start(_ image: CGImage, near corners: [[Double]]?, placement: Placement) async throws -> Quad? {
+        guard let corners else { return try await biggest(in: [image]) }
         return corners.map { placement.source(CGPoint(x: $0[0], y: $0[1])) }
+    }
+
+    /// The biggest rectangle in the first of the frames that has one, on Vision's own threads (`VisionWork`).
+    static func biggest(in images: [CGImage]) async throws -> Quad? {
+        let frames = images.map(VisionImage.init)
+        return try await VisionWork.run {
+            for f in frames { if let q = try quads(in: f.image).first { return q } }
+            return nil
+        }
+    }
+
+    /// `follow(_:through:)` on Vision's own threads.
+    static func following(_ first: Quad, through images: [CGImage]) async throws -> (quads: [Quad], lost: Int) {
+        let frames = images.map(VisionImage.init)
+        return try await VisionWork.run { follow(first, through: frames.map(\.image)) }
     }
 
     /// Keys at each time, linear between, in cut seconds.
@@ -89,8 +104,8 @@ extension TimelineAnalysis {
         let samples = try await cutFrames(asset, story, from: a, to: b, fps: min(fps, 15), cap: 600)
         let size = CGSize(width: samples[0].image.width, height: samples[0].image.height)
         func place(_ t: Double) -> Placement { placement(story, picture: size, frame: frame, at: story.sourceTime(at: MediaTime(seconds: t)).seconds) }
-        guard let first = try start(samples[0].image, near: corners, placement: place(samples[0].t)) else { throw noScreen(story) }
-        let (found, lost) = follow(first, through: samples.map(\.image))
+        guard let first = try await start(samples[0].image, near: corners, placement: place(samples[0].t)) else { throw noScreen(story) }
+        let (found, lost) = try await following(first, through: samples.map(\.image))
         var values: [String: [Double]] = [:]
         for (i, s) in samples.enumerated() {
             let shown = found[i].map(place(s.t).show)
@@ -109,11 +124,11 @@ extension TimelineAnalysis {
         let samples = try await cutFrames(asset, left, from: begin, to: end, fps: min(fps, 30), cap: 300)
         let size = CGSize(width: samples[0].image.width, height: samples[0].image.height)
         let place = placement(left, picture: size, frame: frame, at: nil)
-        var first = try start(samples[0].image, near: corners, placement: place)
+        var first = try await start(samples[0].image, near: corners, placement: place)
         // Nothing at the start of the push: the screen may only come into view later in it.
-        if first == nil, corners == nil { first = try quads(in: samples[samples.count / 2].image).first ?? quads(in: samples[samples.count - 1].image).first }
+        if first == nil, corners == nil { first = try await biggest(in: [samples[samples.count / 2].image, samples[samples.count - 1].image]) }
         guard let first else { throw noScreen(left) }
-        let (found, lost) = follow(first, through: samples.map(\.image))
+        let (found, lost) = try await following(first, through: samples.map(\.image))
         // The screen as the frame shows it, one per frame of the push, between the samples.
         let times = (0...n).map { begin + Double($0) / fps }
         func shown(at t: Double) -> Quad {

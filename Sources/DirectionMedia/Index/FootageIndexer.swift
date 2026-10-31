@@ -327,7 +327,7 @@ public enum FootageIndexer {
                 paths = (0..<images.count).map { describeFrame(shot, $0, options) }
             }
             // A shot that doesn't move (its first and last frames look alike) needs only its middle.
-            if paths.count == 3, let a = jpegPrint(paths[0]), let b = jpegPrint(paths[2]), ShotDetector.distance(a, b) < staticShot { paths = [paths[1]] }
+            if paths.count == 3, let a = await jpegPrint(paths[0]), let b = await jpegPrint(paths[2]), ShotDetector.distance(a, b) < staticShot { paths = [paths[1]] }
             let words = lines.filter { $0.start >= shot.start - 0.2 && $0.start < shot.end }.map(\.text).joined(separator: " ")
             return DescribeRequest(images: paths, words: words)
         }
@@ -404,9 +404,9 @@ public enum FootageIndexer {
         return count
     }
 
-    static func jpegPrint(_ url: URL) -> [Float]? {
+    static func jpegPrint(_ url: URL) async -> [Float]? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
-        return try? ShotDetector.featurePrint(image)
+        return try? await ShotDetector.featurePrints([image]).first
     }
 
     /// Feature-print distance under which a shot reuses another's line: 0.3 anywhere in the film,

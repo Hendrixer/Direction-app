@@ -14,6 +14,8 @@ Direction runs the index itself, the same way every time. The editor doesn't dec
 
 All steps run at background priority, in parallel with transcription, take by take, in the order the takes will be logged. The editor's logging job starts once shots exist for a take.
 
+Vision (shots, text on screen, and the timeline's face following, stabilizing and screen tracking) runs on threads of its own, never Swift's shared ones: a Vision request blocks while it works and waits on work of its own, and a few blocked shared threads stalled it for good. Text on screen uses `VNRecognizeTextRequest`, four frames at once; several of the Swift `RecognizeTextRequest` at once crash inside Apple's text recognition.
+
 | Step | How | Output |
 |---|---|---|
 | 1. Proxies and keyframes | AVFoundation, 4 frames per second at 512 px from the proxy | Cached frames (deleted after step 4) |

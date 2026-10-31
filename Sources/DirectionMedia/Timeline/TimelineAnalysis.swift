@@ -32,21 +32,26 @@ public enum TimelineAnalysis {
     /// keepIn center or thirds places it; without keepIn it stays where it first appears.
     public static func follow(asset: MediaAsset, clip: Clip, subject: String, scale: Double, keepIn: String?, frame: CGSize) async throws -> ResolvedValues {
         let samples = try await frames(asset, clip.sourceRange, fps: 5, maxSize: 640, cap: 240)
-        var points: [CGPoint?] = []
-        for (_, image) in samples {
-            let handler = VNImageRequestHandler(cgImage: image)
-            var box: CGRect?
-            if subject == "face" {
-                let request = VNDetectFaceRectanglesRequest(); try handler.perform([request])
-                let faces = (request.results ?? []).map(\.boundingBox)
-                let previous = points.last.flatMap { $0 }
-                box = previous.map { p in faces.min { hypot($0.midX - p.x, 1 - $0.midY - p.y) < hypot($1.midX - p.x, 1 - $1.midY - p.y) } } ?? faces.max { $0.width * $0.height < $1.width * $1.height }
-            } else {
-                let request = VNGenerateAttentionBasedSaliencyImageRequest(); try handler.perform([request])
-                box = (request.results?.first?.salientObjects ?? []).map(\.boundingBox).max { $0.width * $0.height < $1.width * $1.height }
+        // On Vision's own threads (`VisionWork`): it blocks while it works.
+        let frames = samples.map { VisionImage(image: $0.image) }
+        let points: [CGPoint?] = try await VisionWork.run {
+            var points: [CGPoint?] = []
+            for frame in frames {
+                let handler = VNImageRequestHandler(cgImage: frame.image)
+                var box: CGRect?
+                if subject == "face" {
+                    let request = VNDetectFaceRectanglesRequest(); try handler.perform([request])
+                    let faces = (request.results ?? []).map(\.boundingBox)
+                    let previous = points.last.flatMap { $0 }
+                    box = previous.map { p in faces.min { hypot($0.midX - p.x, 1 - $0.midY - p.y) < hypot($1.midX - p.x, 1 - $1.midY - p.y) } } ?? faces.max { $0.width * $0.height < $1.width * $1.height }
+                } else {
+                    let request = VNGenerateAttentionBasedSaliencyImageRequest(); try handler.perform([request])
+                    box = (request.results?.first?.salientObjects ?? []).map(\.boundingBox).max { $0.width * $0.height < $1.width * $1.height }
+                }
+                // Vision's origin is bottom left; ours is top left.
+                points.append(box.map { CGPoint(x: $0.midX, y: 1 - $0.midY) })
             }
-            // Vision's origin is bottom left; ours is top left.
-            points.append(box.map { CGPoint(x: $0.midX, y: 1 - $0.midY) })
+            return points
         }
         guard let firstSeen = points.firstIndex(where: { $0 != nil }) else { throw DirectionError("bad_argument", "I couldn't find a \(subject) in \(clip.name). Reframe it without follow.") }
         // Fill the frames where it wasn't found from its neighbors.
@@ -84,14 +89,19 @@ public enum TimelineAnalysis {
         let samples = try await frames(asset, clip.sourceRange, fps: fps, maxSize: 480, cap: 600)
         guard samples.count > 1 else { return ["dx": [.init(t: samples[0].t, v: 0)], "dy": [.init(t: samples[0].t, v: 0)], "rotation": [.init(t: samples[0].t, v: 0)]] }
         let w = Double(samples[0].image.width), h = Double(samples[0].image.height)
-        var x = [0.0], y = [0.0], r = [0.0]
-        for (a, b) in zip(samples, samples.dropFirst()) {
-            let request = VNHomographicImageRegistrationRequest(targetedCGImage: b.image)
-            try VNImageRequestHandler(cgImage: a.image).perform([request])
-            // The warp maps the next frame onto this one: how far the picture moved, in pixels and radians.
-            let m = request.results?.first?.warpTransform
-            let tx = Double(m?.columns.2.x ?? 0), ty = Double(m?.columns.2.y ?? 0), rot = atan2(Double(m?.columns.0.y ?? 0), Double(m?.columns.0.x ?? 1))
-            x.append(x.last! + tx); y.append(y.last! + ty); r.append(r.last! + rot)
+        // On Vision's own threads (`VisionWork`): it blocks while it works.
+        let frames = samples.map { VisionImage(image: $0.image) }
+        let (x, y, r) = try await VisionWork.run {
+            var x = [0.0], y = [0.0], r = [0.0]
+            for (a, b) in zip(frames, frames.dropFirst()) {
+                let request = VNHomographicImageRegistrationRequest(targetedCGImage: b.image)
+                try VNImageRequestHandler(cgImage: a.image).perform([request])
+                // The warp maps the next frame onto this one: how far the picture moved, in pixels and radians.
+                let m = request.results?.first?.warpTransform
+                let tx = Double(m?.columns.2.x ?? 0), ty = Double(m?.columns.2.y ?? 0), rot = atan2(Double(m?.columns.0.y ?? 0), Double(m?.columns.0.x ?? 1))
+                x.append(x.last! + tx); y.append(y.last! + ty); r.append(r.last! + rot)
+            }
+            return (x, y, r)
         }
         let radius = max(3, Int(fps))
         let sx = smooth(x, radius), sy = smooth(y, radius), sr = smooth(r, radius)

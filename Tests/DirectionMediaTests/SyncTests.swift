@@ -124,18 +124,17 @@ struct SyncTests {
 
     @Test func footageIsWhatTheDirectorBroughtIn() throws {
         let film = URL(fileURLWithPath: "/Films/Demo.direction"), styles = URL(fileURLWithPath: "/Styles")
-        SharedSettings.stylesFolderOverride = styles
-        defer { SharedSettings.stylesFolderOverride = nil }
         func asset(_ path: String) -> MediaAsset { MediaAsset(name: "a", path: path, duration: MediaTime(seconds: 10)) }
-        #expect(asset("/Footage/camera.mp4").isFootage(film: film))
-        #expect(asset("/Films/Demo.direction/Made/shot.mov").isFootage(film: film))
-        #expect(!asset("/Films/Demo.direction/Editor/Deliveries/mix.wav").isFootage(film: film))
-        #expect(!asset("/Films/Demo.direction/Style/sounds/whoosh.wav").isFootage(film: film))
-        #expect(!asset("/Styles/desk-talk/sounds/pop.wav").isFootage(film: film))
+        func footage(_ a: MediaAsset) -> Bool { a.isFootage(film: film, styles: styles) }
+        #expect(footage(asset("/Footage/camera.mp4")))
+        #expect(footage(asset("/Films/Demo.direction/Made/shot.mov")))
+        #expect(!footage(asset("/Films/Demo.direction/Editor/Deliveries/mix.wav")))
+        #expect(!footage(asset("/Films/Demo.direction/Style/sounds/whoosh.wav")))
+        #expect(!footage(asset("/Styles/desk-talk/sounds/pop.wav")))
         // A sibling folder that only starts with the film's name is footage.
-        #expect(asset("/Films/Demo.direction copy/camera.mp4").isFootage(film: film))
+        #expect(footage(asset("/Films/Demo.direction copy/camera.mp4")))
         var graphic = asset("/Elsewhere/title.mov"); graphic.graphic = "title"
-        #expect(!graphic.isFootage(film: film))
+        #expect(!footage(graphic))
     }
 
     // MARK: Fixtures

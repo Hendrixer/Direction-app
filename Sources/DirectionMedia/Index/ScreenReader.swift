@@ -155,20 +155,24 @@ public enum ScreenReader {
     ///
     /// Vision's older request, not the Swift `RecognizeTextRequest`: several of those at once in one
     /// process crash inside Apple's text recognition (a 17-minute screen recording took the app
-    /// down; about 1 run in 10 of 8 at once crashed, against none in 360 of these).
+    /// down; about 1 run in 10 of 8 at once crashed, against none in 360 of these). It blocks while it
+    /// reads, so it runs on Vision's own threads (`VisionWork`).
     public static func lines(_ image: CGImage) async throws -> [String] {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = false
-        try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
-        let read = (request.results ?? []).compactMap { o -> Read? in
-            guard let c = o.topCandidates(1).first, c.confidence >= minimumConfidence, let text = clean(c.string) else { return nil }
-            return Read(text: text, rect: o.boundingBox)
+        let frame = VisionImage(image: image)
+        let read = try await VisionWork.run {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = false
+            try VNImageRequestHandler(cgImage: frame.image, options: [:]).perform([request])
+            return (request.results ?? []).compactMap { o -> Read? in
+                guard let c = o.topCandidates(1).first, c.confidence >= minimumConfidence, let text = clean(c.string) else { return nil }
+                return Read(text: text, rect: o.boundingBox)
+            }
         }
         return ordered(read, frameHeight: Double(image.height))
     }
 
-    struct Read { var text: String; var rect: CGRect }
+    struct Read: Sendable { var text: String; var rect: CGRect }
 
     /// Pure: sizes in steps of 3 px of the frame read, largest first; rows from the top (Vision's
     /// origin is bottom left), a line joining the row when its center is within half its height of
