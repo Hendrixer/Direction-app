@@ -81,6 +81,10 @@ public struct EditOperation: Hashable, Sendable {
     public var corners: [[Double]]?
     /// `layout`: how the screen and the camera share the frame over `range`.
     public var layout: FrameLayout?
+    /// `layout` by the name of one of the style's layouts ("Showing"), until Direction's tools look it up.
+    public var layoutName: String?
+    /// `punchIn`: the framings in turn on each jump cut; `slowPush`: where it starts and ends.
+    public var scales: [Double]?
     /// What Direction's tools measured before the batch runs: face keys, a matched balance, a checked
     /// shader, quiet stretches, a graphic's render. Never taken from the editor.
     public var resolved: ResolvedValues?
@@ -99,12 +103,14 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
     public var assetID: String?
     /// `layout`: the cameras and screens in sync, and the faces in the cameras.
     public var layout: LayoutMeasure?
+    /// Moves (`punchIn`, `emphasisPunch`, `slowPush`): where the face is in each take they frame.
+    public var faces: [String: FaceTrack]?
     public var warnings: [String]?
-    public init(keys: [String: [Keyframe]]? = nil, grade: ColorGrade? = nil, source: String? = nil, quiet: [MediaRange]? = nil, assetID: String? = nil, layout: LayoutMeasure? = nil, warnings: [String]? = nil) { self.keys = keys; self.grade = grade; self.source = source; self.quiet = quiet; self.assetID = assetID; self.layout = layout; self.warnings = warnings }
+    public init(keys: [String: [Keyframe]]? = nil, grade: ColorGrade? = nil, source: String? = nil, quiet: [MediaRange]? = nil, assetID: String? = nil, layout: LayoutMeasure? = nil, faces: [String: FaceTrack]? = nil, warnings: [String]? = nil) { self.keys = keys; self.grade = grade; self.source = source; self.quiet = quiet; self.assetID = assetID; self.layout = layout; self.faces = faces; self.warnings = warnings }
 }
 
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "layout", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "layout", "scales", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -147,7 +153,9 @@ extension EditOperation: Codable {
         dB = try num("dB"); fadeIn = try int("in"); fadeOut = try int("out"); under = try str("under"); attack = try num("attack"); release = try num("release")
         endOn = value("endOn")
         corners = try decoded("corners", [[Double]].self, "four [x, y] corners, fractions of the frame from its top left, top left first and clockwise")
-        layout = try decoded("layout", FrameLayout.self, "{kind: screenAndYou|you|screen|sideBySide, corner?: topLeft|topRight|bottomLeft|bottomRight, size?: small|medium|large, shape?: circle|rounded|wide, screen?: full|framed}")
+        if let v = value("layout"), let n = v.string ?? (v["kind"] == .null ? v["name"].string : nil) { layoutName = n }
+        else { layout = try decoded("layout", FrameLayout.self, "the name of one of the style's layouts, or {kind: screenAndYou|you|screen|sideBySide, corner?: topLeft|topRight|bottomLeft|bottomRight, size?: small|medium|large, shape?: circle|rounded|wide, screen?: full|framed}") }
+        scales = try decoded("scales", [Double].self, "a list of scales, like [1, 1.15]")
         resolved = try decoded("resolved", ResolvedValues.self, "Direction's own measurements")
     }
 
@@ -167,7 +175,7 @@ extension EditOperation: Codable {
         put("toClipID", toClipID); put("lut", lut); put("target", target); put("effect", effect); if let params { f["params"] = .object(params) }; put("keys", any: keys); put("effectID", effectID)
         if !legacy { put("type", transitionType) }
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
-        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("layout", any: layout); put("resolved", any: resolved)
+        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); put("resolved", any: resolved)
         return .object(f)
     }
 
@@ -638,6 +646,9 @@ struct EditWork {
             return change("Took the transition out before \(label(s.clips[ri]))", s.clips[ri], head: true)
         case "cutaway": return try cutaway(op)
         case "layout": return try layout(op)
+        case "punchIn": return try punchIn(op)
+        case "emphasisPunch": return try emphasisPunch(op)
+        case "slowPush": return try slowPush(op)
         case "pin": return try pin(op)
         case "zoomThrough": return try zoomThrough(op)
         case "syncSound": return try syncSound(op)

@@ -32,7 +32,8 @@ enum EditorJobs {
     /// The first invocation's text for a run.
     static func text(for run: EditorRun, store: ProjectStore) throws -> String {
         let p = try store.read(), brief = try store.brief(), state = try store.directingState(), dailies = try store.dailies()
-        var v = common(run.job, film: p.name, brief: brief, state: state, style: try store.style())
+        let applied = try store.appliedStyle()
+        var v = common(run.job, film: p.name, brief: brief, state: state, applied: applied)
         switch run.job {
         case .logFootage:
             let footage = p.footage(film: store.url)
@@ -51,7 +52,7 @@ enum EditorJobs {
             v["baseCut"] = t.baseCutID.flatMap { id in cuts.first { $0.id == id }?.name } ?? "the current cut"
             v["noteCount"] = t.noteIDs.count == 1 ? "1 note" : "\(t.noteIDs.count) notes"
             v["circles"] = "The director circled \(dailies.takes.values.filter(\.circled).count) takes."
-            v["sync"] = syncRules(dailies, assets: p.assets, layout: try store.directingState().layout)
+            v["sync"] = syncRules(dailies, assets: p.assets, layout: try store.directingState().layout, styleLayouts: applied.layouts)
             let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }.sorted { ($0.number ?? 0) < ($1.number ?? 0) }
             v["notes"] = included.map(noteLine).joined(separator: "\n")
             v["waitForOK"] = t.waitForOK
@@ -74,9 +75,25 @@ enum EditorJobs {
         return fill(template(templateName(run.job)) ?? "", v)
     }
 
+    /// The film's style and the house style's rules, for the brief (styles.md › In a film): the house rules
+    /// in full, since they're few and every film follows them; the style by name, read with direction_style.
+    static func styleLines(_ applied: AppliedStyle) -> [String] {
+        var b: [String] = []
+        if let style = applied.style {
+            let n = style.rules.count, layouts = style.layouts.compactMap(\.name)
+            b.append("- Style: \(style.name)\(style.summary.isEmpty ? "" : ". \(style.summary)") It has \(n) rule\(n == 1 ? "" : "s")\(layouts.isEmpty ? "" : ", layouts \(layouts.joined(separator: ", "))") and its moves. Read it with `direction_style` before you cut, and follow it wherever the brief and the notes leave a choice open.")
+        }
+        let house = applied.house.rules
+        if !house.isEmpty {
+            b.append("- House rules, for every film\(applied.style.map { " (\($0.name) wins where it says otherwise)" } ?? ""):")
+            b.append(contentsOf: house.map { "  - \($0.text)" })
+        }
+        return b
+    }
+
     /// How to cut takes in sync, with the film's groups, or nothing when it has none
     /// (footage-index.md › Sync).
-    static func syncRules(_ dailies: Dailies, assets: [MediaAsset], layout: FrameLayout? = nil) -> String {
+    static func syncRules(_ dailies: Dailies, assets: [MediaAsset], layout: FrameLayout? = nil, styleLayouts: [FrameLayout] = []) -> String {
         let groups = dailies.syncGroups ?? []
         guard !groups.isEmpty else { return "" }
         func label(_ id: String) -> String {
@@ -94,8 +111,16 @@ enum EditorJobs {
         - A circle on any take in a group asks for that moment. Put one angle on V1, never two angles end to end.
         - Bring the other angles in over it with `cutaway` without `sourceRange` (give `at` and `seconds`): it plays the same moment, and Direction keeps it lined up as you edit.
         - The cut uses the group's sound take. If the angle on V1 isn't it, `syncSound` that clip so the sound take plays under it.
-        - A camera and a screen recording in sync share the frame with `layout` (\(layout.map { "the director chose \($0.label) for this film" } ?? "Screen and you, bottom right, unless the director chooses another")): it frames the camera on the face, keeps both in sync and replaces cutaways and shaders. Lay out the whole cut with it; a scene that's only talk can be You. A layout the director set in the app is theirs.
+        - A camera and a screen recording in sync share the frame with `layout` (\(layoutChoice(layout, styleLayouts))). Direction frames the camera on the face and keeps both in sync. Never build a corner camera by hand with cutaways, transforms or shaders, even where a rule describes one: use the layout. Lay out the whole cut with it. Zoom, blur and freeze the screen inside a layout as the style asks; changing the layout keeps them. A layout the director set in the app is theirs.
         """
+    }
+
+    /// Which layout the editor starts from: the director's, else the style's by name, else the standard.
+    static func layoutChoice(_ layout: FrameLayout?, _ styleLayouts: [FrameLayout]) -> String {
+        if let layout { return "the director chose \(layout.label) for this film" }
+        let named = styleLayouts.filter { $0.name != nil }
+        if !named.isEmpty { return "use the style\u{2019}s by name: " + named.map { "\($0.name!) (\($0.plainLabel))" }.joined(separator: ", ") + "; its rules say when" }
+        return "Screen and you, bottom right, unless the director chooses another; a scene that\u{2019}s only talk can be You"
     }
 
     /// A continuation of the same session: an answer, an approval, Resume or Try again.
@@ -104,7 +129,7 @@ enum EditorJobs {
         return fill(template("continue") ?? "{{answer}}", ["answer": answer, "skill": job.skill, "skillPath": skillPath(job), "job": what])
     }
 
-    private static func common(_ job: EditorJob, film: String, brief: Brief, state: DirectingState, style: Style?) -> [String: String] {
+    private static func common(_ job: EditorJob, film: String, brief: Brief, state: DirectingState, applied: AppliedStyle) -> [String: String] {
         var b: [String] = []
         if !brief.logline.isEmpty { b.append("- In one sentence: \(brief.logline)") }
         if !brief.feeling.isEmpty { b.append("- How it should feel: \(brief.feeling)") }
@@ -113,7 +138,7 @@ enum EditorJobs {
         for k in brief.mustKeep { b.append("- Must keep: \(k)") }
         for r in brief.references { b.append("- Reference: \(r.title). \(r.why)") }
         if let a = brief.avoid, !a.isEmpty { b.append("- Avoid: \(a)") }
-        if let style { b.append("- Style: \(style.name)\(style.summary.isEmpty ? "" : ". \(style.summary)") Read it with `direction_style` before you cut, and follow it wherever the brief and the notes leave a choice open.") }
+        b.append(contentsOf: styleLines(applied))
         let prefs = state.preferences ?? EditorPreferences()
         let order = prefs.conflictOrder.map(\.label).joined(separator: " \u{203A} ")
         return [

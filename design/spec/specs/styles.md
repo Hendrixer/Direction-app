@@ -1,17 +1,33 @@
 # Styles
 
-A style is how a director's videos look, sound and move, kept so the editor can cut every film that way. It works the way a design system works for an app: exact values, guidance in words, and parts that are reused as they are. The director picks one in a film's brief (optional). The brief and the notes always come first; the style decides what they leave open.
+A style is how a kind of the director's videos looks, sounds and moves, kept so the editor can cut every film of that kind that way. It works the way a design system works for an app: rules in words, exact values, what Direction carries out itself, and parts that are reused as they are. The director picks one in a film's brief (optional). Under every film sits the **house style**: the director's rules for every film.
 
-Styles are for people who know what they like before they know how to say it in an editor's words. One made once ("Desk Talk", "Long Walk") carries the pace, titles, captions, transitions and sound from one video to the next.
+Styles are for people who know what they like before they know how to say it in an editor's words. One made once ("Desk + Screen", "Reaction") carries the pace, layouts, punch-ins, titles, captions, transitions and sound from one video to the next.
+
+## What a film follows
+
+The narrower one wins:
+
+| | Covers | Set in |
+|---|---|---|
+| Note | one moment | Notes, and anything the director changes in the cut themselves (a layout) |
+| Brief | this film | The brief, and Dailies |
+| Style | this kind of video | Settings › Styles, the brief, Keep as a rule |
+| House style | every film | Settings › Styles, Keep as a rule |
+
+Where two disagree, the higher row wins. One principle is easier to predict than a list: it's how directions to a person work ("always do this, except in this kind of video").
+
+## The split: the editor decides where, Direction does how
+
+Rules say what and when, in words. Layouts, moves and pace say how, as numbers Direction carries out. The editor reads the rules, picks the moments, and asks for things by name ("Showing, 0:42 to 1:10", "punch in on the cuts in scene 2"); Direction tracks the face and writes the keyframes. No reasoning goes into working out how to zoom.
 
 ## A style on disk
 
-One folder per style in the Styles folder (Settings › Styles; default `~/Movies/Direction/Styles/`, `DIRECTION_STYLES_PATH` for a process). The folder's name is the style's id. Copying the folder shares it; dropping one in installs it.
+One folder per style in the Styles folder (Settings › Styles; default `~/Movies/Direction/Styles/`, `DIRECTION_STYLES_PATH` for a process). The folder's name is the style's id. Copying the folder shares it, rules, layouts and all; dropping one in installs it. The house style is the folder `house/`, made the first time something is kept in it, and isn't listed with the styles a brief picks; no style takes its id.
 
 ```
-desk-talk/
-  style.json          the values (required: name)
-  guide.md            the rest, in words
+desk-screen/
+  style.json          rules, layouts, moves, pace and values (required: name)
   graphics/<name>/    Direction graphics (index.html calling direction.graphic)
   transitions/*.metal transitions (agent-timeline.md › Transitions)
   effects/*.metal     effects (agent-timeline.md › Custom effects)
@@ -22,44 +38,52 @@ desk-talk/
   stills/*            what it looks like: jpg, png, heic
 ```
 
-**style.json** holds `format` (1), `name`, `summary` (one sentence), `updatedAt`, and the values the editor holds to. Direction reads only the first four; everything else is for the editor. The keys the `make-style` skill uses:
+**style.json** (format 2) holds `format`, `name`, `summary` (one sentence), `updatedAt`, and:
 
-| Key | Holds |
-| --- | --- |
-| `pace` | `averageShotSeconds`, `longestShotSeconds`, `pausesUpTo`, `hookBySeconds` |
-| `picture` | `punchIn` (scale), `brollEverySeconds` |
-| `colors` | hex: `text`, `accent`, `backing`, … |
-| `fonts` | per role (`title`, `body`, `captions`): `family`, `weight`, `width` |
-| `motion` | `in`, `out`, `hold` (seconds), `ease` |
-| `captions` | `on`, `wordsAtATime`, `case`, `position` |
-| `transitions` | `default` (`cut`), `use` (names), `frames` |
-| `sound` | `musicUnderSpeechDB`, `effectsDB`, `whooshOnTransitions`, `popOnGraphics` |
-| `graphics` | which part plays which role: `title`, `lowerThird`, `captions`, … |
-| `look` | `strength` |
+| Key | Holds | Who reads it |
+|---|---|---|
+| `rules` | `[{id, area, text, kept?}]`: one sentence each in the director's words. Areas, in order: general, pace, picture, layouts, graphics, captions, transitions, sound, music, color, avoid. `kept` says which film and note a kept rule came from | Direction (Settings, Keep as a rule) and the editor |
+| `layouts` | Named layouts (layouts.md › In a style): `[{name, kind, corner?, size?, shape?, screen?, edge?}]` | Direction: the picker, Dailies, `layout` by name |
+| `moves` | `punchIn {scales, keepIn?}`, `emphasisPunch {scale, everySeconds?}`, `slowPush {from, to, longerThan}` | Direction: the moves' numbers when the editor leaves theirs out |
+| `pace` | `tightenPauses {longerThan, to}`, and `averageShotSeconds`, `longestShotSeconds`, `hookBySeconds` for the editor | Direction (`tightenPauses`) and the editor |
+| `colors`, `fonts`, `motion`, `captions`, `transitions`, `sound`, `graphics` (which part plays which role), `look` | Exact values | The editor |
 
-**guide.md** has one section for each thing an editor decides: Pace, Picture, Graphics, Captions, Transitions, Sound, Music, Color, Avoid. Instructions with numbers ("Punch in to 1.2× every two or three sentences"), not adjectives. A new style starts from this template.
+Each move comes from the style, else the house style, else Direction's own (`StyleMoves.standard`: punch-ins 1× and 1.15×, emphasis 1.3×, a push from 1× to 1.05× on shots over 8 s, pauses over 0.35 s to 0.15 s). Layouts come from the style, else the house style.
+
+**Older styles** (format 1) kept their words in `guide.md`. They still read: each bullet or paragraph under a heading is a rule in that heading's area, the template's placeholder lines left out. The first change writes them into style.json; guide.md is no longer read after that.
 
 ## In a film
 
-- **The brief** has a Style question after Length (frame 03): one field showing the chosen style's name and sentence, or None ("Just the brief and your notes."). It opens a list (frame 66): a search field (name, sentence and what it holds; every word must match), None first, then each style with what it holds; ↑↓ and Return choose, and Your Styles… opens Settings › Styles. Beside the field, New Style: Write One… (the same sheet as Settings › Styles, and the new style is chosen), Make One with the Editor…, Your Styles…
-- **The film keeps its own copy.** Saving a brief that names a style copies its folder to `<film>.direction/Style/`, so the film doesn't change when the style does and travels with its style. Saving it with another style, or None, replaces or removes the copy. A style the editor changes for this film (`direction_save_style`) is copied again.
-- **The editor** sees it in `direction_brief` (`style`), in its job text (“Style: Desk Talk…”), and reads it with `direction_style`: values, guide, and each part with its path. It copies graphics to `Editor/Graphics/<name>/`, transitions to `Editor/Transitions/`, effects to `Editor/Effects/`, brings sounds and music in with `direction_import`, and proposes the look with `direction_make_look fromLUT` (the look stays the director's). `direction_graphic_examples` lists the style's graphics first (`fromStyle`).
+- **The brief** has a Style question after Length (frame 03): one field showing the chosen style's name and sentence, or None ("Your house style, the brief and your notes."). It opens a list (frame 66): a search field (name, sentence and what it holds; every word must match), None first, then each style with what it holds; ↑↓ and Return choose, and Your Styles… opens Settings › Styles. Beside the field, New Style: Write One… (the same sheet as Settings › Styles, and the new style is chosen), Make One with the Editor…, Your Styles…
+- **The film keeps its own copy.** Saving a brief that names a style copies its folder to `<film>.direction/Style/`, so the film doesn't change when the style does and travels with its style. Saving it with another style, or None, replaces or removes the copy. A style the editor changes for this film (`direction_save_style`), or a rule kept for it, is copied again. When the style in the Styles folder is newer than the film's copy, the brief says so under the field ("Desk + Screen has changed since this film took it.") with **Use the new version**. The house style isn't copied: every film reads it as it is.
+- **The editor** sees the style by name and the house rules in full in its job text, and reads what the film follows with `direction_style`: the rules (the house style's first, then the style's, each saying where it's from), the named layouts, the moves, the values, and each part with its path. It copies graphics to `Editor/Graphics/<name>/`, transitions to `Editor/Transitions/`, effects to `Editor/Effects/`, brings sounds and music in with `direction_import`, and proposes the look with `direction_make_look fromLUT` (the look stays the director's). `direction_graphic_examples` lists the style's graphics first (`fromStyle`). It never builds by hand what a layout or a move does, even where a rule describes it.
+
+## Keep as a rule
+
+When a note says something the director wants every time ("never put words over my face"), the editor offers a rule with its answer (`direction_turnover_complete` › `rule`: one sentence in their words, its area, `scope` style or house, and `replaces`, the ids of rules it takes the place of). Not for one-off fixes.
+
+Once the answer is accepted, Changes shows **Keep as a Rule…** (changes.md). The director edits the wording and picks where it goes: **`<style> films`** (into the style in the Styles folder and the film's copy; films already cut in that style keep their copy until it's picked again) or **Every film** (the house style). Rules it replaces are taken out, so a house rule that overrides a style's says so once instead of being overruled by it. The answer remembers where it went ("Kept as a rule"). A film whose style has left the Styles folder keeps rules in the house style only.
 
 ## Making a style
 
 - **With the editor, in the app.** New Style › Make One with the Editor… in the brief: the director says what it should be like (channels, videos, what they like about them) and, when the film has a cut, whether to learn from how it's cut. Direction starts a run with job `style` (skill `make-style`, template `jobs/style.md`). It's done when a style is saved after the run began. Under Your own session, the popover says to ask that session instead.
 - **With the editor, in a session of your own.** "Make me a style" with the Direction plugin: the `make-style` skill and `direction_styles`, `direction_style`, `direction_save_style`.
-- **By hand.** Settings › Styles › New Style…, or New Style › Write One… in the brief: name, sentence and guide. Edit… changes them; the parts are files, so Show in Finder opens the folder. Move to Trash… asks first; films that use it keep their copy.
-- `direction_save_style` writes only into the Styles folder: a new style with `name`, or changes to one with `id`. `tokens` merge key by key into style.json (null removes one), `guide` replaces guide.md, `files` copies parts from the editor's working folder to paths inside the style. Nothing else in the folder changes.
+- **By hand.** Settings › Styles › New Style…, or New Style › Write One… in the brief: name, sentence and rules. Edit… changes them; the parts are files, so Show in Finder opens the folder. Move to Trash… asks first; films that use it keep their copy.
+- `direction_save_style` writes only into the Styles folder: a new style with `name`, changes to one with `id`, the house style with `house`. `rules` adds rules, `removeRules` takes them out by id, `tokens` merge key by key into style.json (null removes one; layouts need names, moves need their numbers), a `guide` in words is read into rules, `files` copies parts from the editor's working folder to paths inside the style. Nothing else in the folder changes.
 
 ## Settings › Styles (frame 65)
 
-"Your styles": one row per style (name; sentence and what it holds under it; Edit… and a folder button), New Style… under the list, and a note on what a style is. "Where they live": the Styles folder with Change… and Show in Finder.
+"Every film": the house style, with how many rules every film follows and Edit…. "Your styles": one row per style (name; sentence; rules, layout names and parts under it; Edit… and a folder button), New Style… under the list, and a note on what a style is. "Where they live": the Styles folder with Change… and Show in Finder.
+
+**The edit sheet** (style-edit, style-house): name and sentence (not for the house style, which says what it is instead), then **Rules** grouped by area, each editable in place and removable, a kept rule showing the film it came from, and a line to add one (area menu, text, Add). A style shows its **Layouts** drawn by name and its **Moves** in a line ("Punch in 1–1.15× on jump cuts · Emphasis 1.32× · …"), changed by the editor; then its parts.
 
 **Acceptance:**
-- [ ] A style is a folder with style.json and guide.md; one without a readable name isn't listed.
-- [ ] Picking a style in the brief copies it into the film; picking None removes the copy; the film keeps working when the style is moved to the Trash.
-- [ ] `direction_brief` names the film's style; `direction_style` returns its values, guide and parts with paths.
-- [ ] `direction_save_style` refuses paths outside the style and files outside the film.
+- [x] A style is a folder with style.json; one without a readable name isn't listed; the house style isn't listed and no style takes its id.
+- [x] A format 1 style's guide reads as rules, and the first change writes them into style.json.
+- [x] Picking a style in the brief copies it into the film; picking None removes the copy; the film keeps working when the style is moved to the Trash.
+- [x] `direction_style` returns the house rules then the style's, layouts, moves, values and parts with paths; a film without a style gets the house style.
+- [x] A layout by name comes from the film's style; moves and `tightenPauses` take the style's numbers when the editor gives none.
+- [x] Keep as a rule writes the style and the film's copy, or the house style, takes out what it replaces, and marks the answer.
+- [x] `direction_save_style` refuses paths outside the style and files outside the film, layouts without names and moves without numbers.
 - [ ] A `style` run is done once a style is saved after it began.
-- [ ] Snapshots and tests never read or write the director's own Styles folder.
+- [x] Snapshots and tests never read or write the director's own Styles folder.

@@ -3,19 +3,40 @@ import AppKit
 import DirectionCore
 
 // Styles (specs/styles.md): the brief's Style question, asking the editor to make one, and
-// Settings › Styles, where each style's name, sentence and guide can be written by hand.
+// Settings › Styles, where the house style and each style's rules can be written by hand.
 
-/// Two sample styles for snapshots and previews, so nothing reads the director's own folder there.
+/// Sample styles for snapshots and previews, so nothing reads the director's own folder there.
 enum StyleSamples {
     static let folder = URL(fileURLWithPath: "/tmp/direction-sample-styles", isDirectory: true)
+    static func rules(_ list: [(String, String)]) -> JSONValue { .array(list.enumerated().map { i, r in .object(["id": .string("rule-\(i + 1)"), "area": .string(r.0), "text": .string(r.1)]) }) }
     static var styles: [Style] {
         var a = StyleContents(); a.graphics = ["captions", "lower-third", "title"]; a.transitions = ["push.metal"]; a.sounds = ["pop.wav", "whoosh.wav"]; a.look = true
         var b = StyleContents(); b.graphics = ["chapter-card"]; b.music = ["bed.m4a"]
+        var c = StyleContents(); c.graphics = ["captions", "keys", "step", "title"]; c.sounds = ["click.wav", "whoosh.wav"]; c.look = true
+        let screenLayouts: JSONValue = .array([
+            .object(["name": .string("Talking"), "kind": .string("you")]),
+            .object(["name": .string("Showing"), "kind": .string("screenAndYou"), "corner": .string("bottomRight"), "size": .string("medium"), "shape": .string("rounded")]),
+            .object(["name": .string("Detail"), "kind": .string("screen")]),
+        ])
         return [
-            Style(id: "desk-talk", url: folder.appendingPathComponent("desk-talk"), name: "Desk Talk", summary: "Quick explainers: 3-second shots, punch-ins, bold captions.", updatedAt: 0, tokens: .object([:]), contents: a),
-            Style(id: "long-walk", url: folder.appendingPathComponent("long-walk"), name: "Long Walk", summary: "Slow and wide. Shots hold; music carries it.", updatedAt: 0, tokens: .object([:]), contents: b),
+            Style(id: "desk-screen", url: folder.appendingPathComponent("desk-screen"), name: "Desk + Screen", summary: "Talking to camera, then showing it on screen, you in the corner when it helps.", updatedAt: 0, tokens: .object([
+                "format": .number(2), "layouts": screenLayouts,
+                "moves": .object(["punchIn": .object(["scales": .array([.number(1), .number(1.15)]), "keepIn": .string("thirds")]), "emphasisPunch": .object(["scale": .number(1.32)])]),
+                "rules": rules([("pace", "Cut waiting on screen down to its last half second."), ("layouts", "Talking for the talk, Showing when the screen comes in, Detail for code and forms."),
+                                ("picture", "Zoom to what I'm talking about whenever its text would be under 24 px at 1080p."), ("captions", "Captions over the screen only where they don't cover what's shown.")]),
+            ]), contents: c),
+            Style(id: "desk-talk", url: folder.appendingPathComponent("desk-talk"), name: "Desk Talk", summary: "Quick explainers: 3-second shots, punch-ins, bold captions.", updatedAt: 0, tokens: .object([
+                "format": .number(2), "rules": rules([("pace", "Tighten every pause longer than 0.35 s to about 0.15 s."), ("picture", "Change framing on every jump cut."), ("avoid", "Dissolves and stock transitions.")]),
+            ]), contents: a),
+            Style(id: "long-walk", url: folder.appendingPathComponent("long-walk"), name: "Long Walk", summary: "Slow and wide. Shots hold; music carries it.", updatedAt: 0, tokens: .object(["format": .number(2), "rules": rules([("pace", "Let shots hold.")])]), contents: b),
         ]
     }
+    static var house: Style {
+        Style(id: StyleLibrary.houseID, url: folder.appendingPathComponent(StyleLibrary.houseID), name: StyleLibrary.houseName, summary: "", updatedAt: 0, tokens: .object([
+            "format": .number(2), "rules": rules([("graphics", "Text never covers my face."), ("captions", "No captions over full-screen graphics.")]),
+        ]), contents: StyleContents())
+    }
+    static func applied(_ id: String?) -> AppliedStyle { AppliedStyle(house: house, style: styles.first { $0.id == id }) }
 }
 
 /// The brief's Style question: one field that opens a searchable list (None first, then your styles),
@@ -30,6 +51,22 @@ struct BriefStylePicker: View {
     @State private var writing: StyleDraft?
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            picker
+            // The film keeps its own copy; when the style has changed since, the director can take the new one.
+            if let current, let copy, style == copy.id, current.updatedAt > copy.updatedAt + 1 {
+                HStack(spacing: 6) {
+                    Text("\(current.name) has changed since this film took it.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                    Button("Use the new version") { model.perform { try $0.refreshStyle() }; load() }.buttonStyle(.gate(.ghost, .small))
+                }
+            }
+        }
+    }
+
+    /// The film's own copy of its style, to tell when the one in the Styles folder is newer.
+    private var copy: Style? { model.isPreview ? nil : try? model.store?.style() }
+
+    private var picker: some View {
         HStack(spacing: 8) {
             Button { load(); open = true } label: { field }
                 .buttonStyle(.plain)
@@ -64,7 +101,7 @@ struct BriefStylePicker: View {
         HStack(spacing: 10) {
             Image(systemName: "swatchpalette").font(.system(size: 12, weight: .medium)).foregroundStyle(current == nil ? Gate.Text.disabled : Gate.Voice.director).frame(width: 16)
             Text(current?.name ?? (style == nil ? "None" : style!)).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).lineLimit(1).fixedSize()
-            Text(current?.summary ?? (style == nil ? "Just the brief and your notes." : "Not in your styles folder; the film keeps its copy.")).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1).truncationMode(.tail)
+            Text(current?.summary ?? (style == nil ? "Your house style, the brief and your notes." : "Not in your styles folder; the film keeps its copy.")).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 8)
             Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Gate.Text.tertiary)
         }
@@ -147,7 +184,7 @@ struct StyleList: View {
                 .opacity(s?.id == chosen ? 1 : 0)
             VStack(alignment: .leading, spacing: 2) {
                 Text(s?.name ?? "None").font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).lineLimit(1)
-                Text(s?.summary ?? "Just the brief and your notes.").font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Text(s?.summary ?? "Your house style, the brief and your notes.").font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 if let line = s?.contents.line, !line.isEmpty { Text(line).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
             }
             Spacer(minLength: 0)
@@ -156,7 +193,7 @@ struct StyleList: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Gate.Surface.hover : .clear))
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(s.map { "\($0.name). \($0.summary)" } ?? "None. Just the brief and your notes.")
+        .accessibilityLabel(s.map { "\($0.name). \($0.summary)" } ?? "None. Your house style, the brief and your notes.")
         .accessibilityAddTraits(s?.id == chosen ? [.isSelected, .isButton] : .isButton)
     }
 }
@@ -203,18 +240,25 @@ struct StylesPane: View {
     var preview = false
     @AppStorage(SharedSettings.stylesFolderKey, store: SharedSettings.defaults) private var folder = SharedSettings.defaultStylesFolder
     @State private var styles: [Style] = []
+    @State private var house: Style?
     @State private var editing: StyleDraft?
 
     var body: some View {
         SettingsPane {
-            SettingsGroup(label: "Your styles", note: AnyView(SettingsNote("A style is how your videos look, sound and move: exact values, a guide in words, and the parts the editor reuses, like titles, captions, transitions and sounds. Pick one in a film\u{2019}s brief. Make one with the editor from the brief, or write one here."))) {
+            SettingsGroup(label: "Every film") {
+                let count = house?.rules.count ?? 0
+                SettingsRow(label: StyleLibrary.houseName, detail: count == 0 ? "Rules every film follows. Keep one from an answer in Changes, or write one here." : "\(count) rule\(count == 1 ? "" : "s") every film follows. A film\u{2019}s style wins where it says otherwise.", first: true, minHeight: 56) {
+                    Button("Edit\u{2026}") { if let house { editing = .init(house) } }.buttonStyle(.gate)
+                }
+            }
+            SettingsGroup(label: "Your styles", note: AnyView(SettingsNote("A style is how a kind of video looks, sounds and moves: its rules, its layouts, the moves Direction makes for it (punch-ins, pushes) and the parts the editor reuses, like titles, captions, transitions and sounds. Pick one in a film\u{2019}s brief. Make one with the editor from the brief, or write one here."))) {
                 if styles.isEmpty {
                     SettingsRow(label: "No styles yet", detail: "Make one with the editor from a film\u{2019}s brief, or start one here.", first: true) {
                         Button("New Style\u{2026}") { editing = .new }.buttonStyle(.gate)
                     }
                 }
                 ForEach(Array(styles.enumerated()), id: \.element.id) { i, s in
-                    SettingsRow(label: s.name, detail: [s.summary, s.contents.line].filter { !$0.isEmpty }.joined(separator: "\n"), first: i == 0, minHeight: 56) {
+                    SettingsRow(label: s.name, detail: [s.summary, StyleDraft.holds(s)].filter { !$0.isEmpty }.joined(separator: "\n"), first: i == 0, minHeight: 56) {
                         Button("Edit\u{2026}") { editing = .init(s) }.buttonStyle(.gate)
                         Button { reveal(s.url) } label: { Image(systemName: "folder") }.buttonStyle(.gate(.normal, .regular, icon: true)).help("Show in Finder")
                     }
@@ -239,7 +283,10 @@ struct StylesPane: View {
     private var expanded: String { NSString(string: folder.isEmpty ? SharedSettings.defaultStylesFolder : folder).expandingTildeInPath }
     private var displayPath: String { preview ? "~/Movies/Direction/Styles" : (expanded as NSString).abbreviatingWithTildeInPath }
     private var stylesURL: URL { preview ? StyleSamples.folder : SharedSettings.stylesFolder }
-    private func load() { styles = preview ? StyleSamples.styles : StyleLibrary.list(in: SharedSettings.stylesFolder) }
+    private func load() {
+        styles = preview ? StyleSamples.styles : StyleLibrary.list(in: SharedSettings.stylesFolder)
+        house = preview ? StyleSamples.house : StyleLibrary.house(in: SharedSettings.stylesFolder)
+    }
 
     private func choose() {
         guard !preview else { return }
@@ -258,17 +305,26 @@ struct StylesPane: View {
     private func reveal(_ url: URL) { if !preview { NSWorkspace.shared.activateFileViewerSelecting([url]) } }
 }
 
-/// A style being written in Settings: a new one, or one of yours.
+/// A style being written in Settings: a new one, one of yours, or the house style.
 struct StyleDraft: Identifiable {
     var id: String
     var style: Style?
-    var name = "", summary = "", guide = ""
-    static var new: StyleDraft { .init(id: "new-" + UUID().uuidString, style: nil, guide: StyleLibrary.template(name: "New style", summary: "")) }
-    init(id: String, style: Style?, name: String = "", summary: String = "", guide: String = "") { self.id = id; self.style = style; self.name = name; self.summary = summary; self.guide = guide }
-    init(_ s: Style) { self.init(id: s.id, style: s, name: s.name, summary: s.summary, guide: s.guide) }
+    var name = "", summary = ""
+    var rules: [StyleRule] = []
+    var isHouse: Bool { style?.isHouse == true }
+    static var new: StyleDraft { .init(id: "new-" + UUID().uuidString, style: nil) }
+    init(id: String, style: Style?, name: String = "", summary: String = "", rules: [StyleRule] = []) { self.id = id; self.style = style; self.name = name; self.summary = summary; self.rules = rules }
+    init(_ s: Style) { self.init(id: s.id, style: s, name: s.name, summary: s.summary, rules: s.rules) }
+
+    /// "12 rules · Talking, Showing, Detail · 3 graphics · a look".
+    static func holds(_ s: Style) -> String {
+        let rules = s.rules.count, layouts = s.layouts.compactMap(\.name)
+        return [rules == 0 ? nil : "\(rules) rule\(rules == 1 ? "" : "s")", layouts.isEmpty ? nil : layouts.joined(separator: ", "), s.contents.line.isEmpty ? nil : s.contents.line].compactMap { $0 }.joined(separator: " \u{00B7} ")
+    }
 }
 
-/// Name, one sentence and the guide; the parts are files, so they're shown and opened in Finder.
+/// Name, one sentence and the rules; the style's layouts and moves; the parts are files, so they're shown
+/// and opened in Finder.
 struct StyleEditSheet: View {
     @State var draft: StyleDraft
     var folder: URL
@@ -277,34 +333,37 @@ struct StyleEditSheet: View {
     var close: () -> Void
     @State private var error: String?
     @State private var confirmingTrash = false
+    @State private var newArea = "general"
+    @State private var newText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(draft.style == nil ? "New style" : draft.style!.name).font(Gate.Font.title).foregroundStyle(Gate.Text.primary)
-                field("Name") { TextField("", text: $draft.name).gateField(focused: false).startPlaceholder("Desk Talk", shown: draft.name.isEmpty) }
-                field("In a sentence") { TextField("", text: $draft.summary).gateField(focused: false).startPlaceholder("Quick explainers: 3-second shots, punch-ins, bold captions.", shown: draft.summary.isEmpty) }
-                field("The guide", detail: "How to cut in this style, in words: one section for each thing an editor decides.") {
-                    TextEditor(text: $draft.guide)
-                        .font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Gate.Text.primary).scrollContentBackground(.hidden)
-                        .padding(8).frame(height: 300).background(GateFieldBackground())
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(draft.isHouse ? StyleLibrary.houseName : draft.style == nil ? "New style" : draft.style!.name).font(Gate.Font.title).foregroundStyle(Gate.Text.primary)
+                    if draft.isHouse {
+                        Text("Every film follows these, under whatever style it\u{2019}s cut in. Where a film\u{2019}s style says otherwise, the style wins; your notes and the brief win over both.")
+                            .font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        field("Name") { TextField("", text: $draft.name).gateField(focused: false).startPlaceholder("Desk Talk", shown: draft.name.isEmpty) }
+                        field("In a sentence") { TextField("", text: $draft.summary).gateField(focused: false).startPlaceholder("Quick explainers: 3-second shots, punch-ins, bold captions.", shown: draft.summary.isEmpty) }
+                    }
+                    field("Rules", detail: "One sentence each, in your words. Numbers help: \u{201C}Music 25 dB under my voice.\u{201D}") { rulesEditor }
+                    if let s = draft.style, !s.isHouse { madeHere(s) }
+                    if let error { Text(error).font(Gate.Font.small).foregroundStyle(Gate.State.alert) }
                 }
-                if let s = draft.style {
-                    Text(s.contents.line.isEmpty ? "Words only. Graphics, transitions, sounds, fonts and a look go in its folder." : s.contents.line)
-                        .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
-                }
-                if let error { Text(error).font(Gate.Font.small).foregroundStyle(Gate.State.alert) }
+                .padding(20)
             }
-            .padding(20)
+            .frame(maxHeight: 560)
             HStack(spacing: 8) {
-                if let s = draft.style {
+                if let s = draft.style, !s.isHouse {
                     Button("Move to Trash\u{2026}") { confirmingTrash = true }.buttonStyle(.gate(.ghostDanger))
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([s.url]) }.buttonStyle(.gate(.ghost))
                 }
                 Spacer()
                 Button("Cancel", action: close).buttonStyle(.gate).keyboardShortcut(.cancelAction)
                 Button(draft.style == nil ? "Make Style" : "Save", action: save).buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
-                    .disabled(draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(!draft.isHouse && draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
             .overlay(alignment: .top) { SystemHairline() }
@@ -317,11 +376,80 @@ struct StyleEditSheet: View {
         } message: { Text("Films that use it keep their own copy.") }
     }
 
+    /// The rules by area, each editable and removable, and a line to add one.
+    private var rulesEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(StyleRule.areas.map(\.id).filter { a in draft.rules.contains { $0.area == a } }, id: \.self) { area in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(StyleRule.label(area)).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
+                    ForEach(draft.rules.indices.filter { draft.rules[$0].area == area }, id: \.self) { i in
+                        HStack(alignment: .top, spacing: 8) {
+                            TextField("", text: $draft.rules[i].text, axis: .vertical).textFieldStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary).lineLimit(1...4)
+                            if let kept = draft.rules[i].kept { Text("From \(kept.film)").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1).help(kept.note ?? "") }
+                            Button { draft.rules.remove(at: i) } label: { Image(systemName: "minus.circle").font(.system(size: 11)) }
+                                .buttonStyle(.plain).foregroundStyle(Gate.Text.tertiary).help("Remove this rule").accessibilityLabel("Remove rule")
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 7)
+                        .background(GateFieldBackground())
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                Menu(StyleRule.label(newArea)) { ForEach(StyleRule.areas, id: \.id) { a in Button(a.label) { newArea = a.id } } }
+                    .menuStyle(.button).buttonStyle(.gate(.normal, .small)).fixedSize()
+                TextField("", text: $newText).gateField(focused: false).startPlaceholder("Text never covers my face.", shown: newText.isEmpty).onSubmit(add)
+                Button("Add", action: add).buttonStyle(.gate(.normal, .small)).disabled(newText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    /// What Direction makes for this style without the editor working it out: its layouts and moves.
+    @ViewBuilder private func madeHere(_ s: Style) -> some View {
+        let layouts = s.layouts, moves = s.moves
+        if !layouts.isEmpty {
+            field("Layouts", detail: "Pick them from the Layout button under the picture, or ask the editor to change them.") {
+                HStack(spacing: 12) {
+                    ForEach(layouts, id: \.self) { l in
+                        VStack(spacing: 5) {
+                            LayoutGlyph(layout: l, size: CGSize(width: 52, height: 30))
+                            Text(l.label).font(.system(size: 10.5, weight: .medium)).foregroundStyle(Gate.Text.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        let lines = Self.moveLines(moves)
+        if !lines.isEmpty {
+            field("Moves", detail: "Direction makes these itself when the editor asks for them.") {
+                Text(lines.joined(separator: " \u{00B7} ")).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        Text(s.contents.line.isEmpty ? "No parts yet. Graphics, transitions, sounds, fonts and a look go in its folder." : s.contents.line)
+            .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+    }
+
+    /// "Punch in 1–1.15× on jump cuts", "Emphasis 1.32×", "Slow push to 1.05× on shots over 8 s", "Pauses over 0.35 s to 0.15 s".
+    static func moveLines(_ m: StyleMoves) -> [String] {
+        func n(_ v: Double) -> String { String(format: "%g", v) }
+        return [
+            m.punchIn.map { "Punch in \($0.scales.map(n).joined(separator: "\u{2013}"))\u{00D7} on jump cuts" },
+            m.emphasisPunch.map { "Emphasis \(n($0.scale))\u{00D7}" },
+            m.slowPush.map { "Slow push to \(n($0.to))\u{00D7} on shots over \(n($0.longerThan)) s" },
+            m.tightenPauses.map { "Pauses over \(n($0.longerThan)) s to \(n($0.to)) s" },
+        ].compactMap { $0 }
+    }
+
+    private func add() {
+        let words = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty else { return }
+        draft.rules.append(StyleRule(area: newArea, text: words)); newText = ""
+    }
+
     private func field<Content: View>(_ label: String, detail: String? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(label).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Gate.Text.primary)
-                if let detail { Text(detail).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary) }
+                if let detail { Text(detail).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(2) }
             }
             content()
         }
@@ -330,10 +458,9 @@ struct StyleEditSheet: View {
     private func save() {
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            // A new style's guide starts under a placeholder heading; it takes the style's name.
+            add()
             let name = draft.name.trimmingCharacters(in: .whitespaces)
-            let guide = draft.style == nil && draft.guide.hasPrefix("# New style\n") ? "# \(name)\n" + draft.guide.dropFirst("# New style\n".count) : draft.guide
-            saved(try StyleLibrary.save(id: draft.style?.id, name: name, summary: draft.summary, tokens: nil, guide: guide, in: folder))
+            saved(try StyleLibrary.save(id: draft.isHouse ? StyleLibrary.houseID : draft.style?.id, name: draft.isHouse ? nil : name, summary: draft.isHouse ? nil : draft.summary, tokens: nil, guide: nil, rules: draft.rules, in: folder))
             close()
         } catch let e as DirectionError { error = e.message } catch { self.error = error.localizedDescription }
     }

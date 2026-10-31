@@ -91,8 +91,76 @@ struct LayoutTests {
         // Framed: the screen fits inside a padded frame on a background, with rounded corners.
         c.project = try run(c, [try layout(#"{"op":"layout","range":{"start":0,"end":1},"layout":{"kind":"screen","screen":"framed"}}"#)]).0
         let framed = try #require(laidOut(c.project).first { $0.layout?.layout.kind == .screen })
-        #expect(framed.effects?.map(\.name) == ["transform", "card"] && framed.effects?[1].params["background"]?.string == LayoutGeometry.background)
-        #expect(framed.effects![0].number("scale", at: nil, default: 1) < 0.95)
+        #expect(framed.effects?.map(\.name) == ["place", "card"] && framed.effects?[1].params["background"]?.string == LayoutGeometry.background)
+        #expect(framed.effects![0].number("w", at: nil, default: 1) < 0.95 && framed.effects![0].number("fromW", at: nil, default: 0) == 1)
+    }
+
+    @Test func whatTheEditorDidToTheScreenStaysWhenTheLayoutChanges() throws {
+        var c = cut()
+        c.project = try run(c, [try layout(#"{"op":"layout","range":{"start":0,"end":4},"layout":{"kind":"screenAndYou"}}"#)]).0
+        let screen = try #require(laidOut(c.project).first { $0.layout?.role == .screen })
+        // The editor zooms the screen and blurs something private on it.
+        c.project = try run(c, [
+            try op("{\"op\":\"addEffect\",\"target\":\"\(screen.id)\",\"effect\":\"transform\",\"params\":{\"scale\":1.6}}"),
+            try op("{\"op\":\"addEffect\",\"target\":\"\(screen.id)\",\"effect\":\"mask\",\"params\":{\"x\":0.1,\"y\":0.1,\"w\":0.2,\"h\":0.1}}"),
+            try op("{\"op\":\"addEffect\",\"target\":\"\(screen.id)\",\"effect\":\"blur\",\"params\":{\"radius\":20}}"),
+        ]).0
+        // Framed now: the same clip, still zoomed and blurred, placed smaller after all of it.
+        c.project = try run(c, [try layout(#"{"op":"layout","range":{"start":0,"end":4},"layout":{"kind":"screenAndYou","screen":"framed","corner":"topLeft"}}"#)]).0
+        let framed = try #require(laidOut(c.project).first { $0.layout?.role == .screen })
+        #expect(framed.id == screen.id && framed.layout?.layout.screen == .framed)
+        #expect(framed.effects?.map(\.name) == ["transform", "mask", "blur", "place", "card"] && framed.effects?[0].params["scale"]?.double == 1.6)
+        // Part of the range only: the piece inside is a new clip that keeps them too; the rest stays as it was.
+        c.project = try run(c, [try layout(#"{"op":"layout","range":{"start":1,"end":2},"layout":{"kind":"screen"}}"#)]).0
+        let pieces = laidOut(c.project).filter { $0.layout?.role == .screen }
+        #expect(pieces.count == 3 && Set(pieces.map(\.id)).count == 3 && pieces.allSatisfy { $0.effects?.first?.params["scale"]?.double == 1.6 && $0.effects?.contains { $0.name == "blur" } == true })
+        #expect(pieces[1].effects?.contains { $0.name == "place" } == false && pieces[0].effects?.contains { $0.name == "place" } == true)
+    }
+
+    @Test func aBubbleMadeByHandGivesWayToTheLayoutsOwn() throws {
+        var c = cut()
+        // The old way: the camera cut away in sync, scaled down into a corner, with a rounded shader.
+        c.project = try run(c, [try op(#"{"op":"cutaway","assetID":"d","at":0,"seconds":2}"#)]).0
+        let hand = try #require(c.project.sequences[0].clips.first { $0.assetID == "d" })
+        c.project.sequences[0].clips[c.project.sequences[0].clips.firstIndex { $0.id == hand.id }!].effects = [
+            ClipEffect(name: "transform", params: ["scale": .number(0.3), "x": .number(0.39), "y": .number(0.3)]), ClipEffect(name: "shader", params: ["file": .string("Effects/rounded.metal")]), ClipEffect(name: "blur", params: ["radius": .number(4)]),
+        ]
+        c.project = try run(c, [try layout(#"{"op":"layout","range":{"start":0,"end":4},"layout":{"kind":"screenAndYou"}}"#)]).0
+        let cameras = laidOut(c.project).filter { $0.layout?.role == .camera }
+        // Its own bubble, the same as where nothing was there before; the blur stays.
+        #expect(cameras.count == 2 && cameras[0].effects?.map(\.name) == ["transform", "blur", "card"] && cameras[1].effects?.map(\.name) == ["transform", "card"])
+        #expect(cameras[0].effects?[0].params["scale"] == cameras[1].effects?[0].params["scale"])
+        // Back to you full frame: no bubble, no card.
+        c.project = try run(c, [try layout(#"{"op":"layout","range":{"start":0,"end":4},"layout":{"kind":"you"}}"#)]).0
+        #expect(laidOut(c.project).allSatisfy { $0.effects?.contains { ["transform", "card", "place"].contains($0.name) } != true })
+    }
+
+    @Test func punchInsFrameTheCameraALayoutShowsFullFrame() throws {
+        var c = cut()
+        // You over the story (the screen take a, so the camera d plays on V2), then a jump cut at 2.
+        c.project = try run(c, [try layout(#"{"op":"layout","range":{"start":0,"end":4},"layout":{"kind":"you"}}"#), try op(#"{"op":"split","clipID":"c1","at":2}"#)]).0
+        var punch = try op(#"{"op":"punchIn","range":{"start":0,"end":4},"scales":[1,1.15]}"#)
+        punch.resolved = .init(faces: ["d": FaceTrack(samples: (0...10).map { FaceTrack.Sample(t: Double($0), x: 0.5, y: 0.4, h: 0.25) })])
+        c.project = try run(c, [punch]).0
+        // The camera is cut where the story cuts, and each piece is framed like the shot under it.
+        let cameras = laidOut(c.project).filter { $0.layout?.role == .camera }
+        #expect(cameras.count == 2 && close(cameras[0].end.seconds, 2, 0.001) && cameras.map { $0.effects?.first { $0.name == "transform" }?.params["scale"]?.double } == [1, 1.15])
+        // A bubble drops the punch-in; You again starts plain, ready to be punched in again.
+        c.project = try run(c, [try layout(#"{"op":"layout","range":{"start":0,"end":4},"layout":{"kind":"screenAndYou"}}"#)]).0
+        #expect(laidOut(c.project).filter { $0.layout?.role == .camera }.allSatisfy { ($0.effects?.first { $0.name == "transform" }?.params["scale"]?.double ?? 1) < 1 })
+    }
+
+    @Test func aStylesLayoutByNameIsLookedUpBeforeItRuns() throws {
+        let named = try op(#"{"op":"layout","range":{"start":0,"end":4},"layout":"Showing"}"#)
+        #expect(named.layoutName == "Showing" && named.layout == nil && named.json["layout"] == .string("Showing"))
+        #expect(try op(#"{"op":"layout","range":{"start":0,"end":4},"layout":{"name":"Showing"}}"#).layoutName == "Showing")
+        expectFailure("bad_argument", index: 0) { _ = try run(cut(), [named]) }
+        // Named and with an edge: the label is the name, and the bubble's card draws the edge.
+        let showing = FrameLayout(kind: .screenAndYou, shape: .rounded, name: "Showing", edge: "#FFD43B")
+        var o = try layout(#"{"op":"layout","range":{"start":0,"end":4},"layout":{"kind":"you"}}"#); o.layout = showing
+        let (p, r) = try run(cut(), [o])
+        #expect(r.operations[0].summary.hasPrefix("Layout: Showing,") && p.sequences[0].layout(at: 1)?.name == "Showing")
+        #expect(laidOut(p).first { $0.layout?.role == .camera }?.effects?.first { $0.name == "card" }?.params["edgeColor"] == .string("#FFD43B"))
     }
 
     @Test func aLayoutTheDirectorSetIsTheirs() throws {
@@ -104,6 +172,11 @@ struct LayoutTests {
         let card = try #require(laidOut(mine).first { $0.layout?.role == .camera }?.effects?.first { $0.name == "card" })
         expectFailure("layout_is_yours", index: 0) { _ = try run(c, [try layout(#"{"op":"layout","range":{"start":2,"end":3},"layout":{"kind":"you"}}"#)], notes: nil) }
         expectFailure("layout_is_yours", index: 0) { _ = try run(c, [try op("{\"op\":\"removeEffect\",\"effectID\":\"\(card.id)\"}")], notes: nil) }
+        let bubble = try #require(laidOut(mine).first { $0.layout?.role == .camera }), screen = try #require(laidOut(mine).first { $0.layout?.role == .screen })
+        expectFailure("layout_is_yours", index: 0) { _ = try run(c, [try op("{\"op\":\"addEffect\",\"target\":\"\(bubble.id)\",\"effect\":\"transform\",\"params\":{\"scale\":0.5}}")], notes: nil) }
+        expectFailure("layout_is_yours", index: 0) { _ = try run(c, [try op("{\"op\":\"remove\",\"clipID\":\"\(screen.id)\"}")], notes: nil) }
+        // Where it sits is theirs; the style's zoom and a blur over something private aren't.
+        _ = try run(c, [try op("{\"op\":\"addEffect\",\"target\":\"\(screen.id)\",\"effect\":\"transform\",\"params\":{\"scale\":1.5}}"), try op("{\"op\":\"addEffect\",\"target\":\"\(screen.id)\",\"effect\":\"blur\",\"params\":{\"radius\":12}}")], notes: nil)
         // For a note it may, and cutting the story still carries the layout with it.
         _ = try run(c, [try layout(#"{"op":"layout","range":{"start":2,"end":3},"layout":{"kind":"you"}}"#)], notes: [1])
         let trimmed = try run(c, [try op(#"{"op":"removeRange","range":{"start":1,"end":2}}"#)], notes: nil).0

@@ -139,13 +139,54 @@ extension ToolRuntime {
             guard let point = op.editPoint, let left = clip(point.split(separator: "|").first.map(String.init)), left.layer == 0, let a = asset(left), !a.video.isEmpty, left.hold == nil else { return }
             op.resolved = try await TimelineAnalysis.zoomThrough(left: left, asset: a, seconds: op.seconds ?? 1, corners: op.corners, frame: CGSize(width: s.width, height: s.height), fps: s.frameRate.value)
         case "tightenPauses":
+            // How tight is the style's, unless the editor says.
+            if op.longerThan == nil || op.to == nil, let pauses = (try? store.appliedStyle())?.moves.tightenPauses {
+                if op.longerThan == nil { op.longerThan = pauses.longerThan }
+                if op.to == nil { op.to = .number(pauses.to) }
+            }
             guard let r = op.range else { return }
             if let quiet = try? await TimelineAnalysis.quietRanges(project: p, sequence: s, range: r, cacheDirectory: cacheDirectory) { op.resolved = .init(quiet: quiet) }
         case "placeGraphic":
             if let g = op.graphic, let id = try store.graphicAssetID(g) { op.resolved = .init(assetID: id) }
         case "layout":
+            // A layout by name is one of the film's style's (or the house style's).
+            if op.layout == nil, let name = op.layoutName {
+                let applied = try store.appliedStyle()
+                guard let found = applied.layout(named: name) else {
+                    let names = applied.layouts.compactMap(\.name)
+                    throw DirectionError("bad_argument", names.isEmpty ? "This film\u{2019}s style has no layouts by name. Give one: {kind, corner?, size?, shape?, screen?}." : "The style has no layout called \(name). It has \(names.joined(separator: ", ")).")
+                }
+                op.layout = found
+            }
             guard op.layout != nil else { return }
             op.resolved = .init(layout: try await LayoutAnalysis.measure(project: p, sequence: s, dailies: try store.dailies(), range: op.range, cacheDirectory: cacheDirectory))
+        case "punchIn", "emphasisPunch", "slowPush":
+            // Moves take the style's numbers unless the editor gives its own, and frame on the faces layouts track.
+            let moves = (try? store.appliedStyle())?.moves ?? .standard
+            switch op.type {
+            case "punchIn":
+                if op.scales == nil { op.scales = moves.punchIn?.scales }
+                if op.keepIn == nil { op.keepIn = moves.punchIn?.keepIn }
+            case "emphasisPunch":
+                if op.scale == nil { op.scale = moves.emphasisPunch?.scale }
+            default:
+                if op.scales == nil, let p = moves.slowPush { op.scales = [p.from, p.to] }
+                if op.longerThan == nil { op.longerThan = moves.slowPush?.longerThan }
+            }
+            guard let r = op.range else { return }
+            var faces: [String: FaceTrack] = [:]
+            // The story's takes where they show, and the camera a layout shows full frame over them; a take a
+            // layout covers isn't tracked (a long screen recording would cost a minute for nothing).
+            let laid = s.clips.filter { $0.layer > 0 && $0.layout != nil }
+            func covered(_ c: Clip) -> Bool { laid.contains { $0.start <= c.start && $0.end >= c.end } }
+            let framed = s.clips.filter { c in
+                c.kind == .video && c.start < r.end && c.end > r.start && ((c.layer == 0 && !covered(c)) || (c.layout?.role == .camera && c.layout?.layout.kind == .you))
+            }
+            for c in framed {
+                guard let a = asset(c), !a.video.isEmpty, !a.isImage, faces[a.id] == nil else { continue }
+                if let track = try? await LayoutAnalysis.faceTrack(a, cacheDirectory: cacheDirectory) { faces[a.id] = track }
+            }
+            op.resolved = .init(faces: faces)
         default: break
         }
     }

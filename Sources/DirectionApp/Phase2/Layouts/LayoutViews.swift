@@ -29,6 +29,10 @@ import DirectionCore
         return nil
     }
     func current(_ film: FilmModel) -> FrameLayout? { film.sequence?.layout(at: film.position) }
+    /// The film's style's own layouts, by name (layouts.md › In a style).
+    func styleLayouts(_ film: FilmModel) -> [FrameLayout] { film.appliedStyle.layouts }
+    /// Where the picker starts: the layout at the playhead, else the style's first with you in it, else the standard.
+    func starting(_ film: FilmModel) -> FrameLayout { current(film) ?? styleLayouts(film).first { $0.kind == .screenAndYou } ?? .standard }
 
     /// The stretch a change covers: the scene at the playhead, the selection on the strip, or the film.
     func range(_ film: FilmModel) -> MediaRange? {
@@ -40,7 +44,7 @@ import DirectionCore
     }
 
     func show(_ film: FilmModel) {
-        draft = current(film) ?? draft
+        draft = current(film) ?? (draft == .standard ? starting(film) : draft)
         if film.rangeSelection != nil && film.anchorMode == .range { scope = .selection } else if scope == .selection { scope = .scene }
         message = nil
         open = true
@@ -134,15 +138,21 @@ struct LayoutPicker: View {
     private var layouts: LayoutsModel { model.layouts }
 
     var body: some View {
-        let d = layouts.draft
+        let d = layouts.draft, current = layouts.current(model), named = layouts.styleLayouts(model)
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 Text("Layout").font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary)
+                if !named.isEmpty, let style = model.appliedStyle.style { Text(style.name).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary) }
                 Spacer(minLength: 0)
                 if layouts.working { GateSpinner() }
             }
+            // The style's layouts by name; without a style, the four kinds.
             HStack(spacing: 8) {
-                ForEach(FrameLayout.Kind.allCases, id: \.self) { kind in tile(kind, on: layouts.current(model)?.kind == kind) }
+                if named.isEmpty {
+                    ForEach(FrameLayout.Kind.allCases, id: \.self) { kind in tile({ var l = d.unnamed; l.kind = kind; return l }(), on: current?.name == nil && current?.kind == kind) }
+                } else {
+                    ForEach(named.prefix(4), id: \.self) { l in tile(l, on: current?.name == l.name) }
+                }
             }
             if d.kind == .screenAndYou {
                 row("Corner") { CornerPicker(corner: Binding(get: { d.corner }, set: { c in change { $0.corner = c } })) }
@@ -165,13 +175,12 @@ struct LayoutPicker: View {
         .frame(width: 340, alignment: .leading)
     }
 
-    /// One layout, drawn: picking it applies it with the options above.
-    private func tile(_ kind: FrameLayout.Kind, on: Bool) -> some View {
-        var l = layouts.draft; l.kind = kind
-        return Button { layouts.apply(l, film: model) } label: {
+    /// One layout, drawn: picking it applies it.
+    private func tile(_ l: FrameLayout, on: Bool) -> some View {
+        Button { layouts.apply(l, film: model) } label: {
             VStack(spacing: 6) {
                 LayoutGlyph(layout: l, size: CGSize(width: 52, height: 30), lit: on)
-                Text(kind.label).font(.system(size: 10.5, weight: .medium)).foregroundStyle(on ? Gate.Text.primary : Gate.Text.secondary).lineLimit(1).minimumScaleFactor(0.85)
+                Text(l.name ?? l.kind.label).font(.system(size: 10.5, weight: .medium)).foregroundStyle(on ? Gate.Text.primary : Gate.Text.secondary).lineLimit(1).minimumScaleFactor(0.85)
             }
             .padding(.vertical, 6).frame(maxWidth: .infinity)
             .background(RoundedRectangle(cornerRadius: Gate.Radius.control, style: .continuous).fill(on ? Gate.Surface.hover : Color.clear))
@@ -180,12 +189,13 @@ struct LayoutPicker: View {
         }
         .buttonStyle(.plain)
         .disabled(layouts.working)
-        .accessibilityLabel(kind.label)
+        .accessibilityLabel(l.name ?? l.kind.label)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
+    /// A part changed: no longer the style's layout by name, but the same look otherwise.
     private func change(_ edit: (inout FrameLayout) -> Void) {
-        var l = layouts.draft; edit(&l)
+        var l = layouts.draft.unnamed; edit(&l)
         layouts.apply(l, film: model)
     }
 

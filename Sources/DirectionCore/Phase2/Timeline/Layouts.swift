@@ -2,7 +2,10 @@ import Foundation
 
 // Layouts (layouts.md): how a screen recording and a camera in sync share the frame. A layout is a
 // stretch of ordinary synced clips over the story, the screen on V2 and the camera on V3, each carrying
-// the layout it belongs to, so preview, export and every edit treat them like any other clip.
+// the layout it belongs to, so preview, export and every edit treat them like any other clip. A layout
+// owns only where its clips sit (a smaller screen's `place`, a bubble's transform, their `card`); the
+// editor's zooms, blurs and freezes on them carry on when the layout changes. A style names its own
+// layouts ("Showing", "Talking").
 
 public struct FrameLayout: Codable, Hashable, Sendable {
     public enum Kind: String, Codable, CaseIterable, Sendable {
@@ -45,14 +48,26 @@ public struct FrameLayout: Codable, Hashable, Sendable {
     public var size: Size
     public var shape: Shape
     public var screen: Screen
-    public init(kind: Kind, corner: Corner = .bottomRight, size: Size = .medium, shape: Shape = .circle, screen: Screen = .full) {
-        self.kind = kind; self.corner = corner; self.size = size; self.shape = shape; self.screen = screen
+    /// A style's name for it: "Showing", "Talking".
+    public var name: String?
+    /// The bubble's edge color (#RRGGBB), drawn solid; without one, a thin light edge.
+    public var edge: String?
+    public init(kind: Kind, corner: Corner = .bottomRight, size: Size = .medium, shape: Shape = .circle, screen: Screen = .full, name: String? = nil, edge: String? = nil) {
+        self.kind = kind; self.corner = corner; self.size = size; self.shape = shape; self.screen = screen; self.name = name; self.edge = edge
     }
     /// What Dailies offers first: the screen, with you in the bottom right.
     public static let standard = FrameLayout(kind: .screenAndYou)
 
-    /// "Screen and you · bottom right", "Screen, framed", "You".
+    /// The same layout without its style's name: what the picker makes once the director changes a part.
+    public var unnamed: FrameLayout { var l = self; l.name = nil; return l }
+
+    /// A style's name, else "Screen and you · bottom right", "Screen, framed", "You".
     public var label: String {
+        if let name, !name.isEmpty { return name }
+        return plainLabel
+    }
+    /// What it is, whatever it's called: "Screen and you · bottom right".
+    public var plainLabel: String {
         switch kind {
         case .screenAndYou: "Screen and you \u{00B7} \(corner.label)" + (screen == .framed ? ", framed" : "")
         case .screen: screen == .framed ? "Screen, framed" : "Screen"
@@ -67,6 +82,8 @@ public struct FrameLayout: Codable, Hashable, Sendable {
         size = try c.decodeIfPresent(Size.self, forKey: .size) ?? .medium
         shape = try c.decodeIfPresent(Shape.self, forKey: .shape) ?? .circle
         screen = try c.decodeIfPresent(Screen.self, forKey: .screen) ?? .full
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        edge = try c.decodeIfPresent(String.self, forKey: .edge)
     }
 }
 
@@ -190,6 +207,23 @@ public enum LayoutGeometry {
         return ClipEffect(name: "transform", params: params, keys: keys)
     }
 
+    /// The `place` effect that puts `crop` of a take's picture (fractions of the picture) into `rect` of the
+    /// frame, keyed where the crop moves. It acts after the clip's own transform and effects, so a zoom or
+    /// a blur the editor put on the clip plays inside the layout's frame.
+    public static func placement(crop: [(t: Double, crop: Rect)], into rect: Rect, frame: Size, source: Size) -> ClipEffect {
+        func r(_ v: Double) -> Double { (v * 10_000).rounded() / 10_000 }
+        // Where the fitted picture sits in the frame before anything moves it.
+        let fit = min(frame.w / source.w, frame.h / source.h)
+        let pw = source.w * fit / frame.w, ph = source.h * fit / frame.h, px = (1 - pw) / 2, py = (1 - ph) / 2
+        func from(_ c: Rect) -> [(String, Double)] { [("fromX", px + c.x * pw), ("fromY", py + c.y * ph), ("fromW", c.w * pw), ("fromH", c.h * ph)] }
+        var params: [String: JSONValue] = ["x": .number(r(rect.x)), "y": .number(r(rect.y)), "w": .number(r(rect.w)), "h": .number(r(rect.h))]
+        for (k, v) in from(crop[0].crop) { params[k] = .number(r(v)) }
+        guard crop.count > 1 else { return ClipEffect(name: "place", params: params) }
+        var keys: [String: [Keyframe]] = [:]
+        for c in crop { for (k, v) in from(c.crop) { keys[k, default: []].append(Keyframe(t: r(c.t), v: r(v), ease: "smooth")) } }
+        return ClipEffect(name: "place", params: params, keys: keys)
+    }
+
     /// Where the bubble's crop sits over a stretch of the camera: a key every two seconds where the face
     /// moved, eased, so leaning back carries the bubble with you without it twitching.
     public static func follow(_ track: FaceTrack?, from start: Double, to end: Double, rect: Rect, frame: Size, source: Size) -> [(t: Double, crop: Rect)] {
@@ -219,9 +253,10 @@ public enum LayoutGeometry {
     /// The card effect a layout gives each clip: a circle or rounded corners, a thin edge and a soft shadow;
     /// a framed screen also gets its background.
     public static func card(_ l: FrameLayout, role: ClipLayout.Role) -> ClipEffect? {
+        func edged(_ e: ClipEffect) -> ClipEffect { var e = e; if let c = l.edge { e.params["edgeColor"] = .string(c) }; return e }
         switch (role, l.kind) {
-        case (.camera, .screenAndYou): return ClipEffect(name: "card", params: ["radius": .number(l.shape.radius), "edge": .number(0.35), "shadow": .number(0.6)])
-        case (.camera, .sideBySide): return ClipEffect(name: "card", params: ["radius": .number(0.06), "edge": .number(0.2), "shadow": .number(0.5)])
+        case (.camera, .screenAndYou): return edged(ClipEffect(name: "card", params: ["radius": .number(l.shape.radius), "edge": .number(0.35), "shadow": .number(0.6)]))
+        case (.camera, .sideBySide): return edged(ClipEffect(name: "card", params: ["radius": .number(0.06), "edge": .number(0.2), "shadow": .number(0.5)]))
         case (.screen, .sideBySide): return ClipEffect(name: "card", params: ["radius": .number(0.03), "edge": .number(0.2), "shadow": .number(0.5), "background": .string(background)])
         case (.screen, .screen), (.screen, .screenAndYou):
             return l.screen == .framed ? ClipEffect(name: "card", params: ["radius": .number(0.03), "edge": .number(0.2), "shadow": .number(0.55), "background": .string(background)]) : nil
@@ -240,7 +275,10 @@ extension EditWork {
     /// screen on V2 and the camera on V3 (or the one take a layout needs on V2), in sync, with their framing
     /// and card. Layouts sit just over the story; anything above moves up to make room.
     mutating func layout(_ op: EditOperation) throws -> Outcome {
-        guard let spec = op.layout else { throw bad("layout is {kind: screenAndYou|you|screen|sideBySide, corner?, size?, shape?, screen?}.") }
+        guard let spec = op.layout else {
+            if let name = op.layoutName { throw bad("\(name) is one of the style's layouts, found by Direction's tools; send it through direction_edit.") }
+            throw bad("layout is the name of one of the style's layouts, or {kind: screenAndYou|you|screen|sideBySide, corner?, size?, shape?, screen?}.")
+        }
         guard let raw = op.range else { throw bad("range is the stretch of the cut the layout covers, {start, end} in cut seconds.") }
         var r = snap(raw)
         if r.end > s.duration && r.end.seconds <= s.duration.seconds + frame { r.duration = s.duration - r.start }
@@ -256,6 +294,14 @@ extension EditWork {
             return group.take(id) != nil
         }
         let before = s.clips.filter(sameMoment)
+        // Their pieces inside the range carry on wherever the new layout shows the same take, so the
+        // editor's zooms, blurs and freezes stay; only where they sit changes.
+        func piece(_ c: Clip, _ o: MediaRange) -> Clip {
+            guard o != c.range else { return c }
+            var p = EditReducer.trimmed(c, to: o); p.id = newID("clip"); p.effects = EditReducer.reIDed(c.effects)
+            return p
+        }
+        let inside = before.compactMap { c in c.range.intersection(r).map { piece(c, $0) } }
         var placed: [Clip] = [], warnings: [String] = []
         for story in stories {
             let start = max(story.start, r.start), seg = MediaRange(start: start, duration: min(story.end, r.end) - start)
@@ -271,8 +317,17 @@ extension EditWork {
                 continue
             }
             do {
-                if spec.kind.needsScreen, let screen { placed.append(try layoutClip(screen, .screen, spec, seg, m)) }
-                if spec.kind.needsCamera, let camera { placed.append(try layoutClip(camera, .camera, spec, seg, m)) }
+                for (role, take) in [(ClipLayout.Role.screen, spec.kind.needsScreen ? screen : nil), (.camera, spec.kind.needsCamera ? camera : nil)] {
+                    guard let take else { continue }
+                    var cursor = seg.start
+                    for old in inside.filter({ $0.assetID == take.id && $0.start < seg.end && $0.end > seg.start }).sorted(by: { $0.start < $1.start }) {
+                        guard let o = old.range.intersection(seg), o.start >= cursor else { continue }
+                        if (o.start - cursor).seconds > frame / 2 { placed.append(try layoutClip(take, role, spec, MediaRange(start: cursor, duration: o.start - cursor), m)) }
+                        placed.append(try relaid(piece(old, o), take, role, spec, m))
+                        cursor = o.end
+                    }
+                    if (seg.end - cursor).seconds > frame / 2 { placed.append(try layoutClip(take, role, spec, MediaRange(start: cursor, duration: seg.end - cursor), m)) }
+                }
             } catch let e as DirectionError { warnings.append(e.message) }
         }
         guard !placed.isEmpty else { throw DirectionError("not_in_sync", warnings.first ?? "There\u{2019}s no story to lay out between \(tc(r.start)) and \(tc(r.end)).") }
@@ -286,44 +341,93 @@ extension EditWork {
                        clipIDs: placed.map(\.id), warnings: warnings)
     }
 
-    /// One take of a layout over one stretch: in sync and silent, framed and carded for its part.
+    /// One take of a layout over one stretch: in sync and silent, placed and carded for its part.
     func layoutClip(_ a: MediaAsset, _ role: ClipLayout.Role, _ spec: FrameLayout, _ seg: MediaRange, _ m: LayoutMeasure) throws -> Clip {
-        let layer = role == .screen || !spec.kind.needsScreen ? 1 : 2
-        var clip = Clip(assetID: a.id, name: a.name, kind: .video, layer: layer, start: seg.start, sourceRange: try syncedSource(a, at: seg.start, length: seg.duration))
+        var clip = Clip(assetID: a.id, name: a.name, kind: .video, layer: Self.layoutLayer(role, spec), start: seg.start, sourceRange: try syncedSource(a, at: seg.start, length: seg.duration))
         clip.synced = true
         for stream in a.audio { var settings = stream.settings; settings.muted = true; clip.audioOverrides[String(stream.id)] = settings }
         clip.layout = ClipLayout(layout: spec, role: role, byDirector: director ? true : nil)
+        let own = layoutEffects(a, role, spec, clip.sourceRange, m)
+        clip.effects = own.isEmpty ? nil : own
+        return clip
+    }
+
+    /// A clip that was already there, moved into the new layout. What the editor did to it stays: a zoom on
+    /// the screen (its transform), masks, blurs, filters and its freeze. What placed it before goes: an
+    /// earlier layout's place, card and bubble, or a bubble made by hand (a camera scaled down, a shader).
+    func relaid(_ old: Clip, _ a: MediaAsset, _ role: ClipLayout.Role, _ spec: FrameLayout, _ m: LayoutMeasure) throws -> Clip {
+        var c = old
+        let effects = old.effects ?? [], before = old.layout
+        let tr = effects.first { $0.name == "transform" }
+        func placesCamera(_ l: FrameLayout) -> Bool { l.kind == .screenAndYou || l.kind == .sideBySide }
+        let wasBubble = role == .camera && ((before.map { $0.role == .camera && placesCamera($0.layout) } ?? false) || (tr?.params["scale"]?.double ?? 1) < 0.99)
+        // Layouts before `place` framed a smaller screen with its transform.
+        let framedScreen = role == .screen && before != nil && !effects.contains { $0.name == "place" } && (before!.layout.kind == .sideBySide || before!.layout.screen == .framed)
+        let bubble = role == .camera && placesCamera(spec)
+        let kept = effects.filter { e in
+            switch e.name {
+            case "place", "card", "pin": return false
+            case "transform": return !(wasBubble || framedScreen || bubble)
+            case "shader": return !(wasBubble || bubble)
+            default: return true
+            }
+        }
+        c.layer = Self.layoutLayer(role, spec)
+        c.layout = ClipLayout(layout: spec, role: role, byDirector: director ? true : nil)
+        let own = layoutEffects(a, role, spec, old.sourceRange, m)
+        // The layout's bubble transform goes first, where a transform belongs.
+        let all = own.filter { $0.name == "transform" } + kept + own.filter { $0.name != "transform" }
+        c.effects = all.isEmpty ? nil : all
+        return c
+    }
+
+    static func layoutLayer(_ role: ClipLayout.Role, _ spec: FrameLayout) -> Int { role == .screen || !spec.kind.needsScreen ? 1 : 2 }
+
+    /// What a layout puts on one take's clip: where it sits and its card. A smaller screen is placed after
+    /// its own effects (`place`), so the editor's zoom plays inside it; a camera bubble is framed on the face
+    /// by its transform, read from the take itself so it stays sharp.
+    func layoutEffects(_ a: MediaAsset, _ role: ClipLayout.Role, _ spec: FrameLayout, _ source: MediaRange, _ m: LayoutMeasure) -> [ClipEffect] {
         let frameSize = LayoutGeometry.Size(Double(s.width), Double(s.height))
-        let source = LayoutGeometry.Size(Double(a.video[0].width), Double(a.video[0].height))
+        let picture = LayoutGeometry.Size(Double(a.video[0].width), Double(a.video[0].height))
         let whole = LayoutGeometry.Rect(x: 0, y: 0, w: 1, h: 1)
         var effects: [ClipEffect] = []
         switch role {
         case .screen:
-            let rect = LayoutGeometry.screenRect(spec, frame: frameSize, screen: source)
-            if rect != whole { effects.append(LayoutGeometry.transform(crop: [(clip.sourceRange.start.seconds, whole)], into: rect, frame: frameSize, source: source)) }
+            let rect = LayoutGeometry.screenRect(spec, frame: frameSize, screen: picture)
+            if rect != whole { effects.append(LayoutGeometry.placement(crop: [(source.start.seconds, whole)], into: rect, frame: frameSize, source: picture)) }
         case .camera where spec.kind != .you:
             let rect = LayoutGeometry.cameraRect(spec, frame: frameSize)
-            let crops = LayoutGeometry.follow(m.faces[a.id], from: clip.sourceRange.start.seconds, to: clip.sourceRange.end.seconds, rect: rect, frame: frameSize, source: source)
-            effects.append(LayoutGeometry.transform(crop: crops, into: rect, frame: frameSize, source: source))
+            let crops = LayoutGeometry.follow(m.faces[a.id], from: source.start.seconds, to: source.end.seconds, rect: rect, frame: frameSize, source: picture)
+            effects.append(LayoutGeometry.transform(crop: crops, into: rect, frame: frameSize, source: picture))
         case .camera: break
         }
         if let card = LayoutGeometry.card(spec, role: role) { effects.append(card) }
-        clip.effects = effects.isEmpty ? nil : effects
-        return clip
+        return effects
     }
 
-    /// A layout the director set is theirs: the editor changes it only for a note.
+    /// A layout the director set is theirs: where its clips sit changes only for a note. The editor can
+    /// still zoom the screen, blur or mask what's private, and freeze it.
     func checkLayoutLock(_ op: EditOperation) throws {
         guard !director, !forNote else { return }
         let mine = { (c: Clip) in c.layout?.byDirector == true }
-        let fail = DirectionError("layout_is_yours", "The director set this layout. Change it only for a note that asks for it, and name the note.")
+        let fail = DirectionError("layout_is_yours", "The director set this layout, so where its clips sit is theirs. Zoom, blur or freeze them if the style asks; change the layout only for a note that asks for it, and name the note.")
+        /// The effects that place a clip in the director's layout: its place and card, and the transform on a bubble.
+        func placing(_ name: String?, on c: Clip) -> Bool {
+            guard let name else { return false }
+            if name == "place" || name == "card" || name == "pin" { return true }
+            return name == "transform" && c.layout?.role == .camera && c.layout?.layout.kind != .you
+        }
         switch op.type {
         case "layout":
             guard let r = op.range else { return }
             if s.clips.contains(where: { mine($0) && $0.start.seconds < r.end.seconds && $0.end.seconds > r.start.seconds }) { throw fail }
-        case "addEffect", "setEffect", "removeEffect":
-            if let id = op.target ?? op.clipID, s.clips.first(where: { $0.id == id }).map(mine) == true { throw fail }
-            if let e = op.effectID, s.clips.contains(where: { mine($0) && $0.effect(e) != nil }) { throw fail }
+        case "addEffect":
+            if let id = op.target ?? op.clipID, let c = s.clips.first(where: { $0.id == id }), mine(c), placing(op.effect, on: c) { throw fail }
+        case "setEffect", "removeEffect":
+            if let e = op.effectID, let c = s.clips.first(where: { mine($0) && $0.effect(e) != nil }), placing(c.effect(e)?.name, on: c) { throw fail }
+        case "reframe":
+            if let id = op.clipID, let c = s.clips.first(where: { $0.id == id }), mine(c), placing("transform", on: c) { throw fail }
+        case "freeze": return
         default:
             if let id = op.clipID, s.clips.first(where: { $0.id == id }).map(mine) == true { throw fail }
         }

@@ -47,6 +47,7 @@ Frame: `screens/29-changes.html` · Render: `renders/29-changes@2x.png`
 **States and variants:**
 - To review empty: the list shows the empty line "Every answer is accepted. Screen it again for more notes, or lock picture when the edit is done." and leads to 34. The foot reads "Nothing left to review. Screen it again for more notes, or lock picture to start finishing."
 - Accepted tab: the same rows in their done state.
+- **Keep as a rule** (styles.md › Keep as a rule): when the editor read something lasting in a note ("never", "always", a habit corrected) its answer carries a rule, and once accepted the row shows **Keep as a Rule…** beside ✓ Accepted. It opens a popover: the editor's wording to edit, **For** `<style> films` · Every film (the editor's suggestion chosen; just the house style when the film has no style), a line saying where it goes, and any rules it takes the place of, struck through. Keep saves it; the row then shows a "Kept as a rule" chip (its tooltip names the style). The context menu offers Keep as a Rule… on any answer, with an empty wording when the editor offered none.
 - All tab: the same rows in note order.
 - If an answer failed partially, its row gets a red delta "partly" and the reply action is primary.
 
@@ -54,7 +55,7 @@ Frame: `screens/29-changes.html` · Render: `renders/29-changes@2x.png`
 - Click a row to select it and seek the stage to its change minus the handle.
 - Shortcuts: `A` accepts the selected answer, `R` replies, `↑`/`↓` select, `⌘↩` plays changes, `⇧⌘A` (Accept all remaining) has a confirm.
 - Double-clicking a row plays just that change (31, starting at it).
-- Context menu on a row: Accept, Reply…, Play this change, Show in Cut 3, Revert this change.
+- Context menu on a row: Accept, Reply…, Play this change, Keep as a rule…, Show in Cut 3, Revert this change.
 
 **Motion:**
 - On arrival, the sweep runs one pass left to right (`--t-sweep` 900 ms, `--e-inout`) and then holds as a static 2 pt line for 2.4 s before fading out (Settle).

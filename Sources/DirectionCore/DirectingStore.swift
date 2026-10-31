@@ -27,8 +27,9 @@ public struct AnswerInput: Codable, Sendable {
     public var preferred: String?
     public var unasked: Bool?
     public var kind: NoteKind?
-    public init(noteID: String? = nil, summary: String, delta: String? = nil, start: Double? = nil, end: Double? = nil, options: [NoteOption]? = nil, preferred: String? = nil, unasked: Bool? = nil, kind: NoteKind? = nil) {
-        self.noteID = noteID; self.summary = summary; self.delta = delta; self.start = start; self.end = end; self.options = options; self.preferred = preferred; self.unasked = unasked; self.kind = kind
+    public var rule: RuleSuggestion?
+    public init(noteID: String? = nil, summary: String, delta: String? = nil, start: Double? = nil, end: Double? = nil, options: [NoteOption]? = nil, preferred: String? = nil, unasked: Bool? = nil, kind: NoteKind? = nil, rule: RuleSuggestion? = nil) {
+        self.noteID = noteID; self.summary = summary; self.delta = delta; self.start = start; self.end = end; self.options = options; self.preferred = preferred; self.unasked = unasked; self.kind = kind; self.rule = rule
     }
 }
 
@@ -68,6 +69,43 @@ extension ProjectStore {
 
     /// The film's style, from its own copy.
     public func style() throws -> Style? { StyleLibrary.film(url, id: try brief().style) }
+
+    /// What the film follows: the house style, with the film's own style over it.
+    public func appliedStyle(styles: URL = SharedSettings.stylesFolder) throws -> AppliedStyle { StyleLibrary.applied(try style(), folder: styles) }
+
+    /// Keeps a rule (styles.md › Keep as a rule): in this film's style, which the film's copy follows, or in
+    /// the house style; `replacing` takes out rules it stands in for. A note's answer remembers where it went.
+    @discardableResult
+    public func keepRule(_ text: String, area: String?, inFilmStyle: Bool, replacing: [String] = [], noteID: String? = nil, styles: URL = SharedSettings.stylesFolder) throws -> KeptRule {
+        let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty, words.count <= 300 else { throw DirectionError("invalid_rule", "A rule is one sentence of up to 300 characters.") }
+        let filmStyle = try brief().style
+        var target = StyleLibrary.houseID
+        if inFilmStyle {
+            guard let id = filmStyle, let s = try? StyleLibrary.read(styles.appendingPathComponent(id, isDirectory: true)) else {
+                throw DirectionError("style_not_found", "This film\u{2019}s style isn\u{2019}t in your Styles folder any more. Keep it in your house style.")
+            }
+            target = s.id
+        }
+        let note = try noteID.flatMap { id in try comments().first { $0.id == id } }
+        let rule = StyleRule(area: area ?? "general", text: words, kept: .init(film: try read().name, note: note?.text))
+        let gone = Set(replacing)
+        if !gone.isEmpty {
+            if let id = filmStyle, (try? StyleLibrary.read(styles.appendingPathComponent(id, isDirectory: true)))?.rules.contains(where: { gone.contains($0.id) }) == true { try StyleLibrary.remove(rules: gone, from: id, folder: styles) }
+            if StyleLibrary.house(in: styles).rules.contains(where: { gone.contains($0.id) }) { try StyleLibrary.remove(rules: gone, from: StyleLibrary.houseID, folder: styles) }
+        }
+        let saved = try StyleLibrary.keep(rule, in: target, folder: styles)
+        if filmStyle != nil, target != StyleLibrary.houseID || !gone.isEmpty { try? refreshStyle(styles: styles) }
+        let kept = KeptRule(id: rule.id, styleID: saved.id, styleName: saved.name)
+        if let noteID {
+            try modifyNote(noteID, summary: "Kept a rule") { c, _ in
+                guard var answers = c.answers, !answers.isEmpty else { return }
+                answers[answers.count - 1].keptRule = kept
+                c.answers = answers
+            }
+        }
+        return kept
+    }
     /// Copies the film's style again from the Styles folder, for changes made there since it was picked.
     public func refreshStyle(styles: URL = SharedSettings.stylesFolder) throws {
         guard let id = try brief().style else { return }
@@ -553,6 +591,11 @@ extension ProjectStore {
         for a in answers {
             let range = a.start.flatMap { s in a.end.map { MediaRange(start: s, end: $0) } }
             var answer = NoteAnswer(cutID: cut.id, revision: cut.editRevision, summary: a.summary, delta: a.delta, range: range, options: a.options, preferred: a.preferred)
+            if var rule = a.rule {
+                rule.text = rule.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !rule.text.isEmpty, rule.text.count <= 300, rule.scope == nil || ["style", "house"].contains(rule.scope!) else { throw DirectionError("invalid_rule", "A rule is one sentence of up to 300 characters; scope is style or house.") }
+                answer.rule = rule
+            }
             if let noteID = a.noteID {
                 guard t.noteIDs.contains(noteID) else { throw DirectionError("feedback_not_found", "Answer refers to a note outside this turnover.") }
                 try modifyNote(noteID, summary: "Answered a note") { c, _ in

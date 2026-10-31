@@ -24,6 +24,8 @@ final class ChangesState {
     /// Rows acted on during this visit stay in To review (done) until the director leaves the tab.
     var sticky: Set<String> = []
     var replyingNoteID: String?
+    /// The answer whose Keep as a rule is open.
+    var keepingNoteID: String?
     /// Reply drafts by note, kept across rooms; esc keeps them.
     var drafts: [String: String] = [:]
     /// Play changes is on screen (31). It stays up on the end card after the reel finishes.

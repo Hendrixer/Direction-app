@@ -205,6 +205,9 @@ struct AnswerRow: View {
             actions
         }
         .fixedSize()
+        .popover(isPresented: Binding(get: { model.changes.keepingNoteID == note.id }, set: { if !$0 { model.changes.keepingNoteID = nil } }), arrowEdge: .bottom) {
+            KeepRulePopover(model: model, note: note, suggestion: answer?.rule) { model.changes.keepingNoteID = nil }
+        }
     }
 
     @ViewBuilder private var actions: some View {
@@ -213,7 +216,16 @@ struct AnswerRow: View {
         } else {
             switch status {
             case .accepted:
-                Label(model.doneLabel(note), systemImage: "checkmark").labelStyle(StatusOKLabelStyle())
+                HStack(spacing: 8) {
+                    // A note that said something for every time can be kept (styles.md › Keep as a rule).
+                    if let kept = answer?.keptRule {
+                        Chip("Kept as a rule", icon: "checkmark", mono: false).help("In \(kept.styleName)")
+                    } else if answer?.rule != nil {
+                        Button("Keep as a Rule\u{2026}") { model.changes.keepingNoteID = note.id }
+                            .buttonStyle(.gate(.ghost, .small)).help(answer?.rule?.text ?? "")
+                    }
+                    Label(model.doneLabel(note), systemImage: "checkmark").labelStyle(StatusOKLabelStyle())
+                }
             case .reopened:
                 Chip(model.revertReply(note) == nil ? "Reopened" : "Reverting", style: .director, mono: false)
                     .help("Goes into your next turnover")
@@ -286,6 +298,7 @@ struct AnswerContextMenu: View {
         Button("Accept") { model.acceptAnswerFromChanges(note.id) }.disabled(status != .unreviewed || model.isPictureLocked)
         Button("Reply\u{2026}") { model.replyToAnswer(note.id) }.disabled(model.isPictureLocked)
         Button("Play This Change") { model.openChangesReel(from: note.id) }.disabled(model.answerRange(note) == nil)
+        Button("Keep as a Rule\u{2026}") { model.changes.keepingNoteID = note.id }.disabled(model.answer(note, in: model.reviewCut)?.keptRule != nil)
         if let before {
             Button("Show in \(before.name)") {
                 let t = model.noteTime(note)

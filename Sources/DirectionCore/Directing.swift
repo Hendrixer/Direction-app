@@ -169,6 +169,25 @@ public struct NoteOption: Codable, Hashable, Sendable {
 }
 
 /// What the editor did for one note in one cut.
+/// A rule the editor offers with an answer: the note said something the director wants every time.
+public struct RuleSuggestion: Codable, Hashable, Sendable {
+    public var text: String
+    public var area: String?
+    /// style (this film's style) or house (every film).
+    public var scope: String?
+    /// Rules this one takes the place of, by id, in the film's style or the house style.
+    public var replaces: [String]?
+    public init(text: String, area: String? = nil, scope: String? = nil, replaces: [String]? = nil) { self.text = text; self.area = area; self.scope = scope; self.replaces = replaces }
+}
+
+/// A rule the director kept from an answer, and the style it went into.
+public struct KeptRule: Codable, Hashable, Sendable {
+    public var id: String
+    public var styleID: String
+    public var styleName: String
+    public init(id: String, styleID: String, styleName: String) { self.id = id; self.styleID = styleID; self.styleName = styleName }
+}
+
 public struct NoteAnswer: Codable, Hashable, Sendable {
     public var cutID: String
     public var revision: Int
@@ -183,6 +202,10 @@ public struct NoteAnswer: Codable, Hashable, Sendable {
     public var inCut: String?
     public var state: String = "unreviewed"
     public var createdAt: Double
+    /// A lasting rule the editor read in the note, offered for the director to keep (styles.md › Keep as a rule).
+    public var rule: RuleSuggestion?
+    /// Where the director kept it.
+    public var keptRule: KeptRule?
     public init(cutID: String, revision: Int, summary: String, delta: String? = nil, range: MediaRange? = nil, options: [NoteOption]? = nil, preferred: String? = nil, createdAt: Double = Date().timeIntervalSince1970) {
         self.cutID = cutID; self.revision = revision; self.summary = summary; self.delta = delta; self.range = range; self.options = options; self.preferred = preferred; self.createdAt = createdAt
     }

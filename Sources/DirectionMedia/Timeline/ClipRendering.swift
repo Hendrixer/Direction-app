@@ -62,6 +62,7 @@ enum ClipRendering {
             }
         }
         image = apply(effects, to: image.cropped(to: bounds), at: k, frameIndex: frameIndex, bounds: bounds, scale: scale)
+        if let place = effects.first(where: { $0.name == "place" }) { image = self.place(image, place, at: k, bounds: bounds) }
         if let card = effects.first(where: { $0.name == "card" }) { image = self.card(image, card, bounds: bounds) }
 
         var alpha = f.opacity * (tr?.number("opacity", at: k, default: 1) ?? 1)
@@ -119,6 +120,19 @@ enum ClipRendering {
         return out.cropped(to: bounds).applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: plain, "inputMaskImage": m]).cropped(to: bounds)
     }
 
+    /// `place` (layouts.md): part of the clip's finished picture (from) into a rectangle of the frame (x y w h),
+    /// both fractions of the frame from its top left. It comes after the clip's transform and effects, so a
+    /// zoom or a blur plays inside the rectangle.
+    static func place(_ image: CIImage, _ e: ClipEffect, at t: Double?, bounds: CGRect) -> CIImage {
+        func n(_ k: String, _ d: Double) -> Double { e.number(k, at: t, default: d) }
+        func rect(_ x: Double, _ y: Double, _ w: Double, _ h: Double) -> CGRect {
+            CGRect(x: bounds.minX + x * bounds.width, y: bounds.maxY - (y + max(0.001, h)) * bounds.height, width: max(0.001, w) * bounds.width, height: max(0.001, h) * bounds.height)
+        }
+        let from = rect(n("fromX", 0), n("fromY", 0), n("fromW", 1), n("fromH", 1)), to = rect(n("x", 0), n("y", 0), n("w", 1), n("h", 1))
+        let move = CGAffineTransform(translationX: -from.minX, y: -from.minY).concatenating(.init(scaleX: to.width / from.width, y: to.height / from.height)).concatenating(.init(translationX: to.minX, y: to.minY))
+        return image.cropped(to: from).transformed(by: move).cropped(to: to)
+    }
+
     /// `card` (layouts.md): the placed picture with rounded corners or as a circle, a thin light edge and a
     /// soft shadow below it, over a background that fills the frame when the effect names one.
     static func card(_ image: CIImage, _ e: ClipEffect, bounds: CGRect) -> CIImage {
@@ -127,9 +141,12 @@ enum ClipRendering {
         let side = min(rect.width, rect.height), radius = e.number("radius", at: nil, default: 0.2) * side
         var out = image.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(), "inputMaskImage": shape])
         let edge = e.number("edge", at: nil, default: 0)
-        if edge > 0 {
-            let width = max(1, side * 0.008)
-            if let ring = CIFilter(name: "CIRoundedRectangleStrokeGenerator", parameters: ["inputExtent": CIVector(cgRect: rect.insetBy(dx: width / 2, dy: width / 2)), "inputRadius": max(0, radius - width / 2), "inputWidth": width, "inputColor": CIColor(red: 1, green: 1, blue: 1, alpha: edge * 0.5)])?.outputImage {
+        // A style's edge color is drawn solid and a little bolder, so the bubble reads as you; otherwise a thin light edge.
+        let tint = e.params["edgeColor"]?.string.flatMap { color($0) }
+        if edge > 0 || tint != nil {
+            let width = max(1, side * (tint == nil ? 0.008 : 0.012))
+            let ink = tint ?? CIColor(red: 1, green: 1, blue: 1, alpha: edge * 0.5)
+            if let ring = CIFilter(name: "CIRoundedRectangleStrokeGenerator", parameters: ["inputExtent": CIVector(cgRect: rect.insetBy(dx: width / 2, dy: width / 2)), "inputRadius": max(0, radius - width / 2), "inputWidth": width, "inputColor": ink])?.outputImage {
                 out = ring.composited(over: out)
             }
         }

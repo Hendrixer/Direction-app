@@ -33,6 +33,21 @@ import DirectionTools
         #expect(ClipRendering.color("#FF8000") == CIColor(red: 1, green: 128 / 255, blue: 0) && ClipRendering.color("orange") == nil)
     }
 
+    @Test func placeShowsPartOfTheFinishedPictureInItsRectangle() {
+        let bounds = CGRect(x: 0, y: 0, width: 400, height: 400)
+        // Blue all over, red in the top left quarter (y goes up in Core Image).
+        let picture = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: CGRect(x: 0, y: 200, width: 200, height: 200)).composited(over: CIImage(color: CIColor(red: 0, green: 0, blue: 1)).cropped(to: bounds))
+        let placed = ClipRendering.place(picture, ClipEffect(name: "place", params: ["x": .number(0.5), "y": .number(0.5), "w": .number(0.25), "h": .number(0.25), "fromW": .number(0.5), "fromH": .number(0.5)]), at: nil, bounds: bounds)
+        // The red quarter fills the rectangle a quarter of the frame across, from the middle down and right.
+        #expect(placed.extent == CGRect(x: 200, y: 100, width: 100, height: 100))
+        #expect(pixel(placed, 250, 150)[0] > 0.95 && pixel(placed, 250, 150)[2] < 0.05)
+        // Its card goes around the placed rectangle, edged in the style's color.
+        let carded = ClipRendering.card(placed, ClipEffect(name: "card", params: ["radius": .number(0.2), "edgeColor": .string("#FFD43B")]), bounds: bounds)
+        // On the red picture, the thin yellow ring shows as green where there was none.
+        let edge = pixel(carded, 250, 101), inside = pixel(carded, 250, 110)
+        #expect(edge[0] > 0.95 && edge[1] > 0.5 && edge[2] < 0.3 && inside[1] < 0.05)
+    }
+
     @Test func theDirectorLaysOutTheCutWithTheScreenAndTheCameraInSync() async throws {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         // The fixture shows no face, so the name decides: a screen recording and the take on V1 as the camera.

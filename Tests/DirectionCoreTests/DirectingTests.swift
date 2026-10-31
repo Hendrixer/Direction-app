@@ -114,3 +114,38 @@ private func directedStore() throws -> (ProjectStore, Project, ReviewCut) {
     try store.lockScene(id: "scene-1", locked: true)
     expectError("scene_locked") { _ = try store.deleteScene(id: "scene-1") }
 }
+
+@Test func anAnswerCanOfferARuleAndTheDirectorKeepsItInTheStyleOrTheHouseStyle() throws {
+    let (store, p, cut) = try directedStore()
+    let styles = store.url.deletingLastPathComponent().appendingPathComponent("Styles-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: styles) }
+    try FileManager.default.createDirectory(at: styles, withIntermediateDirectories: true)
+    let style = try StyleLibrary.create(name: "Desk Talk", summary: "", rules: [StyleRule(area: "music", text: "Music 24 dB under the voice.")], in: styles)
+    var brief = Brief(); brief.logline = "Maya builds it."; brief.feeling = "Proud."; brief.style = style.id
+    try store.saveBrief(brief, styles: styles)
+
+    let note = try store.addComment(text: "Never put words over my face. Ever.", sequenceID: nil, revision: p.editRevision, cutID: cut.id, time: .init(seconds: 1), extra: NoteFields(kind: .picture))
+    let t = try store.turnOver(noteIDs: [note.id], latitude: .faithful, waitForOK: false, cutID: cut.id, sequenceID: nil)
+    expectError("invalid_rule") { _ = try store.completeTurnover(id: t.id, revision: nil, sequenceID: nil, answers: [AnswerInput(noteID: note.id, summary: "Moved the title.", rule: RuleSuggestion(text: " ", scope: "house"))]) }
+    _ = try store.completeTurnover(id: t.id, revision: nil, sequenceID: nil, answers: [AnswerInput(noteID: note.id, summary: "Moved the title off your face.", rule: RuleSuggestion(text: "Text never covers my face.", area: "graphics", scope: "house"))])
+    #expect(try store.notes().first { $0.id == note.id }?.answers?.last?.rule?.text == "Text never covers my face.")
+
+    // Kept for the film's style: the style in the folder and the film's own copy both have it, and the answer knows where it went.
+    let kept = try store.keepRule("Text never covers my face.", area: "graphics", inFilmStyle: true, noteID: note.id, styles: styles)
+    #expect(kept.styleID == "desk-talk" && kept.styleName == "Desk Talk")
+    let master = try StyleLibrary.read(style.url), copy = try store.style()
+    #expect(master.rules.last?.text == "Text never covers my face." && copy?.rules.last?.kept?.film == p.name)
+    #expect(try store.notes().first { $0.id == note.id }?.answers?.last?.keptRule == kept)
+
+    // Kept for every film, in place of a style rule it overrides: the house style gets it, the style loses the old one.
+    let old = try #require(try StyleLibrary.read(style.url).rules.first { $0.area == "music" })
+    let house = try store.keepRule("Music 25 dB under my voice.", area: "music", inFilmStyle: false, replacing: [old.id], styles: styles)
+    #expect(house.styleID == StyleLibrary.houseID && StyleLibrary.house(in: styles).rules.map(\.text) == ["Music 25 dB under my voice."])
+    #expect(try store.style()?.rules.contains { $0.id == old.id } == false)
+    let applied = try store.appliedStyle(styles: styles)
+    #expect(applied.rules.map(\.styleName) == ["House style", "Desk Talk"])
+
+    // A film whose style has left the folder keeps rules only in the house style.
+    try FileManager.default.removeItem(at: style.url)
+    expectError("style_not_found") { _ = try store.keepRule("Hard cuts only.", area: nil, inFilmStyle: true, styles: styles) }
+}

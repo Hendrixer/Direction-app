@@ -1,4 +1,4 @@
-<!-- direction-job style v1 -->
+<!-- direction-job style v2 -->
 # Make a style for the director
 
 Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
@@ -9,12 +9,12 @@ The director asked for a style. In their words:
 
 {{source}}
 
-A style is how their videos look, sound and move, kept so the editor can cut every video that way. It goes in their Styles folder ({{stylesFolder}}) through `direction_save_style`, never by writing there yourself.
+A style is how a kind of their videos looks, sounds and moves, kept so the editor can cut every video of that kind that way: rules in their words, named layouts and moves Direction carries out, values, and parts. It goes in their Styles folder ({{stylesFolder}}) through `direction_save_style`, never by writing there yourself.
 
 1. Read what they pointed you to: the brief (`direction_brief`), any references, and `direction_styles` for the styles they have (don't repeat one; build on it when they say so).
-2. Decide the style: pace, picture, graphics, captions, transitions, sound, music, color, and what to avoid. Numbers over adjectives.
+2. Decide the style: its rules (pace, picture, layouts, graphics, captions, transitions, sound, music, color, and what to avoid), its layouts if the films have a camera and a screen in sync, and its moves. Numbers over adjectives; don't repeat the house rules.
 3. Make its parts in your working folder: graphics in `Graphics/<name>/` (check each with `direction_graphic`, note "unasked"), transitions in `Transitions/`, effects in `Effects/`. Use sounds and fonts the director gave you; don't make any with a service.
-4. Save it once with `direction_save_style`: name, summary, tokens, guide and files.
+4. Save it once with `direction_save_style`: name, summary, rules, tokens (layouts, moves, pace and the values) and files.
 5. If something needs the director (a font you don't have, which of two directions), ask with `direction_ask` before saving.
 
 ## The film you're in
