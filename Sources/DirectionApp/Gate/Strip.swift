@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// One scene on the strip, sized by its real duration in the cut.
 struct StripScene: Identifiable, Equatable {
@@ -25,8 +26,8 @@ struct StripMark: Identifiable, Equatable {
     var fresh = false
 }
 
-/// The scene strip replaces the scrubber everywhere. Click seeks, drag selects a range,
-/// right-click a scene for its menu. Marks sit in a row underneath.
+/// The scene strip replaces the scrubber everywhere. Click seeks and drag scrubs; ⌥- or ⇧-drag
+/// selects a range for a note. Right-click a scene for its menu. Marks sit in a row underneath.
 struct SceneStrip<Menu: View>: View {
     var scenes: [StripScene]
     var duration: Double
@@ -40,6 +41,7 @@ struct SceneStrip<Menu: View>: View {
     @ViewBuilder var menu: (StripScene) -> Menu
 
     @State private var dragStart: Double?
+    @State private var selectingRange = false
     @Environment(\.editorPlayhead) private var editorPlayhead
     private var sceneHeight: CGFloat { tall ? Gate.Component.Strip.tallScene : Gate.Component.Strip.scene }
     private var height: CGFloat { tall ? Gate.Component.Strip.tallHeight : Gate.Component.Strip.height }
@@ -88,9 +90,14 @@ struct SceneStrip<Menu: View>: View {
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                 let t = time(at: value.location.x, scenes: scenes, total: total, usable: usable)
-                if dragStart == nil { dragStart = time(at: value.startLocation.x, scenes: scenes, total: total, usable: usable) }
-                if let start = dragStart, let onRange, abs(value.translation.width) > 4 { onRange(min(start, t), max(start, t)) } else { onSeek(t) }
-            }.onEnded { _ in dragStart = nil })
+                if dragStart == nil {
+                    dragStart = time(at: value.startLocation.x, scenes: scenes, total: total, usable: usable)
+                    selectingRange = onRange != nil && !NSEvent.modifierFlags.intersection([.option, .shift]).isEmpty
+                }
+                if selectingRange {
+                    if let start = dragStart, let onRange, abs(value.translation.width) > 4 { onRange(min(start, t), max(start, t)) }
+                } else { onSeek(t) }
+            }.onEnded { _ in dragStart = nil; selectingRange = false })
         }
         .frame(height: height)
         .accessibilityElement(children: .ignore)

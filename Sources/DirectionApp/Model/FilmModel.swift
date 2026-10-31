@@ -147,7 +147,9 @@ final class FilmModel {
         let output = UserDefaults.standard.string(forKey: "audioOutput") ?? ""
         player.audioOutputDeviceUniqueID = output.isEmpty ? nil : output
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1 / 24, preferredTimescale: 600), queue: .main) { [weak self] time in
-            MainActor.assumeIsolated { guard let self, time.seconds.isFinite, !self.isPreparing else { return }; self.position = time.seconds; self.playing = self.player.rate > 0; self.keepAwake(self.playing) }
+            // Not while a seek is on its way: the player still reports where it was, and the playhead
+            // would jump back from where you clicked.
+            MainActor.assumeIsolated { guard let self, time.seconds.isFinite, !self.isPreparing, !self.seeking else { return }; self.position = time.seconds; self.playing = self.player.rate > 0; self.keepAwake(self.playing) }
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] note in
             let id = (note.object as AnyObject?).map(ObjectIdentifier.init)
@@ -475,11 +477,23 @@ final class FilmModel {
         watchedCutID = cut?.id == latestCut?.id ? nil : cut?.id
         loadDisplayed(force: true)
     }
+    /// The playhead moves at once; the player follows. Seeks wait for the one before (the newest
+    /// wins), so a drag across a long 4K cut doesn't pile up seeks that each cancel the last.
     func seek(_ seconds: Double) {
         guard seconds.isFinite else { return }
         position = max(0, min(seconds, duration))
         if isPreparing || isPreview { pendingSeek = position; return }
-        player.seek(to: CMTime(seconds: position, preferredTimescale: 600_000), toleranceBefore: .zero, toleranceAfter: .zero)
+        seekTarget = position
+        if !seeking { chaseSeek() }
+    }
+    @ObservationIgnored private var seekTarget: Double?
+    @ObservationIgnored private(set) var seeking = false
+    private func chaseSeek() {
+        guard let target = seekTarget else { seeking = false; return }
+        seekTarget = nil; seeking = true
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600_000), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.chaseSeek() } }
+        }
     }
     func togglePlayback() {
         guard !isPreview else { playing.toggle(); return }

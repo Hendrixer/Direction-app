@@ -52,7 +52,7 @@ Suggested module layout: `Gate/Tokens.swift` (generated), `Gate/Materials.swift`
 | Picture | `.frame-pic` | `picture` | AVPlayerLayer, aspect-fit, black. Radius 2 pt. Never under grain. |
 | Region | `.region` | `region` | Amber 1.5 pt rect, 35% black outside, label tab "3 · region", 7 pt handles at corners when editing. |
 | HUD tag | `.hud .glass` | `hud` | Timecode or A/B label over picture. |
-| Scene strip | `.strip` | `scene-strip` | Replaces the scrubber everywhere. Scenes proportional to duration, 2 pt gaps. Click seeks; drag selects a range (amber); scene context menu (frame 53). Marks row under it: pins and diamonds. States per scene: normal · current (brighter) · changed in this cut (2 pt prism top edge) · locked (grayscale 30%, hatching, lock icon before name). Tall variant 64 pt for Changes and Finish. |
+| Scene strip | `.strip` | `scene-strip` | Replaces the scrubber everywhere. Scenes proportional to duration, 2 pt gaps. Click seeks; drag scrubs; ⌥- or ⇧-drag selects a range (amber); scene context menu (frame 53). Marks row under it: pins and diamonds. States per scene: normal · current (brighter) · changed in this cut (2 pt prism top edge) · locked (grayscale 30%, hatching, lock icon before name). Tall variant 64 pt for Changes and Finish. |
 | Transport | `.transport` | `transport` | Play, timecode `MM:SS:FF / m:ss`, strip, mark button. Space plays, J/K/L shuttle, ←/→ one frame, ⇧←/→ one second, N marks. |
 | Timecode | `.tc` | `timecode` | SF Mono 12, tabular. Total in text-4. |
 
