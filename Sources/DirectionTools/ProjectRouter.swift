@@ -3,7 +3,8 @@ import AppKit
 import DirectionCore
 
 /// One MCP/API process can own jobs in several projects. Calls always route by an
-/// explicit path (or the immutable --project launch argument), never a mutable global selection.
+/// explicit path, never a mutable global selection. Started for one film (--project, as every
+/// editor run is), it reaches that film only: no other film, no new ones, no list of the rest.
 public actor ProjectRouter {
     private let defaultRuntime: ToolRuntime?
     private let library: ProjectLibrary
@@ -19,6 +20,7 @@ public actor ProjectRouter {
     }
     public func invoke(_ name: String, arguments: JSONValue = .object([:])) async throws -> ToolResponse {
         try ToolCatalog.validate(arguments, for: name)
+        if let bound = defaultRuntime { return try await invoke(name, arguments: arguments, bound: bound) }
         switch name {
         case "direction_projects":
             return ToolResponse(.object(["projects": try .wrapping(library.list())]))
@@ -50,6 +52,22 @@ public actor ProjectRouter {
             else if let defaultRuntime { target = defaultRuntime }
             else { throw DirectionError("project_required", "Pass projectPath on this call. Use direction_projects, direction_create_project, or direction_open_project first.") }
             return try await target.invoke(name, arguments: arguments)
+        }
+    }
+    /// The one film this process was started for.
+    private func invoke(_ name: String, arguments: JSONValue, bound: ToolRuntime) async throws -> ToolResponse {
+        let own = bound.store.url.resolvingSymlinksInPath().path
+        let outside = DirectionError("other_film", "This run is for \(bound.store.url.deletingPathExtension().lastPathComponent) only; other films are out of reach.")
+        switch name {
+        case "direction_projects":
+            return ToolResponse(.object(["projects": try .wrapping(library.list().filter { URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path == own })]))
+        case "direction_create_project": throw outside
+        case "direction_open_project":
+            guard try projectURL(arguments.requiredString("path")).path == own else { throw outside }
+            return try await bound.invoke("direction_inspect")
+        default:
+            if let path = arguments["projectPath"].string, try projectURL(path).path != own { throw outside }
+            return try await bound.invoke(name, arguments: arguments)
         }
     }
     private func projectURL(_ path: String) throws -> URL {

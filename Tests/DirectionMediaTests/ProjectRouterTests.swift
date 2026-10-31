@@ -34,6 +34,16 @@ import DirectionCore
     #expect(try await router.invoke("direction_inspect").value["project"]["name"].string == "First")
     do { _ = try await runtime.invoke("direction_inspect", arguments: .object(["projectPath": .string(root.appendingPathComponent("Other.direction").path)])); Issue.record("Should reject wrong target") }
     catch let error as DirectionError { #expect(error.code == "project_mismatch") }
-    do { _ = try await router.invoke("direction_create_project", arguments: .object(["path": .string("relative.direction"), "name": .string("Relative")])); Issue.record("Should reject relative path") }
+    // Started for one film, it reaches that film only.
+    let other = try ProjectStore.create(at: root.appendingPathComponent("Other.direction"), name: "Other")
+    for (tool, args) in [("direction_inspect", ["projectPath": JSONValue.string(other.url.path)]), ("direction_open_project", ["path": .string(other.url.path)]),
+                         ("direction_create_project", ["path": .string(root.appendingPathComponent("New.direction").path), "name": .string("New")])] {
+        do { _ = try await router.invoke(tool, arguments: .object(args)); Issue.record("\(tool) reached another film") }
+        catch let error as DirectionError { #expect(error.code == "other_film") }
+    }
+    #expect(try await router.invoke("direction_projects").value["projects"].array?.map { $0["name"].string } == ["First"])
+    #expect(try await router.invoke("direction_open_project", arguments: .object(["path": .string(store.url.path)])).value["project"]["name"].string == "First")
+    let unbound = try ProjectRouter(library: ProjectLibrary(url: root.appendingPathComponent("library.sqlite")))
+    do { _ = try await unbound.invoke("direction_create_project", arguments: .object(["path": .string("relative.direction"), "name": .string("Relative")])); Issue.record("Should reject relative path") }
     catch let error as DirectionError { #expect(error.code == "invalid_project_path") }
 }
