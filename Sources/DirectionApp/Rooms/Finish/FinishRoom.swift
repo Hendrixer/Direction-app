@@ -227,7 +227,8 @@ struct FinishRow: View {
                 .disabled(model.runs.active != nil || !model.isPictureLocked)
                 .help("Ask the editor to carry on with finishing")
         }
-        if director {
+        // The editor's own rows need you too when it can't finish them alone (it can't hear the mix).
+        if director || item.state == "needsYou" {
             Button { acting = true } label: {
                 switch item.id {
                 case "titles": SmallIconLabel("Write credits", icon: "plus")
