@@ -15,20 +15,28 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     /// are the ones its own model menu lists, read from its cache, so they follow the installed Codex.
     var versions: [(id: String, name: String)] {
         switch self {
-        case .claudeCode: [("claude-opus-5-5", "Claude Opus 5.5"), ("claude-sonnet-5-5", "Claude Sonnet 5.5"), ("claude-haiku-5-5", "Claude Haiku 5.5")]
+        case .claudeCode: [("claude-opus-5-5", "Claude Opus 5.5"), ("claude-fable-5-1", "Claude Fable 5.1"), ("claude-sonnet-5-5", "Claude Sonnet 5.5"), ("claude-haiku-5-5", "Claude Haiku 5.5")]
         case .codex: [("", "The program\u{2019}s default")] + Self.codexModels()
         }
     }
 
+    /// Codex's own cache of its model menu.
+    static let codexCache = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".codex/models_cache.json")
+    private struct CodexCache: Decodable {
+        struct Level: Decodable { var effort: String }
+        struct Model: Decodable { var slug: String; var display_name: String?; var visibility: String?; var priority: Int?; var supported_reasoning_levels: [Level]? }
+        var models: [Model]
+        static func read(_ url: URL) -> Self? { (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Self.self, from: $0) } }
+    }
+
     /// Codex's model menu: `~/.codex/models_cache.json`, listed models by priority, named the way
     /// its menu names them ("GPT-6.1-Sol" → "GPT-6.1 Sol"). Without the cache, the list it had on 2026-10-29.
-    static func codexModels(cache: URL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".codex/models_cache.json")) -> [(id: String, name: String)] {
-        struct Cache: Decodable { struct Model: Decodable { var slug: String; var display_name: String?; var visibility: String?; var priority: Int? }; var models: [Model] }
+    static func codexModels(cache: URL = codexCache) -> [(id: String, name: String)] {
         func name(_ display: String) -> String {
             let parts = display.split(separator: "-", maxSplits: 2).map(String.init)
             return parts.count == 3 ? "\(parts[0])-\(parts[1]) \(parts[2])" : display
         }
-        if let data = try? Data(contentsOf: cache), let c = try? JSONDecoder().decode(Cache.self, from: data) {
+        if let c = CodexCache.read(cache) {
             let listed = c.models.filter { ($0.visibility ?? "list") == "list" }.sorted { ($0.priority ?? .max) < ($1.priority ?? .max) }
             if !listed.isEmpty { return listed.map { ($0.slug, name($0.display_name ?? $0.slug)) } }
         }
@@ -36,6 +44,20 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     }
     var defaultVersion: String { versions[0].id }
     func versionName(_ id: String) -> String { versions.first { $0.id == id }?.name ?? id }
+
+    /// How hard the editor thinks before each step, in Settings › Engines. "" leaves it to the program (Codex's
+    /// GPT-6.1 Sol and Terra default to low). Every Claude version takes all five; each Codex version lists its
+    /// own in Codex's cache.
+    func efforts(_ version: String, codexCache: URL = Self.codexCache) -> [(id: String, name: String)] {
+        let names = ["low": "Low", "medium": "Medium", "high": "High", "xhigh": "Extra high", "max": "Max"]
+        var levels = Self.efforts
+        if self == .codex, !version.isEmpty, let model = CodexCache.read(codexCache)?.models.first(where: { $0.slug == version }), let listed = model.supported_reasoning_levels {
+            // "ultra" hands work to agents of its own; Direction runs one editor at a time and follows what it does.
+            levels = listed.map(\.effort).filter { $0 != "ultra" }
+        }
+        return [("", "The program\u{2019}s default")] + levels.map { ($0, names[$0] ?? $0.capitalized) }
+    }
+    static let efforts = ["low", "medium", "high", "xhigh", "max"]
 
     /// Folders searched before asking a login shell.
     static var searchFolders: [String] {
@@ -45,7 +67,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
 
     // MARK: Flags (checked against `--help` by EditorProgramTests)
 
-    static let claudeFlags = ["--print", "--output-format", "--verbose", "--model", "--mcp-config", "--strict-mcp-config", "--allowedTools", "--append-system-prompt", "--resume", "--permission-mode", "--settings", "--tools", "--no-session-persistence"]
+    static let claudeFlags = ["--print", "--output-format", "--verbose", "--model", "--effort", "--mcp-config", "--strict-mcp-config", "--allowedTools", "--append-system-prompt", "--resume", "--permission-mode", "--settings", "--tools", "--no-session-persistence"]
     static let codexExecFlags = ["--json", "--model", "--cd", "--sandbox", "--config", "--output-schema", "--skip-git-repo-check", "--ignore-user-config", "--ephemeral"]
     static let codexResumeFlags = ["--json", "--model", "--config", "--output-schema", "--skip-git-repo-check", "--ignore-user-config"]
 
@@ -54,6 +76,8 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
         var job: String
         var role: String
         var version: String
+        /// "" leaves it to the program.
+        var effort: String = ""
         var session: String?
         var folder: URL
         var mcpConfig: URL
@@ -71,6 +95,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             // The prompt goes right after --print: --allowedTools and --mcp-config take lists.
             var args = ["--print", i.job, "--output-format", "stream-json", "--verbose"]
             if !i.version.isEmpty { args += ["--model", i.version] }
+            if !i.effort.isEmpty { args += ["--effort", i.effort] }
             args += ["--mcp-config", i.mcpConfig.path, "--strict-mcp-config"]
             // Every Direction tool, file read and write inside the working folder, and scripts when allowed.
             var allowed = ["mcp__direction", "Read", "Glob", "Grep", "Edit(./**)", "Write(./**)"]
@@ -87,6 +112,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             // --ignore-user-config: only Direction's tools, not the director's other MCP servers (auth still works).
             var shared = ["--json", "--skip-git-repo-check", "--ignore-user-config"]
             if !i.version.isEmpty { shared += ["--model", i.version] }
+            if !i.effort.isEmpty { shared += ["--config", "model_reasoning_effort=\(toml(i.effort))"] }
             shared += [
                 "--config", "mcp_servers.direction.command=\(toml(i.helper))",
                 "--config", "mcp_servers.direction.args=[\(toml("mcp")),\(toml("--project")),\(toml(i.film.path))]",

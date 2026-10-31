@@ -19,7 +19,7 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 
 | Program | Found by | Versions offered (Settings) | Default |
 |---|---|---|---|
-| Claude Code (`claude`) | `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`, npm global bin, then `zsh -lc 'command -v claude'` | Claude Opus 5.5, Claude Sonnet 5.5, Claude Haiku 5.5, Other… | Claude Opus 5.5 |
+| Claude Code (`claude`) | `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`, npm global bin, then `zsh -lc 'command -v claude'` | Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, Claude Haiku 5.5, Other… | Claude Opus 5.5 |
 | Codex (`codex`) | the same folders, then `zsh -lc 'command -v codex'` | The program's default, Other… (a text field) | The program's default |
 
 - The version list ships with the app and is updated with it. "Other…" accepts any version string the program accepts.
@@ -31,8 +31,8 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 
 1. **Working folder.** `<film>.direction/Editor/` holds everything the editor writes: graphics (`Graphics/`), looks (`Looks/`), shaders (`Effects/`), scripts, and `NOTES.md` (its own notes between runs). The program runs with this folder as its working directory.
 2. **Tools.** Direction's MCP server for this film (`direction mcp --project <film>`), passed per run, so the director's other MCP servers aren't loaded:
-   - Claude Code: `claude -p <job> --output-format stream-json --verbose --model <version> --mcp-config <Editor/.mcp.json> --strict-mcp-config --allowedTools <list> --append-system-prompt <role>`; continue with `--resume <session>`.
-   - Codex: `codex exec --json --model <version> --cd <Editor> --sandbox workspace-write -c 'mcp_servers.direction.command="<direction>"' -c 'mcp_servers.direction.args=["mcp","--project","<film>"]' --output-schema <schema.json> <job>`; continue with `codex exec resume <session>`.
+   - Claude Code: `claude -p <job> --output-format stream-json --verbose --model <version> [--effort <level>] --mcp-config <Editor/.mcp.json> --strict-mcp-config --allowedTools <list> --append-system-prompt <role>`; continue with `--resume <session>`.
+   - Codex: `codex exec --json --model <version> [-c 'model_reasoning_effort="<level>"'] --cd <Editor> --sandbox workspace-write -c 'mcp_servers.direction.command="<direction>"' -c 'mcp_servers.direction.args=["mcp","--project","<film>"]' --output-schema <schema.json> <job>`; continue with `codex exec resume <session>`.
 3. **Allowed tools.** Every `direction_*` tool, plus file read and write inside the working folder. Running scripts (Bash) is allowed only when Settings › Engines › "Let the editor run scripts" is on (default on), and only inside the working folder: Codex's `workspace-write` sandbox; Claude Code's sandbox with `Bash` allowed. Network access from scripts is off. Services are reached through Direction's tools, never directly.
 4. **The job text.** Direction writes it from a template in the app bundle (`Resources/Editor/jobs/<job>.md`), filled with: the film's name, the brief, latitude and what it means, preferences (two ways, ask before guessing, conflict order, handles), the job's ids (turnover, notes), and the skill to follow. Templates are versioned files with tests, not strings in code.
 5. **The result.** Each job's final message must match `{"finished": Bool, "summary": String, "needsYou": [String]}`. The real work arrives through Direction's tools, which validate it: the dailies log, the read-back, answers, questions. A run that ends without calling its job's finishing tool fails with "The editor stopped before finishing."
@@ -118,7 +118,8 @@ Frame: `screens/43-settings-editor.html` drew it as the Editor tab's first group
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
 | Who edits | Editor runs on | Seg: Claude Code / Codex / Your own session | Claude Code if installed, else Codex, else Your own session | Which program Direction starts. Sub-label shows what was found: "Claude Code 2.4.1 · signed in", "Not installed. Install it, then come back." with **Copy install command**, or for Your own session "Run Claude Code or Codex yourself. Direction shows what it does but can't start or pause it. How to connect". |
-| Who edits | Version | Select (Claude: Claude Opus 5.5 · Claude Sonnet 5.5 · Claude Haiku 5.5 · Other…) | Claude Opus 5.5 | `--model` for every job. Disabled for Your own session. |
+| Who edits | Version | Select (Claude: Claude Opus 5.5 · Claude Fable 5.1 · Claude Sonnet 5.5 · Claude Haiku 5.5 · Other…) | Claude Opus 5.5 | `--model` for every job. Disabled for Your own session. |
+| Who edits | Effort | Select: The program's default · Low · Medium · High · Extra high · Max (each Codex version lists its own, from Codex's cache; "ultra" isn't offered, since it hands work to agents of its own) | The program's default | Sub-label: "How long the editor thinks before each step. More is slower and uses more of your plan." Claude Code: `--effort <level>`; Codex: `--config model_reasoning_effort="<level>"`, on resumed runs too. Kept per program; a level the chosen version doesn't take reads as the program's default. Codex's GPT-6.1 Sol and Terra default to low (its cache lists each version's default). Disabled for Your own session. |
 | Who edits | Start work | Select: Right away / Ask me first | Right away | Sub-label: "When notes are turned over or footage arrives." |
 | Who edits | Let the editor run scripts | Switch | On | Sub-label: "Only inside its own folder in the film, with no internet. Some graphics and looks need it." |
 | Freedom | unchanged | | | |
@@ -129,8 +130,8 @@ Note under Before cutting: "The editor reads the brief before every cut."
 
 **Acceptance:**
 - [ ] Choosing Codex when it isn't installed keeps the choice and shows the install row; work waits with the pill "Editor not set up".
-- [ ] Changing Version applies to the next run, not the one working.
-- [ ] Your own session disables Version, Start work and Let the editor run scripts.
+- [ ] Changing Version or Effort applies to the next run, not the one working.
+- [ ] Your own session disables Version, Effort, Start work and Let the editor run scripts.
 
 ---
 

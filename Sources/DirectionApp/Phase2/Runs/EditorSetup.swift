@@ -7,6 +7,8 @@ enum EditorSetupKey {
     static let runsOn = "editorRunsOn"
     static let claudeVersion = "editorVersionClaudeCode"
     static let codexVersion = "editorVersionCodex"
+    static let claudeEffort = "editorEffortClaudeCode"
+    static let codexEffort = "editorEffortCodex"
     /// "rightAway" | "askFirst"
     static let startWork = "editorStartWork"
     static let scripts = "editorRunsScripts"
@@ -49,6 +51,12 @@ enum EditorSetup {
         value(p == .claudeCode ? EditorSetupKey.claudeVersion : EditorSetupKey.codexVersion) as? String ?? p.defaultVersion
     }
     static func setVersion(_ v: String, for p: EditorProgram) { put(p == .claudeCode ? EditorSetupKey.claudeVersion : EditorSetupKey.codexVersion, v) }
+    /// The effort chosen for this program, while its version offers it; otherwise the program's default.
+    static func effort(_ p: EditorProgram) -> String {
+        let chosen = value(p == .claudeCode ? EditorSetupKey.claudeEffort : EditorSetupKey.codexEffort) as? String ?? ""
+        return p.efforts(version(p)).contains { $0.id == chosen } ? chosen : ""
+    }
+    static func setEffort(_ e: String, for p: EditorProgram) { put(p == .claudeCode ? EditorSetupKey.claudeEffort : EditorSetupKey.codexEffort, e) }
     static var asksFirst: Bool { value(EditorSetupKey.startWork) as? String == "askFirst" }
     static func setAsksFirst(_ on: Bool) { put(EditorSetupKey.startWork, on ? "askFirst" : "rightAway") }
     static var runsScripts: Bool { value(EditorSetupKey.scripts) as? Bool ?? true }

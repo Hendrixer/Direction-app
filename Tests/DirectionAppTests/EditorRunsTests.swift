@@ -249,6 +249,13 @@ struct EditorJobTests {
         #expect(Array(codexAgain.prefix(2)) == ["exec", "resume"] && codexAgain.suffix(2) == ["s-1", "Do the job."])
         for flag in codexAgain where flag.hasPrefix("--") { #expect(EditorProgram.codexResumeFlags.contains(flag), "\(flag) isn't in codexResumeFlags") }
         #expect(codexAgain.contains("sandbox_mode=\"read-only\""))
+        // No effort chosen: the program decides. Chosen: Claude Code's flag, Codex's config key, on resume too.
+        #expect(!claude.contains("--effort") && !codex.joined().contains("model_reasoning_effort"))
+        var harder = i; harder.effort = "high"
+        let claudeHigh = EditorProgram.claudeCode.arguments(harder)
+        #expect(claudeHigh.firstIndex(of: "--effort").map { claudeHigh[$0 + 1] } == "high")
+        harder.session = "s-1"
+        #expect(EditorProgram.codex.arguments(harder).contains("model_reasoning_effort=\"high\""))
     }
 
     /// Programs change: when one is installed, every flag Direction uses must still be in its help.
@@ -485,6 +492,18 @@ struct EditorRunnerTests {
     #expect(models.map(\.name) == ["GPT-6.1 Sol", "GPT-6 Astra", "GPT-6.1 Terra"])
     // No cache: the list Codex had, never an empty menu.
     #expect(EditorProgram.codexModels(cache: file.appendingPathExtension("missing")).first?.id == "gpt-6.1-sol")
+}
+
+@Test func effortsAreWhatEachVersionTakes() throws {
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("models-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: file) }
+    try #"{"models":[{"slug":"gpt-6.1-sol","visibility":"list","supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"high"},{"effort":"xhigh"},{"effort":"max"},{"effort":"ultra"}]},{"slug":"gpt-6-luna","visibility":"list","supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"high"}]}]}"#.write(to: file, atomically: true, encoding: .utf8)
+    // The program's default comes first; "ultra" hands work to agents of its own, so it isn't offered.
+    #expect(EditorProgram.codex.efforts("gpt-6.1-sol", codexCache: file).map(\.id) == ["", "low", "medium", "high", "xhigh", "max"])
+    #expect(EditorProgram.codex.efforts("gpt-6-luna", codexCache: file).map(\.id) == ["", "low", "medium", "high"])
+    // A version the cache doesn't list, and every Claude version, take all five.
+    #expect(EditorProgram.codex.efforts("gpt-someday", codexCache: file).count == 6)
+    #expect(EditorProgram.claudeCode.efforts("claude-fable-5-1").map(\.name) == ["The program\u{2019}s default", "Low", "Medium", "High", "Extra high", "Max"])
 }
 
 // MARK: Logging in batches (footage-index.md › Logging in batches)

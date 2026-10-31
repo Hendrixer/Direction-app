@@ -17,6 +17,10 @@ struct EditorWhoEditsGroup: View {
                 VersionSelect(program: program, version: Binding(get: { EditorSetup.version(program) }, set: { EditorSetup.setVersion($0, for: program) }))
             }
             .disabled(own)
+            SettingsRow(label: "Effort", detail: "How long the editor thinks before each step. More is slower and uses more of your plan.") {
+                GateSelect(options: program.efforts(EditorSetup.version(program)).map { ($0.id, $0.name) }, selection: Binding(get: { EditorSetup.effort(program) }, set: { EditorSetup.setEffort($0, for: program) }))
+            }
+            .disabled(own)
             SettingsRow(label: "Start work", detail: "When notes are turned over or footage arrives.") {
                 GateSelect(options: [(false, "Right away"), (true, "Ask me first")], selection: Binding(get: { EditorSetup.asksFirst }, set: { EditorSetup.setAsksFirst($0) }))
             }

@@ -91,7 +91,8 @@ import DirectionTools
             let session = continuation == nil ? nil : run.session
             var job = try (session == nil ? EditorJobs.text(for: run, store: store) : continuation!)
             if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
-            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts)
+            let effort = EditorSetup.effort(program)
+            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts)
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = program.arguments(invocation)
@@ -121,7 +122,7 @@ import DirectionTools
             }
             try p.run()
             ChildProcesses.started(p)
-            DirectionLog.info("Started \(program.name) for \(run.job.rawValue) (run \(run.id), session \(session ?? "new"), pid \(p.processIdentifier)) in \(store.url.lastPathComponent)", "editor")
+            DirectionLog.info("Started \(program.name) for \(run.job.rawValue) (run \(run.id), \(run.version.isEmpty ? "default version" : run.version), \(effort.isEmpty ? "default effort" : effort + " effort"), session \(session ?? "new"), pid \(p.processIdentifier)) in \(store.url.lastPathComponent)", "editor")
             live[run.id] = l
             try store.updateRun(run.id) { r in
                 r.state = .starting; r.reason = nil; r.detail = nil; r.held = false; r.pausedByQuit = false
