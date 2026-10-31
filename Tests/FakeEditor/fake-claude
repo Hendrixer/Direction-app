@@ -31,4 +31,17 @@ case "$scenario" in
     echo "fake-claude: the program fell over at frame 214" >&2
     exit 3
     ;;
+  straggler)
+    # Leaves a job behind that outlives it, like an agent's `ffmpeg … &`, then finishes.
+    read_notes
+    (sleep 300 </dev/null >/dev/null 2>&1 & echo $! > "$folder/.fake-straggler")
+    echo '{"type":"result","subtype":"success","is_error":false,"result":"{\"finished\": true, \"summary\": \"Logged 1 take.\", \"needsYou\": []}","total_cost_usd":0.1,"session_id":"'"$session"'"}'
+    ;;
+  stubborn)
+    # Ignores Ctrl-C and SIGTERM; only SIGKILL stops it.
+    read_notes
+    echo $$ > "$folder/.fake-pid"
+    trap '' INT TERM
+    while true; do sleep 0.2; done
+    ;;
 esac

@@ -407,6 +407,64 @@ struct EditorRunnerTests {
         EditorRunner.shared.programOverride = [.claudeCode: Self.fake]
     }
 
+    private func pid(_ dir: URL, _ name: String) async throws -> pid_t {
+        for _ in 0..<100 {
+            if let text = try? String(contentsOf: dir.appendingPathComponent("Editor/\(name)"), encoding: .utf8), let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)) { return pid }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        throw DirectionError("timeout", "The fake program never wrote \(name).")
+    }
+    private func gone(_ pid: pid_t) async throws -> Bool {
+        for _ in 0..<100 { if kill(pid, 0) != 0 { return true }; try await Task.sleep(for: .milliseconds(50)) }
+        kill(pid, SIGKILL)
+        return false
+    }
+    private func quick() { EditorRunner.shared.stopSteps = [(SIGINT, 0.3), (SIGTERM, 0.3), (SIGKILL, 0)] }
+
+    /// A job the editor left running in the background stops when it ends, and nothing holds on to
+    /// the run afterwards: the process, its pipes and what was read go with it.
+    @Test func whatTheEditorLeavesRunningStopsWithIt() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("straggler", dir)
+        let run = try start(.logFootage, store: store)
+        weak var live = EditorRunner.shared.liveRun(run.id)
+        #expect(live != nil)
+        let straggler = try await pid(dir, ".fake-straggler")
+        #expect(try await ended(store, run.id).state == .done)
+        #expect(try await gone(straggler))
+        for _ in 0..<100 where live != nil { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(live == nil)
+    }
+
+    /// Stop reaches a program that ignores Ctrl-C and SIGTERM.
+    @Test func stopEndsAProgramThatWontListen() async throws {
+        quick(); defer { EditorRunner.shared.stopSteps = ChildProcesses.gently }
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("stubborn", dir)
+        let run = try start(.logFootage, store: store)
+        let pid = try await pid(dir, ".fake-pid")
+        _ = try await wait(store, run.id) { $0.state == .working }
+        EditorRunner.shared.stop(run.id, store: store)
+        let r = try await ended(store, run.id)
+        #expect(r.state == .stopped && r.reason == .stoppedByYou)
+        #expect(try await gone(pid))
+    }
+
+    /// Quit goes ahead only once the editor and everything it started are gone, and the run waits
+    /// to be resumed.
+    @Test func quittingLeavesNothingRunning() async throws {
+        quick(); defer { EditorRunner.shared.stopSteps = ChildProcesses.gently }
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("stubborn", dir)
+        let run = try start(.logFootage, store: store)
+        let pid = try await pid(dir, ".fake-pid")
+        _ = try await wait(store, run.id) { $0.state == .working }
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in EditorRunner.shared.pauseAllForQuit { c.resume() } }
+        #expect(try await gone(pid))
+        let r = try await ended(store, run.id)
+        #expect(r.state == .paused && r.pausedByQuit)
+    }
+
     @Test func stopEndsTheRun() async throws {
         let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
         try scenario("slow", dir)

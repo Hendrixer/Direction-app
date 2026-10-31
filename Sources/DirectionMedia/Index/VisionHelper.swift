@@ -176,8 +176,8 @@ public enum VisionHelper {
         defer { watcher.cancel() }
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
-                process.terminationHandler = { _ in done.resume() }
-                do { try process.run() } catch { process.terminationHandler = nil; done.resume(throwing: error) }
+                process.terminationHandler = { p in ChildProcesses.ended(p); done.resume() }
+                do { try process.run(); ChildProcesses.started(process) } catch { process.terminationHandler = nil; done.resume(throwing: error) }
             }
         } onCancel: { process.terminate() }
         try Task.checkCancellation()

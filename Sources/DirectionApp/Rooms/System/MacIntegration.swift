@@ -123,6 +123,25 @@ enum DeliveryWatch {
 
 // MARK: Quit
 
+/// `direction reap`, started at launch: if Direction goes away without stopping the programs it
+/// started (a crash, Force Quit), the reaper does (`ChildProcesses`, `Reaper`).
+enum ReaperLaunch {
+    nonisolated(unsafe) private static var reaper: Process?
+
+    static func start() {
+        // A program that's gone must not take Direction with it when it's written to.
+        signal(SIGPIPE, SIG_IGN)
+        guard reaper == nil, let helper = EditorJobs.helperPath else { return }
+        let p = Process(), pipe = Pipe()
+        p.executableURL = URL(fileURLWithPath: helper); p.arguments = ["reap"]
+        p.standardInput = pipe; p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        p.terminationHandler = { p in DirectionLog.warning("The reaper stopped (status \(p.terminationStatus)); programs won\u{2019}t be stopped if Direction crashes.", "processes") }
+        do { try p.run() } catch { DirectionLog.warning("Couldn\u{2019}t start the reaper: \(error.localizedDescription)", "processes"); return }
+        reaper = p
+        ChildProcesses.connectReaper(pipe.fileHandleForWriting)
+    }
+}
+
 @MainActor
 enum QuitGuard {
     /// Running exports this process owns (a delivery or a screening copy).

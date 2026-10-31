@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import DirectionCore
 
 @MainActor final class DirectionAppDelegate: NSObject, NSApplicationDelegate {
     var app: AppModel?
@@ -8,7 +9,14 @@ import AppKit
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate()
         NSWindow.allowsAutomaticWindowTabbing = false
+        ReaperLaunch.start()
+        // The log keeps 30 days: trimmed now and once a day while Direction stays open.
+        DispatchQueue.global(qos: .utility).async { DirectionLog.prune() }
+        logPruning = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) { _ in DispatchQueue.global(qos: .utility).async { DirectionLog.prune() } }
     }
+    private var logPruning: Timer?
+    /// Quitting stops what Direction started (the editor has already been paused by QuitGuard).
+    func applicationWillTerminate(_ notification: Notification) { ChildProcesses.stopAll() }
     /// Opening a .direction package from Finder or the Dock.
     func application(_ application: NSApplication, open urls: [URL]) { if let url = urls.first(where: { $0.pathExtension == "direction" }) { app?.open(url) } }
     /// Clicking the Dock icon with no window brings the main window back.

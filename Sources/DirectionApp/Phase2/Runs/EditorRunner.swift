@@ -13,6 +13,8 @@ import DirectionTools
     /// Tests point these at the fake program and helper.
     var programOverride: [EditorProgram: String] = [:]
     var helperOverride: String?
+    /// How a program is stopped (Stop, Pause, Quit). Tests shorten the waits.
+    var stopSteps = ChildProcesses.gently
     /// Called after a run's state changes, with the film it belongs to.
     var onChange: ((URL) -> Void)?
 
@@ -41,6 +43,8 @@ import DirectionTools
     }
 
     func isLive(_ runID: String) -> Bool { live[runID] != nil }
+    /// Tests hold it weakly to see it let go once the run is over.
+    func liveRun(_ runID: String) -> LiveRun? { live[runID] }
     var liveCount: Int { live.count }
     func register(_ store: ProjectStore) { stores[store.url.path] = store }
 
@@ -116,6 +120,7 @@ import DirectionTools
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MainActor.assumeIsolated { l.outputClosed = true; self?.maybeFinish(l) } }
             }
             try p.run()
+            ChildProcesses.started(p)
             DirectionLog.info("Started \(program.name) for \(run.job.rawValue) (run \(run.id), session \(session ?? "new"), pid \(p.processIdentifier)) in \(store.url.lastPathComponent)", "editor")
             live[run.id] = l
             try store.updateRun(run.id) { r in
@@ -159,7 +164,7 @@ import DirectionTools
             l.pending.remove(id)
             if isError { DirectionLog.warning("A tool call in run \(l.runID) failed: \(text.prefix(600))", "editor") }
             if isError, EditorFailure.isSpendCap(text) { l.spendCap = EditorFailure.amount(text).map { "\($0) spent on services this month." } ?? "This month\u{2019}s limit for services is reached." }
-            if l.pauseWhenIdle, l.pending.isEmpty { l.pauseWhenIdle = false; l.process.interrupt() }
+            if l.pauseWhenIdle, l.pending.isEmpty { l.pauseWhenIdle = false; interrupt(l) }
         case .cost(let c): l.cost = c
         case .tokens(let t): l.tokens = (l.tokens ?? 0) + t
         case .result(let text, let isError): l.result = text; if isError { l.failures.append(text) }
@@ -170,6 +175,10 @@ import DirectionTools
     private func maybeFinish(_ l: LiveRun) {
         guard !l.finished, let status = l.exited, l.outputClosed else { return }
         l.finished = true
+        // Whatever it left running in its group (a shell's `ffmpeg … &`) stops with it, and the
+        // process lets go of the run so neither outlives it.
+        ChildProcesses.ended(l.process)
+        l.process.terminationHandler = nil
         if !l.buffer.isEmpty { output(l, Data("\n".utf8)) }
         guard let run = try? l.store.run(l.runID) else { live[l.runID] = nil; return }
         var exit = RunStateMachine.Exit(status: status, intent: l.intent, finished: Self.finished(run, store: l.store), waitingForYou: Self.waitingForYou(run, store: l.store), failures: l.failures, spendCap: l.spendCap, lastErrorLine: l.stderrTail.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }))
@@ -214,47 +223,59 @@ import DirectionTools
         _ = try? store.updateRun(runID) { if $0.state.isOpen { $0.state = .paused } }
         guard let l = live[runID] else { onChange?(store.url); return }
         l.intent = .pause
-        if l.pending.isEmpty { l.process.interrupt() }
+        if l.pending.isEmpty { interrupt(l) }
         else {
             l.pauseWhenIdle = true
             // A tool call that never returns mustn't keep the editor working.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 60) { MainActor.assumeIsolated { if l.exited == nil { l.process.interrupt() } } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 60) { MainActor.assumeIsolated { if l.exited == nil { self.interrupt(l) } } }
         }
         stayAwake(); onChange?(store.url)
     }
 
-    /// Ends the run. The program gets SIGINT, then SIGTERM if it lingers.
+    /// Ends the run: the program and everything it started get SIGINT, then SIGTERM if they linger,
+    /// then SIGKILL.
     func stop(_ runID: String, store: ProjectStore) {
         _ = try? store.updateRun(runID) { $0.state = .stopped; $0.reason = .stoppedByYou; $0.held = false }
         offlineRetries[runID]?.cancel(); offlineRetries[runID] = nil
         guard let l = live[runID] else { onChange?(store.url); pump(); return }
         l.intent = .stop
-        l.process.interrupt()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MainActor.assumeIsolated { if l.exited == nil { l.process.terminate() } } }
+        interrupt(l)
+    }
+
+    /// SIGINT to the program's whole group (it saves its session and stops), SIGTERM if anything is
+    /// still there after a few seconds, then SIGKILL. Off the main thread.
+    private func interrupt(_ l: LiveRun) {
+        let group = l.process.processIdentifier, steps = stopSteps
+        DispatchQueue.global(qos: .userInitiated).async { ChildProcesses.stop(group: group, steps) }
     }
 
     /// Quitting: pause every working run and keep its session; the next launch offers Resume.
-    /// Calls back once every program has exited, or after a few seconds.
+    /// Calls back once every program and everything it started has gone: SIGINT, then SIGTERM after
+    /// 4 s, then SIGKILL after 2 more, so nothing is left working on a film Direction isn't watching.
     func pauseAllForQuit(_ done: @escaping @MainActor () -> Void) {
-        let working = live.values
+        let working = Array(live.values)
         guard !working.isEmpty else { done(); return }
         for l in working {
             l.intent = .quit
             _ = try? l.store.updateRun(l.runID) { $0.state = .paused; $0.reason = .pausedByQuit; $0.pausedByQuit = true }
-            l.process.interrupt()
         }
-        func wait(_ tries: Int) {
-            if live.isEmpty || tries == 0 { done(); return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { MainActor.assumeIsolated { wait(tries - 1) } }
+        let groups = working.map(\.process.processIdentifier), steps = stopSteps
+        DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.concurrentPerform(iterations: groups.count) { ChildProcesses.stop(group: groups[$0], steps) }
+            DispatchQueue.main.async { MainActor.assumeIsolated { done() } }
         }
-        wait(40)
     }
 
     /// At launch: runs a previous Direction left working are paused, so they can be resumed.
     func recover(_ store: ProjectStore) {
         register(store)
+        let editorFolder = store.url.appendingPathComponent("Editor").standardizedFileURL.path
         for r in (try? store.runs()) ?? [] where r.state.isActive && !isLive(r.id) {
-            if let pid = r.pid, r.ownerPID != getpid(), kill(pid, 0) == 0 { kill(pid, SIGINT) }
+            // Only if it's still that film's editor (working in its Editor folder): after a restart
+            // the number may belong to something else. Its reaper has usually stopped it already.
+            if let pid = r.pid, r.ownerPID != getpid(), ChildProcesses.workingDirectory(pid)?.hasPrefix(editorFolder) == true {
+                DispatchQueue.global(qos: .utility).async { ChildProcesses.stop(group: pid, ChildProcesses.gently) }
+            }
             _ = try? store.updateRun(r.id) { $0.state = .paused; $0.reason = .pausedByQuit; $0.pausedByQuit = true; $0.pid = nil }
         }
     }

@@ -24,6 +24,31 @@ public enum DirectionLog {
     /// The log before the last one; the file rolls over at 5 MB.
     public static var previousFile: URL { directory.appendingPathComponent("Direction.1.log") }
     static let maxBytes = 5_000_000
+    /// Lines older than this are dropped (`prune`), so the log holds at most 30 days and 10 MB.
+    public static let keepDays = 30
+
+    /// Drops lines older than `keepDays` from every log in the folder, and a log with nothing that
+    /// recent goes. Direction does it when it opens and once a day while it's open. Every line
+    /// starts with its time in UTC, so lines compare as text.
+    public static func prune(in folder: URL = directory, now: Date = Date()) {
+        let cutoff = stamp(now.addingTimeInterval(-Double(keepDays) * 86_400))
+        let fm = FileManager.default
+        let logs = ((try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "log" }
+        lock.lock(); defer { lock.unlock() }
+        for url in logs {
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+            guard let first = lines.firstIndex(where: { $0.prefix(cutoff.count) >= cutoff[...] }), !lines[first].isEmpty else {
+                try? fm.removeItem(at: url); continue
+            }
+            guard first > 0 else { continue }
+            try? lines[first...].joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    static func stamp(_ date: Date) -> String {
+        date.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true).timeZone(separator: .omitted))
+    }
 
     /// The last lines of the log, newest last.
     public static func tail(_ count: Int = 200) -> [String] {
@@ -63,8 +88,7 @@ public enum DirectionLog {
         case .warning: logger.warning("\(text, privacy: .public)")
         case .error: logger.error("\(text, privacy: .public)")
         }
-        let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true).timeZone(separator: .omitted))
-        let line = "\(stamp) \(process) \(level.rawValue.uppercased()) [\(category)] \(text.replacingOccurrences(of: "\n", with: " ⏎ "))\n"
+        let line = "\(stamp(Date())) \(process) \(level.rawValue.uppercased()) [\(category)] \(text.replacingOccurrences(of: "\n", with: " ⏎ "))\n"
         lock.lock(); defer { lock.unlock() }
         let fm = FileManager.default
         try? fm.createDirectory(at: directory, withIntermediateDirectories: true)

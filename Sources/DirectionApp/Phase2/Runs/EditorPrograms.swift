@@ -194,8 +194,9 @@ enum EditorDiscovery {
         let out = Pipe(), err = Pipe()
         p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
         let done = DispatchSemaphore(value: 0)
-        p.terminationHandler = { _ in done.signal() }
+        p.terminationHandler = { p in ChildProcesses.ended(p); done.signal() }
         do { try p.run() } catch { return nil }
+        ChildProcesses.started(p)
         // Drain while it runs so a chatty program can't fill the pipe and stall.
         nonisolated(unsafe) var outData = Data(), errData = Data()
         let group = DispatchGroup()

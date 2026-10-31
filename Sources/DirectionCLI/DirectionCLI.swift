@@ -6,7 +6,7 @@ import DirectionTools
 
 @main
 struct DirectionCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self])
+    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self, Reap.self])
 }
 
 struct ProjectOptions: ParsableArguments {
@@ -191,6 +191,7 @@ struct API: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "api", abstract: "Serve newline-delimited local JSON requests on stdin/stdout. Request: {id,method,params}.")
     @OptionGroup var options: OptionalProjectOptions
     func run() async throws {
+        stopsItsProgramsWhenStopped()
         let runtime = try options.router()
         while let line = readLine() {
             var id: JSONValue = .null
@@ -204,11 +205,39 @@ struct API: AsyncParsableCommand {
             FileHandle.standardOutput.write(try output.data() + Data("\n".utf8))
         }
         await runtime.cancelAll()
+        ChildProcesses.stopAll()
     }
 }
 
 struct MCP: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "mcp", abstract: "Serve the official MCP stdio transport for an external agent.")
     @OptionGroup var options: OptionalProjectOptions
-    func run() async throws { try await DirectionMCPServer.run(router: options.router()) }
+    func run() async throws {
+        stopsItsProgramsWhenStopped()
+        try await DirectionMCPServer.run(router: options.router())
+        ChildProcesses.stopAll()
+    }
+}
+
+/// Stopping this helper (the editor's group is stopped, or Ctrl-C) stops what it started first:
+/// Whisper and the vision helper run in groups of their own and would otherwise carry on.
+func stopsItsProgramsWhenStopped() {
+    signal(SIGPIPE, SIG_IGN)
+    for sig in [SIGINT, SIGTERM, SIGHUP] {
+        signal(sig, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: sig, queue: .global())
+        source.setEventHandler { ChildProcesses.stopAll(); exit(128 + sig) }
+        source.resume()
+        stoppers.append(source)
+    }
+}
+nonisolated(unsafe) private var stoppers: [DispatchSourceSignal] = []
+
+struct Reap: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "reap", abstract: "Direction starts this with a pipe: when the pipe closes, the programs it listed are stopped.", shouldDisplay: false)
+    func run() throws {
+        // Its own Ctrl-C, or a signal meant for Direction's programs, isn't a reason to leave them running.
+        signal(SIGINT, SIG_IGN); signal(SIGHUP, SIG_IGN)
+        Reaper.serve(.standardInput)
+    }
 }

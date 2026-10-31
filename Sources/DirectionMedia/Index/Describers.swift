@@ -94,6 +94,8 @@ public actor LocalVisionHelper {
         stderr.fileHandleForReading.readabilityHandler = { h in let d = h.availableData; if d.isEmpty { h.readabilityHandler = nil } else { tail.append(d) } }
         let lines = LineReader(stdout.fileHandleForReading)
         try p.run()
+        ChildProcesses.started(p)
+        p.terminationHandler = { ChildProcesses.ended($0) }
         process = p; input = stdin.fileHandleForWriting; reader = lines
         let first = await withTaskCancellationHandler { await lines.next() } onCancel: { p.terminate() }
         try Task.checkCancellation()
