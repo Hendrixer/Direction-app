@@ -204,10 +204,23 @@ struct DailiesTakeViewer: View {
                     .accessibilityLabel("\(label)\(model.dailies.take(t.assetID).circled ? ", circled" : "")\(t.assetID == group.soundAssetID ? ", its sound is used" : "")\(open ? ", open" : "")")
                 }
             }
+            // A camera and a screen: how they share the frame in the cut (layouts.md). The assembly follows it.
+            if model.layouts.available(model) {
+                HStack(spacing: 8) {
+                    Text("In the cut").font(.system(size: 12.5)).foregroundStyle(Gate.Text.tertiary)
+                    Spacer(minLength: 0)
+                    GateSelect(options: Self.filmLayouts.map { ($0, $0.label) }, selection: Binding(get: { model.directing.layout ?? .standard }, set: { l in model.perform { _ = try $0.updateDirectingState(summary: "Layout for the film: \(l.label)") { $0.layout = l } } }))
+                }
+                .padding(.top, 2)
+                .help("How the camera and the screen recording share the frame. The editor lays out the cut with it; change any scene from the Layout button under the picture.")
+            }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
         .hairlineBorder(.bottom)
     }
+
+    /// The layouts Dailies offers for the film: you in each corner, then the rest.
+    static let filmLayouts: [FrameLayout] = FrameLayout.Corner.allCases.reversed().map { FrameLayout(kind: .screenAndYou, corner: $0) } + [FrameLayout(kind: .sideBySide), FrameLayout(kind: .you), FrameLayout(kind: .screen)]
 
     /// "89 ms early", "1.2 s late".
     static func offsetText(_ offset: Double) -> String {

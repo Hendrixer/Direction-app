@@ -157,6 +157,7 @@ public enum TimelineExport {
                 parts.append("src \(tc(c.sourceRange.start.seconds))–\(tc(srcEnd))")
             }
             if c.synced == true { parts.append("in sync") }
+            if let l = c.layout { parts.append("layout \(l.role.rawValue)") }
             if let t = c.transition { parts.append("\(t.type == "shader" ? t.file ?? "shader" : t.type) \(t.frames)f in") }
             for e in c.effects ?? [] {
                 switch e.name {
@@ -186,6 +187,8 @@ public enum TimelineExport {
         else if let (id, l) = input.looks?.look.scenes.first, let n = input.dailies.scenes.first(where: { $0.id == id })?.number { lookText = "look \"\(l.name)\" (scene \(n))" }
         else { lookText = "no look" }
         var lines = ["\(input.cutName) · \(CutTimecode.length(s.duration.seconds, rate: rate)) · \(s.width)×\(s.height) · \(CutTimecode.rate(rate)) · \(lookText)"]
+        // Layouts read as layouts, not as the clips they place (layouts.md).
+        for span in s.layoutSpans { lines.append("Layout  \(tc(span.start))–\(tc(span.end))  \(span.layout.label)\(span.byDirector ? "  (the director\u{2019}s)" : "")") }
         for layer in pictureLayers.reversed() { lines += s.clips.filter { $0.kind != .audio && $0.layer == layer }.sorted { $0.start < $1.start }.compactMap(row) }
         for layer in Set(s.clips.filter { $0.kind == .audio }.map(\.layer)).sorted() { lines += s.clips.filter { $0.kind == .audio && $0.layer == layer }.sorted { $0.start < $1.start }.compactMap(row) }
         for (name, t) in (s.tracks ?? [:]).sorted(by: { $0.key < $1.key }) where !(t.effects ?? []).isEmpty || t.gainDB != nil {

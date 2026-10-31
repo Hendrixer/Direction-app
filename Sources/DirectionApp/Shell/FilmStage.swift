@@ -63,6 +63,8 @@ struct FilmTransport: View {
                 Button { model.mark() } label: { PinMark(size: 12) }
                     .buttonStyle(.gate(.ghost, icon: true)).help("Mark this moment (N)").accessibilityLabel("Mark this moment")
             }
+            // How the screen and the camera share the frame, when there are both (layouts.md).
+            if model.layouts.available(model) { LayoutButton(model: model) }
         }
         .padding(.horizontal, 24).padding(.top, 6).padding(.bottom, 16)
     }

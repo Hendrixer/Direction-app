@@ -62,6 +62,7 @@ enum ClipRendering {
             }
         }
         image = apply(effects, to: image.cropped(to: bounds), at: k, frameIndex: frameIndex, bounds: bounds, scale: scale)
+        if let card = effects.first(where: { $0.name == "card" }) { image = self.card(image, card, bounds: bounds) }
 
         var alpha = f.opacity * (tr?.number("opacity", at: k, default: 1) ?? 1)
         var dip: (amount: Double, white: Bool)?
@@ -116,6 +117,37 @@ enum ClipRendering {
         guard let first = masks.first else { return out.cropped(to: bounds) }
         let m = masks.dropFirst().reduce(first) { $1.applyingFilter("CIMaximumCompositing", parameters: [kCIInputBackgroundImageKey: $0]) }
         return out.cropped(to: bounds).applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: plain, "inputMaskImage": m]).cropped(to: bounds)
+    }
+
+    /// `card` (layouts.md): the placed picture with rounded corners or as a circle, a thin light edge and a
+    /// soft shadow below it, over a background that fills the frame when the effect names one.
+    static func card(_ image: CIImage, _ e: ClipEffect, bounds: CGRect) -> CIImage {
+        let rect = image.extent.intersection(bounds).integral
+        guard rect.width > 2, rect.height > 2, let shape = CIFilter(name: "CIRoundedRectangleGenerator", parameters: ["inputExtent": CIVector(cgRect: rect), "inputRadius": e.number("radius", at: nil, default: 0.2) * min(rect.width, rect.height), "inputColor": CIColor.white])?.outputImage?.cropped(to: rect) else { return image }
+        let side = min(rect.width, rect.height), radius = e.number("radius", at: nil, default: 0.2) * side
+        var out = image.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(), "inputMaskImage": shape])
+        let edge = e.number("edge", at: nil, default: 0)
+        if edge > 0 {
+            let width = max(1, side * 0.008)
+            if let ring = CIFilter(name: "CIRoundedRectangleStrokeGenerator", parameters: ["inputExtent": CIVector(cgRect: rect.insetBy(dx: width / 2, dy: width / 2)), "inputRadius": max(0, radius - width / 2), "inputWidth": width, "inputColor": CIColor(red: 1, green: 1, blue: 1, alpha: edge * 0.5)])?.outputImage {
+                out = ring.composited(over: out)
+            }
+        }
+        let shadow = e.number("shadow", at: nil, default: 0)
+        if shadow > 0 {
+            let zero = CIVector(x: 0, y: 0, z: 0, w: 0)
+            let dark = shape.applyingFilter("CIColorMatrix", parameters: ["inputRVector": zero, "inputGVector": zero, "inputBVector": zero, "inputAVector": CIVector(x: 0, y: 0, z: 0, w: shadow * 0.7)])
+            out = out.composited(over: dark.transformed(by: .init(translationX: 0, y: -side * 0.03)).applyingGaussianBlur(sigma: side * 0.05))
+        }
+        if let hex = e.params["background"]?.string, let color = color(hex) { out = out.composited(over: CIImage(color: color).cropped(to: bounds)) }
+        return out.cropped(to: bounds)
+    }
+
+    /// "#16171A" as a color.
+    static func color(_ hex: String) -> CIColor? {
+        let h = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard h.count == 6, let v = UInt32(h, radix: 16) else { return nil }
+        return CIColor(red: CGFloat((v >> 16) & 0xFF) / 255, green: CGFloat((v >> 8) & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255)
     }
 
     /// A white shape on black over the frame. x y w h are fractions of the frame from its top left.

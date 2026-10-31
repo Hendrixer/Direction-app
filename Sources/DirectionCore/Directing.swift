@@ -332,6 +332,8 @@ public struct DirectingState: Codable, Hashable, Sendable {
     public var editorPaused: Bool = false
     /// The director's standing instructions to the editor (Settings › Editor).
     public var preferences: EditorPreferences?
+    /// How a camera and a screen recording in sync share the frame, chosen in Dailies (layouts.md).
+    public var layout: FrameLayout?
     public init() {}
 }
 

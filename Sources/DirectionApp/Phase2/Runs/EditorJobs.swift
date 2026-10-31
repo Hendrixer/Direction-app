@@ -51,7 +51,7 @@ enum EditorJobs {
             v["baseCut"] = t.baseCutID.flatMap { id in cuts.first { $0.id == id }?.name } ?? "the current cut"
             v["noteCount"] = t.noteIDs.count == 1 ? "1 note" : "\(t.noteIDs.count) notes"
             v["circles"] = "The director circled \(dailies.takes.values.filter(\.circled).count) takes."
-            v["sync"] = syncRules(dailies, assets: p.assets)
+            v["sync"] = syncRules(dailies, assets: p.assets, layout: try store.directingState().layout)
             let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }.sorted { ($0.number ?? 0) < ($1.number ?? 0) }
             v["notes"] = included.map(noteLine).joined(separator: "\n")
             v["waitForOK"] = t.waitForOK
@@ -76,7 +76,7 @@ enum EditorJobs {
 
     /// How to cut takes in sync, with the film's groups, or nothing when it has none
     /// (footage-index.md › Sync).
-    static func syncRules(_ dailies: Dailies, assets: [MediaAsset]) -> String {
+    static func syncRules(_ dailies: Dailies, assets: [MediaAsset], layout: FrameLayout? = nil) -> String {
         let groups = dailies.syncGroups ?? []
         guard !groups.isEmpty else { return "" }
         func label(_ id: String) -> String {
@@ -94,6 +94,7 @@ enum EditorJobs {
         - A circle on any take in a group asks for that moment. Put one angle on V1, never two angles end to end.
         - Bring the other angles in over it with `cutaway` without `sourceRange` (give `at` and `seconds`): it plays the same moment, and Direction keeps it lined up as you edit.
         - The cut uses the group's sound take. If the angle on V1 isn't it, `syncSound` that clip so the sound take plays under it.
+        - A camera and a screen recording in sync share the frame with `layout` (\(layout.map { "the director chose \($0.label) for this film" } ?? "Screen and you, bottom right, unless the director chooses another")): it frames the camera on the face, keeps both in sync and replaces cutaways and shaders. Lay out the whole cut with it; a scene that's only talk can be You. A layout the director set in the app is theirs.
         """
     }
 

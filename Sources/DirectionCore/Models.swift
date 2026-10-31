@@ -140,6 +140,8 @@ public struct Clip: Codable, Hashable, Sendable, Identifiable {
     /// Plays the same moment as the story clip under it, from a take in sync with it (a cutaway
     /// without a source range, or `syncSound`). Direction lines it up again after every edit.
     public var synced: Bool? = nil
+    /// Placed by a layout (layouts.md): which layout, and whether it shows the screen or the camera.
+    public var layout: ClipLayout? = nil
     public init(id: String = newID("clip"), assetID: String?, name: String, kind: ClipKind = .video, layer: Int = 0, start: MediaTime = .zero, sourceRange: MediaRange, speed: Double = 1) {
         self.id = id; self.lineageID = id; self.assetID = assetID; self.name = name; self.kind = kind; self.layer = layer; self.start = start; self.sourceRange = sourceRange; self.speed = speed; self.grade = .init(); self.framing = .init(); self.audioOverrides = [:]
     }

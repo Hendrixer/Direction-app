@@ -79,6 +79,8 @@ public struct EditOperation: Hashable, Sendable {
     public var endOn: JSONValue?
     /// `pin` and `zoomThrough`: four corners [[x, y], …] as fractions of the frame (y down), top left first, clockwise.
     public var corners: [[Double]]?
+    /// `layout`: how the screen and the camera share the frame over `range`.
+    public var layout: FrameLayout?
     /// What Direction's tools measured before the batch runs: face keys, a matched balance, a checked
     /// shader, quiet stretches, a graphic's render. Never taken from the editor.
     public var resolved: ResolvedValues?
@@ -95,12 +97,14 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
     /// Quiet stretches in cut time, for tightenPauses.
     public var quiet: [MediaRange]?
     public var assetID: String?
+    /// `layout`: the cameras and screens in sync, and the faces in the cameras.
+    public var layout: LayoutMeasure?
     public var warnings: [String]?
-    public init(keys: [String: [Keyframe]]? = nil, grade: ColorGrade? = nil, source: String? = nil, quiet: [MediaRange]? = nil, assetID: String? = nil, warnings: [String]? = nil) { self.keys = keys; self.grade = grade; self.source = source; self.quiet = quiet; self.assetID = assetID; self.warnings = warnings }
+    public init(keys: [String: [Keyframe]]? = nil, grade: ColorGrade? = nil, source: String? = nil, quiet: [MediaRange]? = nil, assetID: String? = nil, layout: LayoutMeasure? = nil, warnings: [String]? = nil) { self.keys = keys; self.grade = grade; self.source = source; self.quiet = quiet; self.assetID = assetID; self.layout = layout; self.warnings = warnings }
 }
 
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "layout", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -143,6 +147,7 @@ extension EditOperation: Codable {
         dB = try num("dB"); fadeIn = try int("in"); fadeOut = try int("out"); under = try str("under"); attack = try num("attack"); release = try num("release")
         endOn = value("endOn")
         corners = try decoded("corners", [[Double]].self, "four [x, y] corners, fractions of the frame from its top left, top left first and clockwise")
+        layout = try decoded("layout", FrameLayout.self, "{kind: screenAndYou|you|screen|sideBySide, corner?: topLeft|topRight|bottomLeft|bottomRight, size?: small|medium|large, shape?: circle|rounded|wide, screen?: full|framed}")
         resolved = try decoded("resolved", ResolvedValues.self, "Direction's own measurements")
     }
 
@@ -162,7 +167,7 @@ extension EditOperation: Codable {
         put("toClipID", toClipID); put("lut", lut); put("target", target); put("effect", effect); if let params { f["params"] = .object(params) }; put("keys", any: keys); put("effectID", effectID)
         if !legacy { put("type", transitionType) }
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
-        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("resolved", any: resolved)
+        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("layout", any: layout); put("resolved", any: resolved)
         return .object(f)
     }
 
@@ -188,7 +193,9 @@ public struct EditBatch: Codable, Hashable, Sendable {
     /// Note numbers the batch answers. Any operation may name its own `note`.
     public var notes: [Int]?
     public var operations: [EditOperation]
-    public init(baseEditRevision: Int, sequenceID: String? = nil, idempotencyKey: String = UUID().uuidString, summary: String = "Edited sequence", notes: [Int]? = nil, operations: [EditOperation]) { self.baseEditRevision = baseEditRevision; self.sequenceID = sequenceID; self.idempotencyKey = idempotencyKey; self.summary = summary; self.notes = notes; self.operations = operations }
+    /// The director's own change, made in the app (a layout): it needs no note, and what it sets is theirs.
+    public var byDirector: Bool?
+    public init(baseEditRevision: Int, sequenceID: String? = nil, idempotencyKey: String = UUID().uuidString, summary: String = "Edited sequence", notes: [Int]? = nil, operations: [EditOperation], byDirector: Bool? = nil) { self.baseEditRevision = baseEditRevision; self.sequenceID = sequenceID; self.idempotencyKey = idempotencyKey; self.summary = summary; self.notes = notes; self.operations = operations; self.byDirector = byDirector }
 }
 
 /// What an edit needs to know beyond the project: words, locks, latitude and the notes the editor can see.
@@ -250,6 +257,8 @@ public struct EditResult: Codable, Hashable, Sendable {
     public var operations: [OperationResult]
     public var warnings: [String]
     public var createdAt: Double?
+    /// The director made it in the app.
+    public var byDirector: Bool? = nil
 }
 
 /// "−4.2 s", "+1.6 s" (true minus sign, product-model › Formats).
@@ -296,12 +305,15 @@ public enum EditReducer {
         guard (1...1_000).contains(batch.operations.count) else { throw DirectionError("bad_argument", "Send between 1 and 1,000 operations.") }
         guard let si = original.sequences.firstIndex(where: { batch.sequenceID == nil || $0.id == batch.sequenceID }) else { throw DirectionError("bad_argument", "Sequence not found.") }
         var w = EditWork(project: original, si: si, context: context)
+        w.director = batch.byDirector == true
         struct Step { var op: EditOperation; var outcome: Outcome; var notes: [Int]; var unasked: Bool; var delta: Double }
         var steps: [Step] = []
         for (i, op) in batch.operations.enumerated() {
             do {
                 let (notes, unasked) = try noteCheck(op, batch, context)
                 if let context { try TimelineLocks.gate(op, w, context) }
+                w.forNote = !notes.isEmpty
+                try w.checkLayoutLock(op)
                 let before = w.project, oldLength = w.s.duration.seconds
                 // Choosing what a synced clip plays by hand takes it out of sync.
                 let byHand = ["slip", "replaceTake", "speed", "freeze"].contains(op.type) ? op.clipID : nil
@@ -332,7 +344,8 @@ public enum EditReducer {
             results.append(OperationResult(index: i, op: step.op.type, notes: step.notes, unasked: step.unasked, summary: step.outcome.summary, delta: r3(step.delta), deltaText: deltaText(step.delta), changes: changes, effectID: step.outcome.effectID, clipIDs: step.outcome.clipIDs.isEmpty ? nil : step.outcome.clipIDs, warnings: step.outcome.warnings.isEmpty ? nil : step.outcome.warnings))
         }
         let oldLength = oldSequence.duration.seconds, newLength = newSequence.duration.seconds
-        let result = EditResult(committed: false, editRevision: original.editRevision, baseEditRevision: original.editRevision, sequenceID: newSequence.id, summary: batch.summary, notes: Array(Set(results.flatMap(\.notes))).sorted(), oldLength: r3(oldLength), newLength: r3(newLength), delta: r3(newLength - oldLength), operations: results, warnings: results.flatMap { $0.warnings ?? [] }, createdAt: nil)
+        var result = EditResult(committed: false, editRevision: original.editRevision, baseEditRevision: original.editRevision, sequenceID: newSequence.id, summary: batch.summary, notes: Array(Set(results.flatMap(\.notes))).sorted(), oldLength: r3(oldLength), newLength: r3(newLength), delta: r3(newLength - oldLength), operations: results, warnings: results.flatMap { $0.warnings ?? [] }, createdAt: nil)
+        if batch.byDirector == true { result.byDirector = true }
         return (w.project, result)
     }
 
@@ -342,14 +355,14 @@ public enum EditReducer {
         case "overlapping_clips": "overlap"
         case "asset_not_found", "missing_asset": "missing_media"
         case "unknown_operation": "unknown_op"
-        case "scene_locked", "picture_locked", "overlap", "unknown_op", "missing_media", "no_words", "look_is_yours", "words_are_yours", "stale_revision", "shader_too_slow", "shader_invalid", "not_in_sync": c
+        case "scene_locked", "picture_locked", "overlap", "unknown_op", "missing_media", "no_words", "look_is_yours", "words_are_yours", "layout_is_yours", "stale_revision", "shader_too_slow", "shader_invalid", "not_in_sync": c
         default: "bad_argument"
         }
     }
 
     static func noteCheck(_ op: EditOperation, _ batch: EditBatch, _ context: EditContext?) throws -> ([Int], Bool) {
         let notes = op.note.map { [$0] } ?? batch.notes ?? []
-        guard let context else { return (notes, false) }
+        guard let context, batch.byDirector != true else { return (notes, false) }
         for n in notes where !context.noteNumbers.contains(n) { throw DirectionError("bad_argument", "There's no note \(n) you can see.") }
         guard notes.isEmpty, let latitude = context.turnoverLatitude else { return (notes, false) }
         guard latitude == .free else { throw DirectionError("bad_argument", "Say which note this answers with notes or note. A change no note asked for needs latitude “Take a pass”.") }
@@ -451,6 +464,10 @@ struct EditWork {
     var project: Project
     let si: Int
     let context: EditContext?
+    /// The batch is the director's (EditBatch.byDirector).
+    var director = false
+    /// The operation being carried out answers a note.
+    var forNote = false
     typealias Track = (audio: Bool, layer: Int)
 
     var s: Sequence { get { project.sequences[si] } set { project.sequences[si] = newValue } }
@@ -620,6 +637,7 @@ struct EditWork {
             s.clips[ri].transition = nil
             return change("Took the transition out before \(label(s.clips[ri]))", s.clips[ri], head: true)
         case "cutaway": return try cutaway(op)
+        case "layout": return try layout(op)
         case "pin": return try pin(op)
         case "zoomThrough": return try zoomThrough(op)
         case "syncSound": return try syncSound(op)

@@ -108,6 +108,7 @@ The editor may export the document to its working folder and analyze it in a scr
 
 | Op | Arguments | What Direction does |
 |---|---|---|
+| `layout` | `range`, `layout: {kind: screenAndYou\|you\|screen\|sideBySide, corner?, size?, shape?, screen?: full\|framed}` | How a camera and a screen recording in sync share the frame over `range` (layouts.md): the screen on V2, the camera on V3 (or the one take on V2), synced and silent, with a `transform` and a `card`. Direction measures which take is the camera and where the face is (Vision, cached per take). Earlier layouts and synced cutaways over `range` make way; anything else on V2–V3 moves up. A layout the director set is theirs: `layout_is_yours` unless a note asks. |
 | `cutaway` | `assetID`, `sourceRange?`, `seconds?`, `at`, `cover?` (a clip id or edit point) | Puts picture on V2 over the story; the sound underneath keeps playing. With `cover`, Direction centers it over a jump cut. Without `sourceRange`, `seconds` long: a take in sync with V1 there plays the same moment, lined up to the frame (switching angles, a screen recording under the words about it, picture-in-picture with `reframe`). It stays lined up as the cut changes (footage-index.md › Sync). |
 | `pin` | `clipID` (V2+), `corners?`, `follow?` (`screen`) | Puts the clip into a screen, window or sign in the shot under it, in perspective. Without corners Direction finds the biggest rectangle in that shot with Vision and follows it; with corners it stays, or follows from them with `follow: screen`. Writes the clip's `pin` effect |
 | `zoomThrough` | `editPoint` (V1), `seconds?` (0.2–5, default 1), `corners?` | Pushes into a screen in the left shot until it fills the frame at the cut, with the right shot's first frame held in the screen and opening out to the whole frame by the cut (see Zoom through) |
@@ -153,6 +154,7 @@ Used by `addEffect` and `setEffect`.
 | `transform` | `scale` (0.1–8, 1), `x`, `y` (−8–8, 0; fraction of frame), `rotation` (−180–180, 0), `opacity` (0–1, 1), `crop` (`l r t b`, 0–0.5, 0) | yes | `reframe` writes this |
 | `blend` | `mode`: normal, screen, multiply, overlay, add | no | On V2+ clips |
 | `mask` | `shape`: rect, ellipse; `x y w h` (0–1); `feather` (0–0.5, 0.05); `invert` (false) | yes | Limits the clip's other effects to the shape: "brighten her face" |
+| `card` | `radius` (0–0.5 of the shorter side, 0.2), `edge` (0–1, 0.3), `shadow` (0–1, 0.5), `background` (#RRGGBB) | no | The placed picture with rounded corners or as a circle, a thin light edge and a soft shadow, over a background that fills the frame when given. `layout` writes it |
 | `blur` | `radius` (0–100 px, 0) | yes | |
 | `sharpen` | `amount` (0–1, 0) | no | |
 | `stabilize` | `amount` (0–1, 0.5) | no | Vision homographic registration, cached per clip |

@@ -172,7 +172,7 @@ final class FilmModel {
     }
 
     // Phase 2 areas, each refreshed with the film (Sources/DirectionApp/Phase2).
-    let runs = EditorRunsModel(), index = FootageIndexModel(), looks = LooksModel(), graphics = GraphicsModel(), made = MadeModel()
+    let runs = EditorRunsModel(), index = FootageIndexModel(), looks = LooksModel(), graphics = GraphicsModel(), made = MadeModel(), layouts = LayoutsModel()
 
     func startPolling() {
         guard pollTask == nil, !isPreview else { return }
