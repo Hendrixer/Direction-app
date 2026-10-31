@@ -134,6 +134,10 @@ extension FilmModel {
     var primaryAction: PrimaryAction? {
         if let p = editorPrimary { return p }
         if let step = onboardingStep { return onboardingPrimary(step) }
+        // Until the assembly has been screened, every room's one button is to screen it (start.md › 06).
+        if assemblyAwaitsScreening, room != .screening {
+            return PrimaryAction(title: "Screen the assembly", icon: "play.fill", help: "Screen the assembly (\u{2318}\u{21A9})") { self.go(.screening) }
+        }
         switch room {
         case .dailies: return dailiesPrimary
         case .script: return scriptPrimary

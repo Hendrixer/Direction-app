@@ -25,7 +25,7 @@ enum NotesTab: String { case sheet, questions, outside }
 enum NoteAnchorMode: String, CaseIterable { case moment, range, region, scene, wholeCut
     var label: String { switch self { case .moment: "Moment"; case .range: "Range"; case .region: "Region"; case .scene: "Scene"; case .wholeCut: "Whole cut" } }
 }
-enum OnboardingStep: Int, Comparable { case brief, footage, firstLook
+enum OnboardingStep: Int, Comparable { case brief, footage
     static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
 }
 
@@ -217,7 +217,7 @@ final class FilmModel {
             if t.kind == "assembly" {
                 // Nothing to review yet: screen it (start.md › 06).
                 let length = ((try? project?.sequence(cut.sequenceID))??.duration.seconds).map { " " + Timecode.duration($0) + "." } ?? ""
-                toast = Toast(title: "The assembly is ready.\(length)", editor: true, actionTitle: room == .screening ? nil : "Screen it", run: { [weak self] in self?.go(.screening) })
+                toast = Toast(title: "The assembly is ready.\(length)", detail: "Nobody else sees it until you\u{2019}ve screened it. Watch it once all the way through.", editor: true, actionTitle: room == .screening ? nil : "Screen it", run: { [weak self] in self?.go(.screening) })
                 onNotify?("The assembly is ready", "\(filmName) · screen it when you\u{2019}re ready", NotificationKey.cutReady)
                 continue
             }
@@ -384,6 +384,7 @@ final class FilmModel {
         }
         if isPictureLocked, let item = directing.finishing?.first(where: { $0.state == "working" && $0.by.contains("editor") }) { return .working(item.title == "Sound mix" ? "Mixing sound" : item.title, item.progress) }
         if let cut = latestCut, !unreviewedAnswers.isEmpty, openTurnover == nil { return .cutReady("\(cut.name) ready") }
+        if assemblyAwaitsScreening, openTurnover == nil { return .cutReady("Assembly ready") }
         // Before logging, the index looks at every take (footage-index.md).
         if let l = index.looking { return .looking(l.done, l.total) }
         if let l = index.listening, isLogging { return .listening(l.done, l.total) }
@@ -395,16 +396,14 @@ final class FilmModel {
         return .ready
     }
     var isPictureLocked: Bool { directing.pictureLocked }
-    /// Before a film has a first cut, the window walks through Brief → Footage → First look.
+    /// Before a film has footage logged, the window walks through Brief → Footage; then it's the
+    /// rooms. The assembly is built like any cut, from the room you asked for it in (start.md › 06).
     /// The director left onboarding early (Open Dailies while the editor is still logging).
     var onboardingDismissed = false
     var onboardingStep: OnboardingStep? {
-        guard !onboardingDismissed else { return nil }
-        // The assembly is in: the first look stays, ready, until you screen it (start.md › 06).
-        if !cuts.isEmpty { return assemblyAwaitsScreening ? .firstLook : nil }
+        guard !onboardingDismissed, cuts.isEmpty, openTurnover?.kind != "assembly" else { return nil }
         if !brief.isComplete { return .brief }
         if !hasFootage { return .footage }
-        if openTurnover?.kind == "assembly" { return .firstLook }
         // Footage is in but the editor hasn't logged every take yet: Logging footage.
         if isLogging { return .footage }
         return nil
@@ -444,8 +443,6 @@ final class FilmModel {
     }
     func go(_ room: Room) {
         guard isEnabled(room) else { return }
-        // Leaving the first look for a room: the assembly keeps building in the background.
-        if onboardingStep == .firstLook { onboardingDismissed = true }
         if self.room == .screening && room != .screening { endScreening(showEndCard: false) }
         // The cut stops where it is when you change rooms; nothing plays in a room you can't see it in.
         if self.room != room, playing || playingChanges { if playingChanges { stopChanges() } else { pause() } }

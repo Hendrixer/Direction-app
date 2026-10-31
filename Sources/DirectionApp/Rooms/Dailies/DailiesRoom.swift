@@ -10,7 +10,10 @@ struct DailiesRoom: View {
         HStack(spacing: 0) {
             // Search results aren't a scene: no row is current while they show (frame 60).
             DailiesSidebar(model: model, current: model.index.searching && model.openTakeID == nil ? nil : currentBin).frame(width: Gate.Size.sidebar)
-            main.frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                AssemblyQuestions(model: model)
+                main.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .background(Gate.Surface.ground)
         .overlay(alignment: .topLeading) {
@@ -50,6 +53,32 @@ struct DailiesRoom: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+    }
+}
+
+/// The editor's questions while it builds the assembly, above the takes they're about. Notes opens
+/// with the first cut, so until then they wait here; the pill's Answer brings you to them (start.md › 06).
+struct AssemblyQuestions: View {
+    @Bindable var model: FilmModel
+
+    private var questions: [EditorQuestion] {
+        guard model.cuts.isEmpty, let t = model.openTurnover, t.kind == "assembly" else { return [] }
+        return model.openQuestions.filter { $0.turnoverID == t.id }.sorted { $0.createdAt < $1.createdAt }
+    }
+
+    var body: some View {
+        if !questions.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(questions) { q in
+                    if q.kind == "cant" { CantNotice(model: model, question: q, inset: false) }
+                    else { QuestionCard(model: model, question: q, primary: false, steel: false) }
+                }
+                .transition(.noticeArrival)
+            }
+            .frame(maxWidth: 620, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 28).padding(.top, 20).padding(.bottom, 4)
         }
     }
 }
@@ -249,8 +278,6 @@ extension FilmModel {
             let help = building ? "The editor is building the assembly" : openTurnover != nil ? "The editor is still working" : circledCount == 0 ? "Circle at least one take first (C)" : "Build the first cut from your circles (\u{2318}\u{21A9})"
             return PrimaryAction(title: building ? "Assembling\u{2026}" : "Assemble from circles", count: String(circledCount), enabled: circledCount > 0 && openTurnover == nil, help: help) {
                 self.assembleFromCircles()
-                // Show the first look even if Dailies was opened while the editor was still logging.
-                self.onboardingDismissed = false
             }
         }
         let since = lastTurnover?.createdAt ?? 0

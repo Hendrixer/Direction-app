@@ -7,6 +7,22 @@ import DirectionTools
 @Suite("Film model")
 @MainActor
 struct FilmModelTests {
+    /// The assembly has no page of its own (start.md › 06): asking for it leaves you in Dailies, its
+    /// questions wait there, and once it's in every room's one button screens it.
+    @Test func theAssemblyIsBuiltFromTheRoomYouAskedIn() {
+        let building = StartFixtures.assembling()
+        #expect(building.onboardingStep == nil && building.room == .dailies)
+        #expect(building.primaryAction?.title == "Assembling\u{2026}" && building.primaryAction?.enabled == false)
+        let asking = StartFixtures.assemblyQuestion()
+        #expect(asking.onboardingStep == nil && asking.pill == .asks(1))
+        let ready = StartFixtures.assemblyReady()
+        #expect(ready.pill == .cutReady("Assembly ready"))
+        for room in [Room.dailies, .script, .notes] {
+            ready.room = room
+            #expect(ready.primaryAction?.title == "Screen the assembly", "in \(room)")
+        }
+    }
+
     @Test func aNewFilmThatTakesATrashedFilmsNameStillShowsInFilms() throws {
         let path = "/tmp/direction-tests-\(UUID().uuidString)/Untitled film.direction"
         func entry(available: Bool) throws -> ProjectEntry {

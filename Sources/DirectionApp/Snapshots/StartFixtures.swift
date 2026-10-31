@@ -35,6 +35,7 @@ enum StartFixtures {
             },
             "05-footage-logging": { DailiesFixtures.scene(logging(), DailiesPreview(art: DailiesFixtures.art)) },
             "06-assembling": { DailiesFixtures.scene(assembling(), DailiesPreview(art: DailiesFixtures.art)) },
+            "06-assembly-question": { DailiesFixtures.scene(assemblyQuestion(), DailiesPreview(art: DailiesFixtures.art)) },
             "06-assembly-ready": { DailiesFixtures.scene(assemblyReady(), DailiesPreview(art: DailiesFixtures.art)) },
         ]
     }
@@ -118,7 +119,22 @@ enum StartFixtures {
         return m
     }
 
-    /// Frame 06, done: the assembly is a cut and the first look waits for you to screen it.
+    /// Frame 06, a question: the editor needs your call on the ridge, above the scene it's about.
+    static func assemblyQuestion() -> FilmModel {
+        let m = assembling()
+        m.selectedSceneID = "scene-3"
+        m.dailies.takes["take-3a-t2"]?.circled = true; m.dailies.takes["take-3a-t3"]?.circled = true
+        m.questions = [EditorQuestion(id: "question-ridge", turnoverID: "turnover-1", kind: "question", noteIDs: [],
+                                      text: "You circled two takes of 3A on the ridge. T2 holds the wide longer; T3 lands the line. Which one leads?", detail: nil,
+                                      choices: [
+                                          .init(id: "t2", label: "Lead with T2", detail: "3A \u{00B7} the wide holds 4 s longer", assetID: "take-3a-t2"),
+                                          .init(id: "t3", label: "Lead with T3", detail: "3A \u{00B7} the line lands on her face", assetID: "take-3a-t3"),
+                                      ],
+                                      allowsText: true, answer: nil, createdAt: Date().timeIntervalSince1970 - 40)]
+        return m
+    }
+
+    /// Frame 06, done: the assembly is a cut; every room's button screens it, and the toast says so.
     static func assemblyReady() -> FilmModel {
         let m = assembling()
         var p = m.project!
@@ -132,6 +148,7 @@ enum StartFixtures {
         m.turnovers = [t]
         m.cuts = [ReviewCut(id: "cut-assembly", name: "Assembly", editRevision: p.editRevision, sequenceID: "sequence-main", createdAt: Date().timeIntervalSince1970)]
         m.previewAssemblyReady = true
+        m.toast = Toast(title: "The assembly is ready. 4:01.", detail: "Nobody else sees it until you\u{2019}ve screened it. Watch it once all the way through.", editor: true, actionTitle: "Screen it")
         return m
     }
 }

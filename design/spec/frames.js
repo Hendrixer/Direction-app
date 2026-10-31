@@ -7,6 +7,8 @@ window.FRAMES = [
   { id: "04-footage-drop", group: "Start", title: "Bring footage", spec: "start.md" },
   { id: "05-footage-logging", group: "Start", title: "Logging footage", spec: "start.md" },
   { id: "06-assembling", group: "Start", title: "Building the assembly", spec: "start.md" },
+  { id: "06-assembly-question", group: "Start", title: "The assembly asks", spec: "start.md" },
+  { id: "06-assembly-ready", group: "Start", title: "The assembly is ready", spec: "start.md" },
 
   { id: "07-dailies", group: "Dailies", title: "Dailies, circling takes", spec: "dailies.md" },
   { id: "08-dailies-take", group: "Dailies", title: "Dailies, one take open", spec: "dailies.md" },

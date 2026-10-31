@@ -6,7 +6,7 @@
 
 **Entry points.** App launch with no films (01). App launch with films, `⌘⇧O`, or Window › Films (02). File › New Film `⌘N` (03). Film › Bring Footage `⌘I` from any room (04, with the stepper hidden and the crumb showing the film).
 
-**Shared pieces.** Frames 03–05 replace the room switcher with the **stepper** (`.steps` in `css/start.css`): Brief · Footage · First look. Each step is a 24 pt pill; done steps show a check in a filled 16 pt circle, the current step uses `--raised` with a steel-9 number dot. Steps are clickable backwards only. From 06 on, the film exists and the normal room switcher appears with Screening, Notes, Changes and Finish disabled (`.off`) until the assembly is ready.
+**Shared pieces.** Frames 03–05 replace the room switcher with the **stepper** (`.steps` in `css/start.css`): Brief · Footage. Each step is a 24 pt pill; done steps show a check in a filled 16 pt circle, the current step uses `--raised` with a steel-9 number dot. Steps are clickable backwards only. Once footage is logged (or Dailies is opened while it logs), the normal room switcher appears with Screening, Notes, Changes and Finish disabled (`.off`) until the assembly is ready.
 
 ---
 
@@ -156,7 +156,7 @@ Frame: `screens/04-footage-drop.html` · Render: `renders/04-footage-drop@2x.png
 ## 05 · Logging footage
 Frame: `screens/05-footage-logging.html` · Render: `renders/05-footage-logging@2x.png`
 
-**Arrives from / leads to:** after files are added in 04. Open Dailies (primary, available as soon as one scene exists) → 07. When logging completes: toast "214 takes logged. 5 scenes, 14 unsorted." with "Open Dailies", and the stepper keeps Footage current until the assembly starts.
+**Arrives from / leads to:** after files are added in 04. Open Dailies (primary, available as soon as one scene exists) → 07. When logging completes: toast "214 takes logged. 5 scenes, 14 unsorted." with "Open Dailies", and the stepper keeps Footage current until Dailies opens.
 
 **Layout**
 - Main column + 360 pt aside (sunken, left hairline).
@@ -187,38 +187,27 @@ Frame: `screens/05-footage-logging.html` · Render: `renders/05-footage-logging@
 ---
 
 ## 06 · Building the assembly
-Frame: `screens/06-assembling.html` · Render: `renders/06-assembling@2x.png`
+Frames: `06-assembling`, `06-assembly-question`, `06-assembly-ready` (snapshots of Dailies; no page of its own)
 
-**Arrives from / leads to:** Assemble from circles in Dailies (07). When done: one prism sweep under the titlebar, toast "The assembly is ready. 4:12." and the primary "Screen the assembly" enables → 13 (Screening, Assembly).
+**No page of its own.** The assembly is built like every later cut: the director stays in the room they asked for it in (Dailies, from Assemble from circles) and keeps circling, and the editor pill carries the work. An earlier full-window frame (a black stage, a title, scene tiles, a log and a "First look is yours" card) looked like nothing else in Direction, and everything on it has a home in the rooms.
 
-**Layout**
-- Black stage with a soft radial glow. Centered 980 pt column, 34 pt gaps.
-- Header: ion uppercase label with diamond, "Assembly" Archivo 800 48 at 125%, a 15 pt `--text-2` line.
-- Scene tiles: 5 columns, 10 pt gap. Tile = 16:9 preview (radius 6) + 12 pt label row (status icon, name, mono duration right). Done tiles show a still; the live tile has a 1 pt prism border and a blurred, darkened still; pending tiles are empty sunken boxes with `--text-4` names.
-- The 320 pt "First look is yours" card (ground, radius 10) sits to the right of the header, top-aligned with it. Under the bottom of a short log it read as a box floating on its own.
-- Below the tiles: the log, full width.
+**Arrives from / leads to:** Assemble from circles in Dailies (07). When done: one prism sweep under the titlebar, the toast, and the titlebar's steel primary becomes Screen the assembly → 13 (Screening, Assembly).
 
-**Content:** Pill "Assembling 3 of 5" with a meter. Header line: "From your 7 circled takes and the brief. About 3 minutes left." Log (each a `.say`, done rows with steel diamonds, current row prism and `--text-1`):
-1. "Read the brief. Holding on faces, letting quiet moments run."
-2. "Cold open: started on the street, on her face by 0:21. Kept it under 35 seconds."
-3. "Scene 2: used your circled T2 for "Editing was the part nobody wanted." It's a must-keep."
-4. "The ridge: you circled two takes of 3A. Trying both against the music."
-Card: "First look is yours" / "Nobody else can see the assembly until you've screened it. Share links stay off until then." / "It'll be rough on purpose. Watch it once all the way through before giving notes."
+**While it builds**
+- Pill "Assembling 3 of 5" with a meter. Its popover: "Building the assembly from your circled takes." and what the editor is doing now.
+- Dailies' primary is "Assembling…" (disabled) with the circle count. Circles changed now apply to the next cut, with a toast saying so.
+- Rooms: Dailies and Script enabled. Screening, Notes, Changes and Finish stay off until the assembly is in.
 
-**States and variants**
-- Rooms: Dailies and Script enabled (the director can keep circling; changes after this point apply to the next cut, with a toast saying so). Screening, Notes, Changes, Finish disabled.
-- The editor can ask a question mid-assembly; it appears as a `.question` card above the log, the pill turns `.asks` "1 question", and the remaining scenes wait.
-- If no takes are circled in a scene, the log says "Scene 5: nothing circled, so I used my suggestions. Change them in Dailies." Those tiles show a diamond on their label.
-- Failure: the live tile turns into an alert state, and frame 28's pattern applies.
-- **Ready.** When the assembly is delivered the frame stays; it doesn't drop back to Dailies. Label "Your first cut is ready", header line "From your 1 circled take and the brief. It runs 3:12. Watch it once all the way through.", every scene with picture done, the log's last line no longer current, and a large raised **Screen the assembly ⌘↩** under the header line (the titlebar's steel primary does the same). The toast reads "The assembly is ready. 3:12." with **Screen it**. The frame stays until the director screens the assembly, writes a note or goes to another room.
+**The editor asks.** A question during the assembly appears at the top of Dailies, above the scene grid (max 620 pt wide, 28 pt in, the scene header's margin), as the same card Notes › Questions uses (`QuestionCard`, not steel: the titlebar has the steel button). The pill turns `.asks` "1 question"; its popover's Answer opens Dailies. Notes holds questions from the first cut on.
 
-**Interactions:** Clicking a done tile plays that scene in a sheet (preview only, not a screening; no marks). Esc closes. Leaving the room doesn't stop the work.
+**It stops.** The full-width banner under the titlebar (`EditorRunBanner`, frame 58's copy and actions) shows wherever the director is.
 
-**Motion:** Live tile border shimmer. Each finished tile cross-fades from blur to the still over Glide. On completion, Sweep (900 ms) once across the top edge.
+**Ready.** Toast "The assembly is ready. 3:12." / "Nobody else sees it until you've screened it. Watch it once all the way through." with Screen it. The pill reads "Assembly ready"; its popover says the same and offers Screen it. In every room but Screening, the steel primary is **Screen the assembly ⌘↩** until the assembly has been screened or noted.
 
-**Accessibility:** Log is a live region (polite). Tiles are read as "Scene 3, The ridge, in progress".
+**Motion:** On completion, Sweep (900 ms) once across the top edge.
 
 **Acceptance**
+- [ ] Asking for the assembly never takes the director out of the room they're in.
+- [ ] A question about the assembly is always answerable: in Dailies before the first cut, in Notes after.
 - [ ] The Share button is absent until the assembly has been screened once.
-- [ ] Only one prism sweep, on completion, never on scene completion.
-- [ ] Log copy is first person, short, and names the brief or circles it relied on.
+- [ ] Only one prism sweep, on completion.

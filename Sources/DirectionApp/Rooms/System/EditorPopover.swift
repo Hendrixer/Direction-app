@@ -68,6 +68,8 @@ struct EditorPopover: View {
             if model.cuts.isEmpty { return model.circledCount > 0 ? "Nothing in progress. Ask for the assembly when your circles are in." : "Nothing in progress. Circle takes in Dailies, then ask for the assembly." }
             let n = model.readyNotes.count, cut = model.watchedCut?.name ?? "this cut"
             return n == 0 ? "Nothing in progress. Write notes on \(cut) and turn them over when you\u{2019}re done." : "Nothing in progress. Your \(n == 1 ? "note" : "\(n) notes") on \(cut) \(n == 1 ? "is" : "are") waiting. Turn them over when you\u{2019}re done."
+        case .cutReady where model.assemblyAwaitsScreening:
+            return "The assembly is ready. Nobody else sees it until you\u{2019}ve screened it; watch it once all the way through before giving notes."
         case .cutReady:
             let n = model.unreviewedAnswers.count, cut = model.latestCut?.name ?? "The new cut"
             return "\(cut) is ready. \(n == 1 ? "1 answer is" : "\(n) answers are") waiting in Changes."
@@ -138,12 +140,15 @@ struct EditorPopover: View {
             Button("Set up\u{2026}") { model.showEditorPopover = false; model.sheet = .editorSetup }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .stopped:
             if let r = model.runs.failed { EditorStopActions(model: model, run: r, small: true) }
+        case .cutReady where model.assemblyAwaitsScreening:
+            Button("Screen it") { open(.screening) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .readBackReady:
             Button("Open read-back") { open(.notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .asks:
-            Button("Answer") { model.notesTab = .questions; open(.notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+            // Before the first cut the assembly's questions wait in Dailies; after, in Notes.
+            Button("Answer") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .cant:
-            Button("Show me") { model.notesTab = .questions; open(.notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+            Button("Show me") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .waiting where !model.runs.startsEditor:
             HStack(spacing: 8) {
                 Button("Copy request for your editor") { model.copyEditorRequest(); model.showEditorPopover = false }.buttonStyle(.gate(.normal, .small))

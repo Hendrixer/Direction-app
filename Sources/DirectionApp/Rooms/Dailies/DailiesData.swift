@@ -22,7 +22,6 @@ struct DailiesPreview {
     var dropSceneID: String?
     var takePosition: Double?
     var takePlaying = false
-    var assemblyLog: [String] = []
 }
 
 extension EnvironmentValues {

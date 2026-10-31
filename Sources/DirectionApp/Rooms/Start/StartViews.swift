@@ -1,11 +1,11 @@
 import SwiftUI
 import DirectionCore
 
-// Start: from nothing to a first cut. Brief → Footage (bring it, the editor logs it) → First look.
-// Films (01–02) is in FilmsView.swift; the brief in BriefViews.swift; footage and logging in
-// FootageViews.swift; the assembly in AssemblyView.swift.
+// Start: from nothing to footage logged. Brief → Footage (bring it, the editor logs it), then the
+// rooms, where the assembly is asked for in Dailies. Films (01–02) is in FilmsView.swift; the brief
+// in BriefViews.swift; footage and logging in FootageViews.swift.
 
-/// Brief · Footage · First look, in place of the room switcher until the film has footage logged.
+/// Brief · Footage, in place of the room switcher until the film has footage logged.
 /// Done steps are clickable backwards: Brief opens the brief.
 struct OnboardingStepper: View {
     var step: OnboardingStep
@@ -16,8 +16,6 @@ struct OnboardingStepper: View {
             item(.brief, "Brief")
             bar
             item(.footage, "Footage")
-            bar
-            item(.firstLook, "First look")
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Steps")
@@ -47,7 +45,7 @@ struct OnboardingStepper: View {
         .buttonStyle(.plain)
         .allowsHitTesting(done && s == .brief)
         .help(done && s == .brief ? "Edit the brief (\u{2318}B)" : "")
-        .accessibilityLabel("\(title), step \(s.rawValue + 1) of 3, \(on ? "current" : done ? "done" : "not yet")")
+        .accessibilityLabel("\(title), step \(s.rawValue + 1) of 2, \(on ? "current" : done ? "done" : "not yet")")
     }
 }
 
@@ -56,7 +54,7 @@ extension FocusedValues {
     @Entry var onboardingFilm: FilmModel?
 }
 
-/// The window's content before the first cut: the brief, bringing footage, logging, then the assembly.
+/// The window's content before footage is logged: the brief, bringing footage, logging.
 struct OnboardingView: View {
     @Bindable var model: FilmModel
     var step: OnboardingStep
@@ -68,7 +66,6 @@ struct OnboardingView: View {
                 // Continue with footage attached saves the brief before the first file is in: show logging
                 // from then, or the drop zone flashes for a moment.
                 if model.hasFootage || model.importingFootage > 0 { OnboardingLoggingView(model: model) } else { OnboardingFootageDrop(model: model) }
-            case .firstLook: OnboardingAssemblyView(model: model)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -168,8 +165,6 @@ extension FilmModel {
         case .footage:
             if hasFootage { return PrimaryAction(title: "Open Dailies", icon: "square.grid.2x2", enabled: !dailies.scenes.isEmpty, help: dailies.scenes.isEmpty ? "Opens once the editor has found a scene" : "Start circling takes; logging carries on (\u{2318}\u{21A9})") { self.openDailiesFromLogging() } }
             return PrimaryAction(title: "Start logging", enabled: !session.pending.isEmpty, help: session.pending.isEmpty ? "Drop footage or choose a folder first" : "Start logging now (\u{2318}\u{21A9})") { session.importPending() }
-        case .firstLook:
-            return PrimaryAction(title: "Screen the assembly", icon: "play.fill", enabled: !cuts.isEmpty, help: cuts.isEmpty ? "The editor is still building the assembly" : "Screen the assembly (\u{2318}\u{21A9})") { self.go(.screening) }
         }
     }
 }
