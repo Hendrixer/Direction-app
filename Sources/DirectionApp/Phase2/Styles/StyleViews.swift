@@ -18,54 +18,146 @@ enum StyleSamples {
     }
 }
 
-/// The brief's Style question: None, or one of your styles. Picking one gives the film its own copy
-/// when the brief is saved.
+/// The brief's Style question: one field that opens a searchable list (None first, then your styles),
+/// and New Style beside it, to write one or have the editor make one. Picking one gives the film its
+/// own copy when the brief is saved.
 struct BriefStylePicker: View {
     var model: FilmModel
     @Binding var style: String?
     @State private var styles: [Style] = []
+    @State private var open = false
     @State private var asking = false
+    @State private var writing: StyleDraft?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            BriefFlow(spacing: 8) {
-                card(nil)
-                ForEach(styles) { card($0) }
+        HStack(spacing: 8) {
+            Button { load(); open = true } label: { field }
+                .buttonStyle(.plain)
+                .popover(isPresented: $open, arrowEdge: .bottom) {
+                    StyleList(styles: styles, chosen: style) { picked in style = picked; open = false }
+                }
+                .accessibilityLabel("Style")
+                .accessibilityValue(current.map { "\($0.name). \($0.summary)" } ?? "None")
+            Menu {
+                Button("Write One\u{2026}") { writing = .new }
+                Button("Make One with the Editor\u{2026}") { asking = true }
+                Divider()
+                OpenSettingsButton(tab: .styles) { Text("Your Styles\u{2026}") }
+            } label: {
+                HStack(spacing: 6) { Image(systemName: "plus").font(.system(size: 10, weight: .semibold)); Text("New Style") }
+                    .font(Gate.Font.control).foregroundStyle(Gate.Text.primary)
+                    .padding(.horizontal, 12).frame(height: 36)
+                    .background(RoundedRectangle(cornerRadius: Gate.Radius.control).fill(Gate.Surface.raised).overlay(RoundedRectangle(cornerRadius: Gate.Radius.control).strokeBorder(Gate.Line.subtle, lineWidth: 1)))
             }
-            if styles.isEmpty {
-                Text("No styles yet. A style keeps your videos looking like yours from one to the next: the pace, titles, captions, transitions and sound.")
-                    .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
-            }
-            HStack(spacing: 8) {
-                Button("Make one with the editor\u{2026}") { asking = true }.buttonStyle(.gate(.ghost, .small))
-                    .popover(isPresented: $asking, arrowEdge: .bottom) { MakeStylePopover(model: model) { asking = false } }
-                OpenSettingsButton(tab: .styles) { Text("Your styles\u{2026}") }.buttonStyle(.gate(.ghost, .small))
-            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            .popover(isPresented: $asking, arrowEdge: .bottom) { MakeStylePopover(model: model) { asking = false } }
         }
         .task { load() }
         .onChange(of: model.runs.runs.filter { $0.job == .style }.map(\.state)) { _, _ in load() }
+        .sheet(item: $writing) { StyleEditSheet(draft: $0, folder: SharedSettings.stylesFolder, saved: { style = $0.id; load() }) { writing = nil } }
+    }
+
+    private var current: Style? { style.flatMap { id in styles.first { $0.id == id } } }
+
+    /// What's chosen: its name and sentence on one line, or None.
+    private var field: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "swatchpalette").font(.system(size: 12, weight: .medium)).foregroundStyle(current == nil ? Gate.Text.disabled : Gate.Voice.director).frame(width: 16)
+            Text(current?.name ?? (style == nil ? "None" : style!)).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).lineLimit(1).fixedSize()
+            Text(current?.summary ?? (style == nil ? "Just the brief and your notes." : "Not in your styles folder; the film keeps its copy.")).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Gate.Text.tertiary)
+        }
+        .padding(.horizontal, 12).frame(height: 36)
+        .frame(maxWidth: .infinity)
+        .background(GateFieldBackground(focused: open))
+        .contentShape(Rectangle())
     }
 
     private func load() { styles = model.isPreview ? StyleSamples.styles : StyleLibrary.list(in: SharedSettings.stylesFolder) }
+}
 
-    private func card(_ s: Style?) -> some View {
-        let chosen = style == s?.id
-        return Button { style = s?.id } label: {
-            VStack(alignment: .leading, spacing: 3) {
+/// The dropdown: search at the top, None and every style that matches, ↑↓ and Return to choose.
+struct StyleList: View {
+    var styles: [Style]
+    var chosen: String?
+    var pick: (String?) -> Void
+    @State private var query = ""
+    @State private var selected = 0
+    @FocusState private var focused: Bool
+
+    /// None, then the styles whose name, sentence or contents match every word typed.
+    private var rows: [Style?] {
+        let words = query.lowercased().split(separator: " ").map(String.init)
+        let matching = styles.filter { s in words.allSatisfy { w in "\(s.name) \(s.summary) \(s.contents.line)".lowercased().contains(w) } }
+        let none = words.isEmpty || words.allSatisfy { "none no style".contains($0) }
+        return (none ? [nil] : []) + matching.map { Optional($0) }
+    }
+
+    var body: some View {
+        let rows = self.rows
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").font(.system(size: 12, weight: .medium)).foregroundStyle(Gate.Text.tertiary)
+                TextField("", text: $query, prompt: Text("Search styles").foregroundColor(Gate.Text.disabled))
+                    .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).focused($focused)
+                    .onSubmit { if rows.indices.contains(selected) { pick(rows[selected]?.id) } }
+                    .onKeyPress(.downArrow) { selected = min(rows.count - 1, selected + 1); return .handled }
+                    .onKeyPress(.upArrow) { selected = max(0, selected - 1); return .handled }
+                    .accessibilityLabel("Search styles")
+            }
+            .padding(.horizontal, 14).frame(height: 42)
+            .overlay(alignment: .bottom) { SystemHairline() }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 1) {
+                        if rows.isEmpty {
+                            Text("No styles match \u{201C}\(query.trimmingCharacters(in: .whitespaces))\u{201D}.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: 40)
+                        }
+                        ForEach(Array(rows.enumerated()), id: \.offset) { i, s in
+                            row(s, selected: i == selected).id(i)
+                                .onTapGesture { pick(s?.id) }
+                                .onHover { if $0 { selected = i } }
+                        }
+                    }
+                    .padding(6)
+                }
+                .frame(maxHeight: 340)
+                .fixedSize(horizontal: false, vertical: true)
+                .onChange(of: selected) { _, i in proxy.scrollTo(i) }
+            }
+            HStack {
+                Text("\u{2191}\u{2193} to move, \u{21A9} to choose").font(Gate.Font.caption).foregroundStyle(Gate.Text.disabled)
+                Spacer()
+                OpenSettingsButton(tab: .styles) { Text("Your Styles\u{2026}") }.buttonStyle(.gate(.ghost, .small))
+            }
+            .padding(.horizontal, 12).frame(height: 36)
+            .overlay(alignment: .top) { SystemHairline() }
+        }
+        .frame(width: 460)
+        .background(Gate.Surface.panel)
+        .onAppear { focused = true; selected = rows.firstIndex { $0?.id == chosen } ?? 0 }
+        .onChange(of: query) { _, _ in selected = 0 }
+    }
+
+    private func row(_ s: Style?, selected: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Gate.Voice.director).frame(width: 14).padding(.top, 2)
+                .opacity(s?.id == chosen ? 1 : 0)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(s?.name ?? "None").font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).lineLimit(1)
                 Text(s?.summary ?? "Just the brief and your notes.").font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                if let line = s?.contents.line, !line.isEmpty { Text(line).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1).minimumScaleFactor(0.85) }
+                if let line = s?.contents.line, !line.isEmpty { Text(line).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .frame(width: s == nil ? 126 : 248, height: 86, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: Gate.Radius.card, style: .continuous).fill(chosen ? Gate.Voice.directorWash : Gate.Surface.panel))
-            .overlay(RoundedRectangle(cornerRadius: Gate.Radius.card, style: .continuous).strokeBorder(chosen ? Gate.Voice.director : Gate.Line.subtle, lineWidth: chosen ? 1.5 : 1))
-            .contentShape(Rectangle())
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(s.map { "Style: \($0.name). \($0.summary)" } ?? "No style")
-        .accessibilityAddTraits(chosen ? .isSelected : [])
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Gate.Surface.hover : .clear))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(s.map { "\($0.name). \($0.summary)" } ?? "None. Just the brief and your notes.")
+        .accessibilityAddTraits(s?.id == chosen ? [.isSelected, .isButton] : .isButton)
     }
 }
 
@@ -180,6 +272,8 @@ struct StyleDraft: Identifiable {
 struct StyleEditSheet: View {
     @State var draft: StyleDraft
     var folder: URL
+    /// The style as written, for whoever opened the sheet (the brief picks a new one).
+    var saved: (Style) -> Void = { _ in }
     var close: () -> Void
     @State private var error: String?
     @State private var confirmingTrash = false
@@ -239,7 +333,7 @@ struct StyleEditSheet: View {
             // A new style's guide starts under a placeholder heading; it takes the style's name.
             let name = draft.name.trimmingCharacters(in: .whitespaces)
             let guide = draft.style == nil && draft.guide.hasPrefix("# New style\n") ? "# \(name)\n" + draft.guide.dropFirst("# New style\n".count) : draft.guide
-            _ = try StyleLibrary.save(id: draft.style?.id, name: name, summary: draft.summary, tokens: nil, guide: guide, in: folder)
+            saved(try StyleLibrary.save(id: draft.style?.id, name: name, summary: draft.summary, tokens: nil, guide: guide, in: folder))
             close()
         } catch let e as DirectionError { error = e.message } catch { self.error = error.localizedDescription }
     }

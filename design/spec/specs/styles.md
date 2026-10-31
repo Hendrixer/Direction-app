@@ -41,15 +41,15 @@ desk-talk/
 
 ## In a film
 
-- **The brief** has a Style question after Length (frame 03): None, or one card per style (name, sentence, what it holds). The chosen card is the director's amber. "Make one with the editor…" and "Your styles…" sit under the cards.
+- **The brief** has a Style question after Length (frame 03): one field showing the chosen style's name and sentence, or None ("Just the brief and your notes."). It opens a list (frame 66): a search field (name, sentence and what it holds; every word must match), None first, then each style with what it holds; ↑↓ and Return choose, and Your Styles… opens Settings › Styles. Beside the field, New Style: Write One… (the same sheet as Settings › Styles, and the new style is chosen), Make One with the Editor…, Your Styles…
 - **The film keeps its own copy.** Saving a brief that names a style copies its folder to `<film>.direction/Style/`, so the film doesn't change when the style does and travels with its style. Saving it with another style, or None, replaces or removes the copy. A style the editor changes for this film (`direction_save_style`) is copied again.
 - **The editor** sees it in `direction_brief` (`style`), in its job text (“Style: Desk Talk…”), and reads it with `direction_style`: values, guide, and each part with its path. It copies graphics to `Editor/Graphics/<name>/`, transitions to `Editor/Transitions/`, effects to `Editor/Effects/`, brings sounds and music in with `direction_import`, and proposes the look with `direction_make_look fromLUT` (the look stays the director's). `direction_graphic_examples` lists the style's graphics first (`fromStyle`).
 
 ## Making a style
 
-- **With the editor, in the app.** "Make one with the editor…" in the brief: the director says what it should be like (channels, videos, what they like about them) and, when the film has a cut, whether to learn from how it's cut. Direction starts a run with job `style` (skill `make-style`, template `jobs/style.md`). It's done when a style is saved after the run began. Under Your own session, the popover says to ask that session instead.
+- **With the editor, in the app.** New Style › Make One with the Editor… in the brief: the director says what it should be like (channels, videos, what they like about them) and, when the film has a cut, whether to learn from how it's cut. Direction starts a run with job `style` (skill `make-style`, template `jobs/style.md`). It's done when a style is saved after the run began. Under Your own session, the popover says to ask that session instead.
 - **With the editor, in a session of your own.** "Make me a style" with the Direction plugin: the `make-style` skill and `direction_styles`, `direction_style`, `direction_save_style`.
-- **By hand.** Settings › Styles › New Style…: name, sentence and guide. Edit… changes them; the parts are files, so Show in Finder opens the folder. Move to Trash… asks first; films that use it keep their copy.
+- **By hand.** Settings › Styles › New Style…, or New Style › Write One… in the brief: name, sentence and guide. Edit… changes them; the parts are files, so Show in Finder opens the folder. Move to Trash… asks first; films that use it keep their copy.
 - `direction_save_style` writes only into the Styles folder: a new style with `name`, or changes to one with `id`. `tokens` merge key by key into style.json (null removes one), `guide` replaces guide.md, `files` copies parts from the editor's working folder to paths inside the style. Nothing else in the folder changes.
 
 ## Settings › Styles (frame 65)

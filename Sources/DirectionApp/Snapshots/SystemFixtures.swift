@@ -12,6 +12,7 @@ enum SystemFixtures {
             "54-settings-engines": { RunsFixtures.previewPrograms(chosen: true); return settings(.engines, height: 1651) },
             "44-settings-cutting": { settings(.cutting, height: 789) },
             "65-settings-styles": { settings(.styles, height: 789) },
+            "66-brief-style-list": { SnapshotScene(size: CGSize(width: 460, height: 420), StyleList(styles: StyleSamples.styles, chosen: "desk-talk") { _ in }.frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground).preferredColorScheme(.dark)) },
             "45-settings-notifications": { settings(.notifications, height: 789) },
             "46-settings-shortcuts": { settings(.shortcuts, height: 789, recording: .region) },
             "47-settings-storage": { settings(.storage, height: 789) },
