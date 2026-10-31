@@ -38,8 +38,7 @@ extension ToolRuntime {
 
         case "direction_edit_catalog":
             var custom: [JSONValue] = [], problems: [JSONValue] = []
-            let folder = store.url.appendingPathComponent("Effects")
-            for file in ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []).filter({ $0.pathExtension == "metal" }).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            for file in editorFiles("Effects", "metal") {
                 let path = "Effects/" + file.lastPathComponent
                 do {
                     let params = try ShaderEffect.declared(source: try String(contentsOf: file, encoding: .utf8))
@@ -121,12 +120,22 @@ extension ToolRuntime {
         }
     }
 
-    /// `Effects/<name>.metal` inside the film, and nowhere else.
+    /// `Effects/<name>.metal` in the editor's folder (`<film>/Editor/`, where it works), or in the film
+    /// itself for films from before, and nowhere else.
     private func shaderSource(_ file: String) throws -> String {
-        let folder = store.url.appendingPathComponent("Effects").standardizedFileURL
-        let url = store.url.appendingPathComponent(file).standardizedFileURL
-        guard url.pathExtension == "metal", url.deletingLastPathComponent().path == folder.path else { throw DirectionError("bad_argument", "A shader lives in the film's Effects folder: \"Effects/<name>.metal\".") }
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else { throw DirectionError("missing_media", "There's no \(file) in this film.") }
+        let parts = file.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2, parts[0] == "Effects", parts[1].hasSuffix(".metal"), !parts[1].hasPrefix(".") else { throw DirectionError("bad_argument", "A shader lives in the Effects folder of your working folder: \"Effects/<name>.metal\".") }
+        guard let url = editorFiles("Effects", "metal").first(where: { $0.lastPathComponent == parts[1] }), let text = try? String(contentsOf: url, encoding: .utf8) else { throw DirectionError("missing_media", "There's no \(file) in this film.") }
         return text
+    }
+
+    /// The files of one kind in a folder of the editor's working folder, then the film's own for films
+    /// from before it had one; a name in both is the editor's.
+    func editorFiles(_ folder: String, _ ext: String) -> [URL] {
+        var seen = Set<String>(), out: [URL] = []
+        for base in [store.url.appendingPathComponent("Editor/" + folder), store.url.appendingPathComponent(folder)] {
+            for file in ((try? FileManager.default.contentsOfDirectory(at: base, includingPropertiesForKeys: nil)) ?? []).filter({ $0.pathExtension == ext }).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) where seen.insert(file.lastPathComponent).inserted { out.append(file) }
+        }
+        return out.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 }

@@ -159,7 +159,7 @@ Balance and camera LUTs have their own operations. Transitions: `dissolve`, `dip
 
 ### Custom effects (shaders)
 
-When no catalog effect does what a note needs, the editor may write a Metal fragment function in `Effects/<name>.metal`, then use it with `addEffect` (`effect: "shader"`):
+When no catalog effect does what a note needs, the editor may write a Metal fragment function in `Effects/<name>.metal` in its working folder (`<film>.direction/Editor/`; films from before it had one keep theirs in `<film>.direction/Effects/`), then use it with `addEffect` (`effect: "shader"`):
 
 ```metal
 // direction: param amount 0 1 0.5

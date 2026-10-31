@@ -87,7 +87,7 @@ struct TimelineRenderTests {
 
     @Test func aShaderTheEditorWroteRunsOnTheGPU() async throws {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
-        let effects = f.store.url.appendingPathComponent("Effects")
+        let effects = f.store.url.appendingPathComponent("Editor/Effects")
         try FileManager.default.createDirectory(at: effects, withIntermediateDirectories: true)
         try """
         // direction: param amount 0 1 1
