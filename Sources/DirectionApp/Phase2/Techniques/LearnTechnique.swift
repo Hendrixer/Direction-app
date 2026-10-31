@@ -107,14 +107,18 @@ struct LearnTechniqueSheet: View {
 struct TechniquesGroup: View {
     var preview = false
     @State private var techniques: [Technique] = []
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        SettingsGroup(label: "Techniques", note: AnyView(SettingsNote("Ways of doing one thing the same way every time, often learned from a tutorial: Film \u{203A} Learn a Technique\u{2026} gives the editor a video to learn from. A style can name them for its moments, and so can a note."))) {
+        SettingsGroup(label: "Techniques", note: AnyView(SettingsNote("Ways of doing one thing the same way every time, often learned from a tutorial: Film \u{203A} Learn a Technique\u{2026} gives the editor a video to learn from. A style can name them for its moments, and so can a note: type @ and pick one."))) {
+            SettingsRow(label: "Library", detail: "Every transition, move and effect, with a preview of each.", first: true) {
+                Button("Open Library") { if !preview { openWindow(id: "library") } }.buttonStyle(.gate)
+            }
             if techniques.isEmpty {
-                SettingsRow(label: "No techniques yet", detail: "Learn one from a video with Film \u{203A} Learn a Technique\u{2026}.", first: true) { EmptyView() }
+                SettingsRow(label: "No techniques yet", detail: "Learn one from a video with Film \u{203A} Learn a Technique\u{2026}.", first: false) { EmptyView() }
             }
             ForEach(Array(techniques.enumerated()), id: \.element.id) { i, t in
-                SettingsRow(label: t.name, detail: [t.summary, Self.line(t)].filter { !$0.isEmpty }.joined(separator: "\n"), first: i == 0, minHeight: 56) {
+                SettingsRow(label: t.name, detail: [t.summary, Self.line(t)].filter { !$0.isEmpty }.joined(separator: "\n"), first: false, minHeight: 56) {
                     Button { if !preview { NSWorkspace.shared.activateFileViewerSelecting([t.url]) } } label: { Image(systemName: "folder") }
                         .buttonStyle(.gate(.normal, .regular, icon: true)).help("Show in Finder")
                 }

@@ -74,6 +74,9 @@ struct BriefForm: View {
     var missing: Set<OnboardingSession.Field>
     var compact = false
     @FocusState private var focus: Field?
+    /// Where the caret is in the fields that take "@" (techniques.md › The library).
+    @State private var feelingCaret: TextSelection?
+    @State private var avoidCaret: TextSelection?
     @State private var adding = false
     @State private var newTag = ""
     @State private var minText = ""
@@ -104,8 +107,9 @@ struct BriefForm: View {
                 if missing.contains(.logline) && brief.logline.isEmpty { needed }
             }
             question("How should it feel?", "Required") {
-                TextField("", text: $brief.feeling, axis: .vertical)
+                TextField("", text: $brief.feeling, selection: $feelingCaret, axis: .vertical)
                     .lineLimit(3...)
+                    .libraryMentions(text: $brief.feeling, selection: $feelingCaret)
                     .modifier(BriefBigField(focused: focus == .feeling, error: missing.contains(.feeling) && brief.feeling.isEmpty, minHeight: 88))
                     .startPlaceholder("Tired, then proud. Quiet, not triumphant.", shown: brief.feeling.isEmpty, font: .system(size: 17), alignment: .topLeading, inset: .init(top: 12, leading: 14, bottom: 0, trailing: 14))
                     .focused($focus, equals: .feeling)
@@ -135,7 +139,8 @@ struct BriefForm: View {
                 Button("Add\u{2026}", action: chooseReference).buttonStyle(.gate(.ghost, .small)).help("Add a clip or still")
             }) { references }
             question("Avoid", "Optional") {
-                TextField("", text: Binding(get: { brief.avoid ?? "" }, set: { brief.avoid = $0.isEmpty ? nil : $0 }))
+                TextField("", text: Binding(get: { brief.avoid ?? "" }, set: { brief.avoid = $0.isEmpty ? nil : $0 }), selection: $avoidCaret)
+                    .libraryMentions(text: Binding(get: { brief.avoid ?? "" }, set: { brief.avoid = $0.isEmpty ? nil : $0 }), selection: $avoidCaret)
                     .gateField(focused: focus == .avoid).startPlaceholder("Stock music swells", shown: (brief.avoid ?? "").isEmpty).focused($focus, equals: .avoid)
                     .accessibilityLabel("Avoid")
             }

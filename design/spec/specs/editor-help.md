@@ -19,6 +19,23 @@ What Direction already does that they built by hand: timecoded notes that reach 
 
 The same split as layouts, for what a style does to the picture: the editor names the moment, Direction does the math. `punchIn` (framing changes on every jump cut, on the face), `emphasisPunch` (one line cut in and out) and `slowPush` (a creep across a long take), with the style's numbers (agent-timeline.md). Then the style's transitions by name with their sound under the cut, and screen zooms Screen Studio-style: `autoZoom` finds where the action is from what changes on screen four times a second (the cursor OBS records into the picture, clicks, typing; a new page ends a moment) and `zoomTo` a point or words found on screen. On the director's real 4K screen recording a minute is looked at in 17 s the first time, then read back. Next: speeding up stretches where the screen doesn't change, and techniques learned from tutorial videos (techniques.md).
 
+## From Diffusion Studio (studied 31 Oct 2026)
+
+Its editor gives the agent no edit tools: the agent edits the project's JSX files, and 18 inspect-and-verify tools check the work. The ideas worth taking, in order:
+
+1. **`direction_check` after every edit, no render.** Coded issues with ranges and how bad each is: a gap, a black or frozen stretch, a clip that's never seen, a cut inside a word, a caption under a graphic, missing media, a made shot that didn't pass. `direction_turnover_complete` refuses while there are errors. (Its `check`: black-frames, no-visuals, never-visible, zero-duration, source-error.) This is item 2 above, now with a shape.
+2. **Moves and graphics anchored to words.** Its keyframes run on the source's clock, so they stay on the same footage when the head is trimmed. Direction's punch-ins, zooms and graphics would hold to their word ids when removeWords or tightenPauses changes things before them.
+3. **Error messages that name the fix**, from a closed set of codes: "w_481 was removed by removeWords at revision 14; the line now starts at w_482."
+4. **Frames where something changes.** Its `grab auto` scans at 2 fps and keeps a frame only when the picture settles into something new, skipping transitions. Contact sheets of a take or the cut would pick their frames that way instead of every N seconds.
+5. **Sheets sized for reading.** At most 2576×1456, the grid chosen so each cell is as big as it can be, labelled with its time, at most 4 images returned inline, the rest as paths.
+6. **A waveform as a picture and numbers**: silences shaded and cuts marked, with the silent ranges listed.
+7. **Big results as files.** Its transcribe returns a path and counts and says to search the file; Direction's transcript tool would return words by query by default.
+8. **One time format everywhere**: seconds, `45f` or `MM:SS` in, seconds out.
+9. **A depth ladder for watching**: stop at the first look that answers the question (the transcript, then a sheet, then frames), and let the sound choose which frames to look at.
+10. **Graphics checked for determinism**: render a graphic at a later time, then an earlier one, and compare with the forward order, to catch animations that depend on what played before.
+
+Already here: contact sheets, word-level transcripts, the footage index, jobs and the brief, house style, estimates, revisions.
+
 ## Not worth it
 
 - **HyperFrames for graphics.** It renders HTML in headless Chrome with FFmpeg; Direction already renders JavaScript graphics itself, checked and cached, with no Chrome. Its lessons are already here (seek-based rendering, no clocks or randomness, findings with crops).

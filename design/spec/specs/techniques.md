@@ -19,6 +19,15 @@ Techniques/light-leak/
 - **Where it's used**: a style names techniques for its moments (a transition `{name: "Chapter", technique: "Grid flash", variant?: "Big"}`, its own settings over the technique's); the brief or a note can name one ("grid flash here"). `direction_techniques` lists them with when to use each, `direction_technique` reads one, and the edit `technique` (`name`, `editPoint` or `clipID`, `variant?`, `frames?`, `params?`) becomes the transition or effect it makes: its Metal compiled and timed, its sound under the cut. A recipe isn't run; the editor follows its steps.
 - **On disk**: `Techniques/<id>/technique.json` (`name`, `summary`, `kind`, `when`, `needs`, `transition` or `effect` or `steps`, `variants`, `source`, `updatedAt`) and its files, in the Techniques folder (`~/Movies/Direction/Techniques`, `DIRECTION_TECHNIQUES_PATH` for a process; tests get their own). Settings › Styles lists them under Techniques.
 
+## The library
+
+**Window › Library** (also Settings › Styles › Open Library): every transition, move and effect the director can name, in one place. Direction's own come first (nine transitions, four moves: punch in, emphasis punch, slow push, screen zoom; eleven film looks: black and white, split tone, faded, halation, bloom, soften, color fringe, vignette, film grain, gate weave, letterbox), then the techniques learned from tutorials ("Learned").
+
+- **Each has an icon of its own**: an SF Symbol, monochrome (icons.md), in a small tile, the same in the library, the @ list and anywhere else it shows. Direction's own are fixed (`LibraryCatalog.builtIns`); a technique names one (`icon`), and one that names none or one already used gets a spare.
+- **Each has a preview**: three seconds at 640×360 on made-up shots drawn on this Mac (a sunset, a city at night, a figure walking, a screen with a cursor), so none of the director's footage is in it. Direction's own are made the first time the library opens, in the background, one at a time; a technique's when it's saved and again when it changes. Kept in the caches folder (`Library/v<n>/`).
+- **The window**: a search field, All · Transitions · Moves · Effects · Learned, and cards (the preview's poster, playing while the pointer is on it; icon, name, one line). The chosen one shows at the side: its preview playing, what it is, when to use it and what it needs, its variants, where it was learned (a link), and "@Name". Learn a Technique… is there too while a film is open.
+- **"@" in a note or the brief** (the feeling and avoid fields) opens the same list at the caret (notes.md). The editor gets each named one explained with the note (`libraryNamed` in `direction_turnovers`, a line under the note in the job) or the brief, and `direction_techniques` lists Direction's own beside the techniques.
+
 ## Learning one from a video
 
 **Film › Learn a Technique…** (sheet `learn-technique`): paste a link or choose a file, and say what to take from it ("the light leak at 3:20").

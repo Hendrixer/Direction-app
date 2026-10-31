@@ -1,9 +1,11 @@
 import SwiftUI
 import AppKit
+import DirectionCore
 
 /// The multi-line note field (`.field.area`). A real text view, so it checks spelling and
 /// grammar as you type like any Mac text field. ↩ submits, ⇧↩ adds a line, ⇥ takes the
-/// editor's suggested kind, ⌥1–⌥5 set the kind, esc stops writing.
+/// editor's suggested kind, ⌥1–⌥5 set the kind, esc stops writing. "@" opens the library at the
+/// caret (techniques.md › The library); a name picked from it shows in the director's color.
 struct NoteField: View {
     @Binding var text: String
     var placeholder: String
@@ -121,8 +123,12 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
         view.typingAttributes = [.font: NoteTextMetrics.font, .foregroundColor: NSColor(Gate.Text.primary), .paragraphStyle: paragraph]
         view.string = text
         view.delegate = context.coordinator
+        context.coordinator.highlight(view)
         view.setAccessibilityLabel(label)
-        view.onFocusChange = { focused in context.coordinator.parent.onFocusChange(focused) }
+        view.onFocusChange = { focused in
+            if !focused { context.coordinator.closeMention() }
+            context.coordinator.parent.onFocusChange(focused)
+        }
         view.onOptionDigit = onOptionDigit.map { _ in { digit in context.coordinator.parent.onOptionDigit?(digit) } }
         scroll.documentView = view
         context.coordinator.focusToken = focusToken
@@ -135,6 +141,7 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
         if view.string != text {
             view.string = text
             view.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+            context.coordinator.highlight(view)
         }
         view.setAccessibilityLabel(label)
         view.onOptionDigit = onOptionDigit.map { _ in { digit in context.coordinator.parent.onOptionDigit?(digit) } }
@@ -158,6 +165,78 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
             guard let view = notification.object as? NSTextView else { return }
             parent.text = view.string
             measure(view)
+            highlight(view)
+            updateMention(view)
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let view = notification.object as? NSTextView, mention != nil else { return }
+            updateMention(view)
+        }
+
+        // MARK: "@"
+
+        var mention: (range: NSRange, query: String)?
+        var items: [LibraryEntry] = []
+        var selected = 0
+        var popover: NSPopover?
+        weak var textView: NSTextView?
+
+        /// Opens, narrows or closes the library at the "@" before the caret.
+        func updateMention(_ view: NSTextView) {
+            textView = view
+            let library = LibraryModel.shared
+            if library.entries.isEmpty { library.load() }
+            let sel = view.selectedRange()
+            guard view.window?.firstResponder === view, sel.length == 0, let t = MentionToken.find(view.string, caret: sel.location) else { closeMention(); return }
+            let found = Array(library.search(t.query).prefix(6)), q = t.query.lowercased().trimmingCharacters(in: .whitespaces)
+            // A whole name written and a space after it: done.
+            if found.isEmpty || (t.query.hasSuffix(" ") && found.contains { $0.name.lowercased() == q }) { closeMention(); return }
+            if mention?.range.location != t.range.location { selected = 0 }
+            mention = t; items = found; selected = min(selected, found.count - 1)
+            showMention(view, at: t.range)
+        }
+
+        func showMention(_ view: NSTextView, at range: NSRange) {
+            let content = MentionList(items: items, selected: selected) { [weak self] e in self?.pickMention(e) }
+            if let popover, popover.isShown, let host = popover.contentViewController as? NSHostingController<MentionList> { host.rootView = content; return }
+            guard let layout = view.layoutManager, let container = view.textContainer else { return }
+            var rect = layout.boundingRect(forGlyphRange: layout.glyphRange(forCharacterRange: NSRange(location: range.location, length: 1), actualCharacterRange: nil), in: container)
+            rect.origin.x += view.textContainerOrigin.x; rect.origin.y += view.textContainerOrigin.y
+            let p = NSPopover()
+            p.contentViewController = NSHostingController(rootView: content)
+            p.behavior = .applicationDefined; p.animates = false
+            p.show(relativeTo: rect, of: view, preferredEdge: .maxY)
+            popover = p
+            // Typing carries on in the note.
+            view.window?.makeFirstResponder(view)
+        }
+
+        func closeMention() {
+            popover?.close(); popover = nil; mention = nil; items = []
+        }
+
+        func pickMention(_ e: LibraryEntry) {
+            guard let view = textView, let m = mention else { return }
+            closeMention()
+            view.insertText("@\(e.name) ", replacementRange: m.range)
+        }
+
+        /// Names from the library in the note, in the director's color.
+        func highlight(_ view: NSTextView) {
+            guard let layout = view.layoutManager else { return }
+            let s = view.string as NSString, all = NSRange(location: 0, length: s.length)
+            layout.removeTemporaryAttribute(.foregroundColor, forCharacterRange: all)
+            guard s.contains("@") else { return }
+            for e in LibraryModel.shared.entries {
+                var from = 0
+                while from < s.length {
+                    let r = s.range(of: "@" + e.name, options: .caseInsensitive, range: NSRange(location: from, length: s.length - from))
+                    guard r.location != NSNotFound else { break }
+                    layout.addTemporaryAttribute(.foregroundColor, value: NSColor(Gate.Voice.director), forCharacterRange: r)
+                    from = r.location + r.length
+                }
+            }
         }
 
         func measure(_ view: NSTextView) {
@@ -171,6 +250,16 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
         }
 
         func textView(_ view: NSTextView, doCommandBy selector: Selector) -> Bool {
+            // While the library is open at "@", the arrows move through it and ↩ or ⇥ picks.
+            if mention != nil, !items.isEmpty {
+                switch selector {
+                case #selector(NSResponder.moveDown(_:)): selected = min(items.count - 1, selected + 1); showMention(view, at: mention!.range); return true
+                case #selector(NSResponder.moveUp(_:)): selected = max(0, selected - 1); showMention(view, at: mention!.range); return true
+                case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)): pickMention(items[selected]); return true
+                case #selector(NSResponder.cancelOperation(_:)): closeMention(); return true
+                default: break
+                }
+            }
             switch selector {
             case #selector(NSResponder.insertNewline(_:)):
                 if NSApp.currentEvent?.modifierFlags.contains(.shift) == true {

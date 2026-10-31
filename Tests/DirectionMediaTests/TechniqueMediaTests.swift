@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CoreImage
+import AVFoundation
 import DirectionCore
 @testable import DirectionMedia
 @testable import DirectionTools
@@ -91,5 +92,38 @@ import DirectionCore
         #expect(cut.transition?.type == "shader" && cut.transition?.frames == 14 && cut.transition?.params?["strength"]?.double == 0.5)
         let tick = try #require(p.sequences[0].clips.first { $0.kind == .audio && $0.layer >= 2 })
         #expect(tick.gainDB == -16 && p.assets.first { $0.id == tick.assetID }?.path.hasPrefix(folder.path) == true)
+    }
+}
+
+/// The library's previews (techniques.md › The library): every entry plays on the same made-up shots.
+@Suite(.serialized) struct LibraryPreviewTests {
+    @Test func everyKindOfEntryRendersAPreviewAndAPoster() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("direction-previews-" + UUID().uuidString)
+        defer { if ProcessInfo.processInfo.environment["DIRECTION_KEEP_PREVIEWS"] == nil { try? FileManager.default.removeItem(at: root) } }
+        let pick = ["builtin-whip", "builtin-punchIn", "builtin-halation", "builtin-screenZoom", "builtin-dipToBlack"]
+        var entries = LibraryCatalog.builtIns.filter { pick.contains($0.id) }
+        entries.append(LibraryEntry(id: "pixel-grid", name: "Pixel grid", kind: "effect", summary: "", icon: "squareshape.split.3x3", use: "",
+                                    technique: Technique(id: "pixel-grid", url: root, tokens: .object(["name": .string("Pixel grid"), "kind": .string("effect"), "effect": .object(["name": .string("pixelGrid"), "params": .object(["cells": .number(12)])])]))))
+        for e in entries {
+            let subject = try #require(LibraryPreviews.subject(for: e))
+            let out = root.appendingPathComponent(e.id + ".mp4")
+            try await LibraryPreviews.render(subject, to: out, cacheDirectory: root.appendingPathComponent("cache"))
+            let length = try await AVURLAsset(url: out).load(.duration).seconds
+            #expect(abs(length - 3) < 0.1, "\(e.name) is \(length) s")
+            #expect(FileManager.default.fileExists(atPath: out.deletingPathExtension().appendingPathExtension("jpg").path), "\(e.name) has a poster")
+        }
+        // Every one of Direction's own has a preview to make.
+        #expect(LibraryCatalog.builtIns.allSatisfy { LibraryPreviews.subject(for: $0) != nil })
+    }
+}
+
+/// Makes every preview in the library into DIRECTION_CACHE_DIR, for snapshots; only when asked.
+@Suite(.serialized) struct LibraryPreviewBatch {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRECTION_RENDER_LIBRARY"] != nil)) func renderEveryPreview() async throws {
+        for e in LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder)) {
+            guard let subject = LibraryPreviews.subject(for: e) else { continue }
+            let url = ToolRuntime.previewURL(for: e)
+            if !FileManager.default.fileExists(atPath: url.path) { try await LibraryPreviews.render(subject, to: url, cacheDirectory: DirectionPaths.caches) }
+        }
     }
 }

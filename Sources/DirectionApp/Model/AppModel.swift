@@ -18,6 +18,7 @@ final class AppModel {
     @ObservationIgnored @AppStorage("lastFilm") var lastFilm = ""
 
     func start() {
+        LibraryModel.shared.load()
         let info = Bundle.main.infoDictionary
         DirectionLog.info("Direction \(info?["CFBundleShortVersionString"] as? String ?? "dev") (\(info?["CFBundleVersion"] as? String ?? "?")) started on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
         // Caches of films that are gone: trashed in Finder, or old tests (system.md › Deleting a film).

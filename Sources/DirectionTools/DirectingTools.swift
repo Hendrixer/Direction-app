@@ -83,11 +83,18 @@ extension ToolRuntime {
         case "direction_turnovers":
             let all = try store.turnovers(), notes = try store.notes(), questions = try store.questions()
             let shown = a["includeClosed"].bool == true ? all : all.filter(\.state.isOpen)
+            // "@Name" in a note names something in the library: say what it is and how it's made.
+            let library = LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder))
             let items: [JSONValue] = try shown.map { t in
                 let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }
+                let named: [JSONValue] = included.compactMap { n in
+                    let found = LibraryCatalog.mentions(in: n.text, entries: library)
+                    return found.isEmpty ? nil : .object(["noteID": .string(n.id), "names": .string(LibraryCatalog.explain(found))])
+                }
                 return .object([
                     "turnover": try .wrapping(t),
                     "notes": try .wrapping(included),
+                    "libraryNamed": .array(named),
                     "questions": try .wrapping(questions.filter { $0.turnoverID == t.id }),
                     "latitudeMeaning": .string(t.latitude.detail),
                     "mayStartCutting": .bool(!t.waitForOK || t.readBackApproved || t.kind == "assembly"),

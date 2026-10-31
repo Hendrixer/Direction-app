@@ -9,8 +9,8 @@ extension ToolCatalog {
     static var techniqueDefinitions: [ToolDefinition] { [
         definition("direction_techniques", "List the director's techniques (the Techniques folder): name, one sentence, kind (transition, effect or recipe), when to use it, what the footage needs, its variants, and where it was learned. Reach for one when a style, the brief or a note names it, or when its \"when\" fits and the style leaves you the choice."),
         definition("direction_technique", "Read one technique by name: how it's made (its transition or effect and their settings, or a recipe's steps), its variants, its files with paths, and the tutorial it came from. Use a transition or effect with the technique edit (op technique, name, editPoint or clipID, variant?); follow a recipe's steps yourself.", ["name": string], required: ["name"]),
-        definition("direction_save_technique", "Write a technique into the director's Techniques folder, only in a technique job or when the director asks: a new one with name, or changes to one with id. kind is transition ({type, frames, params?, file: <its Metal, a transitions shader>, sound?, soundDB?}), effect ({name: a built-in effect or shader, params?, file?}) or recipe (steps: edit operations in words with their arguments). summary is one sentence; when says where it belongs; needs what the footage must have. variants are named settings [{name, params?, frames?}]. source is where it was learned {title, url, author, at}. files copies from your working folder into the technique: [{from, to}] (to like transition.metal or sounds/clicks.wav). A transition's Metal is compiled and timed before it's saved. Returns the technique as direction_technique reads it.", [
-            "id": string, "name": string, "summary": string, "kind": string, "when": string, "needs": string,
+        definition("direction_save_technique", "Write a technique into the director's Techniques folder, only in a technique job or when the director asks: a new one with name, or changes to one with id. kind is transition ({type, frames, params?, file: <its Metal, a transitions shader>, sound?, soundDB?}), effect ({name: a built-in effect or shader, params?, file?}) or recipe (steps: edit operations in words with their arguments). summary is one sentence; when says where it belongs; needs what the footage must have. variants are named settings [{name, params?, frames?}]. icon is one simple SF Symbol (monochrome, like square.grid.3x3.fill) that no other entry in the library uses; the director picks techniques by it. source is where it was learned {title, url, author, at}. files copies from your working folder into the technique: [{from, to}] (to like transition.metal or sounds/clicks.wav). A transition's Metal is compiled and timed before it's saved. Returns the technique as direction_technique reads it.", [
+            "id": string, "name": string, "summary": string, "kind": string, "when": string, "needs": string, "icon": string,
             "transition": object, "effect": object, "steps": list(string), "variants": list(object), "source": object,
             "files": .object(["type": .string("array"), "items": record(["from": string, "to": string], required: ["from", "to"])]),
         ], readOnly: false),
@@ -27,7 +27,10 @@ extension ToolRuntime {
                 .object(["id": .string(t.id), "name": .string(t.name), "summary": .string(t.summary), "kind": .string(t.kind), "when": .string(t.when), "needs": .string(t.needs),
                          "variants": .array(t.variants.map { .string($0.name) }), "learnedFrom": t.source["title"].string.map(JSONValue.string) ?? .null])
             }
-            return ToolResponse(.object(["techniques": .array(list), "folder": .string(folder.path)]))
+            // Direction's own transitions, moves and looks are in the director's library too, by the names they use.
+            let own: [JSONValue] = LibraryCatalog.builtIns.map { .object(["name": .string($0.name), "kind": .string($0.kind), "summary": .string($0.summary), "use": .string($0.use)]) }
+            return ToolResponse(.object(["techniques": .array(list), "directionsOwn": .array(own), "folder": .string(folder.path),
+                                         "mentions": .string("A note or the brief can name any of these as @Name.")]))
         case "direction_technique":
             let wanted = try a.requiredString("name")
             guard let t = TechniqueLibrary.find(wanted, in: folder) else { throw notFound(wanted, folder) }
@@ -39,7 +42,7 @@ extension ToolRuntime {
                 files.append((try workingFile(from), to))
             }
             var fields: [String: JSONValue] = [:]
-            for k in ["name", "summary", "kind", "when", "needs", "transition", "effect", "steps", "variants", "source"] where a[k] != .null { fields[k] = a[k] }
+            for k in ["name", "summary", "kind", "when", "needs", "icon", "transition", "effect", "steps", "variants", "source"] where a[k] != .null { fields[k] = a[k] }
             // A transition's or effect's Metal is compiled and timed before anything is written.
             let existing = a["id"].string.flatMap { try? TechniqueLibrary.read(folder.appendingPathComponent($0)) }
             for key in ["transition", "effect"] {
@@ -50,7 +53,14 @@ extension ToolRuntime {
             }
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let t = try TechniqueLibrary.save(id: a["id"].string, fields: fields, files: files, in: folder)
-            return ToolResponse(json(t))
+            // Its preview for the library, made now so the director sees it as soon as it's there.
+            guard case .object(var out) = json(t) else { return ToolResponse(json(t)) }
+            if let entry = LibraryCatalog.entries(techniques: [t]).last, let subject = LibraryPreviews.subject(for: entry) {
+                let preview = Self.previewURL(for: entry)
+                do { try await LibraryPreviews.render(subject, to: preview, cacheDirectory: cacheDirectory); out["preview"] = .string(preview.path) }
+                catch { out["previewProblem"] = .string((error as? DirectionError)?.message ?? error.localizedDescription) }
+            }
+            return ToolResponse(.object(out))
         case "direction_study_frames":
             let video = URL(fileURLWithPath: try a.requiredString("video")).standardizedFileURL
             guard video.path.hasPrefix(store.url.standardizedFileURL.path + "/"), FileManager.default.fileExists(atPath: video.path) else { throw DirectionError("invalid_arguments", "video is the one in your job, inside this film.") }
@@ -60,6 +70,12 @@ extension ToolRuntime {
             return ToolResponse(.object(["frames": .array(made.map { .string($0.path) })]))
         default: return nil
         }
+    }
+
+    /// Where an entry's preview is kept: Direction's own once per preview version, a technique again whenever it changes.
+    public static func previewURL(for entry: LibraryEntry) -> URL {
+        let folder = DirectionPaths.caches.appendingPathComponent("Library/v\(LibraryPreviews.version)", isDirectory: true)
+        return folder.appendingPathComponent(entry.technique.map { "\($0.id)-\(Int($0.updatedAt)).mp4" } ?? "\(entry.id).mp4")
     }
 
     private func notFound(_ name: String, _ folder: URL) -> DirectionError {

@@ -22,6 +22,8 @@ Shared layout (frames 17–24, in pt):
   - A 64-tall text field.
   - The kinds row with **Add ↩** on the right.
 
+**"@" names something in the library** (techniques.md › The library): typing "@" in any note field opens a list at the "@" (icon, name, one line; up to six that match what follows the "@"), ↑↓ move, ↩ or ⇥ picks and writes "@Name ", esc closes it. Names from the library show in the director's amber. The editor reads what each named one is and how to make it with the note.
+
 Note anchors in the composer follow the playhead until you start typing. Then they're pinned, and moving the playhead doesn't change them.
 
 Room keys:

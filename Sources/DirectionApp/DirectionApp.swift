@@ -47,5 +47,9 @@ import DirectionCore
         .commands { DirectionCommands(app: app) }
 
         Settings { SettingsView(app: app).preferredColorScheme(.dark) }
+
+        // The library: every transition, move and effect, with previews (techniques.md › The library).
+        Window("Library", id: "library") { LibraryWindow(app: app) }
+            .defaultSize(width: 1080, height: 700)
     }
 }

@@ -46,3 +46,32 @@ struct TechniqueTests {
         #expect(EditCatalog.operations.contains { $0.op == "technique" } && EditCatalog.effect("pixelGrid") != nil)
     }
 }
+
+/// The library (techniques.md › The library): names the director can use with "@", each with its own icon.
+struct LibraryCatalogTests {
+    private func technique(_ name: String, icon: String? = nil) -> Technique {
+        var o: [String: JSONValue] = ["name": .string(name), "kind": .string("transition"), "summary": .string("s"), "when": .string("w"), "transition": .object(["type": .string("dissolve"), "frames": .number(10)])]
+        if let icon { o["icon"] = .string(icon) }
+        return Technique(id: name.lowercased().replacingOccurrences(of: " ", with: "-"), url: URL(fileURLWithPath: "/tmp/\(name)"), tokens: .object(o))
+    }
+
+    @Test func everyEntryHasAnIconNoOtherHas() {
+        let entries = LibraryCatalog.entries(techniques: [technique("Grid flash", icon: "square.grid.3x3.fill"), technique("Copycat", icon: "wind"), technique("Plain"), technique("Whip")])
+        #expect(Set(entries.map(\.icon)).count == entries.count)
+        // A technique with an icon already taken, or none, gets a spare; one named like Direction's own isn't listed twice.
+        #expect(entries.first { $0.name == "Copycat" }?.icon != "wind" && entries.first { $0.name == "Plain" }?.icon.isEmpty == false)
+        #expect(entries.filter { $0.name == "Whip" }.count == 1 && entries.first { $0.name == "Grid flash" }?.icon == "square.grid.3x3.fill")
+    }
+
+    @Test func atNamesAreFoundWholeAndExplained() {
+        let entries = LibraryCatalog.entries(techniques: [technique("Grid flash")])
+        let found = LibraryCatalog.mentions(in: "Use @grid flash here, then a @Whip. Not an @email or a@Whip.", entries: entries)
+        #expect(found.map(\.name) == ["Grid flash", "Whip"])
+        // Longest name wins: "@Dip to black" isn't a dip and something else.
+        #expect(LibraryCatalog.mentions(in: "@Dip to black into the end", entries: entries).map(\.name) == ["Dip to black"])
+        #expect(LibraryCatalog.mentions(in: "@Whipped cream", entries: entries).isEmpty && LibraryCatalog.mentions(in: "No names here", entries: entries).isEmpty)
+        #expect(LibraryCatalog.mentions(in: "mail me at me@Whip", entries: entries).isEmpty)
+        let said = LibraryCatalog.explain(found)
+        #expect(said.contains("@Grid flash is the transition technique Grid flash") && said.contains("technique edit with name \"Grid flash\"") && said.contains("@Whip is Direction's own transition") && said.contains("type whip"))
+    }
+}

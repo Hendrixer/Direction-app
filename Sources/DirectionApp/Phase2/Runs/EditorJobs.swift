@@ -54,7 +54,8 @@ enum EditorJobs {
             v["circles"] = "The director circled \(dailies.takes.values.filter(\.circled).count) takes."
             v["sync"] = syncRules(dailies, assets: p.assets, layout: try store.directingState().layout, styleLayouts: applied.layouts)
             let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }.sorted { ($0.number ?? 0) < ($1.number ?? 0) }
-            v["notes"] = included.map(noteLine).joined(separator: "\n")
+            let library = LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder))
+            v["notes"] = included.map { noteLine($0, library: library) }.joined(separator: "\n")
             v["waitForOK"] = t.waitForOK
                 ? "The director wants to OK the read-back before you cut. Post it, then end your turn with finished: false; Direction continues this session when they approve."
                 : "The director doesn\u{2019}t need to OK the read-back. Post it, then start cutting."
@@ -146,6 +147,9 @@ enum EditorJobs {
         for k in brief.mustKeep { b.append("- Must keep: \(k)") }
         for r in brief.references { b.append("- Reference: \(r.title). \(r.why)") }
         if let a = brief.avoid, !a.isEmpty { b.append("- Avoid: \(a)") }
+        // "@Name" in the brief names something in the library.
+        let named = LibraryCatalog.mentions(in: [brief.logline, brief.feeling, brief.avoid ?? ""].joined(separator: "\n"), entries: LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder)))
+        if !named.isEmpty { b.append("- Named in the brief: \(LibraryCatalog.explain(named))") }
         b.append(contentsOf: styleLines(applied))
         let prefs = state.preferences ?? EditorPreferences()
         let order = prefs.conflictOrder.map(\.label).joined(separator: " \u{203A} ")
@@ -164,13 +168,14 @@ enum EditorJobs {
     private static func minutes(_ s: Double) -> String { String(format: "%d:%02d", Int(s) / 60, Int(s) % 60) }
 
     /// "- Note 3 (Picture, at 01:12:08): Tighter on her. The sky is winning."
-    private static func noteLine(_ c: ReviewComment) -> String {
+    private static func noteLine(_ c: ReviewComment, library: [LibraryEntry] = []) -> String {
         var anchor = "the whole cut"
         if let r = c.range { anchor = EditorActivityLog.timecode(r.start.seconds, 24) + "\u{2013}" + EditorActivityLog.timecode(r.end.seconds, 24) }
         else if let t = c.time { anchor = "at " + EditorActivityLog.timecode(t.seconds, 24) }
         else if let line = c.scriptAction?.lineLabel { anchor = line }
         let about = [c.kind?.label, anchor].compactMap { $0 }.joined(separator: ", ")
-        return "- Note \(c.number.map(String.init) ?? "\u{2013}") (\(about)): \(c.text)"
+        let named = LibraryCatalog.mentions(in: c.text, entries: library)
+        return "- Note \(c.number.map(String.init) ?? "\u{2013}") (\(about)): \(c.text)" + (named.isEmpty ? "" : "\n  (\(LibraryCatalog.explain(named)))")
     }
 
     // MARK: The working folder
