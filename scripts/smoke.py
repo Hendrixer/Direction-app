@@ -76,6 +76,28 @@ class MCP:
     def tool(self, name, arguments=None):
         return self.request("tools/call", {"name": name, "arguments": arguments or {}})
 
+    def all_at_once(self, calls):
+        """Sends every tool call before reading any reply, as an editor running calls in parallel does.
+        Returns the replies by id, or raises if a line isn't JSON (two replies written into each other)."""
+        ids = []
+        for name, arguments in calls:
+            self.counter += 1
+            ids.append(self.counter)
+            self.send({"jsonrpc": "2.0", "id": self.counter, "method": "tools/call", "params": {"name": name, "arguments": arguments}})
+        replies, deadline = {}, time.monotonic() + 90
+        while len(replies) < len(ids) and time.monotonic() < deadline:
+            while b"\n" in self.buffer:
+                line, self.buffer = self.buffer.split(b"\n", 1)
+                response = json.loads(line)
+                if response.get("id") in ids:
+                    replies[response["id"]] = response
+            if len(replies) < len(ids) and select.select([self.process.stdout], [], [], 1)[0]:
+                data = os.read(self.process.stdout.fileno(), 65536)
+                if not data:
+                    raise RuntimeError("MCP exited before responding")
+                self.buffer += data
+        return replies
+
     def __exit__(self, *args):
         self.process.stdin.close()
         try:
@@ -137,6 +159,12 @@ with MCP() as mcp:
     check(initialized["serverInfo"]["name"] == "Direction", "Official MCP initialization succeeds")
     listing = mcp.request("tools/list", {})
     check(len(listing["tools"]) >= 25, "MCP exposes the shared tool catalog")
+    # An editor sends calls in parallel; each reply here is bigger than the pipe holds at once.
+    try:
+        together = mcp.all_at_once([("direction_capabilities", {})] * 6)
+    except json.JSONDecodeError:
+        together = {}
+    check(len(together) == 6 and all(not r["result"].get("isError") for r in together.values()), "MCP answers calls sent all at once, each reply whole")
     response = mcp.tool("direction_feedback_context", {"commentID": comment["id"]})
     check(not response.get("isError"), "MCP reads contextual feedback")
     images = [base64.b64decode(c["data"]) for c in response["content"] if c["type"] == "image"]

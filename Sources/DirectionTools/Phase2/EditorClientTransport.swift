@@ -7,14 +7,25 @@ import DirectionCore
 /// Codex 0.164 sends `capabilities.experimental: {"codex/auth-change": {}}`; the SDK reads
 /// `experimental` as `[String: String]` and fails the handshake, so Codex never sees Direction's
 /// tools. Experimental capabilities mean nothing to Direction, so they're dropped on the way in.
+///
+/// Replies also go out one at a time. The SDK writes a reply bigger than the pipe holds in parts,
+/// waiting between them, and a second reply written in that wait landed inside the first: both
+/// arrived as lines the editor couldn't read, so it waited for answers forever (an assembly that
+/// asked for eight passages at once never got them).
 public actor EditorClientTransport: Transport {
     private let inner: StdioTransport
+    private var lastSend: Task<Void, Error>?
     public nonisolated var logger: Logger { inner.logger }
     public init(_ inner: StdioTransport = StdioTransport()) { self.inner = inner }
 
     public func connect() async throws { try await inner.connect() }
     public func disconnect() async { await inner.disconnect() }
-    public func send(_ data: Data) async throws { try await inner.send(data) }
+    public func send(_ data: Data) async throws {
+        let previous = lastSend, inner = inner
+        let sending = Task { _ = await previous?.result; try await inner.send(data) }
+        lastSend = sending
+        try await sending.value
+    }
     public func receive() -> AsyncThrowingStream<Data, Swift.Error> {
         let upstream = inner
         return AsyncThrowingStream { continuation in
