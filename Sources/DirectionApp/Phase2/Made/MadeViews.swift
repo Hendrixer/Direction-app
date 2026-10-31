@@ -69,6 +69,8 @@ struct MadeProvenance: View {
                 if let from = record.fromText(take: { film.takeCode($0) ?? film.asset($0)?.name ?? "a take" }) { fact("From", from) }
                 if let length = record.lengthText { fact("Length", length) }
                 if let size = record.sharpenedFrom { fact("Sharpened", "From \(size) on this Mac") }
+                // Direction's own look when it arrived (decisions.md); what it found is in the tooltip.
+                if let check = record.check { fact("Checked", check.short).help(check.findings.isEmpty ? "Direction looked at five frames and found nothing broken." : check.findings.joined(separator: " ")) }
                 fact("Spent", record.spentText)
                 fact("For", record.noteID.map { "Note \(film.noteNumber($0))" } ?? "Unasked")
             }

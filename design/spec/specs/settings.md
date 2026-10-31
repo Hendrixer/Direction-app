@@ -200,7 +200,7 @@ What it recommends (`EngineAdvice`):
 - **Editor:** the chosen program while it's installed, else whichever is (Claude Code first). Your own session is left alone.
 - Use Recommended sets those three and nothing else. Defaults already follow it: a Mac with 32 GB or more starts on Best.
 
-**Who edits**: as specified in `editor.md › 43` (Editor runs on, Version, Start work, Let the editor run scripts).
+**Who edits**: as specified in `editor.md › 43` (Editor runs on, Version, Effort, Start work, Let the editor run scripts).
 
 **Transcription** and **Looking at footage**
 
@@ -236,7 +236,7 @@ There are no per-kind version selects: the director chooses how good against how
 |---|---|---|---|---|
 | Spending | Ask before spending more than | Select: $1.00 / $5.00 / $10.00 / $25.00 / $50.00 per turnover. Sub-label: "The editor prices each turnover's plan first, and asks only when it goes over." | $5.00 per turnover | A plan over this needs a yes to one spend question (frame 62). Under it, the editor just makes it. |
 | Spending | Stop for the month at | Select: $25.00 / $50.00 / $100.00 / $250.00 / No limit | $50.00 | Nothing is made past this. |
-| Spending | Spent this month | Meter (like Storage's), one segment per kind, with a legend: Music $0.36, New shots $12.40, Looking at footage $0.04 | — | Read-only. "$12.80 of $50.00" in SF Mono on the right of the row. |
+| Spending | Spent this month | Meter (like Storage's), one segment per kind, with a legend: Music $0.36, New shots $12.40, Looking at footage $0.04, Checking $0.01 | — | Read-only. "$12.80 of $50.00" in SF Mono on the right of the row. Checking is Direction looking at what was made (decisions.md); kinds under half a cent aren't shown. |
 
 Note under the key: "Your key is kept in your Mac's keychain. The editor never sees it; Direction makes every request."
 Note under Spending: "Check each version's terms on OpenRouter before you release a film. Some don't cover film or TV."

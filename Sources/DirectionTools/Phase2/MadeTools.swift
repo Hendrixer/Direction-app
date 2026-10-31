@@ -379,18 +379,42 @@ extension ToolRuntime {
             if !r.version.isLocal { try? SpendLedger.release(r.spendID, charged: made.isEmpty ? nil : spent) }
             throw error
         }
+        // Direction looks at each way itself before the editor does (decisions.md); a failed look never fails the job.
+        var checks: [Int: Result<MadeCheck, Error>] = [:]
+        if MadeChecker.checks(r.kind) {
+            progress(job, "Checking what came back", 0.95)
+            let filmID = try? store.read().id, kind = r.kind, ask = r.ask, turnoverID = r.turnoverID
+            checks = await withTaskGroup(of: (Int, Result<MadeCheck, Error>).self) { group in
+                for (i, m) in made.enumerated() {
+                    group.addTask { do { return (i, .success(try await MadeChecker.check(m.url, kind: kind, ask: ask, filmID: filmID, turnoverID: turnoverID))) } catch { return (i, .failure(error)) } }
+                }
+                return await group.reduce(into: [:]) { $0[$1.0] = $1.1 }
+            }
+        }
         progress(job, "Bringing it into the film", 0.97)
         var results: [JSONValue] = [], ids: [String] = []
-        for m in made {
+        for (i, m) in made.enumerated() {
             let asset = try await importMade(m.url)
             let seconds = asset.duration.seconds > 0 ? asset.duration.seconds : nil
             let each = r.version.isLocal ? 0 : m.cost ?? r.estimate.spend / Double(r.ways)
-            let record = MadeRecord(assetID: asset.id, kind: r.kind, service: r.version.isLocal ? "local" : "openrouter", version: r.version.id, versionName: r.version.name, asked: r.ask, seconds: seconds ?? r.seconds,
+            var record = MadeRecord(assetID: asset.id, kind: r.kind, service: r.version.isLocal ? "local" : "openrouter", version: r.version.id, versionName: r.version.name, asked: r.ask, seconds: seconds ?? r.seconds,
                                     spend: each, estimate: r.estimate.spend / Double(r.ways), noteID: r.noteID, turnoverID: r.turnoverID, from: r.from, first: r.first?.frame, last: r.last?.frame,
                                     references: r.references.map(\.asset.id), factor: r.factor, sharpenedFrom: m.sharpenedFrom, file: "Made/" + m.url.lastPathComponent, way: r.ways > 1 ? m.way : nil, jobID: job.id)
+            var check: JSONValue?
+            switch checks[i] {
+            case .success(let c)?:
+                record.check = c
+                check = c.forEditor
+                DirectionLog.info("Checked \(record.file): \(c.verdict.rawValue)\(c.findings.isEmpty ? "" : " (" + c.findings.joined(separator: " ") + ")") by \(c.version)", "made")
+            case .failure(let e)?:
+                check = .object(["verdict": .string("unchecked"), "why": .string(e.localizedDescription)])
+                DirectionLog.info("Couldn\u{2019}t check \(record.file): \(e.localizedDescription)", "made")
+            case nil: break
+            }
             try store.saveMade(record)
             ids.append(asset.id)
             var o: [String: JSONValue] = ["assetID": .string(asset.id), "file": .string(record.file), "provenance": try .wrapping(record)]
+            if let check { o["check"] = check }
             if r.kind.isMadeShot && m.sharpenedFrom == nil && Double(r.cut.height) >= Double(asset.video.first?.height ?? r.cut.height) * 1.5 { o["sharpened"] = .bool(false) }
             results.append(.object(o))
         }

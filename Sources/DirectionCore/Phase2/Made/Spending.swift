@@ -4,14 +4,16 @@ import Darwin
 /// What spend is for, in Settings › Engines › Spent this month.
 public enum SpendKind: String, Codable, CaseIterable, Sendable {
     case music, soundEffect, voice, still, shot, `extension`, bridge, changedShot, slowMotion, upscale, looking
+    /// Direction checking what was made (decisions.md).
+    case checking
     /// Legend rows: every kind of shot is "New shots".
     public var group: String {
         switch self {
-        case .music: "Music"; case .soundEffect: "Sound effects"; case .voice: "Voice"; case .still: "Stills"; case .looking: "Looking at footage"
+        case .music: "Music"; case .soundEffect: "Sound effects"; case .voice: "Voice"; case .still: "Stills"; case .looking: "Looking at footage"; case .checking: "Checking"
         case .shot, .extension, .bridge, .changedShot, .slowMotion, .upscale: "New shots"
         }
     }
-    public static let groups = ["Music", "Sound effects", "Voice", "New shots", "Stills", "Looking at footage"]
+    public static let groups = ["Music", "Sound effects", "Voice", "New shots", "Stills", "Looking at footage", "Checking"]
 }
 
 /// One request's money: reserved at its estimate before it's sent, settled at what OpenRouter reported.

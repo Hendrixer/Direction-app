@@ -170,8 +170,9 @@ public enum OpenRouter {
     }
 
     /// One request. Throws OpenRouter's own message on a non-2xx reply. The key goes only in the header.
-    public static func send(_ method: String, _ path: String, query: [URLQueryItem] = [], body: JSONValue? = nil, key: String? = nil, authorized: Bool = true, timeout: TimeInterval = 120) async throws -> Reply {
-        var components = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+    /// `root` is another of OpenRouter's APIs (`Decisions.base`); the rest of Direction uses v1.
+    public static func send(_ method: String, _ path: String, query: [URLQueryItem] = [], body: JSONValue? = nil, key: String? = nil, authorized: Bool = true, timeout: TimeInterval = 120, root: URL? = nil) async throws -> Reply {
+        var components = URLComponents(url: (root ?? base).appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!, timeoutInterval: timeout)
         request.httpMethod = method

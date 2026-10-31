@@ -7,6 +7,7 @@ enum MadeFixtures {
     static var frames: [String: () -> SnapshotScene] {
         [
             "61-changes-made": { changesMade() },
+            "61-made-checked": { madeChecked() },
             "62-notes-spend": { .film(notesSpend()) },
         ]
     }
@@ -42,6 +43,28 @@ enum MadeFixtures {
         return SnapshotScene(ZStack(alignment: .topLeading) {
             FilmWindow(app: nil, model: m)
             MadeProvenance(film: m, record: pianoBed).background(SystemPopBackground()).offset(x: 524, y: 222)
+        })
+    }
+
+    /// A made establishing shot whose check found a face changing at 0:03 (decisions.md).
+    static let duskShot: MadeRecord = {
+        var r = MadeRecord(assetID: "made-dusk-ridge", kind: .shot, version: "minimax/hailuo-3-max", versionName: "MiniMax H3 Max",
+                           asked: "Slow push in. Dusk cloud moves over the ridge; the hikers keep walking toward camera. The ridge holds. Cool, quiet evening.", seconds: 5, spend: 0.40, estimate: 0.40,
+                           noteID: "note-3", turnoverID: "turnover-3", first: MadeFrame(assetID: "take-3a-t2", at: 12), file: "Made/shot-slow-push-in-dusk-9c1e.mp4", way: 2, createdAt: SampleFilm.date(10, 28, 14, 4))
+        let moments = MadeChecker.moments(duration: 5)
+        r.check = MadeChecker.check(from: Decisions.Reply(answers: ["look1": .init(choice: "clean"), "look2": .init(choice: "clean"), "look3": .init(choice: "minor"), "look4": .init(choice: "broken"), "look5": .init(choice: "broken"),
+                                                                     "morph": .init(choice: "moves"), "same": .init(choice: "drifted"), "asked": .init(choice: "yes")], version: Decisions.version, cost: 0.0004),
+                                    moments: moments, now: Date(timeIntervalSince1970: SampleFilm.date(10, 28, 14, 4)))
+        return r
+    }()
+
+    /// The provenance of a checked shot, by itself on the window's surface.
+    private static func madeChecked() -> SnapshotScene {
+        let m = ChangesFixtures.cut4()
+        m.made.records = [duskShot]
+        return SnapshotScene(size: CGSize(width: 420, height: 480), ZStack {
+            Gate.Surface.ground
+            MadeProvenance(film: m, record: duskShot).background(SystemPopBackground())
         })
     }
 

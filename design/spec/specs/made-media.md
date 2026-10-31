@@ -128,6 +128,7 @@ Header: diamond + "Made with <version>" (or "Made on this Mac"). Sub: "<Label> �
 | From | "A012 · 0:12–0:17" (changed shot, slow motion, sharpened); "End of A012" or "Start of A012" (extended shot); "A012 to A015" (bridge); "Still: diner exterior" (a new shot from a still) |
 | Length | "0:05" |
 | Sharpened | "From 1280 × 720 on this Mac" |
+| Checked | "Looks clean", "Slightly off" or "Looks broken at 0:03" (SF Mono): Direction's own look when it arrived (decisions.md › Judging made shots). The tooltip has what it found. Only for new shots, extensions, bridges, changed shots and stills. |
 | Spent | "$1.40", or "Nothing" |
 | For | "Note 3" |
 

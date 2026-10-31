@@ -67,8 +67,10 @@ Versions and prices come from OpenRouter's model lists, cached for a day in `~/L
 Otherwise it returns a job. Poll `direction_job` until its status is `completed`. Its `result` is:
 
 ```json
-{"assetID": "asset-…", "made": [{"assetID": "asset-…", "file": "Made/changedShot-replace-the-overcast-sky-1a2b.mov", "provenance": {"kind": "changedShot", "version": "runway/aleph-2", "versionName": "Aleph 2.0", "asked": "…", "seconds": 5, "spend": 1.4, "from": {"assetID": "…", "start": 12, "end": 17}, "sharpenedFrom": "1280 × 720", "noteID": "…", "turnoverID": "…"}}], "spend": 1.4, "estimate": 1.4}
+{"assetID": "asset-…", "made": [{"assetID": "asset-…", "file": "Made/changedShot-replace-the-overcast-sky-1a2b.mov", "check": {"verdict": "broken", "findings": ["Something looks broken at 0:03."], "frames": [{"at": 0, "verdict": "clean"}, …], "shadow": true}, "provenance": {"kind": "changedShot", "version": "runway/aleph-2", "versionName": "Aleph 2.0", "asked": "…", "seconds": 5, "spend": 1.4, "from": {"assetID": "…", "start": 12, "end": 17}, "sharpenedFrom": "1280 × 720", "noteID": "…", "turnoverID": "…", "check": {…}}}], "spend": 1.4, "estimate": 1.4}
 ```
+
+`check` is Direction's own look at each way of a new shot, extension, bridge, changed shot or still, before you see it. Five frames (start, ¼, ½, ¾, end; a still is one) are each asked whether anything in them is broken, the first and last whether the people and the place stayed the same, all five whether things move or morph, and the whole whether it shows what was asked. `verdict` is the worst it found: `clean`, `minor` or `broken`, with `findings` in words and each frame's verdict at its time in seconds. `{"verdict": "unchecked", "why": …}` when it couldn't look (the shot is still made and paid for). `shadow: true`: the check is new and still being tuned against what the director keeps, so it decides nothing. Use it to know where to look, not instead of looking (make-shot › Judge every frame). Each check costs well under a cent, in Settings › Spent this month under Checking.
 
 How each kind is made:
 

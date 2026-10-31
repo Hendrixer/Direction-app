@@ -64,7 +64,9 @@ Rules for the words:
 
 ## 6. Judge every frame before placing
 
-For each way that comes back, look with `direction_frame` at 0 %, 25 %, 50 %, 75 % and the last frame. Reject it if:
+Each way in the job's result has a `check`: Direction already looked at five frames of it and says `clean`, `minor` or `broken`, with `findings` and the time of each frame it looked at. The check is new and still being tuned (`shadow: true`), so it decides nothing. Use it to know where to look first, not instead of looking: open the frames it names, and if you place a way it called `broken`, say why in your answer. `unchecked` means it couldn't look.
+
+Then look at every way yourself with `direction_frame` at 0 %, 25 %, 50 %, 75 % and the last frame. Reject it if:
 - a face, hand or body changes shape, melts, or stops looking like the same person;
 - anything morphs instead of moving (walls, furniture, objects appearing from nothing);
 - the horizon tilts, the light jumps, or the frame flickers;

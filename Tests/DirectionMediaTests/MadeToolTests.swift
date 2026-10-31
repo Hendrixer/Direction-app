@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import ImageIO
 import DirectionCore
 import DirectionMedia
 @testable import DirectionTools
@@ -146,7 +147,9 @@ private struct MadeFixture {
         #expect(submit["model"].string == "google/veo-3.1" && submit["duration"].double == 8 && submit["resolution"].string == "1080p" && submit["aspect_ratio"].string == "16:9" && submit["generate_audio"].bool == false)
         let frame = submit["frame_images"].array?.first
         #expect(submit["frame_images"].array?.count == 1 && frame?["frame_type"].string == "first_frame" && frame?["image_url"]["url"].string?.hasPrefix("data:image/jpeg;base64,") == true)
-        #expect(polls.used == 4 && stub.requests.last?.url?.query == "index=0")
+        #expect(polls.used == 4 && stub.requests.contains { $0.url?.path.hasSuffix("/videos/vid-1/content") == true && $0.url?.query == "index=0" })
+        // This stub has no answers for the check, so the shot comes in unchecked and says why.
+        #expect(done.result?["made"].array?.first?["check"]["verdict"].string == "unchecked")
         let shotID = try #require(done.result?["assetID"].string)
         let record = try #require(try f.media.store.madeRecord(shotID))
         // As big as the cut already, so it comes in as made.
@@ -265,6 +268,50 @@ private struct MadeFixture {
 
     /// A version that turns a request down for what's in it hands it to the next-best one, and the
     /// result says so (made-media.md › Choosing a version).
+    @Test func eachWayIsCheckedAndACheckThatFailsNeverFailsTheShot() async throws {
+        let movie = try Data(contentsOf: try await MediaFixture.make().source)
+        let asked = Counter()
+        let stub = OpenRouterStub { r, n in
+            let path = r.url!.path
+            if path.hasSuffix("/api/alpha/decisions") {
+                // One way's frames come back broken at the three-quarter mark (0:02 of the 3 s fixture); the other can't be checked.
+                guard asked.next() == 0 else { return (502, data(.object(["error": .object(["message": .string("Provider returned error")])])), [:]) }
+                let answers: [String: JSONValue] = ["look1": "clean", "look2": "clean", "look3": "clean", "look4": "broken", "look5": "clean", "morph": "moves", "same": "same", "asked": "yes"].mapValues { .object(["type": .string("choice"), "choice": .string($0)]) }
+                return (200, data(.object(["model": .string("typesafe/jev-1.14"), "answers": .object(answers), "usage": .object(["cost": .number(0.0004)])])), [:])
+            }
+            if r.httpMethod == "POST" && path.hasSuffix("/videos") { return (202, data(.object(["id": .string("vid-\(n)"), "status": .string("pending")])), [:]) }
+            if path.hasSuffix("/content") { return (200, movie, ["Content-Type": "video/mp4"]) }
+            return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "usage": .object(["cost": .number(0.4)])])), [:])
+        }
+        let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("Static camera. Light moves across the wall."), "seconds": .number(4), "ways": .number(2), "first": .object(["assetID": .string(f.assetID), "at": .number(1)])]
+        let done = try await f.finish(try await f.make(shot))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+
+        // Five frames a way, each a JPEG Jev will take (256 to 1,568 px a side), cited by name.
+        let sent = stub.bodies("/api/alpha/decisions")
+        #expect(sent.count == 2)
+        for body in sent {
+            #expect(body["model"].string == "typesafe/jev-1.14" && body["state"].string?.contains("frame_5") == true && body["questions"]["asked"] != .null)
+            for i in 1...5 {
+                let b64 = try #require(body["assets"]["frame_\(i)"]["data_base64"].string)
+                let jpeg = try #require(Data(base64Encoded: b64))
+                let source = try #require(CGImageSourceCreateWithData(jpeg as CFData, nil))
+                let props = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+                let w = props[kCGImagePropertyPixelWidth] as? Int ?? 0, h = props[kCGImagePropertyPixelHeight] as? Int ?? 0
+                #expect(min(w, h) >= 256 && max(w, h) <= 1568, "frame_\(i) is \(w) × \(h)")
+            }
+        }
+        let checks = try #require(done.result?["made"].array).map { $0["check"] }
+        #expect(Set(checks.compactMap { $0["verdict"].string }) == ["broken", "unchecked"])
+        #expect(checks.contains { $0["findings"].array?.first?.string == "Something looks broken at 0:02." })
+        let records = try f.media.store.madeRecords()
+        #expect(records.count == 2 && records.compactMap(\.check).count == 1 && records.compactMap(\.check).first?.short == "Looks broken at 0:02")
+        // The check's spend is in the month, under Checking; the shots are what they cost.
+        #expect(f.ledger.filter { $0.kind == .checking }.map(\.amount) == [0.0004])
+        #expect(f.ledger.filter { $0.kind == .shot }.reduce(0) { $0 + $1.amount } == 0.8)
+    }
+
     @Test func aVersionThatTurnsItDownHandsItToTheNext() async throws {
         let movie = try Data(contentsOf: try await MediaFixture.make().source)
         let refusal = data(.object(["error": .object(["code": .string("InputImageSensitiveContentDetected.PrivacyInformation"), "message": .string("The request failed because the input image 'content[1]' may contain real person.")])]))
@@ -409,6 +456,11 @@ private func videoStub(_ movie: Data, cost: Double) -> OpenRouterStub {
         if path.hasSuffix("/content") { return (200, movie, ["Content-Type": "video/mp4"]) }
         return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "usage": .object(["cost": .number(cost)])])), [:])
     }
+}
+
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock(); private var n = 0
+    func next() -> Int { lock.withLock { defer { n += 1 }; return n } }
 }
 
 /// Answers each poll of a video job with the next status.
