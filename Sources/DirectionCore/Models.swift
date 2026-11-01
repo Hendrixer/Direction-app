@@ -59,6 +59,8 @@ public struct MediaAsset: Codable, Hashable, Sendable, Identifiable {
     public var madeID: String? = nil
     /// A checked graphic's name (graphics.md): its ProRes 4444 render, with alpha.
     public var graphic: String? = nil
+    /// HDR footage's SDR copy (architecture.md › Color): the original's path.
+    public var sdrCopyOf: String? = nil
     public init(id: String = newID("asset"), name: String, path: String, duration: MediaTime, video: [VideoStream] = [], audio: [AudioStream] = [], fileSize: Int64 = 0, modifiedAt: Double = 0, bookmark: Data? = nil, thumbnailPath: String? = nil) {
         self.id = id; self.name = name; self.path = path; self.duration = duration; self.video = video; self.audio = audio; self.fileSize = fileSize; self.modifiedAt = modifiedAt; self.bookmark = bookmark; self.thumbnailPath = thumbnailPath
     }

@@ -31,7 +31,7 @@ public enum MediaInspector {
                     let pq = kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ as String
                     let hlg = kCMFormatDescriptionTransferFunction_ITU_R_2100_HLG as String
                     if transfer == pq || transfer == hlg {
-                        throw DirectionError("hdr_not_supported", "This first build accepts SDR media. Convert HDR footage to SDR Rec.709 before importing; automatic HDR tone mapping is not implemented.")
+                        throw DirectionError("hdr_not_supported", "\(url.lastPathComponent) is HDR. Direction works in SDR: bring it into a film as footage and Direction makes an SDR copy.")
                     }
                     video.append(.init(id: t.trackID, width: Int(abs(bounds.width)), height: Int(abs(bounds.height)), frameRate: Double(rate), colorPrimaries: ext?[kCMFormatDescriptionExtension_ColorPrimaries] as? String, transferFunction: transfer))
                 } else if t.mediaType == .audio {

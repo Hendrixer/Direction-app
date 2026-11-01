@@ -48,9 +48,25 @@ public actor ToolRuntime {
             return ToolResponse(.object(["project": try .wrapping(p), "sequence": try .wrapping(sequence), "durationSeconds": .number(sequence.duration.seconds), "projectPath": .string(store.url.path), "eventCursor": .number(Double(try store.eventCursor()))]))
         case "direction_import":
             let path = try a.requiredString("path")
-            let asset = try await MediaInspector.inspect(url: URL(fileURLWithPath: NSString(string: path).expandingTildeInPath), thumbnailDirectory: cacheDirectory.appendingPathComponent("Thumbnails"))
-            let p = try store.read()
-            let output = try store.addAsset(asset, append: a["append"].bool ?? false, sequenceID: a["sequenceID"].string, frameRate: a["frameRate"].double.map(FrameRate.nearest), expectedRevision: a["baseEditRevision"].int ?? p.editRevision, key: a["idempotencyKey"].string ?? UUID().uuidString)
+            let original = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL.resolvingSymlinksInPath()
+            var file = original
+            // HDR comes in as an SDR copy in the film's Footage folder; the original stays as it is.
+            if await SDRCopy.isHDR(original) {
+                guard try !store.read().assets.contains(where: { $0.sdrCopyOf == original.path }) else { throw DirectionError("already_imported", "This file is already in the project, as its SDR copy.") }
+                file = try await SDRCopy.make(original, in: MediaAsset.copies(in: store.url))
+            }
+            let output: Project, asset: MediaAsset
+            do {
+                var inspected = try await MediaInspector.inspect(url: file, thumbnailDirectory: cacheDirectory.appendingPathComponent("Thumbnails"))
+                if file != original { inspected.sdrCopyOf = original.path }
+                asset = inspected
+                let p = try store.read()
+                output = try store.addAsset(asset, append: a["append"].bool ?? false, sequenceID: a["sequenceID"].string, frameRate: a["frameRate"].double.map(FrameRate.nearest), expectedRevision: a["baseEditRevision"].int ?? p.editRevision, key: a["idempotencyKey"].string ?? UUID().uuidString)
+            } catch {
+                // A copy no take uses isn't kept.
+                if file != original { try? FileManager.default.removeItem(at: file) }
+                throw error
+            }
             let saved = try output.assets.first(where: { $0.path == asset.path }) ?? output.asset(asset.id)
             return ToolResponse(.object(["asset": try .wrapping(saved), "editRevision": .number(Double(output.editRevision))]))
         case "direction_edit": return try await invokeEdit(a)

@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import AppKit
 import DirectionCore
+import DirectionTools
 @testable import DirectionApp
 
 @Suite("Bringing footage")
@@ -35,6 +36,31 @@ struct FootageImportTests {
         // Nothing half-written is left, and the originals stay where they were.
         #expect(try FileManager.default.contentsOfDirectory(atPath: copies.path).sorted() == ["C0001 2.MP4", "C0001.MP4"])
         #expect(FileManager.default.fileExists(atPath: original.path) && FileManager.default.fileExists(atPath: other.path))
+    }
+
+    /// Dropping a folder again brings in what's new; a file that's already in says nothing.
+    @Test func bringingTheSameFileAgainIsNotAProblem() async throws {
+        let dir = try scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        // A second of quiet: a 48 kHz mono WAV.
+        var wav = Data("RIFF".utf8); let samples = 48_000
+        func u32(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { wav.append(contentsOf: $0) } }
+        func u16(_ v: UInt16) { withUnsafeBytes(of: v.littleEndian) { wav.append(contentsOf: $0) } }
+        u32(UInt32(36 + samples * 2)); wav.append(contentsOf: "WAVEfmt ".utf8); u32(16); u16(1); u16(1); u32(48_000); u32(96_000); u16(2); u16(16)
+        wav.append(contentsOf: "data".utf8); u32(UInt32(samples * 2)); wav.append(Data(count: samples * 2))
+        let sound = dir.appendingPathComponent("narration.wav")
+        try wav.write(to: sound)
+        let store = try ProjectStore.create(at: dir.appendingPathComponent("Film.direction"), name: "Film")
+        let m = FilmModel(preview: false)
+        m.runtime = try ToolRuntime(store: store)
+        m.refresh(force: true)
+        for _ in 0..<2 {
+            m.importFootage([sound])
+            for _ in 0..<500 where m.importingFootage > 0 { try await Task.sleep(for: .milliseconds(20)) }
+        }
+        #expect(m.importingFootage == 0 && m.error == nil, "\(m.error ?? "")")
+        #expect(try store.read().assets.map(\.name) == ["narration.wav"])
+        m.close()
     }
 
     @Test func aCopiedTakeIsFootageButTheEditorsFilesAreNot() {

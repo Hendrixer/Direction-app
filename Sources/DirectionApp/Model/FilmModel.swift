@@ -770,10 +770,18 @@ final class FilmModel {
         importingFootage += urls.count
         if copies != nil { var c = copyingFootage ?? FootageCopying(); c.total += urls.count; copyingFootage = c }
         Task {
+            var toldHDR = false
             for url in urls {
                 var file = url
                 do {
-                    if let copies { file = try await copyIn(url, to: copies) }
+                    // HDR comes in as an SDR copy Direction makes in the Footage folder, so it isn't copied first.
+                    let hdr = await SDRCopy.isHDR(url)
+                    if hdr, !toldHDR {
+                        toldHDR = true
+                        toast = Toast(title: "Making SDR copies", detail: "Your HDR clips come in as SDR copies in the film\u{2019}s Footage folder. The originals stay as they are.")
+                    }
+                    if let copies, !hdr { file = try await copyIn(url, to: copies) }
+                    else if copies != nil, var c = copyingFootage { c.done += 1; copyingFootage = c.done >= c.total ? nil : c }
                     // Footage goes to the library; the editor builds the assembly from circles.
                     var args: [String: JSONValue] = ["path": .string(file.path), "append": .bool(false)]
                     // The film's rate comes from its first footage unless Settings › Cutting names one.
@@ -781,7 +789,8 @@ final class FilmModel {
                     let imported = try await runtime.invoke("direction_import", arguments: .object(args))
                     if let place = places[url.path], let id = imported.value["asset"]["id"].string { perform { try $0.fileTakes([id: place]) } }
                 } catch {
-                    self.error = "\(url.lastPathComponent): \(error.localizedDescription)"
+                    // Dropping a folder again brings in what's new; what's already in isn't a problem.
+                    if (error as? DirectionError)?.code != "already_imported" { self.error = "\(url.lastPathComponent): \(error.localizedDescription)" }
                     // A copy no take uses isn't kept.
                     if file != url { refresh(force: true); if project?.assets.contains(where: { $0.path == file.path }) == false { try? FileManager.default.removeItem(at: file) } }
                 }
