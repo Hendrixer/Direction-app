@@ -6,12 +6,13 @@ import Foundation
 /// what's in it and when may not change. After picture lock the same holds for the whole film, except
 /// the graphics over the picture (captions, titles, lower thirds, credits), which finishing places.
 enum TimelineLocks {
-    static let afterPictureLock: Set<String> = ["balance", "matchBalance", "cameraLUT", "color", "gain", "fade", "duck", "audio", "placeMusic", "syncSound"]
+    static let afterPictureLock: Set<String> = ["balance", "matchBalance", "cameraLUT", "color", "gain", "fade", "duck", "audio", "placeMusic", "parts", "syncSound"]
 
     static func gate(_ op: EditOperation, _ w: EditWork, _ c: EditContext) throws {
         guard c.state.pictureLocked, !afterPictureLock.contains(op.type) else { return }
-        if op.type == "placeMade", op.track?.hasPrefix("A") == true { return }
-        if op.type == "remove", let id = op.clipID, w.s.clips.first(where: { $0.id == id })?.kind == .audio { return }
+        if ["placeMade", "overwrite"].contains(op.type), op.track?.hasPrefix("A") == true { return }
+        // Sound on a track of its own (music, effects) still moves, trims and splits; check keeps the picture.
+        if ["remove", "move", "slip", "trim", "split"].contains(op.type), let id = op.clipID, w.s.clips.first(where: { $0.id == id })?.kind == .audio { return }
         if ["placeGraphic", "title"].contains(op.type) { return }
         if ["move", "remove"].contains(op.type), let id = op.clipID, let clip = w.s.clips.first(where: { $0.id == id }), isGraphic(clip, graphics(w.project)) { return }
         throw DirectionError("picture_locked", "Picture is locked. After picture lock only color, sound and the graphics over the picture change; the director can unlock picture from the Film menu.")

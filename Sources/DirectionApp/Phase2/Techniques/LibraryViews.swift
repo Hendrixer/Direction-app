@@ -114,7 +114,8 @@ struct LibraryWindow: View {
     }
 
     var body: some View {
-        let shown = library.search(query, kind: kind)
+        // A song's parts are in its song here, though a note can name each.
+        let shown = library.search(query, kind: kind).filter { $0.partOf == nil }
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
@@ -179,9 +180,10 @@ struct LibraryWindow: View {
                     chosen = id; return true
                 } isTargeted: { dropping = $0 }
             }
-            if let e = library.entries.first(where: { $0.id == (chosen ?? initial) }) ?? shown.first {
+            if let e = library.entries.first(where: { $0.id == (chosen ?? initial) }).map(library.whole) ?? shown.first {
                 Group {
-                    if let item = e.item { LibraryItemDetail(entry: e, item: item, library: library) { chosen = $0 } } else { LibraryDetail(entry: e, library: library) }
+                    if let parts = e.parts { LibrarySongDetail(entry: e, song: Song(name: e.name, parts: parts), library: library) { chosen = $0 } }
+                    else if let item = e.item { LibraryItemDetail(entry: e, item: item, library: library) { chosen = $0 } } else { LibraryDetail(entry: e, library: library) }
                 }
                 .frame(width: 340).overlay(alignment: .leading) { Rectangle().fill(Gate.Line.subtle).frame(width: 1) }
             }

@@ -19,10 +19,14 @@ public struct LibraryEntry: Hashable, Sendable, Identifiable {
     public var use: String
     /// A technique from the Techniques folder, rather than one of Direction's own.
     public var technique: Technique?
-    /// A sound or an image from the director's library.
+    /// A sound or an image from the director's library; for a song kept in parts, the part that stands for it.
     public var item: ShelfItem?
-    public init(id: String, name: String, kind: String, summary: String, icon: String, use: String, technique: Technique? = nil, item: ShelfItem? = nil) {
-        self.id = id; self.name = name; self.kind = kind; self.summary = summary; self.icon = icon; self.use = use; self.technique = technique; self.item = item
+    /// A song kept in parts (library.md › Songs in parts): every part, the full mix first.
+    public var parts: [ShelfItem]?
+    /// One part of a song: the song's name. Named on its own in a note ("@Neon Drive Drums"); the Library shows it in its song.
+    public var partOf: String?
+    public init(id: String, name: String, kind: String, summary: String, icon: String, use: String, technique: Technique? = nil, item: ShelfItem? = nil, parts: [ShelfItem]? = nil, partOf: String? = nil) {
+        self.id = id; self.name = name; self.kind = kind; self.summary = summary; self.icon = icon; self.use = use; self.technique = technique; self.item = item; self.parts = parts; self.partOf = partOf
     }
     public var isBuiltIn: Bool { technique == nil && item == nil }
 }
@@ -89,8 +93,24 @@ public enum LibraryCatalog {
                                     use: t.kind == "recipe" ? "follow the steps of the technique \(t.name) (direction_technique)" : "the technique edit with name \"\(t.name)\"\(t.kind == "transition" ? " and an editPoint" : " and a clipID")", technique: t))
         }
         let taken = Set(out.map { $0.name.lowercased() })
-        for i in items where !taken.contains(i.name.lowercased()) { out.append(entry(i)) }
+        for song in MediaLibrary.songs(items) where !taken.contains(song.name.lowercased()) {
+            out.append(entry(song))
+            out += song.parts.map { entry($0, of: song) }
+        }
+        for i in items where !i.isPart && !taken.contains(i.name.lowercased()) { out.append(entry(i)) }
         return out
+    }
+
+    /// A song kept in parts: brought in whole, then placed with the parts to play.
+    public static func entry(_ song: Song) -> LibraryEntry {
+        LibraryEntry(id: "song:" + song.name, name: song.name, kind: "music", summary: song.summary, icon: "music.note",
+                     use: "direction_import with library \"\(song.name)\" (the film gets its own copy of every part), then placeMusic with its assetID and the parts to play, and parts for where each is heard", item: song.lead, parts: song.parts)
+    }
+    /// One part of a song, by the name a note gives it.
+    public static func entry(_ part: ShelfItem, of song: Song) -> LibraryEntry {
+        let what = part.part ?? ""
+        return LibraryEntry(id: "sound:" + part.file, name: Song.name(song.name, part: what), kind: "music", summary: part.summary, icon: "music.note",
+                            use: "direction_import with library \"\(song.name)\", then placeMusic with parts [\"\(what)\"], or parts to bring it in or out where the song plays", item: part, partOf: song.name)
     }
 
     /// A sound or image as the library lists it, and how the editor brings it into a film and uses it.
@@ -136,6 +156,15 @@ public enum LibraryCatalog {
     /// What the editor reads under a note that names some: "@Grid flash is the technique Grid flash: …".
     public static func explain(_ found: [LibraryEntry]) -> String {
         found.map { e in
+            if let parts = e.parts {
+                let song = Song(name: e.name, parts: parts)
+                let words = [song.note, song.source.map { "From \($0)." }].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                return "@\(e.name) is a song in the director's library, in parts (\(song.partsText)): \(song.lead.summary).\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
+            }
+            if let i = e.item, let song = e.partOf {
+                let words = [i.note, i.source.map { "From \($0)." }].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                return "@\(e.name) is the \(i.part ?? "part") of \(song), a song in the director's library: \(i.summary).\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
+            }
             if let i = e.item {
                 let words = [i.note, i.source.map { "From \($0)." }].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
                 return "@\(e.name) is \(i.kind == .image ? "an image" : i.kind == .music ? "music" : "a sound effect") in the director's library: \(i.summary).\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."

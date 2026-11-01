@@ -19,6 +19,10 @@ public struct ShelfItem: Codable, Hashable, Sendable, Identifiable {
     public var note: String?
     /// Where it's from: a music library and its license, a link, the film it was made in.
     public var source: String?
+    /// A stem or the full mix of one song (library.md › Songs in parts): the song's name, and which part this is
+    /// ("Drums", "Full mix"). An empty song is the director's word that it's on its own.
+    public var song: String?
+    public var part: String?
     public var measured: Measured?
     /// The file as it was when it was measured: a file changed in the Finder is measured again.
     public var fileSize: Int64
@@ -31,6 +35,8 @@ public struct ShelfItem: Codable, Hashable, Sendable, Identifiable {
     public var id: String { file }
     public var name: String { (file as NSString).deletingPathExtension }
     public var isSound: Bool { kind != .image }
+    /// One part of a song, rather than a sound on its own.
+    public var isPart: Bool { !(song ?? "").isEmpty }
 
     public struct Measured: Codable, Hashable, Sendable {
         public var seconds: Double?

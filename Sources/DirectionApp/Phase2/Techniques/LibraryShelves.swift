@@ -23,8 +23,14 @@ extension LibraryModel {
                 do { replace(try await LibraryMeasuring.measure(item, in: shelf, cacheDirectory: DirectionPaths.caches.appendingPathComponent("Library"))) }
                 catch { DirectionLog.warning("\(item.file) wasn\u{2019}t measured: \(error.localizedDescription)", "library") }
             }
+            // Heard for their lengths, a song's stems and full mix are put together (library.md › Songs in parts).
+            do { if try !MediaLibrary.sounds.groupStems().isEmpty { load() } }
+            catch { DirectionLog.warning("Songs in parts weren\u{2019}t put together: \(error.localizedDescription)", "library") }
         }
     }
+
+    /// The entry the Library shows for one: a song for any of its parts.
+    func whole(_ e: LibraryEntry) -> LibraryEntry { e.partOf.flatMap { song in entries.first { $0.id == "song:" + song } } ?? e }
 
     /// Files dropped or chosen go on their shelf, sounds to Sounds and pictures to Images; anything else is
     /// named in `problem`. Returns the first one's entry, to show it.
@@ -73,8 +79,48 @@ extension LibraryModel {
     }
 
     private func replace(_ item: ShelfItem) {
+        if let song = item.song, !song.isEmpty { return replace(song: song) }
         let entry = LibraryCatalog.entry(item)
         if let i = entries.firstIndex(where: { $0.id == entry.id }) { replaceEntry(at: i, with: entry) } else { load() }
+    }
+    /// A song and its parts as they are now on the shelf, without reading the whole library again.
+    private func replace(song name: String) {
+        guard let song = MediaLibrary.sounds.songs().first(where: { $0.name == name }) else { return load() }
+        for e in [LibraryCatalog.entry(song)] + song.parts.map({ LibraryCatalog.entry($0, of: song) }) {
+            guard let i = entries.firstIndex(where: { $0.id == e.id }) else { return load() }
+            replaceEntry(at: i, with: e)
+        }
+    }
+
+    // MARK: Songs in parts
+
+    /// Changes every part of a song: what the director wrote about it is the song's.
+    func update(_ song: Song, _ change: @escaping (inout ShelfItem) -> Void) {
+        do { for p in song.parts { try MediaLibrary.sounds.update(p.file, change) }; replace(song: song.name) } catch { problem = error.localizedDescription }
+    }
+    /// Returns the renamed song's entry id, or nil when it kept its name.
+    func rename(_ song: Song, to name: String) -> String? {
+        do {
+            try MediaLibrary.sounds.renameSong(song, to: name)
+            load()
+            return entries.first { $0.parts != nil && $0.name.lowercased() == name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }?.id
+        } catch { problem = error.localizedDescription; return nil }
+    }
+    /// Takes a song apart into sounds on their own. Returns the first's entry id.
+    func takeApart(_ song: Song) -> String? {
+        do { try MediaLibrary.sounds.partSong(song); load(); return "sound:" + song.lead.file } catch { problem = error.localizedDescription; return nil }
+    }
+    /// Makes a sound a part of a song. Returns the song's entry id.
+    func join(_ item: ShelfItem, song: String, part: String) -> String? {
+        do {
+            let joined = try MediaLibrary.sounds.setSong(item.file, song: song, part: part)
+            load()
+            return joined.song.map { "song:" + $0 }
+        } catch { problem = error.localizedDescription; return nil }
+    }
+    func remove(_ song: Song) {
+        if song.parts.contains(where: { $0.file == playing }) { stop() }
+        do { for p in song.parts { try MediaLibrary.sounds.remove(p) }; load() } catch { problem = error.localizedDescription }
     }
 
     // MARK: Hearing and seeing
@@ -179,6 +225,8 @@ struct LibraryItemDetail: View {
     @State private var name = ""
     @State private var note = ""
     @State private var source = ""
+    @State private var song = ""
+    @State private var part = ""
     @State private var trashing = false
 
     var body: some View {
@@ -205,6 +253,23 @@ struct LibraryItemDetail: View {
                         .startPlaceholder(item.kind == .image ? "Who made it, its license, a link" : "A music library and its license, a link", shown: source.isEmpty, inset: .init())
                         .padding(.horizontal, 11).frame(height: 28).background(GateFieldBackground())
                 }
+                if item.kind == .music {
+                    // Stems Direction didn't put together by their names: the director names the song and the part.
+                    field("Part of a song") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                TextField("", text: $song).textFieldStyle(.plain).font(Gate.Font.body).foregroundStyle(Gate.Text.primary)
+                                    .startPlaceholder("Song", shown: song.isEmpty, inset: .init())
+                                    .padding(.horizontal, 11).frame(height: 28).background(GateFieldBackground()).accessibilityLabel("Song")
+                                TextField("", text: $part).textFieldStyle(.plain).font(Gate.Font.body).foregroundStyle(Gate.Text.primary)
+                                    .startPlaceholder("Drums", shown: part.isEmpty, inset: .init())
+                                    .padding(.horizontal, 11).frame(width: 104, height: 28).background(GateFieldBackground()).accessibilityLabel("Part")
+                            }
+                            .onSubmit(join)
+                            Text("Give each stem the song\u{2019}s name and its part, and they play in time together.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("In a note or the brief, type @ and pick it, or write").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
                     Text("@\(item.name)").font(.system(size: 12, weight: .semibold)).foregroundStyle(Gate.Voice.director).textSelection(.enabled)
@@ -227,14 +292,119 @@ struct LibraryItemDetail: View {
         } message: { Text("Films that use it keep their own copy.") }
     }
 
-    private func fill() { name = item.name; note = item.note ?? ""; source = item.source ?? "" }
+    private func fill() { name = item.name; note = item.note ?? ""; source = item.source ?? ""; song = ""; part = "" }
     private func rename() {
         if let id = library.rename(item, to: name) { chose(id) } else { name = item.name }
+    }
+    private func join() {
+        guard !song.trimmingCharacters(in: .whitespaces).isEmpty, !part.trimmingCharacters(in: .whitespaces).isEmpty, let id = library.join(item, song: song, part: part) else { return }
+        chose(id)
     }
     private func field<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Gate.Text.primary)
             content()
         }
+    }
+}
+
+/// A song kept in parts (library.md › Songs in parts): hear it whole or a part at a time, what Direction measured,
+/// the director's words about when to use it and where it's from, and its names for "@".
+struct LibrarySongDetail: View {
+    var entry: LibraryEntry
+    var song: Song
+    var library: LibraryModel
+    /// The entry to show after a rename, or after it's taken apart.
+    var chose: (String) -> Void
+    @State private var name = ""
+    @State private var note = ""
+    @State private var source = ""
+    @State private var trashing = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                LibraryItemPreview(item: song.lead, library: library, large: true)
+                HStack(spacing: 10) {
+                    LibraryIcon(name: entry.icon, size: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        TextField("", text: $name).textFieldStyle(.plain).font(Gate.Font.title).foregroundStyle(Gate.Text.primary)
+                            .onSubmit(rename).accessibilityLabel("Name")
+                        Text("A song you keep in parts").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
+                    }
+                }
+                Text(song.summary).font(.system(size: 13)).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+                field("Parts") {
+                    VStack(spacing: 2) { ForEach(song.parts) { p in LibraryPartRow(item: p, song: song, library: library) } }
+                        .padding(4).background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Gate.Surface.sunken))
+                }
+                field("When to use it") {
+                    GateTextArea(text: $note, placeholder: "0:00 soft intro \u{00B7} 0:32 drums come in \u{00B7} 1:04 the big part", minHeight: 56)
+                }
+                field("Where it\u{2019}s from") {
+                    TextField("", text: $source).textFieldStyle(.plain).font(Gate.Font.body).foregroundStyle(Gate.Text.primary)
+                        .startPlaceholder("A music library and its license, a link", shown: source.isEmpty, inset: .init())
+                        .padding(.horizontal, 11).frame(height: 28).background(GateFieldBackground())
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("In a note or the brief, type @ and pick it, or write").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
+                    Text("@\(song.name)").font(.system(size: 12, weight: .semibold)).foregroundStyle(Gate.Voice.director).textSelection(.enabled)
+                    if let stem = song.parts.first(where: { $0.part != Stems.fullMix })?.part {
+                        Text("or one part, like @\(Song.name(song.name, part: stem))").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).textSelection(.enabled)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(song.parts.map { MediaLibrary.sounds.url($0) }) }.buttonStyle(.gate(.ghost, .small))
+                    Button("Take Apart") { if let id = library.takeApart(song) { chose(id) } }.buttonStyle(.gate(.ghost, .small))
+                        .help("Keep each part as a sound on its own.")
+                    Spacer(minLength: 0)
+                    Button("Move to Trash\u{2026}") { trashing = true }.buttonStyle(.gate(.ghostDanger, .small))
+                }
+            }
+            .padding(18)
+        }
+        .onAppear(perform: fill)
+        .onChange(of: song.name) { _, _ in fill() }
+        .onChange(of: note) { _, v in if v != (song.note ?? "") { library.update(song) { $0.note = v.isEmpty ? nil : v } } }
+        .onChange(of: source) { _, v in if v != (song.source ?? "") { library.update(song) { $0.source = v.isEmpty ? nil : v } } }
+        .alert("Move \(song.name) to the Trash?", isPresented: $trashing) {
+            Button("Move to Trash", role: .destructive) { library.remove(song) }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("All \(song.parts.count) parts go. Films that use it keep their own copies.") }
+    }
+
+    private func fill() { name = song.name; note = song.note ?? ""; source = song.source ?? "" }
+    private func rename() {
+        if let id = library.rename(song, to: name) { chose(id) } else { name = song.name }
+    }
+    private func field<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Gate.Text.primary)
+            content()
+        }
+    }
+}
+
+/// One part of a song: play it on its own, and see where in the song it plays.
+struct LibraryPartRow: View {
+    var item: ShelfItem
+    var song: Song
+    var library: LibraryModel
+    var body: some View {
+        let on = library.playing == item.file, what = item.part ?? item.name
+        HStack(spacing: 8) {
+            Button { on ? library.stop() : library.play(item) } label: { Image(systemName: on ? "pause.fill" : "play.fill") }
+                .buttonStyle(.gate(.ghost, .small, icon: true))
+                .help(on ? "Stop" : "Play the \(what.lowercased())").accessibilityLabel(on ? "Stop \(what)" : "Play \(what)")
+            Text(what).font(.system(size: 13, weight: .medium)).foregroundStyle(Gate.Text.primary).lineLimit(1).frame(width: 84, alignment: .leading)
+            if let levels = item.measured?.levels {
+                TimelineView(.animation(paused: !on)) { _ in LibraryWaveform(levels: levels, progress: library.progress(item)) }.frame(height: 16)
+            } else { Spacer(minLength: 0) }
+            if let seconds = item.measured?.seconds {
+                Text(String(format: "%d:%02d", Int(seconds.rounded()) / 60, Int(seconds.rounded()) % 60)).font(Gate.Font.caption).monospacedDigit().foregroundStyle(Gate.Text.tertiary)
+            }
+        }
+        .padding(.horizontal, 4).frame(height: 30)
+        .help("@\(Song.name(song.name, part: what)) \u{00B7} \(item.file)")
     }
 }

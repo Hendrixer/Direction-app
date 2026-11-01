@@ -84,4 +84,43 @@ struct LibraryShelfTests {
         #expect(try f.store.read().assets.filter { $0.fromLibrary == item.file }.count == 1)
         await #expect(throws: DirectionError.self) { _ = try await f.runtime.invoke("direction_import", arguments: .object(["library": .string("Nothing called this")])) }
     }
+
+    @Test func aSongComesInWholeAndItsPartsPlayInTime() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let name = "Drive " + UUID().uuidString.prefix(8), sounds = MediaLibrary.sounds
+        var kept: [ShelfItem] = []
+        defer { for i in kept { try? sounds.remove(i) { try FileManager.default.removeItem(at: $0) } } }
+        // Its full mix and two stems, the same length, as a music library names them; heard, they're one song.
+        for (file, hz) in [("\(name).wav", 220.0), ("\(name) (Drums).wav", 110), ("\(name) (Bass).wav", 55)] {
+            let tone = f.directory.appendingPathComponent(file)
+            try MediaFixture.writeTone(to: tone, frequency: hz, seconds: 3)
+            let item = try sounds.add(tone)
+            kept.append(try sounds.update(item.file) { var m = ShelfItem.Measured(); m.seconds = 3; $0.measured = m })
+        }
+        try sounds.groupStems()
+        let song = try #require(sounds.songs().first { $0.name == String(name) })
+        #expect(song.parts.map { $0.part ?? "" } == ["Full mix", "Drums", "Bass"])
+
+        let listed = try await f.runtime.invoke("direction_library", arguments: .object(["query": .string(String(name))]))
+        let items = try #require(listed.value["items"].array)
+        #expect(items.count == 1 && items[0]["parts"].array?.compactMap { $0["name"].string } == ["\(name) Full mix", "\(name) Drums", "\(name) Bass"])
+        // Named by one part, the whole song comes in: each part the film's own copy, knowing its song.
+        let brought = try await f.runtime.invoke("direction_import", arguments: .object(["library": .string("\(name) Drums")]))
+        let parts = try f.store.read().assets.filter { $0.song == String(name) }
+        #expect(parts.count == 3 && Set(parts.compactMap(\.part)) == ["Full mix", "Drums", "Bass"] && parts.allSatisfy { !$0.isFootage(film: f.store.url) })
+        #expect(brought.value["asset"]["part"].string == "Drums" && brought.value["parts"].array?.count == 3 && parts.contains { $0.name == "\(name) Drums" })
+        let again = try await f.runtime.invoke("direction_import", arguments: .object(["library": .string(String(name))]))
+        let count = try f.store.read().assets.filter { $0.song == String(name) }.count
+        #expect(again.value["alreadyIn"].bool == true && count == 3)
+        // Placed, both stems play the same moment of the song, and the cut plays and measures.
+        let drums = try #require(parts.first { $0.part == "Drums" })
+        let p = try f.store.read()
+        let edit = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(p.editRevision)), "idempotencyKey": .string(UUID().uuidString), "summary": .string("Drums and bass"),
+            "operations": .array([.object(["op": .string("placeMusic"), "assetID": .string(drums.id), "at": .number(0), "endOn": .number(2), "from": .number(0.5), "parts": .array([.string("Drums"), .string("Bass")])])])]))
+        #expect(edit.value["operations"].array?.first?["clipIDs"].array?.count == 2, "\(edit.value)")
+        let placed = try f.store.read().sequences[0].clips.filter { $0.assetID.map { id in parts.contains { $0.id == id } } == true }
+        #expect(placed.count == 2 && Set(placed.map(\.sourceRange)).count == 1 && Set(placed.map(\.start)).count == 1 && Set(placed.map(\.trackName)).count == 2)
+        let loudness = try await SequenceRenderer.loudness(try await f.compile())
+        #expect(loudness["integratedLUFS"].double != nil, "\(loudness)")
+    }
 }

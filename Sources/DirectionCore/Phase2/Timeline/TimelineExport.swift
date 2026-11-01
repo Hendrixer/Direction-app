@@ -150,6 +150,7 @@ public enum TimelineExport {
             if c.kind == .title { parts.append("title \"\(c.title ?? c.name)\"") }
             else if let g = a?.graphic { parts.append("graphic \"\(g)\"") }
             else if a?.madeID != nil { parts.append((c.kind == .audio ? role : "shot") + " \"\(c.name)\" (made)") }
+            else if c.kind == .audio, let song = a?.song, !song.isEmpty { parts.append("music \"\(song)\" \(a?.part ?? "part")") }
             else if c.kind == .audio { parts.append("\(role) \"\(c.name)\"") }
             else { parts.append(take(c) ?? c.name) }
             if c.kind != .title && a?.graphic == nil, a?.isImage != true {

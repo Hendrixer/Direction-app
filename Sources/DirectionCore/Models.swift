@@ -65,6 +65,10 @@ public struct MediaAsset: Codable, Hashable, Sendable, Identifiable {
     public var seekableCopyOf: String? = nil
     /// A film's copy of a sound or image from the library (library.md): its file on the shelf. Not footage.
     public var fromLibrary: String? = nil
+    /// A stem or the full mix of a song from the library (library.md › Songs in parts): the song, and which part.
+    /// Where a song's parts play at once they play the same moment of it, and they move together.
+    public var song: String? = nil
+    public var part: String? = nil
     public init(id: String = newID("asset"), name: String, path: String, duration: MediaTime, video: [VideoStream] = [], audio: [AudioStream] = [], fileSize: Int64 = 0, modifiedAt: Double = 0, bookmark: Data? = nil, thumbnailPath: String? = nil) {
         self.id = id; self.name = name; self.path = path; self.duration = duration; self.video = video; self.audio = audio; self.fileSize = fileSize; self.modifiedAt = modifiedAt; self.bookmark = bookmark; self.thumbnailPath = thumbnailPath
     }

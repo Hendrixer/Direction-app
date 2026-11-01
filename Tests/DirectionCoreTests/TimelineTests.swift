@@ -394,6 +394,90 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     #expect(onWord.sequences[0].clips.first { $0.trackName == "A4" }?.end == MediaTime(seconds: 3))
 }
 
+// MARK: Songs in parts
+
+/// Neon Drive, a library song in parts: its full mix and three stems, a minute each.
+func neonDrive(_ cut: inout TimelineCut) {
+    for part in ["Full mix", "Drums", "Bass", "Melody"] {
+        var a = MediaAsset(id: "nd-" + part.lowercased().replacingOccurrences(of: " ", with: ""), name: "Neon Drive \(part)", path: "/nd-\(part).wav", duration: .init(seconds: 60), audio: [.init(id: 1, index: 0, label: "Audio 1", channels: 2, sampleRate: 48_000)])
+        a.song = "Neon Drive"; a.part = part
+        cut.project.assets.append(a)
+    }
+}
+func songClips(_ p: Project) -> [Clip] { p.sequences[0].clips.filter { $0.assetID?.hasPrefix("nd-") == true } }
+/// Where the song's beginning falls in the cut, for a clip of one of its parts.
+func songStart(_ c: Clip) -> Double { c.start.seconds - c.sourceRange.start.seconds }
+
+@Test func aSongsPartsPlayInTimeWhereverTheyMeet() throws {
+    var cut = TimelineCut.make(); neonDrive(&cut)
+    // Drums and bass from 0:10 in the song, under the whole cut, each on a track of its own.
+    let placed = try cut.apply(#"{"op":"placeMusic","assetID":"nd-drums","at":0,"endOn":13,"from":10,"parts":["Drums","bass"]}"#)
+    let ids = try #require(placed.operations[0].clipIDs)
+    let drums = clip(cut.project, ids[0]), bass = clip(cut.project, ids[1])
+    #expect(drums.trackName == "A3" && bass.trackName == "A4" && drums.sourceRange == bass.sourceRange && drums.sourceRange.start == MediaTime(seconds: 10) && drums.end == MediaTime(seconds: 13))
+    #expect(placed.operations[0].summary.hasPrefix("Placed Neon Drive (Drums, Bass) on A3, A4 from"))
+    // The melody comes in at 6 s as the bass goes: the same moment of the song, ramped where the song plays on.
+    let changed = try cut.apply(#"{"op":"parts","clipID":"\#(ids[0])","heard":{"Melody":[{"start":6,"end":13}],"Bass":[{"start":0,"end":6}]}}"#)
+    let melody = try #require(songClips(cut.project).first { $0.assetID == "nd-melody" }), bassNow = try #require(songClips(cut.project).first { $0.assetID == "nd-bass" })
+    #expect(melody.start == MediaTime(seconds: 6) && melody.sourceRange.start == MediaTime(seconds: 16) && melody.trackName == "A5" && close(melody.fadeIn ?? 0, 2.0 / 30) && melody.fadeOut == nil)
+    #expect(bassNow.end == MediaTime(seconds: 6) && bassNow.trackName == "A4" && close(bassNow.fadeOut ?? 0, 2.0 / 30) && bassNow.fadeIn == nil)
+    #expect(changed.operations[0].summary.hasPrefix("Neon Drive: Bass ") && changed.operations[0].summary.contains("; Melody "))
+    // Moving or slipping any part takes the stretch of the song with it.
+    let moved = try cut.apply(#"{"op":"move","clipID":"\#(melody.id)","to":{"at":7}}"#)
+    #expect(songClips(cut.project).allSatisfy { close(songStart($0), -9) } && songClips(cut.project).map(\.start.seconds).min() == 1 && moved.operations[0].summary.hasPrefix("Moved Neon Drive to"))
+    _ = try cut.apply(#"{"op":"slip","clipID":"\#(ids[0])","frames":30}"#)
+    #expect(songClips(cut.project).allSatisfy { close(songStart($0), -10) })
+    // A part trims where it stands. Sliding one or changing its speed would take it out of time.
+    _ = try cut.apply(#"{"op":"trim","clipID":"\#(melody.id)","edge":"tail","frames":-15}"#)
+    #expect(clip(cut.project, melody.id).end == MediaTime(seconds: 13.5) && clip(cut.project, ids[0]).end == MediaTime(seconds: 14))
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"slide","clipID":"\#(ids[0])","frames":5}"#]) }
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"speed","clipID":"\#(ids[0])","rate":1.5}"#]) }
+    // Another moment of the song over these is refused; the same moment (the full mix over the drums) isn't.
+    expectFailure("not_in_sync", index: 0) { _ = try cut.run([#"{"op":"overwrite","assetID":"nd-fullmix","sourceRange":{"start":30,"end":34},"at":2,"track":"A6"}"#]) }
+    _ = try cut.run([#"{"op":"overwrite","assetID":"nd-fullmix","sourceRange":{"start":11,"end":15},"at":1,"track":"A6"}"#])
+    // A cut in the story cuts every part at once; what follows it still plays in time with itself.
+    _ = try cut.apply(#"{"op":"removeRange","range":{"start":4,"end":5}}"#)
+    let after = songClips(cut.project)
+    #expect(after.count == 5 && Set(after.map { (songStart($0) * 1_000).rounded() }) == [-10_000, -11_000])
+    // Ducking one part ducks them all; gain is the part's; a fade in fades every part that starts there.
+    let ducked = try cut.apply(#"{"op":"duck","track":"A3","under":"A1","dB":-6}"#)
+    #expect(ducked.operations[0].summary.hasPrefix("Ducked A3, A4, A5 \u{2212}6 dB under A1") && cut.project.sequences[0].tracks?["A5"]?.ducked?.under == "A1")
+    let first = try #require(songClips(cut.project).first { $0.assetID == "nd-drums" && $0.start == MediaTime(seconds: 1) })
+    let firstBass = try #require(songClips(cut.project).first { $0.assetID == "nd-bass" && $0.start == MediaTime(seconds: 1) })
+    _ = try cut.apply(#"{"op":"gain","target":"\#(firstBass.id)","dB":-4}"#)
+    #expect(clip(cut.project, firstBass.id).gainDB == -4 && clip(cut.project, first.id).gainDB == nil)
+    let faded = try cut.apply(#"{"op":"fade","clipID":"\#(first.id)","in":15}"#)
+    #expect(clip(cut.project, first.id).fadeIn == 0.5 && clip(cut.project, firstBass.id).fadeIn == 0.5 && faded.operations[0].summary == "Faded Neon Drive in over 15 frames")
+}
+
+@Test func aSongsPartsAreRefusedWhatTheyCantDo() throws {
+    var cut = TimelineCut.make(); neonDrive(&cut)
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"placeMusic","assetID":"nd-drums","at":0,"endOn":13,"from":55}"#]) }
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"placeMusic","assetID":"nd-drums","at":0,"endOn":13,"parts":["Cowbell"]}"#]) }
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"placeMusic","assetID":"music","at":0,"endOn":4,"parts":["Drums"]}"#]) }
+    let placed = try cut.apply(#"{"op":"placeMusic","assetID":"nd-fullmix","at":0,"endOn":{"cut":"c2|c3"}}"#)
+    let id = placed.operations[0].clipIDs![0]
+    // Without from, the song ends on the mark: its last nine seconds.
+    #expect(clip(cut.project, id).sourceRange.start == MediaTime(seconds: 51) && placed.operations[0].summary.hasPrefix("Placed Neon Drive Full mix on A3 to end on the cut"))
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"parts","clipID":"\#(id)","heard":{"Drums":[{"start":-2,"end":4}]}}"#]) }
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"parts","clipID":"m1","heard":{"Drums":[{"start":0,"end":4}]}}"#]) }
+    expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"parts","clipID":"\#(id)","heard":{"Drums":[{"start":0,"end":4}]},"frames":-1}"#]) }
+}
+
+@Test func aSongsPartsStayOpenAfterPictureLock() throws {
+    var cut = TimelineCut.make(); neonDrive(&cut)
+    let picture = cut.project.sequences[0].clips.filter { $0.kind != .audio }
+    cut.context.state.pictureLocked = true
+    // The big part, from 0:40, drums then the full mix; moved and trimmed, the picture stays as it was locked.
+    let placed = try cut.apply(#"{"op":"placeMusic","assetID":"nd-fullmix","at":0,"endOn":{"cut":"c2|c3"},"from":40,"parts":["Drums","Bass"]}"#)
+    _ = try cut.apply(#"{"op":"parts","clipID":"\#(placed.operations[0].clipIDs![1])","heard":{"Full mix":[{"start":4,"end":9}],"Drums":[{"start":0,"end":4}]},"frames":0}"#)
+    let drums = try #require(songClips(cut.project).first { $0.assetID == "nd-drums" })
+    _ = try cut.apply(#"{"op":"move","clipID":"\#(drums.id)","to":{"at":1}}"#, #"{"op":"trim","clipID":"\#(drums.id)","edge":"head","frames":10}"#)
+    #expect(songClips(cut.project).count == 3 && songClips(cut.project).allSatisfy { close(songStart($0), -39) } && songClips(cut.project).allSatisfy { $0.fadeIn == nil && $0.fadeOut == nil })
+    #expect(cut.project.sequences[0].clips.filter { $0.kind != .audio } == picture)
+    expectFailure("picture_locked", index: 0) { _ = try cut.run([#"{"op":"trim","clipID":"c1","edge":"tail","frames":-3}"#]) }
+}
+
 // MARK: Errors, locks and notes
 
 @Test func unknownOperationsAndTheLookAreRefusedWithTheirIndex() {

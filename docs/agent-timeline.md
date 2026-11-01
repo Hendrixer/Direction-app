@@ -64,13 +64,13 @@ Each change is placed in the new cut (through every later operation in the batch
 | Code | When |
 |---|---|
 | `scene_locked` | Anything that would change what plays over a locked scene, on any track: its clips, overlays and sound over it, transitions and J/L cuts reaching into it, its takes' camera LUTs and stream settings. Changes earlier in the cut may move it whole. |
-| `picture_locked` | After picture lock, anything but `balance`, `matchBalance`, `cameraLUT`, `color`, `gain`, `fade`, `duck`, `audio`, `placeMusic`, `placeMade` on an A track, removing a sound clip, and the graphics over the picture: `placeGraphic` and `title` on V2 and up, and `move` or `remove` of those. Every other clip and its timing stays exactly as locked, over locked scenes too (picture lock locks them all). Before picture lock, a locked scene still refuses graphics over it. |
+| `picture_locked` | After picture lock, anything but `balance`, `matchBalance`, `cameraLUT`, `color`, `gain`, `fade`, `duck`, `audio`, `placeMusic`, `parts`, `placeMade` or `overwrite` on an A track, moving, slipping, trimming, splitting or removing a sound clip, and the graphics over the picture: `placeGraphic` and `title` on V2 and up, and `move` or `remove` of those. Every other clip and its timing stays exactly as locked, over locked scenes too (picture lock locks them all). Before picture lock, a locked scene still refuses graphics over it. |
 | `stale_revision` | `baseEditRevision` isn't current. |
 | `overlap` | Two clips on one track would overlap. |
 | `unknown_op` / `bad_argument` | Not in the catalog / a value out of range, a missing argument, an unknown argument, an id that isn't in the cut, not enough handle. |
 | `missing_media` | An asset, graphic, made clip or LUT file that doesn't exist. |
 | `no_words` | `replaceTake` with words, `removeWords`, `tightenPauses` or `duck` with no transcript. |
-| `not_in_sync` | A `cutaway` without `sourceRange` from a take that isn't in sync with the V1 clip under it. |
+| `not_in_sync` | A `cutaway` without `sourceRange` from a take that isn't in sync with the V1 clip under it; or an edit that would play two of a song's parts at different moments of the song at once. |
 | `look_is_yours` | `look`, `setLook`, `applyLook`, or an effect named `look`/`lut`. |
 | `words_are_yours` | Raised by the graphics tools, not by edit functions, which never change a graphic's words. |
 | `shader_invalid` / `shader_too_slow` | A shader that doesn't compile or makes NaN or infinity / is slower than 40 ms a frame at 1080p. |
@@ -110,12 +110,15 @@ Story operations keep every layer in sync; overlays and sound-only clips move on
 | `placeMade` | `madeID, at, track, sourceRange?` | Places a made clip like footage; the track must be free. |
 | `gain` | `target (clip or A track), dB, keys?: {dB: [{t, v}]}` | |
 | `fade` | `clipID, in?, out?` (frames) | |
-| `duck` | `track, under? (A1), dB, attack? (0.25), release? (0.5)` | Words less than 0.6 s apart are one line; keys go on every clip of `track`, and redoing it replaces them. |
+| `duck` | `track, under? (A1), dB, attack? (0.25), release? (0.5)` | Words less than 0.6 s apart are one line; keys go on every clip of `track` (and every part of a song on it, on their own tracks), and redoing it replaces them. |
 | `syncSound` | `clipID, assetID?` | A take in sync with a V1 clip plays its sound under it, lined up, in place of the clip's own: the group's `soundAssetID` by default. For the screen on V1 with the camera's mic, or a camera with a separate recorder. Naming the clip's own take puts its own sound back. |
-| `placeMusic` | `madeID \| assetID, at, endOn: {cut} \| {word} \| seconds, track?` | Ends on the cut or the word's start, trimmed from the head; if it's shorter, it starts later and says so. |
+| `placeMusic` | `madeID \| assetID, at, endOn: {cut} \| {word} \| seconds, from?, parts?, track?` | Ends on the cut or the word's start, trimmed from the head; if it's shorter, it starts later and says so. With `from` (the song's own seconds) it plays on from that moment and stops at the mark. `parts` names a library song's parts to play, each on a free A track, all at the same moment of the song; without it, the asset given. |
+| `parts` | `clipID, heard: {part: [{start, end}]}, frames? (2)` | Where each named part of a song is heard, in the stretch of the song `clipID` plays: cut seconds, inside where the song plays there; `[]` takes a part out, and a part not named stays. A part coming in or going out while the song plays on ramps over `frames`; the song's own edges keep their fades. A new part keeps the part's gain and takes the song's duck keys. |
 | `audio`, `format`, `duplicateSequence` | as before | |
 
 **Staying in sync.** A synced clip (a `cutaway` without `sourceRange`, or `syncSound`'s sound) is `synced: true` in the timeline ("in sync" in the outline). After every operation Direction lines it up again with the V1 clip under its start, and splits it where V1 jumps to footage that doesn't carry on, so a slip, roll or new reading under it doesn't leave it behind. If the V1 under it isn't in sync with it any more, or it would need footage from before the take started, it keeps what it plays, stops being synced, and the operation warns. Slipping, swapping, speeding or freezing the synced clip itself is choosing by hand: it stops being synced without a warning.
+
+**Songs in parts.** A library song kept in stems (library.md › Songs in parts) comes into the film whole: each part is a `MediaAsset` with `song` and `part`. Wherever two of a song's parts play at once they play the same moment of it, and Direction keeps it that way: `move` and `slip` on any part take every part in that stretch of the song (its parts at the same moment, meeting in time), `fade` fades every part that starts or ends on that edge, `gain` on a part sets that part wherever it's heard there, `duck` ducks them all, and `trim` trims a part where it stands unless `ripple` is given. `slide` and `speed` are refused on a part, and any edit that would put two parts out of time is `not_in_sync`. A cut in the story cuts every part at once, so each side still plays in time. The outline shows a part as `music "Neon Drive" Drums`.
 
 Older shapes still decode: `{"batch": {…}}` with `type` per operation and `{value,timescale}` times; `title`, `color`, `frame` and `rename` keep working.
 

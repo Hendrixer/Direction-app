@@ -77,6 +77,12 @@ public struct EditOperation: Hashable, Sendable {
     public var attack: Double?
     public var release: Double?
     public var endOn: JSONValue?
+    /// `placeMusic`: which of a library song's parts play ("Drums", "Bass"), and the moment of the song, in its own
+    /// seconds, that plays at `at`.
+    public var parts: [String]?
+    public var from: Double?
+    /// `parts`: where each part of a song is heard, by part, in cut seconds; [] for nowhere.
+    public var heard: [String: [MediaRange]]?
     /// `pin` and `zoomThrough`: four corners [[x, y], …] as fractions of the frame (y down), top left first, clockwise.
     public var corners: [[Double]]?
     /// `layout`: how the screen and the camera share the frame over `range`.
@@ -126,7 +132,7 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
 }
 
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "corners", "layout", "scales", "focus", "name", "variant", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "parts", "from", "heard", "corners", "layout", "scales", "focus", "name", "variant", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -168,6 +174,15 @@ extension EditOperation: Codable {
         cover = try str("cover"); graphic = try str("graphic"); aboveLook = try bool("aboveLook"); madeID = try str("madeID")
         dB = try num("dB"); fadeIn = try int("in"); fadeOut = try int("out"); under = try str("under"); attack = try num("attack"); release = try num("release")
         endOn = value("endOn")
+        parts = try decoded("parts", [String].self, "a list of a song's parts, like [\"Drums\", \"Bass\"]")
+        from = try num("from")
+        if let v = value("heard") {
+            guard case .object(let o) = v else { throw bad("heard", "{part: [{start, end}]}, in cut seconds") }
+            heard = try o.mapValues { list in
+                guard let items = list.array else { throw bad("heard", "{part: [{start, end}]}, each part a list of stretches") }
+                return try items.map { try Self.range($0, "heard") }
+            }
+        }
         corners = try decoded("corners", [[Double]].self, "four [x, y] corners, fractions of the frame from its top left, top left first and clockwise")
         if let v = value("layout"), let n = v.string ?? (v["kind"] == .null ? v["name"].string : nil) { layoutName = n }
         else { layout = try decoded("layout", FrameLayout.self, "the name of one of the style's layouts, or {kind: screenAndYou|you|screen|sideBySide, corner?: topLeft|topRight|bottomLeft|bottomRight, size?: small|medium|large, shape?: circle|rounded|wide, screen?: full|framed}") }
@@ -194,7 +209,7 @@ extension EditOperation: Codable {
         put("toClipID", toClipID); put("lut", lut); put("target", target); put("effect", effect); if let params { f["params"] = .object(params) }; put("keys", any: keys); put("effectID", effectID)
         if !legacy { put("type", transitionType) }
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
-        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("variant", variant); put("resolved", any: resolved)
+        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("parts", any: parts); put("from", from); put("heard", any: heard); put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("variant", variant); put("resolved", any: resolved)
         return .object(f)
     }
 
@@ -347,6 +362,7 @@ public enum EditReducer {
                 var outcome = try w.perform(op)
                 if let id = byHand, let k = w.s.clips.firstIndex(where: { $0.id == id }) { w.s.clips[k].synced = nil }
                 let followed = w.relineSynced()
+                try w.checkSongs()
                 outcome.changes += followed.changes
                 outcome.warnings += w.normalizeTransitions() + (op.resolved?.warnings ?? []) + followed.warnings
                 try validate(w.project)
@@ -680,6 +696,7 @@ struct EditWork {
         case "fade": return try fade(op)
         case "duck": return try duck(op)
         case "placeMusic": return try placeMusic(op)
+        case "parts": return try partsOp(op)
         case "audio": return try audio(op)
         case "format":
             if let width = op.width { s.width = width }; if let height = op.height { s.height = height }; if let rate = op.frameRate { s.frameRate = rate }
@@ -795,9 +812,19 @@ struct EditWork {
         else if let t = to["at"].double { dest = snap(MediaTime(seconds: t)) }
         else { throw bad("to is {at}, {before: clip} or {after: clip}.") }
         guard dest >= .zero else { throw bad("That would start \(label(c)) before the cut does.") }
-        if let t = to["track"].string { let p = try parseTrack(t); guard p.audio == (c.kind == .audio) else { throw bad("Picture stays on V tracks and sound on A tracks.") }; s.clips[i].layer = p.layer }
-        dest = snap(dest); s.clips[i].start = dest
-        return .init(summary: "Moved \(label(c)) to \(tc(dest))", changes: [.init(before: (c.start.seconds, c.end.seconds), after: (dest.seconds, dest.seconds + d.seconds), tracks: Array(Set([c.trackName, s.clips[i].trackName])).sorted())])
+        dest = snap(dest)
+        // A song's part takes the stretch of the song it's in with it; a new track is that part's.
+        let together = withSong(i), delta = dest - c.start
+        guard together.allSatisfy({ s.clips[$0].start + delta >= .zero }) else { throw bad("That would start \(song(of: c) ?? label(c)) before the cut does.") }
+        var tracks = Set(together.map { s.clips[$0].trackName })
+        if let t = to["track"].string {
+            let p = try parseTrack(t); guard p.audio == (c.kind == .audio) else { throw bad("Picture stays on V tracks and sound on A tracks.") }
+            for k in together where s.clips[k].assetID == c.assetID { s.clips[k].layer = p.layer }
+        }
+        for k in together { s.clips[k].start = s.clips[k].start + delta }
+        tracks.formUnion(together.map { s.clips[$0].trackName })
+        let span = (together.map { s.clips[$0].start.seconds - delta.seconds }.min()!, together.map { s.clips[$0].end.seconds - delta.seconds }.max()!)
+        return .init(summary: "Moved \(songLabel(c, together.count)) to \(tc(dest))", changes: [.init(before: span, after: (span.0 + delta.seconds, span.1 + delta.seconds), tracks: tracks.sorted())])
     }
 
     mutating func split(_ op: EditOperation) throws -> Outcome {
@@ -820,7 +847,8 @@ struct EditWork {
         }
         guard let edge = op.edge, edge == "head" || edge == "tail" else { throw bad("edge is head or tail.") }
         guard let n = op.frames, n != 0 else { throw bad("frames is a whole number: positive lengthens, negative shortens.") }
-        let d = frames(abs(n)), ds = d.seconds, ripple = op.ripple ?? true, story = c.layer == 0
+        // A song's part trims where it stands, so the song's other parts stay in time with what follows it.
+        let d = frames(abs(n)), ds = d.seconds, ripple = op.ripple ?? (song(of: c) == nil), story = c.layer == 0
         let summary = "\(n > 0 ? "Extended" : "Trimmed") \(label(c))’s \(edge), \(deltaText(secs(n)))"
         if n < 0 { guard c.duration.seconds - ds >= frame - 1e-9 else { throw bad("\(c.id) is only \(framesText(c.duration.seconds)) long.") } }
         if n > 0 {
@@ -894,16 +922,24 @@ struct EditWork {
     mutating func slip(_ op: EditOperation) throws -> Outcome {
         let i = try clipIndex(op.clipID); let c = s.clips[i]
         guard let n = op.frames, n != 0 else { throw bad("frames slips the take: positive shows later footage.") }
-        let ds = secs(abs(n))
-        if n > 0 { guard handleAfter(c) + 1e-6 >= ds else { throw bad("\(label(c)) has only \(framesText(handleAfter(c))) after its out point.") } }
-        else { guard handleBefore(c) + 1e-6 >= ds else { throw bad("\(label(c)) has only \(framesText(handleBefore(c))) before its in point.") } }
-        let shift = frames(n).scaled(by: c.speed)
-        s.clips[i].sourceRange.start = c.sourceRange.start + shift
+        let ds = secs(abs(n)), together = withSong(i)
+        // A song's parts slip together, so they still play the same moment of it.
+        for k in together {
+            let x = s.clips[k]
+            if n > 0 { guard handleAfter(x) + 1e-6 >= ds else { throw bad("\(label(x)) has only \(framesText(handleAfter(x))) after its out point.") } }
+            else { guard handleBefore(x) + 1e-6 >= ds else { throw bad("\(label(x)) has only \(framesText(handleBefore(x))) before its in point.") } }
+        }
+        for k in together { s.clips[k].sourceRange.start = s.clips[k].sourceRange.start + frames(n).scaled(by: s.clips[k].speed) }
+        if together.count > 1 {
+            let span = (together.map { s.clips[$0].start.seconds }.min()!, together.map { s.clips[$0].end.seconds }.max()!)
+            return .init(summary: "Slipped \(song(of: c)!) \(framesText(ds)) \(n > 0 ? "later" : "earlier") in the song", changes: [.init(before: span, after: span, tracks: Set(together.map { s.clips[$0].trackName }).sorted())])
+        }
         return change("Slipped \(label(c)) \(framesText(ds)) \(n > 0 ? "later" : "earlier") in the take", c)
     }
 
     mutating func slide(_ op: EditOperation) throws -> Outcome {
         let i = try clipIndex(op.clipID); let c = s.clips[i], t = track(of: c)
+        if let g = song(of: c) { throw bad("\(g)\u{2019}s parts play in time together: move it with move, or say where each part is heard with parts.") }
         guard let n = op.frames, n != 0 else { throw bad("frames slides the clip: positive later, negative earlier.") }
         let d = frames(abs(n)), ds = d.seconds
         let li = s.clips.firstIndex { $0.id != c.id && on($0, t) && abs($0.end.seconds - c.start.seconds) < frame / 2 }
@@ -1052,6 +1088,7 @@ struct EditWork {
     mutating func speed(_ op: EditOperation) throws -> Outcome {
         let i = try clipIndex(op.clipID); let c = s.clips[i]
         guard c.hold == nil else { throw bad("A freeze has no speed.") }
+        if let g = song(of: c) { throw bad("\(g) plays at its own speed, so its parts stay in time.") }
         guard let rate = op.rate ?? op.speed, rate.isFinite, (0.1...8).contains(rate) else { throw bad("rate is 0.1 to 8; 2 plays twice as fast.") }
         s.clips[i].speed = rate
         if !op.legacy, let a = assetOf(c) {
@@ -1559,9 +1596,12 @@ struct EditWork {
         if let i = s.clips.firstIndex(where: { $0.id == target }) {
             let c = s.clips[i]
             guard hasSound(c) else { throw bad("\(c.id) has no sound.") }
-            s.clips[i].gainDB = dB == 0 ? nil : dB
-            if let given { s.clips[i].gainKeys = sourceKeys(["dB": given], c)["dB"] }
-            return .init(summary: "Set \(label(c))’s sound to \(dbText(dB))", changes: [.init(before: (c.start.seconds, c.end.seconds), after: (c.start.seconds, c.end.seconds), tracks: [c.kind == .audio ? c.trackName : "A1"])])
+            // A song's part is set wherever it's heard in that stretch of the song; its keys are in the song's time.
+            let pieces = withSong(i).filter { s.clips[$0].assetID == c.assetID }
+            let keys = given.flatMap { sourceKeys(["dB": $0], c)["dB"] }
+            for k in pieces { s.clips[k].gainDB = dB == 0 ? nil : dB; if let keys { s.clips[k].gainKeys = keys } }
+            let what = pieces.count > 1 || song(of: c) != nil ? "\(song(of: c) ?? label(c))\u{2019}s \(partName(c))" : "\(label(c))’s sound"
+            return .init(summary: "Set \(what) to \(dbText(dB))", changes: pieces.map { k in .init(before: (s.clips[k].start.seconds, s.clips[k].end.seconds), after: (s.clips[k].start.seconds, s.clips[k].end.seconds), tracks: [c.kind == .audio ? s.clips[k].trackName : "A1"]) })
         }
         let t = try parseTrack(target)
         guard t.audio else { throw bad("Gain goes on a clip with sound or an A track.") }
@@ -1575,11 +1615,19 @@ struct EditWork {
         let i = try clipIndex(op.clipID); let c = s.clips[i]
         guard hasSound(c) else { throw bad("\(c.id) has no sound to fade.") }
         guard op.fadeIn != nil || op.fadeOut != nil else { throw bad("fade takes in and/or out, in frames.") }
-        let total = Int((c.duration.seconds / frame).rounded())
-        for v in [op.fadeIn, op.fadeOut].compactMap({ $0 }) { guard v >= 0, v <= total else { throw bad("Fades are 0 to \(total) frames for this clip.") } }
-        if let v = op.fadeIn { s.clips[i].fadeIn = v == 0 ? nil : secs(v) }
-        if let v = op.fadeOut { s.clips[i].fadeOut = v == 0 ? nil : secs(v) }
-        return change("Faded \(label(c))’s sound" + (op.fadeIn.map { " in over \($0) frames" } ?? "") + (op.fadeOut.map { (op.fadeIn != nil ? " and" : "") + " out over \($0) frames" } ?? ""), c)
+        // A song fades as one: every part that starts (for in) or ends (for out) where this one does.
+        let together = withSong(i)
+        let ins = op.fadeIn == nil ? [] : together.filter { abs(s.clips[$0].start.seconds - c.start.seconds) < frame / 2 }
+        let outs = op.fadeOut == nil ? [] : together.filter { abs(s.clips[$0].end.seconds - c.end.seconds) < frame / 2 }
+        for k in Set(ins + outs) {
+            let total = Int((s.clips[k].duration.seconds / frame).rounded())
+            for v in [op.fadeIn, op.fadeOut].compactMap({ $0 }) { guard v >= 0, v <= total else { throw bad("Fades are 0 to \(total) frames for \(k == i ? "this clip" : label(s.clips[k])).") } }
+        }
+        if let v = op.fadeIn { for k in ins { s.clips[k].fadeIn = v == 0 ? nil : secs(v) } }
+        if let v = op.fadeOut { for k in outs { s.clips[k].fadeOut = v == 0 ? nil : secs(v) } }
+        let words = (op.fadeIn.map { " in over \($0) frames" } ?? "") + (op.fadeOut.map { (op.fadeIn != nil ? " and" : "") + " out over \($0) frames" } ?? "")
+        if Set(ins + outs).count > 1 { return change("Faded \(song(of: c)!)" + words, c) }
+        return change("Faded \(label(c))’s sound" + words, c)
     }
 
     /// Words on a sound track: A1 is what's heard of V1 plus any sound-only clips on A1.
@@ -1603,7 +1651,9 @@ struct EditWork {
         // Ducked windows with their ramps; windows whose ramps meet stay down between them.
         var windows: [(Double, Double)] = []
         for l in lines { if let last = windows.last, l.0 - attack <= last.1 + release { windows[windows.count - 1].1 = max(last.1, l.1) } else { windows.append(l) } }
-        let targets = s.clips.indices.filter { on(s.clips[$0], t) && hasSound(s.clips[$0]) }
+        // A song's parts on other tracks duck with the one on this track.
+        let onTrack = s.clips.indices.filter { on(s.clips[$0], t) && hasSound(s.clips[$0]) }
+        let targets = Array(Set(onTrack.flatMap(withSong))).sorted()
         guard !targets.isEmpty else { throw bad("\(name(t)) has no sound to duck.") }
         var count = 0
         for i in targets {
@@ -1615,10 +1665,13 @@ struct EditWork {
             }
             s.clips[i].duckKeys = keys.isEmpty ? nil : sourceKeys(["d": keys], c)["d"]
         }
-        var settings = s.track(name(t)); settings.ducked = DuckSettings(under: name(under), dB: depth, attack: attack, release: release)
-        s.tracks = (s.tracks ?? [:]).merging([name(t): settings]) { _, b in b }
+        let ducked = Set(targets.map { s.clips[$0].trackName }).union([name(t)]).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        for tn in ducked {
+            var settings = s.track(tn); settings.ducked = DuckSettings(under: name(under), dB: depth, attack: attack, release: release)
+            s.tracks = (s.tracks ?? [:]).merging([tn: settings]) { _, b in b }
+        }
         let a = targets.map { s.clips[$0].start.seconds }.min() ?? 0, b = targets.map { s.clips[$0].end.seconds }.max() ?? 0
-        return .init(summary: "Ducked \(name(t)) \(dbText(depth)) under \(name(under)) for \(lines.count) \(lines.count == 1 ? "line" : "lines")", changes: [.init(before: (a, b), after: (a, b), tracks: [name(t)])], warnings: count == 0 ? ["No dialogue falls under \(name(t))."] : [])
+        return .init(summary: "Ducked \(ducked.joined(separator: ", ")) \(dbText(depth)) under \(name(under)) for \(lines.count) \(lines.count == 1 ? "line" : "lines")", changes: [.init(before: (a, b), after: (a, b), tracks: ducked)], warnings: count == 0 ? ["No dialogue falls under \(name(t))."] : [])
     }
 
     mutating func placeMusic(_ op: EditOperation) throws -> Outcome {
@@ -1635,19 +1688,43 @@ struct EditWork {
             end = snap(word.range.start); what = "“\(word.text)” at \(tc(end))"
         } else { throw bad("endOn is {cut: \"<left>|<right>\"}, {word: id} or a time in seconds.") }
         guard end > at else { throw bad("The music has to end after it starts.") }
-        var start = at, warnings: [String] = []
-        let available = snapDown(a.duration)
-        if end - start > available { start = end - available; warnings.append("\(a.name) is \(String(format: "%.1f", a.duration.seconds)) s, so it starts at \(tc(start)) to end on time.") }
-        let length = end - start
-        // Trimmed from the head, so the music's own ending lands on the mark.
-        let src = MediaRange(start: a.duration - length, duration: length)
-        let r = MediaRange(start: start, duration: length)
-        let t: Track = try op.track.map { try parseTrack($0) } ?? (true, firstFree(audio: true, from: 1, r))
-        guard t.audio else { throw bad("Music goes on an A track.") }
-        guard free(t, r) else { throw DirectionError("overlap", "\(name(t)) already has sound at \(tc(start))–\(tc(end)).") }
-        let clip = Clip(assetID: a.id, name: a.name, kind: .audio, layer: t.layer, start: start, sourceRange: src)
-        s.clips.append(clip)
-        return .init(summary: "Placed \(a.name) on \(name(t)) to end on \(what)", changes: [.init(before: (start.seconds, end.seconds), after: (start.seconds, end.seconds), tracks: [name(t)])], clipIDs: [clip.id], warnings: warnings)
+        // A library song's parts, by name; each plays the same moment of the song.
+        var playing = [a]
+        if let names = op.parts {
+            guard let g = a.song, !g.isEmpty else { throw bad("\(a.name) isn\u{2019}t a song in parts; leave parts out.") }
+            guard !names.isEmpty else { throw bad("parts names at least one of \(g)\u{2019}s parts: \(parts(of: g).compactMap(\.part).joined(separator: ", ")).") }
+            playing = []
+            for n in names { let p = try part(n, of: g); if !playing.contains(where: { $0.id == p.id }) { playing.append(p) } }
+        }
+        let songLength = playing.map(\.duration).min()!, title = playing.count > 1 ? "\(a.song!) (\(playing.compactMap(\.part).joined(separator: ", ")))" : playing[0].name
+        var start = at, warnings: [String] = [], src: MediaTime
+        if let from = op.from {
+            // From a moment of the song: it plays on from there and stops at the mark.
+            guard from.isFinite, from >= 0 else { throw bad("from is the moment of the song that plays at at, in the song's seconds.") }
+            src = snap(MediaTime(seconds: from))
+            let left = songLength - src
+            guard left > .zero else { throw bad("\(title) is only \(String(format: "%.1f", songLength.seconds)) s long.") }
+            if end - start > left { throw bad("From \(String(format: "%.1f", from)) s, \(title) has \(String(format: "%.1f", left.seconds)) s left, so it can play until \(tc(at + snapDown(left))) at most.") }
+        } else {
+            let available = snapDown(songLength)
+            if end - start > available { start = end - available; warnings.append("\(title) is \(String(format: "%.1f", songLength.seconds)) s, so it starts at \(tc(start)) to end on time.") }
+            // Trimmed from the head, so the music's own ending lands on the mark.
+            src = songLength - (end - start)
+        }
+        let length = end - start, r = MediaRange(start: start, duration: length)
+        // Each part on a sound track of its own, the first on track when it's given.
+        var ids: [String] = [], tracks: [String] = []
+        for (k, p) in playing.enumerated() {
+            var t: Track = (true, firstFree(audio: true, from: 1, r))
+            if k == 0, let given = op.track { t = try parseTrack(given) }
+            guard t.audio else { throw bad("Music goes on an A track.") }
+            guard free(t, r) else { throw DirectionError("overlap", "\(name(t)) already has sound at \(tc(start))–\(tc(end)).") }
+            let clip = Clip(assetID: p.id, name: p.name, kind: .audio, layer: t.layer, start: start, sourceRange: .init(start: src, duration: length))
+            s.clips.append(clip); ids.append(clip.id); tracks.append(name(t))
+        }
+        let on = tracks.count == 1 ? tracks[0] : tracks.joined(separator: ", ")
+        let summary = op.from == nil ? "Placed \(title) on \(on) to end on \(what)" : "Placed \(title) on \(on) from \(tc(src)) in the song to \(what)"
+        return .init(summary: summary, changes: [.init(before: (start.seconds, end.seconds), after: (start.seconds, end.seconds), tracks: tracks)], clipIDs: ids, warnings: warnings)
     }
 
     mutating func audio(_ op: EditOperation) throws -> Outcome {
