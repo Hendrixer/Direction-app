@@ -79,14 +79,18 @@ public struct VideoStudy: Codable, Hashable, Sendable {
         public var musicAloneDB: Double?
         /// Other sounds the classifier heard, each where it starts: added effects, or the footage's own.
         public var effects: [Effect]?
-        /// Of the cuts with no word starting on them, how many land on a hit, and how many the level rises into.
+        /// The key most of the music fits, across every cue: one key held through a film is a choice.
+        public var key: String?
+        /// Of the cuts with music playing and no word starting on them, how many land on a hit; of the cuts with
+        /// no talk in the two seconds before, how many the level rises into. Under the voice a riser can't be told.
         public var cutsHeard: Int?
         public var hitsOnCuts: Int?
+        public var cutsClearOfTalk: Int?
         public var risersIntoCuts: Int?
         public init(loudness: Double? = nil, truePeak: Double? = nil, music: Double? = nil, musicUnderSpeech: Double? = nil, cues: [Cue]? = nil, stings: [Double]? = nil, breaks: [Stretch]? = nil,
-                    musicUnderVoiceDB: Double? = nil, musicAloneDB: Double? = nil, effects: [Effect]? = nil, cutsHeard: Int? = nil, hitsOnCuts: Int? = nil, risersIntoCuts: Int? = nil) {
+                    musicUnderVoiceDB: Double? = nil, musicAloneDB: Double? = nil, effects: [Effect]? = nil, key: String? = nil, cutsHeard: Int? = nil, hitsOnCuts: Int? = nil, cutsClearOfTalk: Int? = nil, risersIntoCuts: Int? = nil) {
             self.loudness = loudness; self.truePeak = truePeak; self.music = music; self.musicUnderSpeech = musicUnderSpeech; self.cues = cues; self.stings = stings; self.breaks = breaks
-            self.musicUnderVoiceDB = musicUnderVoiceDB; self.musicAloneDB = musicAloneDB; self.effects = effects; self.cutsHeard = cutsHeard; self.hitsOnCuts = hitsOnCuts; self.risersIntoCuts = risersIntoCuts
+            self.musicUnderVoiceDB = musicUnderVoiceDB; self.musicAloneDB = musicAloneDB; self.effects = effects; self.key = key; self.cutsHeard = cutsHeard; self.hitsOnCuts = hitsOnCuts; self.cutsClearOfTalk = cutsClearOfTalk; self.risersIntoCuts = risersIntoCuts
         }
     }
 
@@ -221,13 +225,18 @@ public struct VideoStudy: Codable, Hashable, Sendable {
             if let m = s.music { out.append("- Music \(pct(m)) of the time\(s.musicUnderSpeech.map { ", under the speech \(pct($0)) of the time" } ?? "").") }
             if let v = s.musicUnderVoiceDB { out.append("- In the pauses between words the music sits \(db(v)) the voice\(s.musicAloneDB.map { "; with nobody talking it plays \(db($0)) it" } ?? "").") }
             else if let a = s.musicAloneDB { out.append("- With nobody talking the music plays \(db(a)) the voice.") }
+            if let k = s.key {
+                let outside = (s.cues ?? []).compactMap(\.key).filter { $0 != k }
+                out.append("- Across the cues, the notes fit \(k) best\(outside.isEmpty ? "" : "; cues read in another key: \(Array(Set(outside)).sorted().joined(separator: ", "))").")
+            }
             if let cues = s.cues, !cues.isEmpty {
                 let lengths = cues.map { $0.end - $0.start }
                 out.append("- \(plural(cues.count, "music cue", "music cues")), \(mmss(lengths.reduce(0, +) / Double(lengths.count))) on average, the longest \(mmss(lengths.max()!)); \(n(Double(cues.count) / max(1, seconds / 60))) a minute.")
             }
             if let b = s.breaks, !b.isEmpty { out.append("- The music stops for \(plural(b.count, "stretch", "stretches")) of talk, the longest \(mmss(b.map { $0.end - $0.start }.max()!)): at \(times(b.map(\.start), 8)).") }
             if let st = s.stings, !st.isEmpty { out.append("- \(plural(st.count, "short burst", "short bursts")) of music (risers, transitions, hits) at \(times(st)).") }
-            if let c = s.cutsHeard, c > 0 { out.append("- Of the \(plural(c, "cut", "cuts")) with no word starting on them, \(s.hitsOnCuts ?? 0) land on a hit and the level rises into \(s.risersIntoCuts ?? 0) (a riser).") }
+            if let c = s.cutsHeard, c > 0 { out.append("- Of the \(plural(c, "cut", "cuts")) with music playing and no word starting on them, \(s.hitsOnCuts ?? 0) have a sound starting right on the cut: a hit, or the next shot\u{2019}s own sound.") }
+            if let c = s.cutsClearOfTalk, c >= 5 { out.append("- Of the \(plural(c, "cut", "cuts")) with no talk in the two seconds before, the level rises into \(s.risersIntoCuts ?? 0) (a riser). Under the voice a riser can\u{2019}t be told.") }
             if let e = s.effects, !e.isEmpty {
                 let kinds = Dictionary(grouping: e, by: \.sound).sorted { ($0.value.count, $1.key) > ($1.value.count, $0.key) }
                 out.append("- Other sounds heard (added effects, or the footage\u{2019}s own): " + kinds.map { k, v in "\(k) \(v.count)\(v.contains { $0.onCut == true } ? " (\(v.filter { $0.onCut == true }.count) on a cut)" : "") at \(times(v.map(\.at), 6))" }.joined(separator: "; ") + ".")

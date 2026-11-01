@@ -136,5 +136,8 @@ struct MusicListeningTests {
     let under = try #require(sound.musicUnderVoiceDB), alone = try #require(sound.musicAloneDB)
     #expect((-25 ... -6).contains(under) && abs(alone - under) <= 3, "\(under) \(alone)")
     #expect(sound.effects == [VideoStudy.Effect(at: 45, sound: "whoosh", onCut: true)])
-    #expect(sound.cutsHeard == 2)
+    // The cut at 60 s has a word starting on it, so it's neither a hit nor a riser to hear.
+    #expect(sound.cutsHeard == 2 && sound.cutsClearOfTalk == 2)
+    // The two cues are in different keys, so the film as a whole fits neither well enough to name.
+    #expect(sound.key == nil || sound.key == "A minor" || sound.key == "E\u{266D} major")
 }

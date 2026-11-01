@@ -199,8 +199,10 @@ enum MusicListening {
     static let majorProfile: [Float] = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
     static let minorProfile: [Float] = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
     static let noteNames = ["C", "C\u{266F}", "D", "E\u{266D}", "E", "F", "F\u{266F}", "G", "A\u{266D}", "A", "B\u{266D}", "B"]
-    /// How closely the notes must follow a key's profile, and how far ahead of the next key, to name it.
-    static let keyFit: Float = 0.6, keyLead: Float = 0.04
+    /// How closely the notes must follow a key's profile, and how far ahead of the next key, to name it. Music
+    /// under a voice fits less closely than music alone; in a real film its key read 0.45–0.6 where the score's
+    /// own key was the best fit.
+    static let keyFit: Float = 0.45, keyLead: Float = 0.05
 
     /// The key some notes are in, by the profile they follow best: "A minor".
     static func key(_ chroma: [Float]) -> String? {

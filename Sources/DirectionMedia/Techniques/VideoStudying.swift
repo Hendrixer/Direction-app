@@ -189,6 +189,9 @@ public enum VideoStudying {
     static let musicGap = 2.0, cueLength = 6.0, breakLength = 4.0
     /// An instrument is in a cue when it's heard in a quarter of its seconds.
     static let inCue = 0.25
+    /// A cue's own key is named when it's this long; a shorter one under a voice has too few notes to tell, though
+    /// its notes still count toward the film's key.
+    static let keyLength = 12.0
 
     static func score(_ sound: inout VideoStudy.Sound, heard: [Heard], features f: MusicListening.Features?, words: [TranscriptWord], cuts: [Double], seconds: Double) {
         let spoken = words.map { $0.range.start.seconds...max($0.range.start.seconds, $0.range.end.seconds) }
@@ -209,7 +212,7 @@ public enum VideoStudying {
         }
 
         let noteQuiet = f.map { MusicListening.noteMask(quiet, $0) } ?? [], onsetQuiet = f.map { MusicListening.onsetMask(quiet, $0) } ?? []
-        var cues: [VideoStudy.Cue] = []
+        var cues: [VideoStudy.Cue] = [], allNotes = [Float](repeating: 0, count: 12)
         for (a, b) in long {
             let bounds = [a] + (f.map { MusicListening.changes($0, from: a, to: b, quiet: noteQuiet) } ?? []) + [b]
             for (s, e) in zip(bounds, bounds.dropFirst()) {
@@ -221,13 +224,16 @@ public enum VideoStudying {
                 if let f {
                     let oa = max(0, Int(s * MusicListening.onsetRate)), ob = min(f.onsets.count, Int(e * MusicListening.onsetRate))
                     if oa < ob { tempo = MusicListening.tempo(f.onsets[oa..<ob], quiet: Array(onsetQuiet[oa..<ob])) }
-                    key = MusicListening.key(MusicListening.notes(f, from: s, to: e, quiet: noteQuiet))
+                    let notes = MusicListening.notes(f, from: s, to: e, quiet: noteQuiet)
+                    key = e - s >= keyLength ? MusicListening.key(notes) : nil
+                    allNotes = zip(allNotes, notes).map { $0 + $1 }
                 }
                 cues.append(VideoStudy.Cue(start: s, end: e, instruments: instruments, tempo: tempo.map { ($0 * 2).rounded() / 2 }, key: key, underSpeech: speechShare(s, e),
                                            startsOnCut: s < 1 ? nil : onCut(s, within: 1), endsOnCut: e > seconds - 1 ? nil : onCut(e, within: 1)))
             }
         }
         sound.cues = cues
+        if cues.count > 1 { sound.key = MusicListening.key(allNotes) }
 
         // Talk the music leaves alone: before the first cue, between cues and after the last.
         if !cues.isEmpty {
@@ -259,13 +265,22 @@ public enum VideoStudying {
         }
         sound.effects = effects
 
-        // Hits and risers, on the cuts no word starts on (with no words, the cuts in seconds with no talk).
+        // Hits on the cuts in the music that no word starts on (with no words, the cuts in seconds with no talk): a
+        // cut to a shot with its own sound starts a sound too, and is no hit. Risers on the cuts nothing is said before.
         if let f {
             let starts = words.map(\.range.start.seconds)
-            let clear = cuts.filter { c in words.isEmpty ? !(Int(c) < isSpeech.count && isSpeech[Int(c)]) : !starts.contains { abs($0 - c) <= 0.15 } }
+            func music(_ c: Double) -> Bool { (Int(c) < isMusic.count && isMusic[Int(c)]) || (Int(c) > 0 && Int(c) - 1 < isMusic.count && isMusic[Int(c) - 1]) }
+            let clear = cuts.filter { c in music(c) && (words.isEmpty ? !(Int(c) < isSpeech.count && isSpeech[Int(c)]) : !starts.contains { abs($0 - c) <= 0.15 }) }
             sound.cutsHeard = clear.count
             sound.hitsOnCuts = clear.filter { MusicListening.hit(f, at: $0) }.count
-            sound.risersIntoCuts = clear.filter { c in !spoken.contains { $0.overlaps((c - 2)...c) } && MusicListening.riser(f, into: c) }.count
+            func talkBefore(_ c: Double) -> Bool {
+                guard words.isEmpty else { return spoken.contains { $0.overlaps((c - 2)...c) } }
+                let lo = max(0, Int(c) - 2), hi = min(isSpeech.count, Int(c) + 1)
+                return lo < hi && (lo..<hi).contains { isSpeech[$0] }
+            }
+            let quietBefore = cuts.filter { !talkBefore($0) }
+            sound.cutsClearOfTalk = quietBefore.count
+            sound.risersIntoCuts = quietBefore.filter { MusicListening.riser(f, into: $0) }.count
         }
     }
 

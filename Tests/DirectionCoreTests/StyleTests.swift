@@ -140,7 +140,7 @@ struct StyleTests {
                 VideoStudy.Cue(start: 130, end: 190, instruments: ["synth"], tempo: nil, key: nil, underSpeech: 0, startsOnCut: true, endsOnCut: false)]
     let sound = VideoStudy.Sound(loudness: -14.2, truePeak: -1.1, music: 0.8, musicUnderSpeech: 0.5, cues: cues, stings: [111, 129.5], breaks: [VideoStudy.Stretch(start: 112, end: 130)],
                                  musicUnderVoiceDB: -18, musicAloneDB: -6.5, effects: [VideoStudy.Effect(at: 12, sound: "whoosh", onCut: true), VideoStudy.Effect(at: 40, sound: "whoosh", onCut: false), VideoStudy.Effect(at: 41, sound: "ticking clock", onCut: false)],
-                                 cutsHeard: 30, hitsOnCuts: 6, risersIntoCuts: 2)
+                                 key: "A minor", cutsHeard: 30, hitsOnCuts: 6, cutsClearOfTalk: 12, risersIntoCuts: 2)
     let study = VideoStudy(title: "Consumerism", by: "A filmmaker", seconds: 200, pace: .init(shots: 31, cutsPerMinute: 9, averageShot: 6.5, medianShot: 5, longestShot: 20, firstCut: 3, cutsByMinute: [9, 10, 8, 4]),
                            sound: sound, picture: .init(close: 0.5, medium: 0.3, wide: 0.2, noFace: 0.2, punchIns: 0.1, brightness: 0.4, contrast: 0.2, saturation: 0.3, warmth: 0.05),
                            musicCredits: ["Music: Film Score Collection Vol. 3"], shots: [])
@@ -150,7 +150,9 @@ struct StyleTests {
     #expect(md.contains("- 2 music cues, 1:26 on average, the longest 1:52; 0.6 a minute."))
     #expect(md.contains("- The music stops for 1 stretch of talk, the longest 0:18: at 1:52."))
     #expect(md.contains("- 2 short bursts of music (risers, transitions, hits) at 1:51, 2:10."))
-    #expect(md.contains("- Of the 30 cuts with no word starting on them, 6 land on a hit and the level rises into 2 (a riser)."))
+    #expect(md.contains("- Of the 30 cuts with music playing and no word starting on them, 6 have a sound starting right on the cut: a hit, or the next shot\u{2019}s own sound."))
+    #expect(md.contains("- Of the 12 cuts with no talk in the two seconds before, the level rises into 2 (a riser)."))
+    #expect(md.contains("- Across the cues, the notes fit A minor best."))
     #expect(md.contains("whoosh 2 (1 on a cut) at 0:12, 0:40; ticking clock 1 at 0:41."))
     #expect(md.contains("1. 0:00\u{2013}1:52 (1:52): piano, bowed strings \u{00B7} about 92 beats a minute \u{00B7} A minor \u{00B7} under the voice 80% of it \u{00B7} ends on a cut"))
     #expect(md.contains("2. 2:10\u{2013}3:10 (1:00): synth \u{00B7} no steady beat \u{00B7} no one talking over it \u{00B7} starts on a cut"))
