@@ -118,6 +118,7 @@ struct BriefForm: View {
                     .accessibilityLabel("How should it feel?").accessibilityHint("Required")
                 if missing.contains(.feeling) && brief.feeling.isEmpty { needed }
                 else { Text("Talk the way you'd talk to an editor. Feelings are better than instructions.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).frame(minHeight: 17) }
+                MentionChips(text: brief.feeling, footage: model.footageNames)
             }
             HStack(alignment: .top, spacing: 20) {
                 question("Length", nil) {
@@ -145,6 +146,7 @@ struct BriefForm: View {
                     .libraryMentions(text: Binding(get: { brief.avoid ?? "" }, set: { brief.avoid = $0.isEmpty ? nil : $0 }), selection: $avoidCaret)
                     .gateField(focused: focus == .avoid).startPlaceholder("Stock music swells", shown: (brief.avoid ?? "").isEmpty).focused($focus, equals: .avoid)
                     .accessibilityLabel("Avoid")
+                MentionChips(text: brief.avoid ?? "", footage: model.footageNames)
             }
         }
         .onAppear {

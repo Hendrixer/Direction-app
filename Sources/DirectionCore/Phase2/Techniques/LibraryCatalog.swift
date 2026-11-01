@@ -109,22 +109,28 @@ public enum LibraryCatalog {
     /// The things named with "@" and their name in some words, each once, longest name first, and only whole
     /// names: "@Scene 2" isn't found in "@Scene 20".
     public static func mentioned<T: Hashable>(in text: String, _ items: [T], name: (T) -> String) -> [T] {
-        let lower = text.lowercased()
-        guard lower.contains("@") else { return [] }
-        var found: [T] = [], taken: [Range<String.Index>] = []
+        var found: [T] = []
+        for m in mentions(in: text, items, name: name) where !found.contains(m.item) { found.append(m.item) }
+        return found
+    }
+
+    /// Every "@Name" in some words, where it is: "@" through the end of the name, in the order written. Whole
+    /// names only, the longest first, so the words show each as what it names.
+    public static func mentions<T>(in text: String, _ items: [T], name: (T) -> String) -> [(item: T, range: Range<String.Index>)] {
+        guard text.contains("@") else { return [] }
+        var found: [(item: T, range: Range<String.Index>)] = []
         for e in items.sorted(by: { name($0).count > name($1).count }) {
-            var from = lower.startIndex
-            while let r = lower.range(of: "@" + name(e).lowercased(), range: from..<lower.endIndex) {
+            var from = text.startIndex
+            while let r = text.range(of: "@" + name(e), options: .caseInsensitive, range: from..<text.endIndex) {
                 from = r.upperBound
                 // A whole name: nothing word-like right after it, and not inside a longer one already found.
-                let next = r.upperBound < lower.endIndex ? lower[r.upperBound] : " "
-                let before = r.lowerBound > lower.startIndex ? lower[lower.index(before: r.lowerBound)] : " "
-                guard !(next.isLetter || next.isNumber), !(before.isLetter || before.isNumber), !taken.contains(where: { $0.overlaps(r) }) else { continue }
-                taken.append(r)
-                if !found.contains(e) { found.append(e) }
+                let next = r.upperBound < text.endIndex ? text[r.upperBound] : " "
+                let before = r.lowerBound > text.startIndex ? text[text.index(before: r.lowerBound)] : " "
+                guard !(next.isLetter || next.isNumber), !(before.isLetter || before.isNumber), !found.contains(where: { $0.range.overlaps(r) }) else { continue }
+                found.append((e, r))
             }
         }
-        return found
+        return found.sorted { $0.range.lowerBound < $1.range.lowerBound }
     }
 
     /// What the editor reads under a note that names some: "@Grid flash is the technique Grid flash: …".

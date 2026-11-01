@@ -300,7 +300,7 @@ struct NoteRow: View {
         } else if note.lifecycle == .dropped {
             Text(note.text).font(.system(size: 13)).strikethrough().foregroundStyle(Gate.Text.disabled).lineHeight(13, 1.45)
         } else {
-            Text(note.text).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).lineHeight(13, 1.45)
+            Mentions.text(note.text, footage: model.footageNames).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).lineHeight(13, 1.45)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -361,7 +361,7 @@ struct OutsideCard: View {
                     if reaction { LabelChip("No change asked") }
                     if let otherCut { Chip("On \(otherCut.name)", mono: false) }
                 }
-                Text(note.text).font(Gate.Font.body).foregroundStyle(Gate.Text.primary).lineHeight(13, 1.45).fixedSize(horizontal: false, vertical: true)
+                Mentions.text(note.text, footage: model.footageNames).font(Gate.Font.body).foregroundStyle(Gate.Text.primary).lineHeight(13, 1.45).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) { actions }.padding(.top, 4)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -93,7 +93,7 @@ struct ScriptSidePanel: View {
                         .accessibilityLabel("Note \(note.number ?? 0)")
                     Text("Edit the words or press \u{21A9} to keep them.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
                 } else {
-                    Text(note.text).font(Gate.Font.body).foregroundStyle(note.lifecycle == .draft ? Gate.Text.tertiary : Gate.Text.primary).italic(note.lifecycle == .draft)
+                    Mentions.text(note.text, footage: model.footageNames).font(Gate.Font.body).foregroundStyle(note.lifecycle == .draft ? Gate.Text.tertiary : Gate.Text.primary).italic(note.lifecycle == .draft)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

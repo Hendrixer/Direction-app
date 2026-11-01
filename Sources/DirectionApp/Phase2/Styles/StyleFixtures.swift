@@ -17,6 +17,7 @@ enum StyleFixtures {
             "library-sounds": { library(kind: "sounds") },
             "library-images": { library(kind: "images") },
             "mention-list": { mentions() },
+            "mention-note": { mentionNote() },
             "learn-technique": { SnapshotScene(size: CGSize(width: 520, height: 400), LearnTechniqueSheet(model: ChangesFixtures.cut4()).frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground)) },
             "style-from-video": { SnapshotScene(size: CGSize(width: 540, height: 470), StyleFromVideoSheet(model: ChangesFixtures.cut4(), videos: [
                 StyleVideo(link: "https://www.youtube.com/watch?v=k3Jx9fQ2mPo"), StyleVideo(file: URL(fileURLWithPath: "/Users/you/Movies/Their best one.mp4")),
@@ -66,6 +67,22 @@ enum StyleFixtures {
         library.preview = false; library.load()
         let chosen = kind == nil ? library.entries.first { $0.name == "Grid flash" } : library.entries.first { LibraryModel.shown($0, kind: kind) }
         return SnapshotScene(size: CGSize(width: 1180, height: 760), LibraryWindowPreview(chosen: chosen?.id, kind: kind))
+    }
+
+    /// A note that names a sound, an image, a take, a scene and a transition: in the field as it's written, as the
+    /// note reads after, and as chips under a brief field. The library as on this Mac (scratch folders in a snapshot run).
+    private static func mentionNote() -> SnapshotScene {
+        let library = LibraryModel.shared
+        library.preview = false; library.load()
+        let footage = [FootageName(id: "scene:s2", name: "Scene 2", kind: .scene, summary: "The desk", sceneID: "s2"),
+                       FootageName(id: "take:a", name: "2A Take 3", kind: .take, summary: "Circled", sceneID: "s2", setupCode: "2A", assetID: "a")]
+        let words = "Put @Felt piano bed under the open, out on @2A Take 3. @Channel mark in the corner from @Scene 2 on, and a @Whip into the talking head."
+        return SnapshotScene(size: CGSize(width: 460, height: 330), VStack(alignment: .leading, spacing: 14) {
+            NoteField(text: .constant(words), placeholder: "", label: "Note", footage: footage, minHeight: 90)
+            Mentions.text(words, footage: footage).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).lineHeight(13, 1.45).fixedSize(horizontal: false, vertical: true)
+            MentionChips(text: words, footage: footage)
+        }
+        .padding(18).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(Gate.Surface.ground))
     }
 
     /// "@gr" typed in a note: the list under it.

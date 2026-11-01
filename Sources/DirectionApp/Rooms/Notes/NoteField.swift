@@ -6,7 +6,7 @@ import DirectionCore
 /// grammar as you type like any Mac text field. ↩ submits, ⇧↩ adds a line, ⇥ takes the
 /// editor's suggested kind, ⌥1–⌥5 set the kind, esc stops writing. "@" opens the library at the
 /// caret (techniques.md › The library), and the film's scenes, setups and takes (notes.md › Naming
-/// footage); a name picked from it shows in the director's color.
+/// footage); a name picked from it shows in the director's color, its "@" drawn as its kind's icon.
 struct NoteField: View {
     @Binding var text: String
     var placeholder: String
@@ -47,6 +47,40 @@ enum NoteTextMetrics {
     /// CSS 13px/1.45: the leading beyond the font's own line height.
     static var extraLeading: CGFloat { max(0, size * 1.45 - (font.ascender - font.descender + font.leading)) }
     static var inset: NSSize { NSSize(width: 11, height: 9 + extraLeading / 2) }
+}
+
+extension NSAttributedString.Key {
+    /// On a name's "@" in a note: the icon of the kind of thing it names, drawn in its place.
+    static let mentionIcon = NSAttributedString.Key("dev.direction.mentionIcon")
+}
+
+/// Draws each name's "@" as its kind's icon (Mentions.icon); the "@" itself is clear and a little wider (`room`),
+/// so the icon reads at the size of the words and the words stay as written.
+final class MentionLayoutManager: NSLayoutManager {
+    static let room: CGFloat = 4
+    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
+        let chars = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        var i = chars.location
+        while i < NSMaxRange(chars) {
+            var effective = NSRange(location: i, length: 1)
+            if let name = temporaryAttribute(.mentionIcon, atCharacterIndex: i, effectiveRange: &effective) as? String { draw(name, at: i, origin: origin) }
+            i = max(i + 1, NSMaxRange(effective))
+        }
+    }
+
+    private func draw(_ symbol: String, at index: Int, origin: NSPoint) {
+        let glyph = glyphIndexForCharacter(at: index)
+        guard let container = textContainer(forGlyphAt: glyph, effectiveRange: nil),
+              let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: NoteTextMetrics.size - 1, weight: .medium).applying(.init(paletteColors: [NSColor(Gate.Voice.director)]))) else { return }
+        let box = boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+        let line = lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil), baseline = line.minY + location(forGlyphAt: glyph).y
+        // Centered on the "@", sitting on the line like a capital.
+        let scale = min(1, (box.width - 2) / max(1, image.size.width)), size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+        let center = NSPoint(x: origin.x + box.minX + (box.width - 2) / 2, y: origin.y + baseline - NoteTextMetrics.font.capHeight / 2)
+        image.draw(in: NSRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    }
 }
 
 final class NoteTextView: NSTextView {
@@ -97,7 +131,7 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
         let container = NSTextContainer(containerSize: NSSize(width: 300, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
         container.lineFragmentPadding = 0
-        let layout = NSLayoutManager()
+        let layout = MentionLayoutManager()
         layout.addTextContainer(container)
         let storage = NSTextStorage()
         storage.addLayoutManager(layout)
@@ -229,22 +263,25 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
         /// The footage names last highlighted, so new ones light up as Dailies changes.
         var shownFootage: [FootageName] = []
 
-        /// Names from the library and the film's footage in the note, in the director's color.
+        /// Names from the library and the film's footage in the note, in the director's color, each "@" its kind's icon.
         func highlight(_ view: NSTextView) {
             guard let layout = view.layoutManager else { return }
-            let s = view.string as NSString, all = NSRange(location: 0, length: s.length)
+            let text = view.string, all = NSRange(location: 0, length: (text as NSString).length)
             layout.removeTemporaryAttribute(.foregroundColor, forCharacterRange: all)
+            layout.removeTemporaryAttribute(.mentionIcon, forCharacterRange: all)
             shownFootage = parent.footage
-            guard s.contains("@") else { return }
-            for name in LibraryModel.shared.entries.map(\.name) + parent.footage.map(\.name) {
-                var from = 0
-                while from < s.length {
-                    let r = s.range(of: "@" + name, options: .caseInsensitive, range: NSRange(location: from, length: s.length - from))
-                    guard r.location != NSNotFound else { break }
-                    layout.addTemporaryAttribute(.foregroundColor, value: NSColor(Gate.Voice.director), forCharacterRange: r)
-                    from = r.location + r.length
-                }
+            // The room after each "@" is set again on every change, so what's typed after one never takes it.
+            let storage = view.textStorage
+            storage?.beginEditing()
+            storage?.removeAttribute(.kern, range: all)
+            for (entry, range) in Mentions.found(in: text, footage: parent.footage) {
+                let r = NSRange(range, in: text), at = NSRange(location: r.location, length: 1)
+                layout.addTemporaryAttribute(.foregroundColor, value: NSColor(Gate.Voice.director), forCharacterRange: r)
+                layout.addTemporaryAttribute(.foregroundColor, value: NSColor.clear, forCharacterRange: at)
+                layout.addTemporaryAttribute(.mentionIcon, value: Mentions.icon(entry.kind), forCharacterRange: at)
+                storage?.addAttribute(.kern, value: MentionLayoutManager.room, range: at)
             }
+            storage?.endEditing()
         }
 
         func measure(_ view: NSTextView) {

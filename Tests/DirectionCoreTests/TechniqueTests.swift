@@ -63,6 +63,16 @@ struct LibraryCatalogTests {
         #expect(entries.filter { $0.name == "Whip" }.count == 1 && entries.first { $0.name == "Grid flash" }?.icon == "square.grid.3x3.fill")
     }
 
+    /// Where each name is, so it can show as what it names: in the order written, as written, whole names only.
+    @Test func atNamesAreFoundWhereTheyAre() {
+        let entries = LibraryCatalog.entries(techniques: [technique("Grid flash")], items: [ShelfItem(file: "Felt piano.m4a", kind: .music)])
+        let text = "A @whip, then @Felt Piano and @Grid flash; not @Whipped."
+        let found = LibraryCatalog.mentions(in: text, entries, name: \.name)
+        #expect(found.map(\.item.name) == ["Whip", "Felt piano", "Grid flash"])
+        #expect(found.map { String(text[$0.range]) } == ["@whip", "@Felt Piano", "@Grid flash"])
+        #expect(found.map(\.item.kind) == ["transition", "music", "transition"])
+    }
+
     @Test func atNamesAreFoundWholeAndExplained() {
         let entries = LibraryCatalog.entries(techniques: [technique("Grid flash")])
         let found = LibraryCatalog.mentions(in: "Use @grid flash here, then a @Whip. Not an @email or a@Whip.", entries: entries)

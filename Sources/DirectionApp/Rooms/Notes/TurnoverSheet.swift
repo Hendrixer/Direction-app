@@ -125,7 +125,7 @@ struct CompactNoteList: View {
                 if c.isOutside { Chip(model.anchorStart(c)) } else { Chip(model.anchorStart(c), style: .director) }
             }
             .frame(width: 64, alignment: .leading)
-            Text(c.person.map { "\(c.text) · \($0.name)" } ?? c.text)
+            Mentions.text(c.person.map { "\(c.text) · \($0.name)" } ?? c.text, footage: model.footageNames)
                 .font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary).lineLimit(1).truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if model.isInLockedScene(c) { Chip("Locked scene", icon: "lock.fill", mono: false) }

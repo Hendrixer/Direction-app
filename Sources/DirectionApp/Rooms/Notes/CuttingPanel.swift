@@ -154,7 +154,7 @@ struct StepRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 10) {
                 NoteNumber(note: note).lineHeight(14, 1.25, mono: true).frame(width: 26, alignment: .leading)
-                Text(note.text).font(Gate.Font.body).foregroundStyle(status == .queued ? Gate.Text.tertiary : Gate.Text.primary)
+                Mentions.text(note.text, footage: model.footageNames).font(Gate.Font.body).foregroundStyle(status == .queued ? Gate.Text.tertiary : Gate.Text.primary)
                     .lineHeight(13, 1.4).lineLimit(2).truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading).layoutPriority(1)
                 statusLabel

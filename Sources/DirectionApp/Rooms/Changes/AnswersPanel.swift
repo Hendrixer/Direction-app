@@ -420,7 +420,7 @@ struct AnswerThread: View {
             .frame(width: 14, height: 14).padding(.top, 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(m.who).font(Gate.Font.caption).foregroundStyle(Gate.Text.disabled).frame(minHeight: 16)
-                Text(m.text).font(.system(size: 12.5)).lineSpacing(2.7).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
+                Mentions.text(m.text, footage: model.footageNames).font(.system(size: 12.5)).lineSpacing(2.7).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityElement(children: .combine)
