@@ -82,13 +82,17 @@ public enum LibraryCatalog {
     }
 
     /// The entries named with "@Name" in some words, longest name first so "@Grid flash big" finds Grid flash.
-    public static func mentions(in text: String, entries: [LibraryEntry]) -> [LibraryEntry] {
+    public static func mentions(in text: String, entries: [LibraryEntry]) -> [LibraryEntry] { mentioned(in: text, entries, name: \.name) }
+
+    /// The things named with "@" and their name in some words, each once, longest name first, and only whole
+    /// names: "@Scene 2" isn't found in "@Scene 20".
+    public static func mentioned<T: Hashable>(in text: String, _ items: [T], name: (T) -> String) -> [T] {
         let lower = text.lowercased()
         guard lower.contains("@") else { return [] }
-        var found: [LibraryEntry] = [], taken: [Range<String.Index>] = []
-        for e in entries.sorted(by: { $0.name.count > $1.name.count }) {
+        var found: [T] = [], taken: [Range<String.Index>] = []
+        for e in items.sorted(by: { name($0).count > name($1).count }) {
             var from = lower.startIndex
-            while let r = lower.range(of: "@" + e.name.lowercased(), range: from..<lower.endIndex) {
+            while let r = lower.range(of: "@" + name(e).lowercased(), range: from..<lower.endIndex) {
                 from = r.upperBound
                 // A whole name: nothing word-like right after it, and not inside a longer one already found.
                 let next = r.upperBound < lower.endIndex ? lower[r.upperBound] : " "

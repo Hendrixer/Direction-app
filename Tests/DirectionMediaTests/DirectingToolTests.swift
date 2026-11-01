@@ -118,3 +118,22 @@ private func expectRefused(_ code: String, _ body: () async throws -> Void) asyn
     let record = try store.editRecords().last
     #expect(try store.read().sequences[0].duration == MediaTime(seconds: 9) && record?.notes == [note.number ?? 0])
 }
+
+/// A note that names a take with "@" reaches the editor's turnover with which take it is and where it plays.
+@Test func aTurnoverSaysWhichTakeANoteNames() async throws {
+    let path = FileManager.default.temporaryDirectory.appendingPathComponent("direction-named-" + UUID().uuidString + ".direction")
+    defer { try? FileManager.default.removeItem(at: path) }
+    let store = try ProjectStore.create(at: path, name: "Launch film")
+    _ = try store.addAsset(MediaAsset(id: "take-1", name: "A011_C001.mov", path: "/fixture.mov", duration: .init(seconds: 10), video: [.init(id: 1, width: 320, height: 180, frameRate: 24)], audio: []), append: true, expectedRevision: 0)
+    let runtime = try ToolRuntime(store: store)
+    _ = try await runtime.invoke("direction_log_dailies", arguments: .object([
+        "scenes": .array([.object(["number": .number(1), "title": .string("Cold open"), "setups": .array([.object(["code": .string("1A"), "description": .string("Street")])])])]),
+        "takes": .array([.object(["assetID": .string("take-1"), "sceneNumber": .number(1), "setupCode": .string("1A"), "code": .string("T1")])]),
+    ]))
+    let p = try store.read()
+    let note = try store.addComment(text: "Open on @1A Take 1 instead.", sequenceID: nil, revision: p.editRevision, time: .init(seconds: 1), extra: NoteFields(kind: .picture))
+    _ = try store.turnOver(noteIDs: [note.id], latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
+    let named = try await runtime.invoke("direction_turnovers").value["turnovers"].array?.first?["footageNamed"].array?.first
+    #expect(named?["noteID"].string == note.id)
+    #expect(named?["names"].string == "@1A Take 1 is the take A011_C001.mov (assetID take-1) in scene 1 Cold open, setup 1A Street. In the cut at 0:00\u{2013}0:10.")
+}

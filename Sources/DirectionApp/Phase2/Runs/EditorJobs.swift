@@ -55,7 +55,8 @@ enum EditorJobs {
             v["sync"] = syncRules(dailies, assets: p.assets, layout: try store.directingState().layout, styleLayouts: applied.layouts)
             let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }.sorted { ($0.number ?? 0) < ($1.number ?? 0) }
             let library = LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder))
-            v["notes"] = included.map { noteLine($0, library: library) }.joined(separator: "\n")
+            let footage = FootageMention(names: FootageNames.all(dailies, assets: p.assets), dailies: dailies, assets: p.assets, cut: try? p.sequence(nil))
+            v["notes"] = included.map { noteLine($0, library: library, footage: footage) }.joined(separator: "\n")
             v["waitForOK"] = t.waitForOK
                 ? "The director wants to OK the read-back before you cut. Post it, then end your turn with finished: false; Direction continues this session when they approve."
                 : "The director doesn\u{2019}t need to OK the read-back. Post it, then start cutting."
@@ -205,15 +206,25 @@ enum EditorJobs {
     static func ducking(_ db: Double) -> String { db > 0 ? "duck it \(Int(db)) dB (`duck`) where a note doesn\u{2019}t say otherwise" : "don\u{2019}t duck it unless a note asks" }
     private static func minutes(_ s: Double) -> String { String(format: "%d:%02d", Int(s) / 60, Int(s) % 60) }
 
+    /// What a note's "@Scene 2" or "@2A Take 3" needs to be explained.
+    struct FootageMention {
+        var names: [FootageName]
+        var dailies: Dailies
+        var assets: [MediaAsset]
+        var cut: DirectionCore.Sequence?
+    }
+
     /// "- Note 3 (Picture, at 01:12:08): Tighter on her. The sky is winning."
-    private static func noteLine(_ c: ReviewComment, library: [LibraryEntry] = []) -> String {
+    static func noteLine(_ c: ReviewComment, library: [LibraryEntry] = [], footage: FootageMention? = nil) -> String {
         var anchor = "the whole cut"
         if let r = c.range { anchor = EditorActivityLog.timecode(r.start.seconds, 24) + "\u{2013}" + EditorActivityLog.timecode(r.end.seconds, 24) }
         else if let t = c.time { anchor = "at " + EditorActivityLog.timecode(t.seconds, 24) }
         else if let line = c.scriptAction?.lineLabel { anchor = line }
         let about = [c.kind?.label, anchor].compactMap { $0 }.joined(separator: ", ")
         let named = LibraryCatalog.mentions(in: c.text, entries: library)
+        let shots = footage.map { f in FootageNames.mentions(in: c.text, names: f.names) } ?? []
         return "- Note \(c.number.map(String.init) ?? "\u{2013}") (\(about)): \(c.text)" + (named.isEmpty ? "" : "\n  (\(LibraryCatalog.explain(named)))")
+            + (shots.isEmpty ? "" : "\n  (\(FootageNames.explain(shots, dailies: footage!.dailies, assets: footage!.assets, cut: footage!.cut)))")
     }
 
     // MARK: The working folder

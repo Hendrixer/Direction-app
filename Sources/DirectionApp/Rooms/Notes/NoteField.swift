@@ -5,11 +5,14 @@ import DirectionCore
 /// The multi-line note field (`.field.area`). A real text view, so it checks spelling and
 /// grammar as you type like any Mac text field. ↩ submits, ⇧↩ adds a line, ⇥ takes the
 /// editor's suggested kind, ⌥1–⌥5 set the kind, esc stops writing. "@" opens the library at the
-/// caret (techniques.md › The library); a name picked from it shows in the director's color.
+/// caret (techniques.md › The library), and the film's scenes, setups and takes (notes.md › Naming
+/// footage); a name picked from it shows in the director's color.
 struct NoteField: View {
     @Binding var text: String
     var placeholder: String
     var label: String
+    /// The film's scenes, setups and takes, named after "@" as Dailies shows them.
+    var footage: [FootageName] = []
     var minHeight: CGFloat = 64
     var maxHeight: CGFloat = 160
     /// Bump to put the caret in the field.
@@ -25,7 +28,7 @@ struct NoteField: View {
     @State private var contentHeight: CGFloat = 0
 
     var body: some View {
-        NoteTextViewRepresentable(text: $text, label: label, focusToken: focusToken, contentHeight: $contentHeight,
+        NoteTextViewRepresentable(text: $text, label: label, footage: footage, focusToken: focusToken, contentHeight: $contentHeight,
                                   onFocusChange: { focused = $0; onFocusChange($0) }, onSubmit: onSubmit, onEscape: onEscape, onTab: onTab, onOptionDigit: onOptionDigit)
             .frame(height: max(minHeight, min(maxHeight, contentHeight)))
             .overlay(alignment: .topLeading) {
@@ -72,6 +75,7 @@ final class NoteTextView: NSTextView {
 private struct NoteTextViewRepresentable: NSViewRepresentable {
     @Binding var text: String
     var label: String
+    var footage: [FootageName]
     var focusToken: Int
     @Binding var contentHeight: CGFloat
     var onFocusChange: (Bool) -> Void
@@ -142,7 +146,7 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
             view.string = text
             view.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
             context.coordinator.highlight(view)
-        }
+        } else if footage != context.coordinator.shownFootage { context.coordinator.highlight(view) }
         view.setAccessibilityLabel(label)
         view.onOptionDigit = onOptionDigit.map { _ in { digit in context.coordinator.parent.onOptionDigit?(digit) } }
         context.coordinator.measure(view)
@@ -189,7 +193,7 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
             if library.entries.isEmpty { library.load() }
             let sel = view.selectedRange()
             guard view.window?.firstResponder === view, sel.length == 0, let t = MentionToken.find(view.string, caret: sel.location) else { closeMention(); return }
-            let found = Array(library.search(t.query).prefix(6)), q = t.query.lowercased().trimmingCharacters(in: .whitespaces)
+            let found = Array(library.search(t.query, footage: parent.footage).prefix(6)), q = t.query.lowercased().trimmingCharacters(in: .whitespaces)
             // A whole name written and a space after it: done.
             if found.isEmpty || (t.query.hasSuffix(" ") && found.contains { $0.name.lowercased() == q }) { closeMention(); return }
             if mention?.range.location != t.range.location { selected = 0 }
@@ -222,16 +226,20 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
             view.insertText("@\(e.name) ", replacementRange: m.range)
         }
 
-        /// Names from the library in the note, in the director's color.
+        /// The footage names last highlighted, so new ones light up as Dailies changes.
+        var shownFootage: [FootageName] = []
+
+        /// Names from the library and the film's footage in the note, in the director's color.
         func highlight(_ view: NSTextView) {
             guard let layout = view.layoutManager else { return }
             let s = view.string as NSString, all = NSRange(location: 0, length: s.length)
             layout.removeTemporaryAttribute(.foregroundColor, forCharacterRange: all)
+            shownFootage = parent.footage
             guard s.contains("@") else { return }
-            for e in LibraryModel.shared.entries {
+            for name in LibraryModel.shared.entries.map(\.name) + parent.footage.map(\.name) {
                 var from = 0
                 while from < s.length {
-                    let r = s.range(of: "@" + e.name, options: .caseInsensitive, range: NSRange(location: from, length: s.length - from))
+                    let r = s.range(of: "@" + name, options: .caseInsensitive, range: NSRange(location: from, length: s.length - from))
                     guard r.location != NSNotFound else { break }
                     layout.addTemporaryAttribute(.foregroundColor, value: NSColor(Gate.Voice.director), forCharacterRange: r)
                     from = r.location + r.length

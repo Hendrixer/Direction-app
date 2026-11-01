@@ -133,7 +133,7 @@ struct ReadBackLineView: View {
     }
 
     @ViewBuilder private var correction: some View {
-        NoteField(text: Binding(get: { ui.correction }, set: { ui.correction = $0 }), placeholder: "What should change?", label: "Correction for note \(number)",
+        NoteField(text: Binding(get: { ui.correction }, set: { ui.correction = $0 }), placeholder: "What should change?", label: "Correction for note \(number)", footage: model.footageNames,
                   minHeight: 52, maxHeight: 120, focusToken: focusRequest,
                   onSubmit: send, onEscape: cancel)
             .padding(.top, 8)

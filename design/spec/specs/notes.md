@@ -24,6 +24,8 @@ Shared layout (frames 17–24, in pt):
 
 **"@" names something in the library** (techniques.md › The library): typing "@" in any note field opens a list at the "@" (icon, name, one line; up to six that match what follows the "@"), ↑↓ move, ↩ or ⇥ picks and writes "@Name ", esc closes it. Names from the library show in the director's amber. The editor reads what each named one is and how to make it with the note.
 
+**"@" names footage too** (Naming footage): the film's scenes, setups and takes are in the same list, by the names Dailies shows: "Scene 2" (its title under it), "2A" (what it is and its scene), "2A Take 3" (its caption, and Circled when it is). A take with no setup is "Scene 4 Take 2"; one not in a scene yet goes by its file's name ("MVI_0001", "Not logged yet"). With nothing typed after the "@" the library comes first; after that both are searched, names that start with what's typed first, and words in a caption find its take ("@laughs"). Their icons: `film` for a scene, `video` for a setup, `play.rectangle` for a take. Only whole names count, longest first, so "@2A Take 3" is the take, not the setup, and "@Scene 2" isn't found in "@Scene 20". The editor reads each named one with the note (the turnover's `footageNamed`, and under the note in its job): which take it is (its file and assetID), its scene and setup, its caption, circled or not usable, and where it is in the cut ("In the cut at 1:10–1:22", or "Not in the cut"); a setup or scene with its takes and the circled ones. It uses that take, not one that seems like it.
+
 Note anchors in the composer follow the playhead until you start typing. Then they're pinned, and moving the playhead doesn't change them.
 
 Room keys:

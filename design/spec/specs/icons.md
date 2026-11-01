@@ -72,6 +72,8 @@ The rendering mode is monochrome and the color is inherited (`.foregroundStyle(.
 | gem | Editor | **custom shape**; `diamond.fill` as a fallback in menus only |
 | brief | The brief | `doc.plaintext` |
 | takes | Dailies, takes grid | `square.grid.2x2` |
+| setup | A setup named with "@" | `video` |
+| take | A take named with "@" | `play.rectangle` |
 | split | Compare A/B | `rectangle.split.2x1` |
 | history | Cut history | `clock.arrow.circlepath` |
 | offline | Offline | `wifi.slash` |

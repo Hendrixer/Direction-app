@@ -749,6 +749,9 @@ final class FilmModel {
 
     // MARK: Brief and footage
 
+    /// The scenes, setups and takes a note can name with "@" (notes.md › Naming footage).
+    var footageNames: [FootageName] { FootageNames.all(dailies, assets: project?.assets ?? []) }
+
     func saveBrief(_ b: Brief) {
         brief = b; perform { try $0.saveBrief(b) }
         // A reference taken out takes its study with it.

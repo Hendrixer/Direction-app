@@ -28,3 +28,13 @@ import DirectionCore
     #expect(take.contains("Filed by the director in \u{201C}02 Pricing/A Talking head\u{201D}: scene 2 Pricing \u{00B7} setup 2A Talking head \u{00B7} take T3."))
     #expect(LoggingDigest.scenes(dailies).contains("the director\u{2019}s folder \u{201C}02 Pricing\u{201D}: 2A Talking head"))
 }
+
+/// A turnover's note that names a take with "@" reaches the editor with which take it is.
+@Test func aNoteNamingATakeTellsTheEditorWhichOne() {
+    var d = Dailies(scenes: [DailiesScene(id: "scene-2", number: 2, title: "Pricing", setups: [DailiesSetup(code: "2A", description: "Talking head")])], takes: [:])
+    var t = TakeInfo(assetID: "t3"); t.sceneID = "scene-2"; t.setupCode = "2A"; t.code = "T3"; t.circled = true; d.takes["t3"] = t
+    let assets = [MediaAsset(id: "t3", name: "T3.mov", path: "/T3.mov", duration: .init(seconds: 12), video: [.init(id: 1, width: 1920, height: 1080, frameRate: 24)])]
+    let note = ReviewComment(id: "c1", cutID: nil, editRevision: 1, sequenceID: "s", scope: "time", range: nil, time: .init(seconds: 72), region: nil, text: "Use @2A Take 3 here.", author: "Director", status: "open", anchors: [], transcriptContext: [], replies: [], createdAt: 0, cursor: 0)
+    let line = EditorJobs.noteLine(note, footage: .init(names: FootageNames.all(d, assets: assets), dailies: d, assets: assets, cut: nil))
+    #expect(line.hasSuffix("Use @2A Take 3 here.\n  (@2A Take 3 is the take T3.mov (assetID t3) in scene 2 Pricing, setup 2A Talking head: circled. Not in the cut.)"))
+}

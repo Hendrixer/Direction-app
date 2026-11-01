@@ -89,16 +89,24 @@ extension ToolRuntime {
             let shown = a["includeClosed"].bool == true ? all : all.filter(\.state.isOpen)
             // "@Name" in a note names something in the library: say what it is and how it's made.
             let library = LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder))
+            // "@Scene 2", "@2A", "@2A Take 3" name footage: say which take, setup or scene, and where it is in the cut.
+            let p = try store.read(), dailies = try store.dailies(), footage = FootageNames.all(dailies, assets: p.assets)
             let items: [JSONValue] = try shown.map { t in
                 let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }
                 let named: [JSONValue] = included.compactMap { n in
                     let found = LibraryCatalog.mentions(in: n.text, entries: library)
                     return found.isEmpty ? nil : .object(["noteID": .string(n.id), "names": .string(LibraryCatalog.explain(found))])
                 }
+                let cut = (try? p.sequence(nil))
+                let footageNamed: [JSONValue] = included.compactMap { n in
+                    let found = FootageNames.mentions(in: n.text, names: footage)
+                    return found.isEmpty ? nil : .object(["noteID": .string(n.id), "names": .string(FootageNames.explain(found, dailies: dailies, assets: p.assets, cut: cut))])
+                }
                 return .object([
                     "turnover": try .wrapping(t),
                     "notes": .array(try included.map { try $0.forEditor() }),
                     "libraryNamed": .array(named),
+                    "footageNamed": .array(footageNamed),
                     "questions": try .wrapping(questions.filter { $0.turnoverID == t.id }),
                     "latitudeMeaning": .string(t.latitude.detail),
                     "mayStartCutting": .bool(!t.waitForOK || t.readBackApproved || t.kind == "assembly"),

@@ -44,17 +44,26 @@ import DirectionTools
         }
     }
 
-    /// Entries whose name or sentence holds every word typed, names that start with it first.
-    func search(_ query: String, kind: String? = nil) -> [LibraryEntry] {
+    /// Entries whose name or sentence holds every word typed, names that start with it first. A note's "@" also
+    /// looks through the film's `footage`: after the library while nothing's typed, among it after that.
+    func search(_ query: String, kind: String? = nil, footage: [FootageName] = []) -> [LibraryEntry] {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
         let words = q.split(separator: " ").map(String.init)
-        let pool = entries.filter { kind == nil || $0.kind == kind || (kind == "yours" && !$0.isBuiltIn) }
-        guard !words.isEmpty else { return pool }
+        let pool = footage.map(\.entry) + entries.filter { kind == nil || $0.kind == kind || (kind == "yours" && !$0.isBuiltIn) }
+        guard !words.isEmpty else { return entries.filter { kind == nil || $0.kind == kind || (kind == "yours" && !$0.isBuiltIn) } + footage.map(\.entry) }
         let hits = pool.filter { e in words.allSatisfy { w in "\(e.name) \(e.summary) \(e.kind)".lowercased().contains(w) } }
         return hits.sorted { a, b in
             let pa = a.name.lowercased().hasPrefix(q), pb = b.name.lowercased().hasPrefix(q)
             return pa != pb ? pa : false
         }
+    }
+}
+
+extension FootageName {
+    /// As the "@" list shows it: a scene with the film icon, a setup with a camera, a take with a frame.
+    var entry: LibraryEntry {
+        LibraryEntry(id: id, name: name, kind: kind.rawValue, summary: summary.isEmpty ? kind.rawValue.capitalized : summary,
+                     icon: kind == .scene ? "film" : kind == .setup ? "video" : "play.rectangle", use: "")
     }
 }
 

@@ -24,7 +24,7 @@ struct NotesComposer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             anchorRow.frame(height: Gate.Size.control)
-            NoteField(text: $model.draftText, placeholder: "What should it feel like?", label: fieldLabel, focusToken: focusRequest,
+            NoteField(text: $model.draftText, placeholder: "What should it feel like?", label: fieldLabel, footage: model.footageNames, focusToken: focusRequest,
                       onFocusChange: { ui.composerFocused = $0 },
                       onSubmit: submit,
                       onEscape: { model.cancelComposer(); onLeave() },
