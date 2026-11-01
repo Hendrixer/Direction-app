@@ -334,6 +334,15 @@ struct MentionList: View {
 /// Where "@" is being typed: the "@word" before the caret, when it starts a word and the words could still
 /// be one of the library's names.
 enum MentionToken {
+    /// The caret's place in `text`, in UTF-16 units, or nil when it isn't a place in this text. A field's
+    /// selection can still point into what the field held before (another film's brief, the text a keystroke
+    /// ago), and measuring that against this text stops the app.
+    static func caret(_ i: String.Index, in text: String) -> Int? {
+        var n = 0
+        for j in text.utf16.indices { if j == i { return n }; n += 1 }
+        return i == text.endIndex ? n : nil
+    }
+
     static func find(_ text: String, caret: Int) -> (range: NSRange, query: String)? {
         let s = text as NSString
         guard caret <= s.length else { return nil }
@@ -360,8 +369,8 @@ struct MentionsModifier: ViewModifier {
     private var library: LibraryModel { LibraryModel.shared }
 
     private var token: (range: NSRange, query: String)? {
-        guard let sel = selection, case .selection(let r) = sel.indices, r.isEmpty else { return nil }
-        return MentionToken.find(text, caret: text.utf16.distance(from: text.startIndex, to: r.lowerBound))
+        guard let sel = selection, case .selection(let r) = sel.indices, r.isEmpty, let caret = MentionToken.caret(r.lowerBound, in: text) else { return nil }
+        return MentionToken.find(text, caret: caret)
     }
     private var items: [LibraryEntry] {
         guard let t = token, dismissed != text else { return [] }
