@@ -63,6 +63,33 @@ struct FootageImportTests {
         m.close()
     }
 
+    /// A take that moves while a saved cut is on screen (relinked, or copied so it plays from any frame) plays
+    /// from where it is now, without opening the film again.
+    @Test func aSavedCutPlaysATakeFromWhereItIsNow() async throws {
+        let dir = try scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var wav = Data("RIFF".utf8); let samples = 48_000
+        func u32(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { wav.append(contentsOf: $0) } }
+        func u16(_ v: UInt16) { withUnsafeBytes(of: v.littleEndian) { wav.append(contentsOf: $0) } }
+        u32(UInt32(36 + samples * 2)); wav.append(contentsOf: "WAVEfmt ".utf8); u32(16); u16(1); u16(1); u32(48_000); u32(96_000); u16(2); u16(16)
+        wav.append(contentsOf: "data".utf8); u32(UInt32(samples * 2)); wav.append(Data(count: samples * 2))
+        let first = dir.appendingPathComponent("narration.wav"), moved = dir.appendingPathComponent("Moved/narration.wav")
+        try wav.write(to: first); try file(moved); try wav.write(to: moved)
+        let store = try ProjectStore.create(at: dir.appendingPathComponent("Film.direction"), name: "Film")
+        let runtime = try ToolRuntime(store: store)
+        let id = try #require(try await runtime.invoke("direction_import", arguments: .object(["path": .string(first.path), "append": .bool(true)])).value["asset"]["id"].string)
+        _ = try await runtime.invoke("direction_create_cut", arguments: .object(["name": .string("Assembly")]))
+        let m = FilmModel(preview: false)
+        m.runtime = runtime
+        m.refresh(force: true)
+        #expect(m.displayed?.assets.first?.path == first.path)
+        let values = try moved.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        try store.relink([AssetRelink(assetID: id, path: moved.path, fileSize: Int64(values.fileSize ?? 0), modifiedAt: values.contentModificationDate?.timeIntervalSince1970 ?? 0, duration: MediaTime(seconds: 1))])
+        m.refresh(force: true)
+        #expect(m.displayed?.editRevision == 1 && m.displayed?.assets.first?.path == moved.path)
+        m.close()
+    }
+
     /// B-roll with nothing said in it has no dialogue; it didn't fail. A job from before codes says so in words.
     @Test func aTakeWithNothingSaidHasNoDialogueNotAFailure() throws {
         let dir = try scratch()

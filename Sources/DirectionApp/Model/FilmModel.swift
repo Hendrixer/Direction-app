@@ -269,10 +269,17 @@ final class FilmModel {
     func loadDisplayed(force: Bool = false) {
         guard let store else { return }
         let revision = watchedCut.map(revision(of:)) ?? project?.editRevision ?? 0
-        if force || displayed?.editRevision != revision || displayed == nil {
+        if force || displayed?.editRevision != revision || displayed == nil || takesMoved {
             displayed = (try? store.read(revision: revision)) ?? project
         }
         preparePlayback()
+    }
+    /// A take in the watched cut now plays from another file (relinked, or copied so it plays from any frame):
+    /// the cut is read again, since every revision plays a take from where it is now.
+    private var takesMoved: Bool {
+        guard let shown = displayed, let now = project else { return false }
+        let files = Dictionary(now.assets.map { ($0.id, $0.path) }, uniquingKeysWith: { a, _ in a })
+        return shown.assets.contains { a in files[a.id].map { $0 != a.path } ?? false }
     }
 
     // MARK: Derived: cuts and sequences
@@ -486,9 +493,10 @@ final class FilmModel {
 
     func preparePlayback(force: Bool = false) {
         guard !isPreview, let p = displayed, let sequence, let runtime else { return }
-        // The look is kept outside the revisions, so choosing one (or undoing it) changes the key too.
+        // The look is kept outside the revisions, so choosing one (or undoing it) changes the key too; so does a
+        // take playing from another file.
         let looks = try? runtime.store.lookContext()
-        let key = "\(p.editRevision):\(sequence.id):\(looks?.hashValue ?? 0)"
+        let key = "\(p.editRevision):\(sequence.id):\(looks?.hashValue ?? 0):\(p.assets.map(\.path).hashValue)"
         guard force || key != renderKey else { return }
         renderKey = key; renderTask?.cancel(); isPreparing = true; pendingSeek = position
         if sequence.clips.isEmpty { player.pause(); player.replaceCurrentItem(with: nil); compiled = nil; isPreparing = false; return }
