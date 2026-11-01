@@ -50,13 +50,20 @@ import DirectionTools
         runner.pump()
     }
 
-    /// A style made from videos leaves nothing behind: the downloads and what was read from them go
-    /// once it's saved. A run that stopped keeps them for Try Again.
+    /// Learning from videos leaves nothing behind: once a style or a technique is saved, the downloads and
+    /// what was read from them go. A run that stopped keeps them for Try Again.
     static func cleanUpStudies(_ runs: [EditorRun], store: ProjectStore) {
-        for r in runs where r.job == .style && r.state == .done && !(r.studies ?? []).isEmpty {
-            let film = store.url.standardizedFileURL.path + "/"
-            for path in r.studies ?? [] where URL(fileURLWithPath: path).standardizedFileURL.path.hasPrefix(film) { try? FileManager.default.removeItem(atPath: path) }
-            _ = try? store.updateRun(r.id) { $0.studies = nil }
+        let film = store.url.standardizedFileURL.path + "/"
+        func remove(_ path: String) { if URL(fileURLWithPath: path).standardizedFileURL.path.hasPrefix(film) { try? FileManager.default.removeItem(atPath: path) } }
+        for r in runs where r.state == .done {
+            if r.job == .style, let studies = r.studies, !studies.isEmpty {
+                studies.forEach(remove)
+                _ = try? store.updateRun(r.id) { $0.studies = nil }
+            }
+            if r.job == .technique, let folder = r.learnFolder {
+                remove(folder)
+                _ = try? store.updateRun(r.id) { $0.learnFolder = nil; $0.learnVideo = nil }
+            }
         }
     }
 

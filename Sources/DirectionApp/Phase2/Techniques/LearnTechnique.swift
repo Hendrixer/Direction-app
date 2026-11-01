@@ -6,7 +6,8 @@ import DirectionMedia
 
 // Learn a technique (techniques.md › Learning one): the director gives a link or a video file and says what
 // to take from it; Direction gets the video ready (downloaded, its words, a contact sheet every two seconds)
-// in the film's editor folder, and the editor learns it into the Techniques folder.
+// in the film's editor folder, and the editor learns it into the Techniques folder. Once it's saved, the
+// folder goes, download and all (EditorRunsModel.cleanUpStudies).
 
 extension FilmModel {
     func learnTechnique(link: String, file: URL?, ask: String) {
@@ -17,16 +18,8 @@ extension FilmModel {
         toast = Toast(title: "Getting the video ready", detail: file == nil ? "Downloading it and reading its words. The editor starts when it\u{2019}s ready." : "Reading its words and frames. The editor starts when it\u{2019}s ready.", editor: true)
         Task { @MainActor in
             do {
-                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                let video: URL
-                if let file {
-                    // A copy beside what Direction reads from it, so the editor can look at any moment.
-                    video = folder.appendingPathComponent("video." + (file.pathExtension.isEmpty ? "mov" : file.pathExtension))
-                    try FileManager.default.copyItem(at: file, to: video)
-                } else {
-                    guard let url = URL(string: link.trimmingCharacters(in: .whitespacesAndNewlines)) else { throw DirectionError("bad_link", "That isn\u{2019}t a link to a video.") }
-                    video = try await TutorialStudy.download(url, to: folder)
-                }
+                // A file is linked beside what Direction reads from it, so the editor can look at any moment; a link is downloaded.
+                let (video, _) = try await ReferenceVideo.fetch(file.map { StyleVideo(file: $0) } ?? StyleVideo(link: link), into: folder)
                 learning = "Reading the video"
                 _ = try await TutorialStudy.prepare(video: video, folder: folder, cacheDirectory: runtime.cacheDirectory)
                 learning = nil
@@ -37,6 +30,8 @@ extension FilmModel {
                 }
             } catch {
                 learning = nil
+                // Nothing half done stays.
+                try? FileManager.default.removeItem(at: folder)
                 self.error = (error as? DirectionError)?.message ?? error.localizedDescription
             }
         }
@@ -75,7 +70,7 @@ struct LearnTechniqueSheet: View {
                     Text("What to take from it").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Gate.Text.primary)
                     GateTextArea(text: $ask, placeholder: "The grid transition it opens with, and the clicks under it.", minHeight: 64)
                 }
-                Text(file == nil ? "Direction downloads the video to learn from it. It stays in this film\u{2019}s editor folder; nothing from it goes into your films." : "It stays in this film\u{2019}s editor folder; nothing from it goes into your films.")
+                Text(file == nil ? "Direction downloads the video to learn from it, and removes it once the technique is saved. Nothing from it goes into your films." : "Direction reads it where it is; nothing is copied, and nothing from it goes into your films.")
                     .font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
             }
             .padding(20)

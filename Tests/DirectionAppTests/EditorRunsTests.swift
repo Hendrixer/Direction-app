@@ -224,6 +224,20 @@ struct EditorJobTests {
         EditorRunsModel.cleanUpStudies(try store.runs(), store: store)
         let after = try #require(try store.run(run.id))
         #expect(!FileManager.default.fileExists(atPath: folder.path) && FileManager.default.fileExists(atPath: outside.path) && after.studies == nil)
+
+        // A technique's tutorial goes the same way once it's saved.
+        let tutorial = dir.appendingPathComponent("Editor/Learn/2026-10-31-tutorial")
+        try FileManager.default.createDirectory(at: tutorial, withIntermediateDirectories: true)
+        try Data("video".utf8).write(to: tutorial.appendingPathComponent("video.mp4"))
+        var learn = EditorRun(job: .technique, state: .working, program: "claudeCode", version: "claude-opus-5-5")
+        learn.learnFolder = tutorial.path; learn.learnVideo = tutorial.appendingPathComponent("video.mp4").path
+        try store.saveRun(learn)
+        EditorRunsModel.cleanUpStudies(try store.runs(), store: store)
+        #expect(FileManager.default.fileExists(atPath: tutorial.path))
+        _ = try store.updateRun(learn.id) { $0.state = .done }
+        EditorRunsModel.cleanUpStudies(try store.runs(), store: store)
+        let learned = try #require(try store.run(learn.id))
+        #expect(!FileManager.default.fileExists(atPath: tutorial.path) && learned.learnFolder == nil && learned.learnVideo == nil)
     }
 
     @Test func briefReferencesThatAreVideosAreStudiedAndTheirStudiesGoWithThem() throws {
