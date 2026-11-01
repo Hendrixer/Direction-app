@@ -6,11 +6,11 @@ import DirectionCore
 extension ToolCatalog {
     static var styleDefinitions: [ToolDefinition] { [
         definition("direction_styles", "List the director's styles (the Styles folder): id, name, summary, how many rules and what each holds, plus the one this film's brief uses and the house style (id house: the rules every film follows). A style is how the director's videos look, sound and move: rules in words, named layouts, moves Direction carries out (punch-ins, pushes, how tight pauses go), exact values, and its parts (graphics, transitions, effects, sounds, music, fonts, a look, stills)."),
-        definition("direction_style", "Read what this film follows (or one style with id; house is the house style): the rules, the house style's first and then the film's style's, each with its area and where it's from; the named layouts (use them by name: layout op with layout: \"Showing\"); the moves (punchIn, emphasisPunch, slowPush and tightenPauses run with these numbers when you leave theirs out); the exact values; and each part with its path and how to use it. Your note and the brief come first; where the style and the house style disagree, the style wins. Copy a graphic's folder to Editor/Graphics/<name>/ and check it with direction_graphic; copy a transition to Editor/Transitions/ and an effect to Editor/Effects/; bring a sound or music in with direction_import; propose its look with direction_make_look fromLUT: <its path>. Never apply the look yourself.", ["id": string]),
-        definition("direction_save_style", "Write a style into the director's Styles folder, only when the director asks for one (a style job or a note): a new one with name and summary, or changes to one with id (house writes the house style). rules adds rules, each one sentence in the director's words with an area (general, pace, picture, layouts, graphics, captions, transitions, sound, music, color, avoid); removeRules takes rules out by id. tokens are merged key by key into style.json (null removes one): layouts (named: [{name, kind: screenAndYou|you|screen|sideBySide, corner?, size?: small|medium|large, shape?: circle|rounded|wide, screen?: full|framed, edge?: #RRGGBB}]), moves ({punchIn?: {scales, keepIn?}, emphasisPunch?: {scale, everySeconds?}, slowPush?: {from, to, longerThan}}), pace ({tightenPauses: {longerThan, to}, averageShotSeconds, longestShotSeconds, hookBySeconds}), colors, fonts, motion, captions, transitions, sound, graphics (which part plays which role), look. Numbers Direction carries out go in layouts, moves and pace; what only you can judge goes in rules. files copies parts in: [{from (a path in your working folder, like Graphics/lower-third or Effects/flash.metal), to (where in the style: graphics/<name>, transitions/<name>.metal, effects/<name>.metal, sounds/<name>.wav, music/<name>.m4a, fonts/<name>.otf, look.cube, stills/<name>.jpg)}]. Returns the style as direction_style reads it.", [
+        definition("direction_style", "Read what this film follows (or one style with id; house is the house style): the rules, the house style's first and then the film's style's, each with its area and where it's from; the named layouts (use them by name: layout op with layout: \"Showing\"); the moves (punchIn, emphasisPunch, slowPush and tightenPauses run with these numbers when you leave theirs out); the exact values; and each part with its path and how to use it. Your note and the brief come first; where the style and the house style disagree, the style wins. Copy a graphic's folder to Editor/Graphics/<name>/ and check it with direction_graphic; copy a transition to Editor/Transitions/ and an effect to Editor/Effects/; bring a sound or music in with direction_import; propose its look with direction_make_look fromLUT: <its path>. Never apply the look yourself. A style learned from a video has learnedFrom (the videos and what Direction measured in them), examples (moments that show a rule, each a still) and structure (how a video of this kind runs); stills: true shows you the example stills.", ["id": string, "stills": bool]),
+        definition("direction_save_style", "Write a style into the director's Styles folder, only when the director asks for one (a style job or a note): a new one with name and summary, or changes to one with id (house writes the house style). rules adds rules, each one sentence in the director's words with an area (general, pace, picture, layouts, graphics, captions, transitions, sound, music, color, avoid); removeRules takes rules out by id. tokens are merged key by key into style.json (null removes one): layouts (named: [{name, kind: screenAndYou|you|screen|sideBySide, corner?, size?: small|medium|large, shape?: circle|rounded|wide, screen?: full|framed, edge?: #RRGGBB}]), moves ({punchIn?: {scales, keepIn?}, emphasisPunch?: {scale, everySeconds?}, slowPush?: {from, to, longerThan}}), pace ({tightenPauses: {longerThan, to}, averageShotSeconds, longestShotSeconds, hookBySeconds}), colors, fonts, motion, captions, transitions, sound, graphics (which part plays which role), look. Numbers Direction carries out go in layouts, moves and pace; what only you can judge goes in rules. files copies parts in: [{from (a path in your working folder, like Graphics/lower-third or Effects/flash.metal), to (where in the style: graphics/<name>, transitions/<name>.metal, effects/<name>.metal, sounds/<name>.wav, music/<name>.m4a, fonts/<name>.otf, look.cube, stills/<name>.jpg)}]. From a video (styles.md › From a video): studies names the study folders from your job (like Learn/2026-10-31-1); Direction keeps each video's title, maker, link and its measured numbers as the style's sources, so don't copy the numbers by hand. tokens.examples are moments that show a rule: [{still: stills/<name>.jpg (copied in with files from a frame you took with direction_study_frames), area, text (what it shows, in a sentence), source (index in sources), at (seconds in that video)}]; tokens.structure is how a video of this kind runs: [{name, at?, length?, what}]. Returns the style as direction_style reads it.", [
             "id": string, "name": string, "summary": string, "tokens": object,
             "rules": .object(["type": .string("array"), "items": record(["area": string, "text": string], required: ["text"])]),
-            "removeRules": list(string),
+            "removeRules": list(string), "studies": list(string),
             "files": .object(["type": .string("array"), "items": record(["from": string, "to": string], required: ["from", "to"])]),
         ], readOnly: false),
     ] }
@@ -36,9 +36,9 @@ extension ToolRuntime {
                 if id == StyleLibrary.houseID { return ToolResponse(styleJSON(AppliedStyle(house: StyleLibrary.house(in: SharedSettings.stylesFolder), style: nil), only: true)) }
                 guard StyleLibrary.isSafe(id) else { throw DirectionError("style_not_found", "There's no style \(id). direction_styles lists them.") }
                 let other = try StyleLibrary.read(SharedSettings.stylesFolder.appendingPathComponent(id, isDirectory: true))
-                return ToolResponse(styleJSON(AppliedStyle(house: StyleLibrary.house(in: SharedSettings.stylesFolder), style: other), only: true))
+                return styleResponse(AppliedStyle(house: StyleLibrary.house(in: SharedSettings.stylesFolder), style: other), only: true, stills: a["stills"].bool == true)
             }
-            return ToolResponse(styleJSON(try store.appliedStyle()))
+            return styleResponse(try store.appliedStyle(), stills: a["stills"].bool == true)
 
         case "direction_save_style":
             var files: [(from: URL, to: String)] = []
@@ -47,7 +47,20 @@ extension ToolRuntime {
                 files.append((try workingFile(from), to))
             }
             let folder = SharedSettings.stylesFolder
-            var s = try StyleLibrary.save(id: a["id"].string, name: a["name"].string, summary: a["summary"].string, tokens: a["tokens"] == .null ? nil : a["tokens"], guide: nil, files: files, in: folder)
+            var tokens = a["tokens"] == .null ? nil : a["tokens"]
+            // The videos it's learned from, with Direction's own numbers, added to the ones it has.
+            if let studies = a["studies"].array?.compactMap(\.string), !studies.isEmpty {
+                var sources = a["id"].string.flatMap { try? StyleLibrary.read(folder.appendingPathComponent($0, isDirectory: true)).sources } ?? []
+                for path in studies {
+                    guard let study = VideoStudy.read(in: try workingFile(path)) else { throw DirectionError("invalid_arguments", "\(path) has no \(VideoStudy.fileName). Name a study folder from your job.") }
+                    sources.removeAll { ($0.link ?? $0.title) == (study.link ?? study.title) }
+                    sources.append(StyleSource(study))
+                }
+                guard case .object(var t) = tokens ?? .object([:]) else { throw DirectionError("invalid_arguments", "tokens is an object.") }
+                t["sources"] = try .wrapping(sources)
+                tokens = .object(t)
+            }
+            var s = try StyleLibrary.save(id: a["id"].string, name: a["name"].string, summary: a["summary"].string, tokens: tokens, guide: nil, files: files, in: folder)
             if let gone = a["removeRules"].array?.compactMap(\.string), !gone.isEmpty { s = try StyleLibrary.remove(rules: Set(gone), from: s.id, folder: folder) }
             for r in a["rules"].array ?? [] {
                 guard let text = r["text"].string else { throw DirectionError("invalid_arguments", "Each rule is {area, text}.") }
@@ -55,7 +68,10 @@ extension ToolRuntime {
             }
             // The film's copy follows when it's this film's style.
             if s.id == (try store.brief().style) { try store.refreshStyle() }
-            return ToolResponse(styleJSON(AppliedStyle(house: StyleLibrary.house(in: folder), style: s.isHouse ? nil : s), only: true))
+            var saved = styleJSON(AppliedStyle(house: StyleLibrary.house(in: folder), style: s.isHouse ? nil : s), only: true)
+            let missing = s.examples.filter { !FileManager.default.fileExists(atPath: s.url.appendingPathComponent($0.still).path) }.map(\.still)
+            if !missing.isEmpty, case .object(var o) = saved { o["missingStills"] = .array(missing.map(JSONValue.string)); o["fix"] = .string("Copy these stills in with files, or take them out of examples."); saved = .object(o) }
+            return ToolResponse(saved)
 
         default: return nil
         }
@@ -71,6 +87,13 @@ extension ToolRuntime {
 
     /// What a film follows (the house style and its own), or one style alone (`only`; the house style when
     /// there's no other): rules with where each is from, layouts by name, moves, values and parts.
+    /// The style, and with `stills` its example stills to look at.
+    private func styleResponse(_ applied: AppliedStyle, only: Bool = false, stills: Bool) -> ToolResponse {
+        let main = applied.style ?? applied.house
+        let paths = stills ? main.examples.prefix(8).map { main.url.appendingPathComponent($0.still).path }.filter { FileManager.default.fileExists(atPath: $0) } : []
+        return ToolResponse(styleJSON(applied, only: only), imagePaths: Array(paths))
+    }
+
     private func styleJSON(_ applied: AppliedStyle, only: Bool = false) -> JSONValue {
         let main = applied.style ?? applied.house
         let rules = only ? main.rules.map { AppliedStyle.Rule(rule: $0, styleID: main.id, styleName: main.name) } : applied.rules
@@ -87,7 +110,14 @@ extension ToolRuntime {
         ]
         parts["look"] = c.look ? .string(path(StyleLibrary.lookFile)) : .null
         var values: [String: JSONValue] = [:]
-        if case .object(let t) = main.tokens { values = t.filter { !["format", "name", "summary", "updatedAt", "rules", "layouts", "moves"].contains($0.key) } }
+        if case .object(let t) = main.tokens { values = t.filter { !["format", "name", "summary", "updatedAt", "rules", "layouts", "moves", "sources", "examples", "structure"].contains($0.key) } }
+        let learned: [JSONValue] = main.sources.map { src in
+            .object(["title": .string(src.title), "by": src.by.map(JSONValue.string) ?? .null, "link": src.link.map(JSONValue.string) ?? .null,
+                     "measured": src.measured.map { .string($0.summary) } ?? .null, "numbers": src.measured.flatMap { try? JSONValue.wrapping($0) } ?? .null])
+        }
+        let examples: [JSONValue] = main.examples.map { e in
+            .object(["still": .string(path(e.still)), "area": .string(e.area), "text": .string(e.text), "source": e.source.map { .number(Double($0)) } ?? .null, "at": e.at.map(JSONValue.number) ?? .null])
+        }
         let layouts = only ? main.layouts : applied.layouts
         let ruleList: [JSONValue] = rules.map { r in
             .object(["id": .string(r.rule.id), "area": .string(r.rule.area), "text": .string(r.rule.text), "from": .string(r.styleName), "styleID": .string(r.styleID)])
@@ -99,6 +129,7 @@ extension ToolRuntime {
             "layouts": (try? .wrapping(layouts)) ?? .array([]),
             "moves": (try? .wrapping(only ? main.moves.over(.standard) : applied.moves)) ?? .null,
             "values": .object(values), "parts": .object(parts), "folder": .string(base.path),
+            "learnedFrom": .array(learned), "examples": .array(examples), "structure": (try? .wrapping(main.structure)) ?? .array([]),
             "use": .string("Rules: follow them where your note and the brief leave a choice open. Layouts: the layout op by name. Moves: punchIn, emphasisPunch, slowPush and tightenPauses take these numbers when you leave theirs out. Graphics: copy the folder to copyTo in your working folder (fonts go in the graphic's folder too), then direction_graphic. Transitions and effects: copy to copyTo and use them like your own. Sounds and music: direction_import the path, then place it. Look: propose it with direction_make_look fromLUT: <look>. Stills show what it looks like."),
         ])
     }

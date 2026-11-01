@@ -20,6 +20,8 @@ enum ActiveSheet: String, Identifiable { case turnover, lockPicture, deliver, sh
     case editorSetup
     /// Learn a technique from a video (techniques.md).
     case learnTechnique
+    /// Make a style from a video (styles.md › From a video).
+    case styleFromVideo
     var id: String { rawValue }
 }
 
@@ -70,8 +72,11 @@ final class FilmModel {
     /// Where esc goes back to from Screening.
     var previousRoom: Room?
     var sheet: ActiveSheet?
-    /// What Direction is doing to get a tutorial video ready to learn from, while it does.
+    /// What Direction is doing to get a video ready to learn from (a technique, a style), while it does.
     var learning: String?
+    /// Brief references being studied, and why one couldn't be (styles.md › In the brief).
+    var studyingReferences: Set<String> = []
+    var referenceProblems: [String: String] = [:]
     var toast: Toast?
     var showEditorPopover = false
     var showCommandMenu = false
@@ -744,7 +749,11 @@ final class FilmModel {
 
     // MARK: Brief and footage
 
-    func saveBrief(_ b: Brief) { brief = b; perform { try $0.saveBrief(b) } }
+    func saveBrief(_ b: Brief) {
+        brief = b; perform { try $0.saveBrief(b) }
+        // A reference taken out takes its study with it.
+        if let store, !isPreview { ReferenceVideo.cleanUp(b, film: store.url) }
+    }
     /// Files on their way in. The footage step shows logging from the first one, not the drop zone.
     var importingFootage = 0
     /// Files being copied into the film (Settings › Storage › Copy into library), while they are.

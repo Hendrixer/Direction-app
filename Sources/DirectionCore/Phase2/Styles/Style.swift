@@ -45,6 +45,74 @@ public struct Style: Hashable, Sendable, Identifiable {
         if m.tightenPauses == nil { m.tightenPauses = try? tokens["pace"]["tightenPauses"].decode(StyleMoves.Pauses.self) }
         return m
     }
+    /// The videos it was learned from (styles.md › From a video), with what Direction measured in each.
+    public var sources: [StyleSource] {
+        guard case .array(let list) = tokens["sources"] else { return [] }
+        return list.compactMap { try? $0.decode(StyleSource.self) }
+    }
+    /// Moments that show a rule, each a still in the style.
+    public var examples: [StyleExample] {
+        guard case .array(let list) = tokens["examples"] else { return [] }
+        return list.compactMap { try? $0.decode(StyleExample.self) }.filter { StyleLibrary.isSafe($0.still) && $0.still.hasPrefix("stills/") }
+    }
+    /// How a video of this kind is built over time: the hook, the sections, the ending.
+    public var structure: [StyleSection] {
+        guard case .array(let list) = tokens["structure"] else { return [] }
+        return list.compactMap { try? $0.decode(StyleSection.self) }.filter { !$0.name.isEmpty }
+    }
+}
+
+/// A video a style was learned from: where it is, who made it, and the numbers Direction measured in it.
+/// The video itself isn't kept; the link can fetch it again.
+public struct StyleSource: Codable, Hashable, Sendable {
+    public var title: String
+    public var by: String?
+    public var link: String?
+    public var studiedAt: Double?
+    /// What Direction measured, without the list of shots.
+    public var measured: VideoStudy?
+    public init(title: String, by: String? = nil, link: String? = nil, studiedAt: Double? = nil, measured: VideoStudy? = nil) {
+        self.title = title; self.by = by; self.link = link; self.studiedAt = studiedAt; self.measured = measured
+    }
+    /// From a study: its numbers, its shots left out.
+    public init(_ study: VideoStudy) {
+        var numbers = study; numbers.shots = []
+        self.init(title: study.title, by: study.by, link: study.link, studiedAt: study.studiedAt, measured: numbers)
+    }
+}
+
+/// One moment that shows how the style does something: "Punch in on the punchline, like this", with a still
+/// of it in the style's stills folder and where it came from.
+public struct StyleExample: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    /// stills/<name>.jpg in the style.
+    public var still: String
+    public var area: String
+    public var text: String
+    /// The source (by its index in sources) and the second it's from.
+    public var source: Int?
+    public var at: Double?
+    public init(id: String = newID("example"), still: String, area: String = "general", text: String, source: Int? = nil, at: Double? = nil) {
+        self.id = id; self.still = still; self.area = area; self.text = text; self.source = source; self.at = at
+    }
+    /// The editor writes examples without ids; each is known by its still.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        still = try c.decode(String.self, forKey: .still); text = try c.decode(String.self, forKey: .text)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? still
+        area = try c.decodeIfPresent(String.self, forKey: .area) ?? "general"
+        source = try c.decodeIfPresent(Int.self, forKey: .source); at = try c.decodeIfPresent(Double.self, forKey: .at)
+    }
+}
+
+/// A part of how a video of this kind runs: "Hook: a question to camera, then the result, in the first 8 s".
+public struct StyleSection: Codable, Hashable, Sendable {
+    public var name: String
+    /// Where it usually starts and how long it runs, in seconds; nil when it varies.
+    public var at: Double?
+    public var length: Double?
+    public var what: String
+    public init(name: String, at: Double? = nil, length: Double? = nil, what: String) { self.name = name; self.at = at; self.length = length; self.what = what }
 }
 
 /// One rule of a style, in the director's words: "Text never covers my face." Kept from a note, written

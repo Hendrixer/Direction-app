@@ -14,7 +14,7 @@ extension ToolCatalog {
             "transition": object, "effect": object, "steps": list(string), "variants": list(object), "source": object,
             "files": .object(["type": .string("array"), "items": record(["from": string, "to": string], required: ["from", "to"])]),
         ], readOnly: false),
-        definition("direction_study_frames", "Full frames of a video you're learning a technique from, at the times you give (seconds), saved as JPEGs beside it; read them to see a result or a settings panel up close. video is the path from your job.", ["video": string, "times": list(number)], required: ["video", "times"]),
+        definition("direction_study_frames", "Full frames of a video you're learning from (a technique or a style), at the times you give (seconds), saved as JPEGs beside it; read them to see a result, a settings panel or a moment up close, and copy one into a style as an example still. video is the path from your job.", ["video": string, "times": list(number)], required: ["video", "times"]),
     ] }
 }
 

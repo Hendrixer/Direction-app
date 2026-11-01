@@ -61,6 +61,65 @@ struct StyleToolTests {
         #expect(try await runtime.invoke("direction_styles").value["house"]["rules"].double == 1)
     }
 
+    static let study = VideoStudy(title: "How I edit talking videos", by: "Someone Else", link: "https://www.youtube.com/watch?v=abc123", seconds: 60, width: 1280, height: 720,
+                                  pace: .init(shots: 20, cutsPerMinute: 19, averageShot: 3, medianShot: 2.8, longestShot: 7, firstCut: 1.2, cutsByMinute: [19]),
+                                  words: .init(count: 160, perMinute: 160, medianPause: 0.12, longestPause: 1.1, pausesOverHalfSecond: 0.2),
+                                  sound: .init(loudness: -14, truePeak: -1, music: 0.8, musicUnderSpeech: 0.7),
+                                  picture: .init(close: 0.6, medium: 0.3, wide: 0.1, noFace: 0, punchIns: 0.5, brightness: 0.5, contrast: 0.2, saturation: 0.4, warmth: 0.1),
+                                  onScreen: .init(captions: 0.8, otherText: 0.1, wordsPerCaption: 3, captionHeight: 0.75, upperCase: 1),
+                                  shots: [.init(start: 0, end: 1.2, framing: "close", text: "HERE'S THE TRICK")])
+
+    @Test func aStyleLearnedFromAVideoKeepsWhereItCameFromItsNumbersAndItsExamples() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("direction-style-video-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        SharedSettings.stylesFolderOverride = root.appendingPathComponent("Styles")
+        defer { SharedSettings.stylesFolderOverride = nil }
+        let store = try ProjectStore.create(at: root.appendingPathComponent("Launch film.direction"), name: "Launch film")
+        let runtime = try ToolRuntime(store: store)
+        // What Direction studied, as the style job finds it, and a frame the editor took.
+        let folder = store.url.appendingPathComponent("Editor/Learn/2026-10-31-1")
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent("frames"), withIntermediateDirectories: true)
+        try JSONEncoder.direction.encode(Self.study).write(to: folder.appendingPathComponent(VideoStudy.fileName))
+        try Data([0xFF, 0xD8, 0xFF, 0xD9]).write(to: folder.appendingPathComponent("frames/frame-0003.50.jpg"))
+        func save(_ extra: [String: JSONValue]) async throws -> JSONValue {
+            try await runtime.invoke("direction_save_style", arguments: .object(["name": .string("Fast Talk"), "summary": .string("Quick and close."), "studies": .array([.string("Learn/2026-10-31-1")])].merging(extra) { $1 })).value
+        }
+        let saved = try await save([
+            "tokens": .object([
+                "examples": .array([.object(["still": .string("stills/punch.jpg"), "area": .string("picture"), "text": .string("A punch-in on the joke."), "source": .number(0), "at": .number(3.5)])]),
+                "structure": .array([.object(["name": .string("Hook"), "at": .number(0), "length": .number(8), "what": .string("The result first, then the question.")])]),
+            ]),
+            "files": .array([.object(["from": .string("Learn/2026-10-31-1/frames/frame-0003.50.jpg"), "to": .string("stills/punch.jpg")])]),
+        ])
+        let source = try #require(saved["learnedFrom"].array?.first)
+        #expect(source["title"].string == "How I edit talking videos" && source["by"].string == "Someone Else" && source["link"].string == Self.study.link)
+        #expect(source["measured"].string?.contains("20 shots") == true && source["numbers"]["pace"]["cutsPerMinute"].double == 19 && source["numbers"]["shots"].array?.isEmpty == true)
+        let example = try #require(saved["examples"].array?.first)
+        #expect(example["text"].string == "A punch-in on the joke." && FileManager.default.fileExists(atPath: example["still"].string ?? "") && saved["missingStills"] == .null)
+        #expect(saved["structure"].array?.first?["name"].string == "Hook" && saved["values"]["sources"] == .null)
+
+        // Saving with the same video again keeps one source; the stills show on request.
+        let id = try #require(saved["id"].string)
+        let again = try await runtime.invoke("direction_save_style", arguments: .object(["id": .string(id), "studies": .array([.string("Learn/2026-10-31-1")])])).value
+        #expect(again["learnedFrom"].array?.count == 1)
+        let shown = try await runtime.invoke("direction_style", arguments: .object(["id": .string(id), "stills": .bool(true)]))
+        #expect(shown.imagePaths.count == 1)
+        // An example whose still never came in is named.
+        let missing = try await runtime.invoke("direction_save_style", arguments: .object(["id": .string(id), "tokens": .object(["examples": .array([.object(["still": .string("stills/gone.jpg"), "text": .string("Missing.")])])])])).value
+        #expect(missing["missingStills"].array?.first?.string == "stills/gone.jpg")
+        do { _ = try await runtime.invoke("direction_save_style", arguments: .object(["id": .string(id), "studies": .array([.string("Learn")])])); Issue.record("A folder without a study") }
+        catch let e as DirectionError { #expect(e.message.contains(VideoStudy.fileName)) }
+
+        // A video in the brief, once studied, is in the brief the editor reads.
+        var brief = try store.brief(); brief.references = [BriefReference(id: "ref-1", title: "Their channel", why: "The pace", path: "https://youtu.be/abc123")]
+        try store.saveBrief(brief)
+        let studied = VideoStudy.referenceFolder("ref-1", film: store.url)
+        try FileManager.default.createDirectory(at: studied, withIntermediateDirectories: true)
+        try JSONEncoder.direction.encode(Self.study).write(to: studied.appendingPathComponent(VideoStudy.fileName))
+        let read = try await runtime.invoke("direction_brief").value
+        #expect(read["studiedReferences"].array?.first?["folder"].string == "References/ref-1" && read["studiedReferences"].array?.first?["measured"].string?.contains("words a minute") == true)
+    }
+
     @Test func theEditorUsesTheStylesLayoutsAndMovesByName() async throws {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         let styles = f.directory.appendingPathComponent("Styles")

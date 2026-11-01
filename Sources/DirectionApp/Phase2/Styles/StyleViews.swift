@@ -53,6 +53,7 @@ struct BriefStylePicker: View {
     @State private var open = false
     @State private var asking = false
     @State private var writing: StyleDraft?
+    @State private var fromVideo = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -82,6 +83,7 @@ struct BriefStylePicker: View {
             Menu {
                 Button("Write One\u{2026}") { writing = .new }
                 Button("Make One with the Editor\u{2026}") { asking = true }
+                Button("Make One from a Video\u{2026}") { fromVideo = true }.disabled(model.learning != nil)
                 Divider()
                 OpenSettingsButton(tab: .styles) { Text("Your Styles\u{2026}") }
             } label: {
@@ -96,6 +98,7 @@ struct BriefStylePicker: View {
         .task { load() }
         .onChange(of: model.runs.runs.filter { $0.job == .style }.map(\.state)) { _, _ in load() }
         .sheet(item: $writing) { StyleEditSheet(draft: $0, folder: SharedSettings.stylesFolder, saved: { style = $0.id; load() }) { writing = nil } }
+        .sheet(isPresented: $fromVideo) { StyleFromVideoSheet(model: model) { fromVideo = false } }
     }
 
     private var current: Style? { style.flatMap { id in styles.first { $0.id == id } } }
@@ -441,8 +444,64 @@ struct StyleEditSheet: View {
                 Text(lines.joined(separator: " \u{00B7} ")).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
+        if !s.sources.isEmpty {
+            field("Learned from", detail: "What Direction measured in each video. The videos themselves aren\u{2019}t kept.") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(s.sources.enumerated()), id: \.offset) { _, src in
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 6) {
+                                Text(src.title).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Gate.Text.primary).lineLimit(1)
+                                if let by = src.by { Text(by).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
+                                if let link = src.link, link.contains("://"), let url = URL(string: link) {
+                                    Link(destination: url) { Image(systemName: "arrow.up.right.square").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary) }.help("Open the video")
+                                }
+                            }
+                            if let m = src.measured { Text(m.summary).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true) }
+                        }
+                    }
+                }
+            }
+        }
+        if !s.examples.isEmpty {
+            field("Examples", detail: "Moments the editor looks at when it cuts in this style.") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(s.examples) { e in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Group {
+                                    if let image = NSImage(contentsOf: s.url.appendingPathComponent(e.still)) { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill) }
+                                    else { Gate.Surface.sunken }
+                                }
+                                .frame(width: 144, height: 81).clipShape(RoundedRectangle(cornerRadius: 5))
+                                Text(e.text).font(Gate.Font.caption).foregroundStyle(Gate.Text.secondary).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(width: 144, alignment: .leading)
+                        }
+                    }
+                }
+            }
+        }
+        if !s.structure.isEmpty {
+            field("How one runs", detail: "The editor shapes a first cut this way.") {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(s.structure.enumerated()), id: \.offset) { _, part in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(part.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Gate.Text.primary)
+                            Text(Self.sectionLine(part)).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
         Text(s.contents.line.isEmpty ? "No parts yet. Graphics, transitions, sounds, fonts and a look go in its folder." : s.contents.line)
             .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+    }
+
+    /// "From 0:08 for about 20 s. A question to camera, then the result."
+    static func sectionLine(_ part: StyleSection) -> String {
+        func clock(_ t: Double) -> String { String(format: "%d:%02d", Int(t) / 60, Int(t) % 60) }
+        let when = [part.at.map { "From \(clock($0))" }, part.length.map { "for about \(Int($0.rounded())) s" }].compactMap { $0 }.joined(separator: " ")
+        return [when.isEmpty ? nil : when + ".", part.what].compactMap { $0 }.joined(separator: " ")
     }
 
     /// "Punch in 1–1.15× on jump cuts", "Emphasis 1.32×", "Slow push to 1.05× on shots over 8 s", "Pauses over 0.35 s to 0.15 s".

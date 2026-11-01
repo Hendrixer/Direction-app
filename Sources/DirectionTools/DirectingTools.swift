@@ -40,8 +40,13 @@ extension ToolRuntime {
     func invokeDirecting(_ name: String, _ a: JSONValue) throws -> ToolResponse? {
         switch name {
         case "direction_brief":
-            let state = try store.directingState()
-            return ToolResponse(.object(["brief": try .wrapping(store.brief()), "latitude": .string(state.latitude.rawValue), "pictureLocked": .bool(state.pictureLocked), "editorPaused": .bool(state.editorPaused), "preferences": try .wrapping(state.preferences ?? EditorPreferences()),
+            let state = try store.directingState(), brief = try store.brief()
+            // A video reference Direction has studied: what it measured, and where its words and contact sheets are.
+            let studied: [JSONValue] = brief.references.compactMap { r in
+                let folder = VideoStudy.referenceFolder(r.id, film: store.url)
+                return VideoStudy.read(in: folder).map { .object(["referenceID": .string(r.id), "title": .string($0.title), "measured": .string($0.summary), "folder": .string("References/\(r.id)"), "read": .string("study.md first, then transcript.txt and the sheet-N.jpg contact sheets")]) }
+            }
+            return ToolResponse(.object(["brief": try .wrapping(brief), "studiedReferences": .array(studied), "latitude": .string(state.latitude.rawValue), "pictureLocked": .bool(state.pictureLocked), "editorPaused": .bool(state.editorPaused), "preferences": try .wrapping(state.preferences ?? EditorPreferences()),
                                          "style": try store.style().map { .object(["id": .string($0.id), "name": .string($0.name), "summary": .string($0.summary), "read": .string("direction_style has its values, its guide and its parts. Follow it wherever the brief and the notes leave a choice open.")]) } ?? .null]))
 
         case "direction_dailies":

@@ -68,8 +68,10 @@ public enum ShotDetector {
         return kept.map(\.index)
     }
 
-    /// Samples the take at 4 fps, finds boundaries and refines each to the exact frame.
-    public static func detect(_ asset: MediaAsset, progress: (@Sendable (Double) -> Void)? = nil) async throws -> Result {
+    /// Samples the take at 4 fps, finds boundaries and refines each to the exact frame. `covering` (a share of
+    /// the frame, y up as Vision has it) is painted out before the picture is compared: burned-in captions
+    /// changing there would read as cuts, and hide real ones beside them.
+    public static func detect(_ asset: MediaAsset, covering cover: CGRect? = nil, progress: (@Sendable (Double) -> Void)? = nil) async throws -> Result {
         let duration = asset.duration.seconds
         guard !asset.video.isEmpty, !asset.isImage, duration > 0 else { return Result(ranges: duration > 0 ? [0...duration] : [], samples: []) }
         var times: [Double] = []
@@ -80,7 +82,7 @@ public enum ShotDetector {
         // Decode in batches so a long take doesn't hold every frame in memory at once.
         for chunk in stride(from: 0, to: times.count, by: 48).map({ Array(times[$0..<min(times.count, $0 + 48)]) }) {
             let images = try await SourceFrames.images(asset, at: chunk, maxDimension: sampleSize, tolerance: 0.5 / rate)
-            let prints = try await featurePrints(images)
+            let prints = try await featurePrints(images.map { covered($0, cover) })
             for ((time, image), print) in zip(zip(chunk, images), prints) { samples.append(Sample(time: time, print: print, luma: SourceFrames.luminance(image))) }
             progress?(Double(samples.count) / Double(times.count))
         }
@@ -90,7 +92,7 @@ public enum ShotDetector {
         var cuts: [Double] = []
         for i in found {
             let fade = (samples[i - 1].luma >= black) != (samples[i].luma >= black)
-            let exact = (try? await refine(asset, from: samples[i - 1], to: samples[i], fade: fade)) ?? samples[i].time
+            let exact = (try? await refine(asset, from: samples[i - 1], to: samples[i], fade: fade, covering: cover)) ?? samples[i].time
             if let last = cuts.last, exact - last < minimumShot { continue }
             if exact >= minimumShot && duration - exact >= minimumShot { cuts.append(exact) }
         }
@@ -100,7 +102,7 @@ public enum ShotDetector {
 
     /// The first frame of the new shot between two samples: the frame after the biggest jump,
     /// or after the luminance crosses black for a fade.
-    static func refine(_ asset: MediaAsset, from a: Sample, to b: Sample, fade: Bool) async throws -> Double {
+    static func refine(_ asset: MediaAsset, from a: Sample, to b: Sample, fade: Bool, covering cover: CGRect? = nil) async throws -> Double {
         let fps = max(1, asset.video.first?.frameRate ?? 24)
         // Whole frames after the earlier sample up to the later one, asked for at their middles
         // so the decoder never lands on the frame before.
@@ -114,11 +116,22 @@ public enum ShotDetector {
             return b.time
         }
         var previous = a.print, best = (frame: last, d: Float(0))
-        for (n, p) in zip(frames, try await featurePrints(images)) {
+        for (n, p) in zip(frames, try await featurePrints(images.map { covered($0, cover) })) {
             let d = distance(previous, p)
             if d > best.d { best = (n, d) }
             previous = p
         }
         return Double(best.frame) / fps
+    }
+
+    /// The frame with `cover` painted mid grey; as it is without one.
+    static func covered(_ image: CGImage, _ cover: CGRect?) -> CGImage {
+        guard let cover else { return image }
+        let w = Double(image.width), h = Double(image.height)
+        guard let c = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return image }
+        c.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        c.setFillColor(CGColor(gray: 0.5, alpha: 1))
+        c.fill(CGRect(x: cover.minX * w, y: cover.minY * h, width: cover.width * w, height: cover.height * h))
+        return c.makeImage() ?? image
     }
 }

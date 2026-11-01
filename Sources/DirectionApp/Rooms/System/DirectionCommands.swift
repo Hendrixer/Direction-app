@@ -143,6 +143,7 @@ private struct FilmMenuItems: View {
         Button("Look at Footage") { if let film { film.index.lookAtFootage(film) } }.disabled(film?.project?.assets.isEmpty ?? true)
         Button("Look\u{2026}") { film?.openLook() }.keyboardShortcut("l", modifiers: [.command, .option]).disabled(film.map { $0.cuts.isEmpty || $0.sheet != nil } ?? true)
         Button("Learn a Technique\u{2026}") { film?.sheet = .learnTechnique }.disabled(film == nil || film?.sheet != nil || film?.learning != nil)
+        Button("Make a Style from a Video\u{2026}") { film?.sheet = .styleFromVideo }.disabled(film == nil || film?.sheet != nil || film?.learning != nil)
         Divider()
         Picker("How Much Freedom", selection: Binding(get: { film?.directing.latitude ?? LatitudeSetting.current }, set: { LatitudeSetting.set($0, film: film) })) {
             ForEach(Latitude.allCases, id: \.self) { Text($0.label).tag($0) }

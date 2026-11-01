@@ -33,7 +33,7 @@ enum EditorJobs {
     static func text(for run: EditorRun, store: ProjectStore) throws -> String {
         let p = try store.read(), brief = try store.brief(), state = try store.directingState(), dailies = try store.dailies()
         let applied = try store.appliedStyle()
-        var v = common(run.job, film: p.name, brief: brief, state: state, applied: applied)
+        var v = common(run.job, film: p.name, brief: brief, state: state, applied: applied, studied: { ReferenceVideo.study($0, film: store.url) })
         switch run.job {
         case .logFootage:
             let footage = p.footage(film: store.url)
@@ -80,6 +80,7 @@ enum EditorJobs {
             v["source"] = run.fromFilm == true && !cuts.isEmpty
                 ? "Learn it from this film as well: watch \(cuts.last!.name) (`direction_timeline`, `direction_watch`), measure how it's cut, and keep what makes it this director's."
                 : "Make it from their words and whatever they point you to. Don't take it from this film's cut."
+            if let studies = run.studies, !studies.isEmpty { v["source"] = videos(studies, editor: store.url.appendingPathComponent("Editor")) + (run.fromFilm == true ? "\n\n" + v["source"]! : "") }
             v["stylesFolder"] = SharedSettings.stylesFolder.path
         case .technique:
             v["request"] = run.request.map { $0.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n") } ?? "> Learn the technique this video teaches."
@@ -91,6 +92,27 @@ enum EditorJobs {
             v["techniquesFolder"] = SharedSettings.techniquesFolder.path
         }
         return fill(template(templateName(run.job)) ?? "", v)
+    }
+
+    /// The videos a style is learned from (styles.md › From a video), each studied in its own folder.
+    static func videos(_ studies: [String], editor: URL) -> String {
+        let base = editor.standardizedFileURL.path + "/"
+        let rows: [String] = studies.map { path in
+            let folder = URL(fileURLWithPath: path), name = folder.standardizedFileURL.path.hasPrefix(base) ? String(folder.standardizedFileURL.path.dropFirst(base.count)) : path
+            guard let s = VideoStudy.read(in: folder) else { return "- `\(name)/`" }
+            let video = (try? FileManager.default.contentsOfDirectory(atPath: path))?.first { $0.hasPrefix("video.") }.map { "`\(name)/\($0)`" } ?? "not kept"
+            return "- \u{201C}\(s.title)\u{201D}\(s.by.map { " by \($0)" } ?? "")\(s.link.map { " (\($0))" } ?? ""): `\(name)/`. \(s.summary). The video: \(video)."
+        }
+        let names = studies.map { path -> String in
+            let p = URL(fileURLWithPath: path).standardizedFileURL.path
+            return "\"" + (p.hasPrefix(base) ? String(p.dropFirst(base.count)) : path) + "\""
+        }
+        return """
+        Learn it from \(studies.count == 1 ? "this video" : "these videos") the director likes. Direction has studied each in its own folder: `study.md` is what it measured (pace, words, sound, framing, captions, and every shot), `transcript.txt` the words with their times, and `sheet-N.jpg` a frame every two seconds. Look at any moment up close with `direction_study_frames`.
+        \(rows.joined(separator: "\n"))
+
+        Follow \u{201C}From a video\u{201D} in the skill. Save with `studies: [\(names.joined(separator: ", "))]` so the style keeps where it came from and Direction\u{2019}s numbers. The videos are removed once the style is saved, so take every still you want to keep first.
+        """
     }
 
     /// The film's style and the house style's rules, for the brief (styles.md › In a film): the house rules
@@ -147,14 +169,18 @@ enum EditorJobs {
         return fill(template("continue") ?? "{{answer}}", ["answer": answer, "skill": job.skill, "skillPath": skillPath(job), "job": what])
     }
 
-    private static func common(_ job: EditorJob, film: String, brief: Brief, state: DirectingState, applied: AppliedStyle) -> [String: String] {
+    private static func common(_ job: EditorJob, film: String, brief: Brief, state: DirectingState, applied: AppliedStyle, studied: (BriefReference) -> VideoStudy? = { _ in nil }) -> [String: String] {
         var b: [String] = []
         if !brief.logline.isEmpty { b.append("- In one sentence: \(brief.logline)") }
         if !brief.feeling.isEmpty { b.append("- How it should feel: \(brief.feeling)") }
         if let lo = brief.lengthMin, let hi = brief.lengthMax { b.append("- Length: \(minutes(lo))\u{2013}\(minutes(hi))") }
         if let a = brief.audience, !a.isEmpty { b.append("- Audience: \(a)") }
         for k in brief.mustKeep { b.append("- Must keep: \(k)") }
-        for r in brief.references { b.append("- Reference: \(r.title). \(r.why)") }
+        for r in brief.references {
+            // A video the director gave as inspiration, studied by Direction (styles.md › In the brief).
+            let study = studied(r).map { " Direction studied it: \($0.summary). What it measured, its words and contact sheets are in `References/\(r.id)/` (study.md first)." } ?? ""
+            b.append("- Reference: \(r.title). \(r.why)\(study)")
+        }
         if let a = brief.avoid, !a.isEmpty { b.append("- Avoid: \(a)") }
         // "@Name" in the brief names something in the library.
         let named = LibraryCatalog.mentions(in: [brief.logline, brief.feeling, brief.avoid ?? ""].joined(separator: "\n"), entries: LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder)))

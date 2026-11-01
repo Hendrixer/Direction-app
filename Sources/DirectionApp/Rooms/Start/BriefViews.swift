@@ -82,6 +82,8 @@ struct BriefForm: View {
     @State private var minText = ""
     @State private var maxText = ""
     @State private var dropTargeted = false
+    /// A reference the director wants a style made from.
+    @State private var styleFrom: BriefReference?
 
     enum Field: Hashable { case title, logline, feeling, lengthMin, lengthMax, audience, tag, avoid }
 
@@ -240,12 +242,13 @@ struct BriefForm: View {
     private var references: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(brief.references.enumerated()), id: \.element.id) { i, ref in
-                BriefReferenceCard(reference: $brief.references[i], art: [.night, .room, .dusk, .day, .hands][i % 5], preview: model.isPreview,
+                BriefReferenceCard(reference: $brief.references[i], model: model, art: [.night, .room, .dusk, .day, .hands][i % 5], preview: model.isPreview,
                                    canMoveUp: i > 0, canMoveDown: i + 1 < brief.references.count) { action in
                     switch action {
                     case .up: brief.references.swapAt(i, i - 1)
                     case .down: brief.references.swapAt(i, i + 1)
                     case .remove: brief.references.remove(at: i)
+                    case .makeStyle: styleFrom = ref
                     }
                 }
             }
@@ -257,6 +260,9 @@ struct BriefForm: View {
         }
         .padding(4).padding(-4)
         .background(RoundedRectangle(cornerRadius: Gate.Radius.card).strokeBorder(Gate.Text.primary, style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])).padding(-4).opacity(dropTargeted ? 1 : 0))
+        .sheet(item: $styleFrom) { ref in
+            StyleFromVideoSheet(model: model, videos: [ref.path.map { $0.contains("://") ? StyleVideo(link: $0) : StyleVideo(file: URL(fileURLWithPath: $0)) } ?? StyleVideo()], ask: ref.why) { styleFrom = nil }
+        }
         .dropDestination(for: URL.self) { urls, _ in
             brief.references += urls.map(Self.reference)
             return !urls.isEmpty
@@ -300,13 +306,17 @@ private struct BriefBigField: ViewModifier {
 /// A reference: thumbnail, what it is, why. Editable in place; the menu reorders and removes.
 private struct BriefReferenceCard: View {
     @Binding var reference: BriefReference
+    var model: FilmModel
     var art: FootageArt
     var preview: Bool
     var canMoveUp: Bool
     var canMoveDown: Bool
     var act: (Action) -> Void
     @State private var image: NSImage?
-    enum Action { case up, down, remove }
+    enum Action { case up, down, remove, makeStyle }
+    private var isVideo: Bool { reference.path.map(ReferenceVideo.isVideo) ?? false }
+    /// What Direction measured in it, once it has (styles.md › In the brief).
+    private var study: VideoStudy? { preview ? nil : model.store.flatMap { ReferenceVideo.study(reference, film: $0.url) } }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -315,8 +325,10 @@ private struct BriefReferenceCard: View {
                 TextField("Reference", text: $reference.title).textFieldStyle(.plain).font(.system(size: 13, weight: .medium)).foregroundStyle(Gate.Text.primary)
                 TextField("", text: $reference.why).textFieldStyle(.plain).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
                     .startPlaceholder("Say why\u{2026}", shown: reference.why.isEmpty, font: Gate.Font.small, inset: .init())
+                if isVideo { studyLine }
             }
             Menu {
+                if isVideo { Button("Make a Style from This\u{2026}") { act(.makeStyle) }.disabled(model.learning != nil); Divider() }
                 Button("Move Up") { act(.up) }.disabled(!canMoveUp)
                 Button("Move Down") { act(.down) }.disabled(!canMoveDown)
                 if let path = reference.path, !path.contains("://") {
@@ -331,9 +343,23 @@ private struct BriefReferenceCard: View {
         }
         .padding(8)
         .gatePanel(Gate.Radius.card)
-        .task(id: reference.path) { await loadImage() }
+        .task(id: reference.path) { await loadImage(); if isVideo, !preview { model.studyReference(reference) } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Reference: \(reference.title). \(reference.why)")
+    }
+
+    /// Studying it, what was measured, or why it couldn't be.
+    @ViewBuilder private var studyLine: some View {
+        if model.studyingReferences.contains(reference.id) {
+            HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Studying how it\u{2019}s cut\u{2026}") }.font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
+        } else if let study {
+            Text(study.summary).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+        } else if let problem = model.referenceProblems[reference.id] {
+            HStack(spacing: 6) {
+                Text("Couldn\u{2019}t study it: \(problem)").font(Gate.Font.caption).foregroundStyle(Gate.State.alert).lineLimit(2)
+                Button("Try Again") { model.studyReference(reference) }.buttonStyle(.gate(.ghost, .small))
+            }
+        }
     }
 
     @ViewBuilder private var thumb: some View {

@@ -48,6 +48,9 @@ desk-screen/
 | `moves` | `punchIn {scales, keepIn?}`, `emphasisPunch {scale, everySeconds?}`, `slowPush {from, to, longerThan}`, `screenZoom {min, max, in, out, hold}` | Direction: the moves' numbers when the editor leaves theirs out |
 | `pace` | `tightenPauses {longerThan, to}`, and `averageShotSeconds`, `longestShotSeconds`, `hookBySeconds` for the editor | Direction (`tightenPauses`) and the editor |
 | `colors`, `fonts`, `motion`, `captions`, `transitions`, `sound`, `graphics` (which part plays which role), `look` | Exact values | The editor |
+| `sources` | The videos it was learned from (From a video, below): `[{title, by?, link?, studiedAt?, measured?}]`, `measured` being what Direction counted in each (pace, words, sound, picture, words on screen). Written by Direction from the study, never by hand | Settings (Learned from) and the editor |
+| `examples` | Moments that show a rule: `[{id, still, area, text, source?, at?}]`, `still` a picture in `stills/`, `source` the index in `sources`, `at` its second there | The editor (`direction_style` with `stills: true` shows them) and Settings |
+| `structure` | How a video of this kind runs: `[{name, at?, length?, what}]`, from the hook to the ending | The editor, for first cuts |
 
 Each move comes from the style, else the house style, else Direction's own (`StyleMoves.standard`: punch-ins 1× and 1.15×, emphasis 1.3×, a push from 1× to 1.05× on shots over 8 s, pauses over 0.35 s to 0.15 s, screen zooms 1.4–2× in 0.6 s, out 0.5 s, held at least 1.5 s). Layouts and transitions come from the style, else the house style.
 
@@ -71,6 +74,28 @@ Once the answer is accepted, Changes shows **Keep as a Rule…** (changes.md). T
 - **With the editor, in a session of your own.** "Make me a style" with the Direction plugin: the `make-style` skill and `direction_styles`, `direction_style`, `direction_save_style`.
 - **By hand.** Settings › Styles › New Style…, or New Style › Write One… in the brief: name, sentence and rules. Edit… changes them; the parts are files, so Show in Finder opens the folder. Move to Trash… asks first; films that use it keep their copy.
 - `direction_save_style` writes only into the Styles folder: a new style with `name`, changes to one with `id`, the house style with `house`. `rules` adds rules, `removeRules` takes them out by id, `tokens` merge key by key into style.json (null removes one; layouts need names, moves need their numbers), a `guide` in words is read into rules, `files` copies parts from the editor's working folder to paths inside the style. Nothing else in the folder changes.
+
+## From a video
+
+The quickest way to a style is a video the director wishes theirs felt like. **New Style › Make One from a Video…** in the brief, or **Film › Make a Style from a Video…**: up to three videos (a YouTube, Vimeo or other link, or a file; two or three by the same person make a truer style) and what they like about them.
+
+1. **Direction fetches and studies each, on this Mac.** A link is downloaded with yt-dlp (at most 720p, with its sound); a file is studied where it is (the study folder holds a link to it, never a copy). Each video gets its own folder in `<film>.direction/Editor/Learn/<time>-<n>/`: its words (`transcript.txt`), a frame every two seconds (`sheet-N.jpg`), and what Direction can count (`study.json`, and `study.md` in words), so the editor judges only what it can't:
+   - **pace:** the shots and their lengths, cuts a minute and in each minute, when the first cut comes;
+   - **words:** words a minute, the gaps left between them and how many pauses run over half a second;
+   - **sound:** integrated loudness and true peak, how much of it has music and how much music under speech;
+   - **picture:** close, medium and wide by the face's size, shots with no face, how often a cut between two shots of the same face changes its size (a punch-in), brightness, contrast, saturation and warmth;
+   - **words on screen:** how much of the time captions are up (text that matches what's being said), how many words at a time, where they sit, how many are in capitals, and other text;
+   - **every shot** with its framing and any words on it.
+2. **The editor makes the style** in one run (job `style`, skill `make-style` › From a video): the numbers become pace, moves and sound values; the contact sheets and frames it takes with `direction_study_frames` give the caption look, graphics, layouts, transitions, color and feeling; five to ten example stills go in `stills/` with `examples`; the run of a video goes in `structure`. What isn't the director's (the footage, the voice, music, fonts) is described, not copied. It saves with `studies`, and Direction writes each video's title, maker, link and numbers into `sources` itself.
+3. **The downloads go.** Once the style is saved (the run is done), Direction removes the study folders, downloads and frames with them. A run that stops keeps them for Try Again. The style keeps the links, the numbers and its stills; the link can fetch a video again.
+
+Settings › Styles and the style's sheet show **Learned from** (each video, who made it, a link to it and what was measured), the **Examples** with their sentences, and **How one runs**.
+
+## In the brief
+
+A video dropped or pasted into the brief's references (a file, or a link to a video site) is studied the same way in the background, once, into `<film>.direction/Editor/References/<reference id>/`. A downloaded one keeps only what was read from it: the video goes as soon as it's studied. The card says it's studying, then shows what was measured in a line ("142 shots, 3.1 s each (19 cuts a minute) · 168 words a minute · captions most of the time · −14 LUFS"), or why it couldn't, with Try Again. Taking the reference out of the brief takes its study with it.
+
+The editor reads it as inspiration for that film: the job's brief lists the reference with what was measured and where its study is, and `direction_brief` › `studiedReferences` has the same. **Make a Style from This…** in the card's menu opens Make One from a Video with the reference and its why filled in, and saves it for every film like it.
 
 ## Settings › Styles (frame 65)
 

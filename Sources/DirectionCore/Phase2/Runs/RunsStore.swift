@@ -82,6 +82,9 @@ public struct EditorRun: Codable, Hashable, Sendable, Identifiable {
     /// A technique job: the folder Direction got the video ready in, and the video itself.
     public var learnFolder: String?
     public var learnVideo: String?
+    /// A style learned from videos (styles.md › From a video): the folders each was studied in, inside the
+    /// film. Direction removes them, downloads and all, once the style is made.
+    public var studies: [String]?
     public init(id: String = newID("run"), job: EditorJob, state: EditorRunState = .queued, program: String, version: String, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, createdAt: Double = Date().timeIntervalSince1970) {
         self.id = id; self.job = job; self.state = state; self.program = program; self.version = version; self.turnoverID = turnoverID; self.assetCount = assetCount; self.assetIDs = assetIDs; self.createdAt = createdAt; self.updatedAt = createdAt
     }

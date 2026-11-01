@@ -198,6 +198,52 @@ struct RunStateMachineTests {
 @Suite("Editor jobs and programs")
 @MainActor
 struct EditorJobTests {
+    @Test func aStyleFromVideosNamesEachStudyAndGoesOnceTheStyleIsSaved() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("style-videos-\(UUID().uuidString).direction")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = try ProjectStore.create(at: dir, name: "Launch film")
+        let folder = dir.appendingPathComponent("Editor/Learn/2026-10-31-1")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let study = VideoStudy(title: "How I edit", by: "Someone", link: "https://youtu.be/abc", seconds: 60, pace: .init(shots: 20, cutsPerMinute: 19, averageShot: 3, medianShot: 3, longestShot: 7, firstCut: 1, cutsByMinute: [19]),
+                               picture: .init(close: 0.5, medium: 0.5, wide: 0, noFace: 0, punchIns: 0.4, brightness: 0.5, contrast: 0.2, saturation: 0.4, warmth: 0), shots: [])
+        try JSONEncoder.direction.encode(study).write(to: folder.appendingPathComponent(VideoStudy.fileName))
+        try Data("video".utf8).write(to: folder.appendingPathComponent("video.mp4"))
+        var run = EditorRun(job: .style, program: "claudeCode", version: "claude-opus-5-5")
+        run.request = "The pace and the captions."; run.studies = [folder.path]
+        let text = try EditorJobs.text(for: run, store: store)
+        #expect(text.contains("`Learn/2026-10-31-1/`") && text.contains("How I edit") && text.contains("studies: [\"Learn/2026-10-31-1\"]") && text.contains("`Learn/2026-10-31-1/video.mp4`") && !text.contains("{{"))
+        // Still running or stopped: the folder stays for Try Again. Done: it goes, and only folders in the film.
+        let outside = FileManager.default.temporaryDirectory.appendingPathComponent("outside-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        run.studies = [folder.path, outside.path]; run.state = .failed
+        try store.saveRun(run)
+        EditorRunsModel.cleanUpStudies(try store.runs(), store: store)
+        #expect(FileManager.default.fileExists(atPath: folder.path))
+        _ = try store.updateRun(run.id) { $0.state = .done }
+        EditorRunsModel.cleanUpStudies(try store.runs(), store: store)
+        let after = try #require(try store.run(run.id))
+        #expect(!FileManager.default.fileExists(atPath: folder.path) && FileManager.default.fileExists(atPath: outside.path) && after.studies == nil)
+    }
+
+    @Test func briefReferencesThatAreVideosAreStudiedAndTheirStudiesGoWithThem() throws {
+        #expect(ReferenceVideo.isVideo("https://www.youtube.com/watch?v=abc") && ReferenceVideo.isVideo("https://youtu.be/abc") && ReferenceVideo.isVideo("https://vimeo.com/123"))
+        #expect(!ReferenceVideo.isVideo("https://example.com/article") && ReferenceVideo.isVideo("/Volumes/Card/A001.mov") && !ReferenceVideo.isVideo("/Users/me/still.jpg"))
+        #expect(ReferenceVideo.isLink("https://youtu.be/abc") && !ReferenceVideo.isLink("not a link"))
+        let film = FileManager.default.temporaryDirectory.appendingPathComponent("refs-\(UUID().uuidString).direction")
+        defer { try? FileManager.default.removeItem(at: film) }
+        for id in ["ref-keep", "ref-gone"] { try FileManager.default.createDirectory(at: ReferenceVideo.folder(id, film: film), withIntermediateDirectories: true) }
+        var brief = Brief(); brief.references = [BriefReference(id: "ref-keep", title: "Keep", why: "")]
+        ReferenceVideo.cleanUp(brief, film: film)
+        #expect(FileManager.default.fileExists(atPath: ReferenceVideo.folder("ref-keep", film: film).path) && !FileManager.default.fileExists(atPath: ReferenceVideo.folder("ref-gone", film: film).path))
+        // Only the video and its frames go from a study; what was read from it stays.
+        let study = ReferenceVideo.folder("ref-keep", film: film)
+        for name in ["video.mp4", "video.info.json", "study.json", "transcript.txt", "sheet-1.jpg"] { try Data("x".utf8).write(to: study.appendingPathComponent(name)) }
+        try FileManager.default.createDirectory(at: study.appendingPathComponent("frames"), withIntermediateDirectories: true)
+        ReferenceVideo.removeVideo(in: study)
+        #expect(Set(try FileManager.default.contentsOfDirectory(atPath: study.path)) == ["video.info.json", "study.json", "transcript.txt", "sheet-1.jpg"])
+    }
+
     @Test func everyTemplateShipsAndFillsCompletely() throws {
         for name in EditorJobs.templateNames {
             let t = try #require(EditorJobs.template(name), "\(name).md is missing from the app bundle")

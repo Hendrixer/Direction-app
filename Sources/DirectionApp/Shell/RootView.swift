@@ -88,6 +88,7 @@ struct FilmWindow: View {
         case .look: LookSheet(model: model)
         case .editorSetup: EditorSetupSheet(model: model)
         case .learnTechnique: LearnTechniqueSheet(model: model)
+        case .styleFromVideo: StyleFromVideoSheet(model: model) { model.sheet = nil }
         }
     }
 

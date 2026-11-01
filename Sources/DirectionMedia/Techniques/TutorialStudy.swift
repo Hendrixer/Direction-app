@@ -35,26 +35,36 @@ public enum TutorialStudy {
 
     /// Reads a video into `folder`: transcript.txt (its words, a line every few seconds with the time) and
     /// sheet-1.jpg, sheet-2.jpg… (a frame every two seconds, 24 to a sheet, each with its time). Returns the
-    /// files' names.
-    public static func prepare(video: URL, folder: URL, cacheDirectory: URL) async throws -> [String] {
+    /// files' names. Given `words`, they're written as they are instead of listening for them.
+    public static func prepare(video: URL, folder: URL, cacheDirectory: URL, words given: [TranscriptWord]? = nil) async throws -> [String] {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var written: [String] = []
         let asset = try await MediaInspector.inspect(url: video, thumbnailDirectory: cacheDirectory.appendingPathComponent("Thumbnails"))
-        if let track = asset.audio.first?.id {
-            let words: [TranscriptWord]
-            if WhisperTranscriber.executable() != nil, let t = try? await WhisperTranscriber.transcribe(asset: asset, trackID: track, language: "en", model: SharedSettings.whisperModel, directory: cacheDirectory) { words = t.words }
-            else { words = (try? await LocalTranscriber.transcribe(asset: asset, trackID: track, language: "en-US", directory: cacheDirectory))?.words ?? [] }
+        var words = given
+        if words == nil, !asset.audio.isEmpty { words = await listen(asset, cacheDirectory: cacheDirectory) }
+        if let words {
             try lines(words).write(to: folder.appendingPathComponent("transcript.txt"), atomically: true, encoding: .utf8)
             written.append("transcript.txt")
         }
         let times = Array(stride(from: 0.0, to: max(0.1, asset.duration.seconds - 0.1), by: 2))
-        let frames = try await grab(video, at: times, width: 320)
-        for (n, start) in stride(from: 0, to: frames.count, by: 24).enumerated() {
-            let name = "sheet-\(n + 1).jpg"
-            try sheet(Array(frames[start..<min(frames.count, start + 24)]), to: folder.appendingPathComponent(name))
+        // A sheet at a time, so a long video never holds all its frames at once.
+        var sheets = 0
+        for start in stride(from: 0, to: times.count, by: 24) {
+            let frames = try await grab(video, at: Array(times[start..<min(times.count, start + 24)]), width: 320)
+            guard !frames.isEmpty else { continue }
+            sheets += 1
+            let name = "sheet-\(sheets).jpg"
+            try sheet(frames, to: folder.appendingPathComponent(name))
             written.append(name)
         }
         return written
+    }
+
+    /// A video's words with their times: Whisper when it's installed, else the Mac's own recognizer; none when both fail.
+    public static func listen(_ asset: MediaAsset, cacheDirectory: URL) async -> [TranscriptWord] {
+        guard let track = asset.audio.first?.id else { return [] }
+        if WhisperTranscriber.executable() != nil, let t = try? await WhisperTranscriber.transcribe(asset: asset, trackID: track, language: "en", model: SharedSettings.whisperModel, directory: cacheDirectory) { return t.words }
+        return (try? await LocalTranscriber.transcribe(asset: asset, trackID: track, language: "en-US", directory: cacheDirectory))?.words ?? []
     }
 
     /// Full frames of the video at given times, as JPEGs in `folder`.

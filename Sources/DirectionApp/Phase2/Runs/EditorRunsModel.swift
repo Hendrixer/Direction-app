@@ -41,12 +41,23 @@ import DirectionTools
         runner.register(store)
         if !recovered { recovered = true; runner.recover(store); EditorPrograms.shared.refreshIfNeeded() }
         runs = (try? store.runs()) ?? []
+        Self.cleanUpStudies(runs, store: store)
         activity = (try? store.activity(limit: 200)) ?? []
         watchOwnSession()
         announce(film)
         findWork(film, store: store)
         offerSetup(film)
         runner.pump()
+    }
+
+    /// A style made from videos leaves nothing behind: the downloads and what was read from them go
+    /// once it's saved. A run that stopped keeps them for Try Again.
+    static func cleanUpStudies(_ runs: [EditorRun], store: ProjectStore) {
+        for r in runs where r.job == .style && r.state == .done && !(r.studies ?? []).isEmpty {
+            let film = store.url.standardizedFileURL.path + "/"
+            for path in r.studies ?? [] where URL(fileURLWithPath: path).standardizedFileURL.path.hasPrefix(film) { try? FileManager.default.removeItem(atPath: path) }
+            _ = try? store.updateRun(r.id) { $0.studies = nil }
+        }
     }
 
     /// Direction starts the editor (Settings › Engines › Editor runs on isn't Your own session).
@@ -170,10 +181,10 @@ import DirectionTools
     /// Make a style (styles.md › Making a style): the director asked, so it starts now, not held.
     /// False when Direction doesn't start the editor (Your own session) or it isn't set up.
     @discardableResult
-    func makeStyle(_ film: FilmModel, request: String, fromFilm: Bool) -> Bool {
+    func makeStyle(_ film: FilmModel, request: String, fromFilm: Bool, studies: [URL] = []) -> Bool {
         guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program else { return false }
         var run = EditorRun(job: .style, program: program.rawValue, version: EditorSetup.version(program))
-        run.request = request; run.fromFilm = fromFilm
+        run.request = request; run.fromFilm = fromFilm; run.studies = studies.isEmpty ? nil : studies.map(\.path)
         try? store.saveRun(run)
         runs.append(run)
         film.refresh(force: true)
