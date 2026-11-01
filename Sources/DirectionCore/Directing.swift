@@ -62,6 +62,8 @@ public struct DailiesScene: Codable, Hashable, Sendable, Identifiable {
     public var setups: [DailiesSetup]
     public var locked: Bool
     public var lockedAt: Double?
+    /// The director's folder it came from ("01 Intro"): its number and title are theirs (FootageFolders).
+    public var folder: String?
     public init(id: String = newID("scene"), number: Int, title: String, setups: [DailiesSetup] = [], locked: Bool = false) { self.id = id; self.number = number; self.title = title; self.setups = setups; self.locked = locked }
     public var label: String { "\(number) \(title)" }
 }
@@ -83,6 +85,9 @@ public struct TakeInfo: Codable, Hashable, Sendable, Identifiable {
     public var guessSceneID: String?
     public var flags: [String] = []
     public var unusable: Bool = false
+    /// The director's folders it was filed in ("01 Intro/A Talking head"): its scene, setup and take
+    /// code come from them, and the editor's logging keeps them (FootageFolders).
+    public var folder: String?
     public init(assetID: String) { self.assetID = assetID }
 }
 

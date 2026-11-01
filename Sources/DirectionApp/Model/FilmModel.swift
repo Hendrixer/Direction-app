@@ -758,7 +758,9 @@ final class FilmModel {
     var importingFootage = 0
     /// Files being copied into the film (Settings › Storage › Copy into library), while they are.
     var copyingFootage: FootageCopying?
-    func importFootage(_ urls: [URL]) {
+    /// `places`: where the director filed each file in scene and setup folders, by its path; those takes
+    /// go to their scenes as they come in, before the editor logs (FootageFolders).
+    func importFootage(_ urls: [URL], places: [String: FootagePlace] = [:]) {
         guard let runtime, let store, !urls.isEmpty else { return }
         // Settings › Storage: link to the originals, or copy them into the film's Footage folder first.
         let copies = UserDefaults.standard.string(forKey: SettingsKey.footageImport) == "copy" ? MediaAsset.copies(in: store.url) : nil
@@ -773,7 +775,8 @@ final class FilmModel {
                     var args: [String: JSONValue] = ["path": .string(file.path), "append": .bool(false)]
                     // The film's rate comes from its first footage unless Settings › Cutting names one.
                     if let rate = Double(UserDefaults.standard.string(forKey: SettingsKey.frameRate) ?? "match") { args["frameRate"] = .number(rate) }
-                    _ = try await runtime.invoke("direction_import", arguments: .object(args))
+                    let imported = try await runtime.invoke("direction_import", arguments: .object(args))
+                    if let place = places[url.path], let id = imported.value["asset"]["id"].string { perform { try $0.fileTakes([id: place]) } }
                 } catch {
                     self.error = "\(url.lastPathComponent): \(error.localizedDescription)"
                     // A copy no take uses isn't kept.
@@ -805,7 +808,7 @@ final class FilmModel {
     /// written. Direction can't read a script yet, so a dropped one says so instead of failing as footage.
     func bring(_ drop: FootageDrop) {
         if !drop.footage.isEmpty {
-            if onboardingStep != nil { OnboardingSession.of(self).add(drop.footage, wait: true) } else { importFootage(drop.footage) }
+            if onboardingStep != nil { OnboardingSession.of(self).add(drop.footage, places: drop.places, wait: true) } else { importFootage(drop.footage, places: drop.places) }
         }
         if !drop.scripts.isEmpty { toast = Toast(title: "Direction can\u{2019}t read scripts yet", detail: "The Script room is built from what was said in the takes.") }
         else if drop.footage.isEmpty { toast = Toast(title: "Those aren\u{2019}t video, sound or script files.") }
@@ -813,15 +816,8 @@ final class FilmModel {
     func chooseFootage() {
         let panel = NSOpenPanel(); panel.title = "Bring footage"; panel.allowedContentTypes = [.movie, .audio, .image, .folder]; panel.allowsMultipleSelection = true; panel.canChooseDirectories = true
         guard panel.runModal() == .OK else { return }
-        var files: [URL] = []
-        for url in panel.urls {
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-                let items = (FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil)?.allObjects as? [URL]) ?? []
-                files += items.filter { ["mov", "mp4", "m4v", "mxf", "wav", "m4a", "mp3", "aif", "aiff", "jpg", "png"].contains($0.pathExtension.lowercased()) }
-            } else { files.append(url) }
-        }
-        importFootage(files.sorted { $0.lastPathComponent < $1.lastPathComponent })
+        let drop = FootageFiles.route(panel.urls)
+        importFootage(drop.footage, places: drop.places)
     }
 
     // MARK: Editor

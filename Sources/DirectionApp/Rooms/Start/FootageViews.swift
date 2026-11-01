@@ -11,26 +11,28 @@ enum FootageFiles {
     static let still: Set<String> = ["jpg", "jpeg", "png"]
     static let script: Set<String> = ["pdf", "fdx"]
 
-    /// Files and folders → the footage and sound inside them, sorted by name.
-    static func expand(_ urls: [URL]) -> (footage: [URL], scripts: [URL]) {
-        var files: [URL] = []
+    /// Files and folders → the footage and sound inside them, sorted by name, and where the director filed
+    /// each in scene and setup folders, by path (FootageFolders).
+    static func expand(_ urls: [URL]) -> (footage: [URL], scripts: [URL], places: [String: FootagePlace]) {
+        var files: [URL] = [], found: [(file: URL, root: URL)] = []
         for url in urls {
             var dir: ObjCBool = false
             if FileManager.default.fileExists(atPath: url.path, isDirectory: &dir), dir.boolValue, url.pathExtension != "direction" {
                 let items = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsPackageDescendants])?.allObjects as? [URL] ?? []
-                files += items
+                files += items; found += items.map { ($0, url) }
             } else { files.append(url) }
         }
         let ext = { (u: URL) in u.pathExtension.lowercased() }
-        return (files.filter { video.contains(ext($0)) || sound.contains(ext($0)) }.sorted { $0.lastPathComponent < $1.lastPathComponent },
-                files.filter { script.contains(ext($0)) })
+        let footage = files.filter { video.contains(ext($0)) || sound.contains(ext($0)) }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        let kept = Set(footage.map(\.path))
+        return (footage, files.filter { script.contains(ext($0)) }, FootageFolders.places(found.filter { kept.contains($0.file.path) }))
     }
 
     /// What a drop on a film's window brings: a film to open, footage and sound (folders opened), and scripts.
     /// A still comes in only when it's dropped itself, never from inside a folder (a camera card's thumbnails).
     static func route(_ urls: [URL]) -> FootageDrop {
-        let (footage, scripts) = expand(urls)
-        return FootageDrop(film: urls.first { $0.pathExtension == "direction" }, footage: footage + urls.filter { still.contains($0.pathExtension.lowercased()) }, scripts: scripts)
+        let (footage, scripts, places) = expand(urls)
+        return FootageDrop(film: urls.first { $0.pathExtension == "direction" }, footage: footage + urls.filter { still.contains($0.pathExtension.lowercased()) }, scripts: scripts, places: places)
     }
 
     /// Copies a file into a film's Footage folder under its own name, or "Name 2.mov" when that's taken,
@@ -80,6 +82,8 @@ struct FootageDrop: Equatable {
     var film: URL?
     var footage: [URL] = []
     var scripts: [URL] = []
+    /// Where the director filed each file in scene and setup folders, by path.
+    var places: [String: FootagePlace] = [:]
 }
 
 /// Footage on its way into the film's Footage folder: files copied, of how many, and how far the one being copied is.
@@ -149,8 +153,11 @@ struct OnboardingFootageDrop: View {
     }
     private var message: String {
         if rejected { return "Those aren't video, sound or script files." }
-        if !session.pending.isEmpty { return "Logging starts in a moment. Drop more to add them too." }
-        return "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes. Your files stay where they are."
+        if !session.pending.isEmpty {
+            let scenes = Set(session.pendingPlaces.values.map(\.scene)).count
+            return "Logging starts in a moment.\(scenes > 0 ? " Your folders give \(DailiesFormat.count(scenes, "scene"))." : "") Drop more to add them too."
+        }
+        return "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes, or keeps yours: a folder named for its scene (\u{201C}02 Pricing\u{201D}) holds setups in folders of their own. Your files stay where they are."
     }
 
     /// Three fanned frames: they spread a little while something is dragged over.
@@ -218,14 +225,14 @@ struct OnboardingFootageDrop: View {
     private func received(_ urls: [URL]) { bring(urls, wait: true) }
 
     private func bring(_ urls: [URL], wait: Bool) {
-        let (footage, scripts) = FootageFiles.expand(urls)
+        let (footage, scripts, places) = FootageFiles.expand(urls)
         guard !footage.isEmpty else {
             rejected = scripts.isEmpty
             if scripts.isEmpty { shakeOnce() } else { model.toast = Toast(title: "Bring footage first", detail: "The editor matches a script to the takes it logs.", editor: true) }
             return
         }
         rejected = false
-        session.add(footage, wait: wait)
+        session.add(footage, places: places, wait: wait)
     }
 
     private func shakeOnce() {

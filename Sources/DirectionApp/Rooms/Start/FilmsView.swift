@@ -216,10 +216,10 @@ struct FilmsView: View {
     static func received(_ urls: [URL], app: AppModel) {
         guard app.previewFilms == nil else { return }
         if let film = urls.first(where: { $0.pathExtension == "direction" }) { app.open(film); return }
-        let footage = FootageFiles.expand(urls).footage
+        let (footage, _, places) = FootageFiles.expand(urls)
         guard !footage.isEmpty else { return }
         app.newFilm()
-        if let film = app.film { OnboardingSession.of(film).add(footage, wait: false) }
+        if let film = app.film { OnboardingSession.of(film).add(footage, places: places, wait: false) }
     }
 
     /// Start from a folder…: a new film with the folder's footage attached; logging starts after the brief.

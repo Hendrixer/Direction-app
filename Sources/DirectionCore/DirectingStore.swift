@@ -257,13 +257,44 @@ extension ProjectStore {
         }
     }
 
+    /// Takes as the director filed them in their folders (dailies.md › From your folders): their scenes and
+    /// setups are made or found by number and code, and a take already in a scene stays where it is.
+    @discardableResult
+    public func fileTakes(_ placed: [String: FootagePlace]) throws -> Dailies {
+        guard !placed.isEmpty else { return try dailies() }
+        return try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Filed takes as their folders say") { d in
+            for (assetID, place) in placed.sorted(by: { $0.value.folder < $1.value.folder }) {
+                var t = d.take(assetID)
+                guard t.sceneID == nil else { continue }
+                let i: Int
+                if let found = d.scenes.firstIndex(where: { $0.number == place.scene }) { i = found }
+                else { var s = DailiesScene(number: place.scene, title: place.sceneTitle); s.folder = place.folder.components(separatedBy: "/").first; d.scenes.append(s); i = d.scenes.count - 1 }
+                if let code = place.setupCode, !d.scenes[i].setups.contains(where: { $0.code == code }) { d.scenes[i].setups.append(DailiesSetup(code: code, description: place.setupDescription ?? "")) }
+                t.sceneID = d.scenes[i].id; t.guessSceneID = nil; t.folder = place.folder
+                if let code = place.setupCode { t.setupCode = code }
+                if let n = place.take { t.code = "T\(n)" }
+                d.takes[assetID] = t
+            }
+            d.scenes.sort { $0.number < $1.number }
+            for i in d.scenes.indices { d.scenes[i].setups.sort { $0.code.localizedStandardCompare($1.code) == .orderedAscending } }
+            d.updatedAt = Date().timeIntervalSince1970
+        }
+    }
+
     /// The editor logs footage: scenes, setups, take codes, captions, suggestions and guesses. It can't circle.
     public func logDailies(_ update: Dailies) throws -> Dailies {
         let assets = Set(try read().assets.map(\.id))
         return try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "The editor logged footage") { d in
             var scenes: [DailiesScene] = []
             for var s in update.scenes {
-                if let old = d.scenes.first(where: { $0.id == s.id }) { s.locked = old.locked; s.lockedAt = old.lockedAt }
+                if let old = d.scenes.first(where: { $0.id == s.id }) {
+                    s.locked = old.locked; s.lockedAt = old.lockedAt; s.folder = old.folder
+                    // A scene from the director's folders keeps its number, title and setups; the editor adds setups and fills in what they are.
+                    if old.folder != nil {
+                        s.number = old.number; s.title = old.title
+                        s.setups = old.setups.map { o in o.description.isEmpty ? (s.setups.first { $0.code == o.code } ?? o) : o } + s.setups.filter { n in !old.setups.contains { $0.code == n.code } }
+                    }
+                }
                 else { s.locked = false; s.lockedAt = nil }
                 scenes.append(s)
             }
@@ -276,6 +307,11 @@ extension ProjectStore {
                 t.assetID = id; t.circled = old.circled; t.circledAt = old.circledAt
                 if old.unusable && !t.unusable { t.unusable = old.unusable }
                 if let s = old.sceneID, d.scenes.first(where: { $0.id == s })?.locked == true { t.sceneID = s }
+                // Filed by the director's folders: the scene, setup and take they say stay.
+                if let folder = old.folder, old.sceneID != nil {
+                    t.folder = folder; t.sceneID = old.sceneID; t.guessSceneID = nil
+                    if let v = old.setupCode { t.setupCode = v }; if let v = old.code { t.code = v }
+                }
                 d.takes[id] = t
             }
             d.updatedAt = Date().timeIntervalSince1970

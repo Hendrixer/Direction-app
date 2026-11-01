@@ -284,6 +284,10 @@ enum LoggingDigest {
         var out: [String] = []
         let picture = a.video.first.map { "\($0.width)\u{00D7}\($0.height)" } ?? (a.isImage ? "still" : "sound only")
         out.append("### \(a.name) \u{00B7} \(a.id) \u{00B7} \(clock(a.duration.seconds)) \u{00B7} \(picture)\(a.audio.isEmpty ? " \u{00B7} no sound" : "")")
+        if let folder = dailies.takes[a.id]?.folder, let t = dailies.takes[a.id], let scene = dailies.scene(for: a.id) {
+            let setup = t.setupCode.map { code in " \u{00B7} setup \(code)" + (scene.setups.first { $0.code == code }.map { $0.description.isEmpty ? "" : " \($0.description)" } ?? "") } ?? ""
+            out.append("Filed by the director in \u{201C}\(folder)\u{201D}: scene \(scene.number) \(scene.title)\(setup)\(t.code.map { " \u{00B7} take \($0)" } ?? "").")
+        }
         if let g = dailies.syncGroup(for: a.id) {
             let others = g.takes.filter { $0.assetID != a.id }.map { t in (try? store.read().asset(t.assetID).name) ?? t.assetID }
             out.append("In sync with \(others.joined(separator: ", ")) (matched by sound)\(g.soundAssetID == a.id ? "; the cut uses this take\u{2019}s sound" : "").")
@@ -319,7 +323,7 @@ enum LoggingDigest {
         guard !d.scenes.isEmpty else { return "None yet. You start them." }
         return d.scenes.sorted { $0.number < $1.number }.map { s in
             let setups = s.setups.map { "\($0.code) \($0.description)" }.joined(separator: "; ")
-            return "- \(s.number) \(s.title) (\(s.id))\(setups.isEmpty ? "" : ": " + setups)"
+            return "- \(s.number) \(s.title) (\(s.id))\(s.folder.map { ", the director\u{2019}s folder \u{201C}\($0)\u{201D}" } ?? "")\(setups.isEmpty ? "" : ": " + setups)"
         }.joined(separator: "\n")
     }
 

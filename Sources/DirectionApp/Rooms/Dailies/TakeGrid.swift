@@ -106,7 +106,7 @@ struct DailiesSceneView: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Setup \(group.code), \(group.description)")
+        .accessibilityLabel(group.description.isEmpty ? "Setup \(group.code)" : "Setup \(group.code), \(group.description)")
     }
 
     private func payload(_ id: String) -> String { selection.contains(id) ? order.filter(selection.contains).joined(separator: "\n") : id }

@@ -101,3 +101,16 @@ Frame: `screens/09-dailies-unsorted.html` · Render: `renders/09-dailies-unsorte
 - [ ] Guesses use the diamond and ion text; nothing here uses amber except the sidebar circle counts.
 - [ ] "Accept N guesses" counts only cards with a guess.
 - [ ] Unsorted takes never appear in a cut.
+
+## From your folders
+
+Footage the director has already sorted comes in sorted. When a folder is dropped or chosen, Direction reads the folders before the editor logs, as an assistant editor reads the camera report (`FootageFolders`):
+
+- **A scene** is a folder named with its number: "01 Intro", "Scene 2 - Pricing", "S03_the_ending", "Sc4". The number is the scene's and the rest is its title ("Scene 4" when there's none). A number that's a date, a year or a resolution ("2026-10-18", "2026 shoot", "4K exports", "1080p") isn't a scene. Folders above the first scene folder (the film's own, "Footage") are passed over; the dropped folder's own name counts, so "02 Pricing" dropped alone is scene 2.
+- **A setup** is a folder inside a scene folder. Its letter comes from its name ("A Talking head", "2A - Wide", "Setup B", "Cam B", "A_Close") or, when it has none, the next free letter in name order ("Close" A, "Wide" B); its description is the rest of the name. A camera folder above the scenes ("Cam B/03 Outro/…") is the setup when there's none inside.
+- **A take** is a file in a setup folder. Its number comes from its name ("T3", "Take 03", "S02_A_T03", "1A-3") when every file in the setup has one, and otherwise from name order. A file right inside a scene folder has a scene and no setup.
+- A camera card's own folders (DCIM, 100CANON, PRIVATE/M4ROOT/CLIP, CONTENTS/CLIPS001, proxies) are skipped wherever they sit, so a card copied into a setup folder files its clips there.
+
+The scenes and setups appear in Dailies as each take comes in, so the director can start circling before the editor has logged anything. The editor then logs those takes like any other (caption, flags, suggestion) and describes setups the folders only letter, but keeps their scene, setup and take code and can't retitle a scene that came from a folder; a take it thinks is misfiled gets a suggestion saying so. The director can still move anything. Loose files and folders that aren't scenes are logged as before: the editor sorts them. Footage brought in later never moves a take that's already in a scene.
+
+While files wait to be logged, the drop zone says how many scenes the folders give ("Logging starts in a moment. Your folders give 3 scenes.").

@@ -87,6 +87,8 @@ struct OnboardingView: View {
     var missing: Set<Field> = []
     /// Dropped footage, imported after a second unless more arrives.
     var pending: [URL] = []
+    /// Where the director filed the pending files in scene and setup folders, by path.
+    @ObservationIgnored var pendingPlaces: [String: FootagePlace] = [:]
     @ObservationIgnored private var pendingTask: Task<Void, Never>?
 
     private static var sessions: [ObjectIdentifier: OnboardingSession] = [:]
@@ -114,8 +116,9 @@ struct OnboardingView: View {
     }
 
     /// Footage dropped on the window: wait a second for more, then start logging.
-    func add(_ urls: [URL], wait: Bool) {
+    func add(_ urls: [URL], places: [String: FootagePlace] = [:], wait: Bool) {
         pending += urls.filter { !pending.contains($0) }
+        pendingPlaces.merge(places) { _, new in new }
         pendingTask?.cancel()
         guard wait else { importPending(); return }
         pendingTask = Task { [weak self] in
@@ -128,8 +131,8 @@ struct OnboardingView: View {
     func importPending() {
         pendingTask?.cancel(); pendingTask = nil
         guard let model = owner, !pending.isEmpty, model.brief.isComplete else { return }
-        let files = pending; pending = []
-        model.importFootage(files)
+        let files = pending, places = pendingPlaces; pending = []; pendingPlaces = [:]
+        model.importFootage(files, places: places)
     }
 }
 
