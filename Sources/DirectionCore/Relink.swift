@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-// Footage is linked, never copied, so a take can go missing when a drive is unplugged.
+// Footage is linked unless Settings › Storage asks for copies, so a take can go missing when a drive is unplugged.
 // Relinking points a take at its file's new location. It goes through `update`, so it is
 // one revision in history and the lock rules see it like any other change.
 

@@ -64,7 +64,7 @@ Each change is placed in the new cut (through every later operation in the batch
 | Code | When |
 |---|---|
 | `scene_locked` | Anything that would change what plays over a locked scene, on any track: its clips, overlays and sound over it, transitions and J/L cuts reaching into it, its takes' camera LUTs and stream settings. Changes earlier in the cut may move it whole. |
-| `picture_locked` | After picture lock, anything but `balance`, `matchBalance`, `cameraLUT`, `color`, `gain`, `fade`, `duck`, `audio`, `placeMusic`, `placeMade` on an A track and removing a sound clip. |
+| `picture_locked` | After picture lock, anything but `balance`, `matchBalance`, `cameraLUT`, `color`, `gain`, `fade`, `duck`, `audio`, `placeMusic`, `placeMade` on an A track, removing a sound clip, and the graphics over the picture: `placeGraphic` and `title` on V2 and up, and `move` or `remove` of those. Every other clip and its timing stays exactly as locked, over locked scenes too (picture lock locks them all). Before picture lock, a locked scene still refuses graphics over it. |
 | `stale_revision` | `baseEditRevision` isn't current. |
 | `overlap` | Two clips on one track would overlap. |
 | `unknown_op` / `bad_argument` | Not in the catalog / a value out of range, a missing argument, an unknown argument, an id that isn't in the cut, not enough handle. |

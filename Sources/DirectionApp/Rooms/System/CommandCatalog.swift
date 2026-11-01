@@ -62,15 +62,15 @@ enum SettingsIndex {
         (.general, "When Direction opens"), (.general, "Show Films when no film is open"), (.general, "Start screenings full screen"),
         (.general, "Hide controls in Screening after"), (.general, "Audio output"), (.general, "Film grain"), (.general, "Reduce motion"),
         (.editor, "Wait for my OK before cutting"), (.editor, "Cut Feeling notes two ways"), (.editor, "Ask before guessing"), (.editor, "Follow the brief"),
-        (.cutting, "Handles in Play changes"), (.cutting, "Name new cuts"), (.cutting, "Frame rate for new films"), (.cutting, "Loudness target"),
+        (.cutting, "Handles in Play changes"), (.cutting, "Frame rate for new films"), (.cutting, "Loudness target"),
         (.engines, "Recommended"), (.engines, "Editor runs on"), (.engines, "Version"), (.engines, "Start work"), (.engines, "Let the editor run scripts"),
         (.engines, "Transcribe with"), (.engines, "Whisper version"), (.engines, "Look with"), (.engines, "Detail"), (.engines, "Look at new footage automatically"),
         (.engines, "OpenRouter"), (.engines, "Ask before spending more than"), (.engines, "Stop for the month at"),
-        (.cutting, "Music under dialogue"), (.cutting, "Transitions"), (.cutting, "Keep earlier cuts"), (.cutting, "Play from proxies"),
+        (.cutting, "Music under dialogue"), (.cutting, "Transitions"),
         (.cutting, "Looks folder"), (.cutting, "Convert log footage automatically"),
         (.notifications, "A cut is ready"), (.notifications, "The editor has a question"), (.notifications, "The editor can\u{2019}t do a note"),
         (.notifications, "An outside note arrives"), (.notifications, "A delivery finishes"), (.notifications, "Hold notifications during a screening"), (.notifications, "Sound"),
-        (.storage, "Location"), (.storage, "When you bring footage"), (.storage, "Render cache"), (.storage, "Proxies for locked films"),
+        (.storage, "Location"), (.storage, "When you bring footage"), (.storage, "Render cache"),
         (.sharing, "Viewers can leave notes"), (.sharing, "Links expire"), (.sharing, "Show who wrote each note to the editor"),
     ]
 }

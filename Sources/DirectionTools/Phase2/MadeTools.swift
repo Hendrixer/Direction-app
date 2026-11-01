@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import os
 import AVFoundation
 import DirectionCore
 import DirectionMedia
@@ -20,7 +21,7 @@ extension ToolCatalog {
         definition("direction_services", "Read what you can make picture and sound with: whether OpenRouter is ready, the version Direction uses for each kind right now (and when a frame shows a person) with its price, whether this Mac can sharpen, the director's limits, and what's left in the open turnover and this month. You don't choose versions: Direction picks one for each request from what it needs and the director's Made with setting, and moves to the next if a version turns it down. Use the footage first (direction_search_footage). The make-shot skill has the workflow."),
         definition("direction_estimate", "Price a plan before making any of it: steps is a list of direction_make arguments (kind, ask, seconds, from, first, last, references, sound, ways…), turnover the turnover ID. Returns each step's version, seconds and spend, the plan's total, what this turnover has spent, the director's limit and needsQuestion. Under the limit, make it without asking. Over it, ask one spend question for the whole plan (direction_ask kind spend, spend: {estimate: total, choiceID}) and pass its id as spendQuestionID on every step. Spends nothing.",
                    ["turnover": string, "steps": list(record(makeProperties))], required: ["steps"]),
-        definition("direction_make", "Make something the footage doesn't have. Through OpenRouter: music, soundEffect, voice (ask is the words), still, shot (a new shot from words, a first frame, or first and last frames), extension (continues a take: from {assetID, end, side: tail}), bridge (first and last frames, from two takes; a last frame always needs a first), changedShot (changes a range of a take itself, up to 10 s: from {assetID, start, end}, ask is the change: \"remove the boom at top left\", \"dusk sky with cloud\"). On this Mac at no cost: slowMotion (from a range, factor 2–4) and upscale (sharpens a range to the cut's size). A frame is {assetID, at} (at is source seconds; omit for a still). references are up to 4 stills or takes ({assetID, at}) that ground it in the film. Shots are silent unless sound is true. seconds is the length for music, sound effects, shots, extensions and bridges. ways is 1 or 2 (up to 4 for stills). note is the note ID (or \"unasked\"), turnover the turnover ID. Price the whole plan first with direction_estimate. Over the turnover's limit you get spend_over_limit: ask one spend question and call again with spendQuestionID. Past the monthly cap you get spend_cap, with no override. Otherwise a job: poll direction_job; its result has each made clip's assetID and provenance, and note says when Direction used another version because one turned the request down. Made shots are sharpened to the cut's size on this Mac and extensions join without a repeated frame. Watch what's made before placing it with placeMade (a changed shot goes on V2 over its own range).",
+        definition("direction_make", "Make something the footage doesn't have. Through OpenRouter: music, soundEffect, voice (ask is the words), still, shot (a new shot from words, a first frame, or first and last frames), extension (continues a take: from {assetID, end, side: tail}), bridge (first and last frames, from two takes; a last frame always needs a first), changedShot (changes a range of a take itself, up to 10 s: from {assetID, start, end}, ask is the change: \"remove the boom at top left\", \"dusk sky with cloud\"). On this Mac at no cost: slowMotion (from a range, factor 2–4) and upscale (sharpens a range to the cut's size). A frame is {assetID, at} (at is source seconds; omit for a still). references are up to 4 stills or takes ({assetID, at}) that ground it in the film. Shots are silent unless sound is true. seconds is the length for music, sound effects, shots, extensions and bridges. ways is 1 or 2 (up to 4 for stills). note is the note ID (or \"unasked\"), turnover the turnover ID. Price the whole plan first with direction_estimate. Over the turnover's limit you get spend_over_limit: ask one spend question and call again with spendQuestionID. Past the monthly cap you get spend_cap, with no override. Otherwise a job: poll direction_job; its result has each made clip's assetID and provenance, and note says when Direction used another version because one turned the request down. If the next version would pass a limit, the job's result is spend_over_limit or spend_cap instead, the same as this call's. Made shots are sharpened to the cut's size on this Mac and extensions join without a repeated frame. Watch what's made before placing it with placeMade (a changed shot goes on V2 over its own range).",
                    makeProperties, required: ["kind", "note", "turnover"], readOnly: false),
     ] }
 
@@ -57,6 +58,9 @@ struct MadeRequest: Sendable {
     /// Why Direction used another version than the one chosen, for the result.
     var versionNote: String?
     var spendID: String = ""
+    /// The spend question whose yes this request goes ahead on, and how much that yes allows.
+    var approval: String?
+    var budget: Double?
     /// The versions to try next if this one turns the request down (a person in a frame, a policy).
     var alternatives: [MadeVersion] = []
     /// A frame or reference shows a person.
@@ -157,10 +161,13 @@ extension ToolRuntime {
         let turnoverID = turnoverArg ?? steps.first?["turnover"].string
         let spent = SpendLedger.turnoverSpent(entries, filmID: filmID, turnoverID: turnoverID), limit = SharedSettings.spendAskAbove
         let month = SpendLedger.monthSpent(entries), cap = SharedSettings.spendStopAt
-        let needsQuestion = spent + total > limit + 0.005, overCap = cap.map { month + total > $0 + 0.005 } ?? false
+        // A step with no listed price could cost anything, so the director says yes to the plan first.
+        let needsQuestion = spent + total > limit + 0.005 || unpriced > 0, overCap = cap.map { month + total > $0 + 0.005 || (unpriced > 0 && month >= $0 - 0.005) } ?? false
+        let ask = "Ask one spend question for the plan (spend: {estimate: \(String(format: "%.2f", total)), choiceID}) and pass its id as spendQuestionID on every step."
         let message: String
         if overCap { message = "This plan would pass the director\u{2019}s \(MadeFormat.money(cap ?? 0)) for the month (\(MadeFormat.money(month)) spent). Only the director can change that, in Settings \u{203A} Engines." }
-        else if needsQuestion { message = "About \(MadeFormat.money(total)) would take this turnover to \(MadeFormat.money(spent + total)) of the director\u{2019}s \(MadeFormat.money(limit)) limit. Ask one spend question for the plan (spend: {estimate: \(String(format: "%.2f", total)), choiceID}) and pass its id as spendQuestionID on every step." }
+        else if unpriced > 0 { message = "About \(MadeFormat.money(total)), but \(unpriced == 1 ? "one step uses a version" : "\(unpriced) steps use versions") OpenRouter lists no price for, so the director says yes first. \(ask)" }
+        else if needsQuestion { message = "About \(MadeFormat.money(total)) would take this turnover to \(MadeFormat.money(spent + total)) of the director\u{2019}s \(MadeFormat.money(limit)) limit. \(ask)" }
         else { message = "About \(MadeFormat.money(total)), within the director\u{2019}s \(MadeFormat.money(limit)) limit for this turnover. Make it; say it in the read-back." }
         return .object(["steps": .array(priced), "total": .number(total), "turnoverSpent": .number(spent), "limit": .number(limit), "needsQuestion": .bool(needsQuestion),
                         "monthSpent": .number(month), "monthLeft": cap.map { .number(max(0, $0 - month)) } ?? .null, "overMonthlyCap": .bool(overCap),
@@ -285,37 +292,33 @@ extension ToolRuntime {
                 approval = qid; budget = SpendLedger.budget(forEstimate: s.estimate)
             }
             let entry = SpendEntry(kind: request.kind.spendKind, version: version.id, estimate: estimate.spend, filmID: p.id, turnoverID: request.turnoverID)
-            switch try SpendLedger.reserve(entry, approvedBy: approval, budget: budget) {
-            case .ok: break
-            case let .overLimit(e, spent, limit):
-                return .object(["status": .string("spend_over_limit"), "estimate": .number(e), "seconds": estimate.seconds.map(JSONValue.number) ?? .null, "turnoverSpent": .number(spent), "turnoverLimit": .number(limit), "left": .number(max(0, limit - spent)), "version": .string(version.id), "versionName": .string(version.name),
-                                "message": .string("About \(MadeFormat.money(e)) would take this turnover to \(MadeFormat.money(spent + e)) of the director\u{2019}s \(MadeFormat.money(limit)) limit. Price the whole plan with direction_estimate, ask one spend question for it (direction_ask kind spend, spend: {estimate, choiceID}) and call again with spendQuestionID once the director agrees.")])
-            case let .cap(e, spent, cap):
-                return .object(["status": .string("spend_cap"), "estimate": .number(e), "monthSpent": .number(spent), "monthLimit": .number(cap), "left": .number(max(0, cap - spent)),
-                                "message": .string("Nothing more can be made this month: \(MadeFormat.money(spent)) of the director\u{2019}s \(MadeFormat.money(cap)) is spent and this would cost about \(MadeFormat.money(e)). Only the director can change the limit, in Settings \u{203A} Engines.")])
-            }
-            request.spendID = entry.id
+            if let stop = Self.spendStop(try SpendLedger.reserve(entry, approvedBy: approval, budget: budget, priced: estimate.priced), estimate, version) { return stop }
+            request.spendID = entry.id; request.approval = approval; request.budget = budget
         }
 
         let r = request
-        let now = Date().timeIntervalSince1970
         let phase = version.isLocal ? "\(r.kind == .slowMotion ? "Making slow motion" : "Sharpening") on this Mac" : "Asking \(version.name) for \(r.kind.label.lowercased())"
-        let job = JobRecord(id: newID("job"), kind: "make", revision: p.editRevision, ownerPID: getpid(), status: "running", phase: phase, progress: 0, result: nil, error: nil, createdAt: now, updatedAt: now)
-        try store.saveJob(job)
-        // ToolRuntime's own job runner is private to it; this one keeps the same record so direction_job reads it.
-        Task { [store] in
-            var record = job
-            do {
-                record.result = try await self.perform(r, job: job)
-                record.status = "completed"; record.phase = "Completed"; record.progress = 1
-            } catch {
-                record.status = Task.isCancelled || error is CancellationError ? "cancelled" : "failed"
-                record.error = error.localizedDescription; record.phase = record.status == "cancelled" ? "Cancelled" : "Failed"
-            }
-            record.updatedAt = Date().timeIntervalSince1970
-            try? store.saveJob(record)
-        }
+        // In the runtime's own jobs, so direction_cancel_job reaches it and closing the film stops it.
+        let job = try startJob(kind: "make", revision: p.editRevision, phase: phase, progress: 0) { job in try await self.perform(r, job: job) }
         return try .wrapping(job)
+    }
+
+    /// What direction_make answers when a request would pass a limit, before or after a version turned it down.
+    static func spendStop(_ check: SpendCheck, _ estimate: MadeEstimate, _ version: MadeVersion) -> JSONValue? {
+        let ask = "Price the whole plan with direction_estimate, ask one spend question for it (direction_ask kind spend, spend: {estimate, choiceID}) and call again with spendQuestionID once the director agrees."
+        switch check {
+        case .ok: return nil
+        case let .overLimit(e, spent, limit):
+            let why = estimate.priced ? "About \(MadeFormat.money(e)) would take this turnover to \(MadeFormat.money(spent + e)) of the director\u{2019}s \(MadeFormat.money(limit)) limit." : "OpenRouter lists no price for \(version.name), so the director says yes before it\u{2019}s used."
+            var o: [String: JSONValue] = ["status": .string("spend_over_limit"), "estimate": .number(e), "seconds": estimate.seconds.map(JSONValue.number) ?? .null, "turnoverSpent": .number(spent), "turnoverLimit": .number(limit), "left": .number(max(0, limit - spent)),
+                                          "version": .string(version.id), "versionName": .string(version.name), "message": .string("\(why) \(ask)")]
+            if !estimate.priced { o["priced"] = .bool(false) }
+            return .object(o)
+        case let .cap(e, spent, cap):
+            let cost = estimate.priced ? "this would cost about \(MadeFormat.money(e))" : "OpenRouter lists no price for \(version.name)"
+            return .object(["status": .string("spend_cap"), "estimate": .number(e), "monthSpent": .number(spent), "monthLimit": .number(cap), "left": .number(max(0, cap - spent)),
+                            "message": .string("Nothing more can be made this month: \(MadeFormat.money(spent)) of the director\u{2019}s \(MadeFormat.money(cap)) is spent and \(cost). Only the director can change the limit, in Settings \u{203A} Engines.")])
+        }
     }
 
     /// The film's shape as one of the version's ratios.
@@ -337,6 +340,8 @@ extension ToolRuntime {
     private struct Piece { var url: URL; var cost: Double?; var way: Int; var sharpenedFrom: String? = nil }
     /// Something went wrong after the service had made (and charged for) it: the charge stays in the ledger.
     private struct PaidThenFailed: Error { var underlying: Error; var cost: Double? }
+    /// The version next in line would pass a limit: the job ends with direction_make's own spend answer.
+    private struct SpendStopped: Error { var result: JSONValue }
 
     private func perform(_ request: MadeRequest, job: JobRecord) async throws -> JSONValue {
         var r = request
@@ -368,6 +373,15 @@ extension ToolRuntime {
                         if r.person || why.contains("person") { MadeRefusals.record(refused.id) }
                         r.version = r.alternatives.removeFirst()
                         r.estimate = MadeEstimator.estimate(r.kind, version: r.version, seconds: r.seconds, words: r.ask, ways: r.ways, sound: r.sound, fromImage: r.first != nil || r.last != nil, outputPixels: Double(r.cut.width * r.cut.height))
+                        // The next version often costs more: the hold moves to it only within the limits and the director's yes.
+                        if !refused.isLocal && !r.version.isLocal {
+                            let planned = spent + r.estimate.spend / Double(r.ways) * Double(r.ways - made.count)
+                            let check = try SpendLedger.adjust(r.spendID, version: r.version.id, estimate: planned, priced: r.estimate.priced, approvedBy: r.approval, budget: r.budget)
+                            if case .object(var stop)? = Self.spendStop(check, r.estimate, r.version) {
+                                stop["note"] = .string("\(refused.name) wouldn\u{2019}t take \(why). \(r.version.name) would make it instead.")
+                                throw SpendStopped(result: .object(stop))
+                            }
+                        }
                         r.aspect = Self.aspect(try store.read().sequence(nil), listed: r.version.aspectRatios)
                         r.versionNote = [r.versionNote, "\(refused.name) wouldn\u{2019}t take \(why), so this used \(r.version.name)."].compactMap { $0 }.joined(separator: " ")
                         progress(job, "Asking \(r.version.name) instead", 0.05)
@@ -381,6 +395,7 @@ extension ToolRuntime {
             var charged = made.isEmpty ? nil : spent, failure = error
             if let paid = error as? PaidThenFailed { charged = (charged ?? 0) + (paid.cost ?? r.estimate.spend / Double(r.ways)); failure = paid.underlying }
             if !r.version.isLocal { try? SpendLedger.release(r.spendID, charged: charged) }
+            if let stopped = error as? SpendStopped { return stopped.result }
             throw failure
         }
         // Direction looks at each way itself before the editor does (decisions.md); a failed look never fails the job.
@@ -532,13 +547,16 @@ extension ToolRuntime {
             if !r.references.isEmpty { body["input_references"] = .array(try await references(r)) }
         }
         let submitted = try await OpenRouter.submitVideo(.object(body))
-        progress(job, "Waiting for \(r.version.name)\(label)", 0.1)
-        let name = r.version.name, making = r.kind == .changedShot ? "changing the shot" : r.kind == .upscale ? "sharpening the shot" : "making the shot"
-        let done = try await OpenRouter.waitForVideo(submitted.id) { [weak self] j in
-            self?.progress(job, j.status == "in_progress" ? "\(name) is \(making)\(label)" : "Waiting for \(name)\(label)", j.status == "in_progress" ? 0.5 : 0.1)
-        }
-        // Made, so paid for, from here on.
+        // Sent, so paid for from here on, a cancel or a lost poll included, unless OpenRouter itself says it
+        // couldn't make the shot. The cost is the last one a poll reported.
+        let reported = OSAllocatedUnfairLock<Double?>(initialState: nil)
         do {
+            progress(job, "Waiting for \(r.version.name)\(label)", 0.1)
+            let name = r.version.name, making = r.kind == .changedShot ? "changing the shot" : r.kind == .upscale ? "sharpening the shot" : "making the shot"
+            let done = try await OpenRouter.waitForVideo(submitted.id) { [weak self] j in
+                if let c = j.cost { reported.withLock { $0 = c } }
+                self?.progress(job, j.status == "in_progress" ? "\(name) is \(making)\(label)" : "Waiting for \(name)\(label)", j.status == "in_progress" ? 0.5 : 0.1)
+            }
             progress(job, "Downloading the shot\(label)", 0.8)
             let data = try await OpenRouter.videoContent(submitted.id)
             let downloaded = scratch.appendingPathComponent(UUID().uuidString + ".mp4")
@@ -546,7 +564,10 @@ extension ToolRuntime {
             defer { try? FileManager.default.removeItem(at: downloaded) }
             let (output, sharpenedFrom) = try await finish(downloaded, r, folder: folder, job: job, label: label)
             return Piece(url: output, cost: done.cost, way: 1, sharpenedFrom: sharpenedFrom)
-        } catch { throw PaidThenFailed(underlying: error, cost: done.cost) }
+        } catch let e as DirectionError where e.code == "shot_failed" {
+            if let cost = reported.withLock({ $0 }), cost > 0 { throw PaidThenFailed(underlying: e, cost: cost) }
+            throw e
+        } catch { throw PaidThenFailed(underlying: error, cost: reported.withLock { $0 }) }
     }
 
     /// Finishing a made shot (made-media.md): sharpen it to the cut's size when the cut is 1.5× taller and this Mac can,

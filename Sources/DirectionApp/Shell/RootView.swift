@@ -6,7 +6,8 @@ struct MainWindow: View {
     @Bindable var app: AppModel
     var body: some View {
         Group {
-            if let film = app.film { FilmWindow(app: app, model: film) }
+            // One identity per film, so a film opened over another starts fresh: ⌘Z, the ? key and the watchers are its own.
+            if let film = app.film { FilmWindow(app: app, model: film).id(ObjectIdentifier(film)) }
             else { FilmsView(app: app) }
         }
         .frame(minWidth: Gate.Size.windowMin.width, minHeight: Gate.Size.windowMin.height)
@@ -122,10 +123,12 @@ struct FilmWindow: View {
         }
     }
 
+    /// A film dropped on the window opens; footage, folders and scripts go where FilmModel.bring sends them.
     private func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
-        let group = DispatchGroup(); var urls: [URL] = []
-        for p in providers { group.enter(); _ = p.loadObject(ofClass: URL.self) { url, _ in if let url { urls.append(url) }; group.leave() } }
-        group.notify(queue: .main) { MainActor.assumeIsolated { model.importFootage(urls) } }
+        Task { @MainActor in
+            let drop = FootageFiles.route(await FootageFiles.urls(from: providers))
+            if let film = drop.film, let app { app.open(film) } else { model.bring(drop) }
+        }
         return true
     }
 }

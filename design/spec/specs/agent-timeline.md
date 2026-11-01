@@ -139,7 +139,7 @@ Every operation is checked before anything commits:
 | Code | When |
 |---|---|
 | `scene_locked` | It would recut a locked scene: its takes, timing, framing, joins, or any picture over it. Its color and sound stay open. |
-| `picture_locked` | Any picture change after picture lock |
+| `picture_locked` | Any change to the cut after picture lock. The graphics over the picture (captions, titles, credits: `placeGraphic` and `title` on V2 and up, moved or removed) stay open, as its color and sound do. |
 | `stale_revision` | `baseEditRevision` isn't current |
 | `overlap` | It would make two clips overlap on one track |
 | `unknown_op`, `bad_argument` | Not in the catalog, or a value out of range |

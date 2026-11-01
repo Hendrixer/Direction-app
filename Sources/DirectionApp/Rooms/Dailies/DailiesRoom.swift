@@ -227,6 +227,13 @@ struct DailiesSidebar: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if let c = model.copyingFootage {
+                HStack(spacing: 8) {
+                    Text("Copying \(min(c.total, c.done + 1)) of \(c.total)").lineLimit(1).fixedSize()
+                    GateProgress(value: c.fraction).frame(maxWidth: .infinity)
+                }
+                .accessibilityLabel("Copying \(min(c.total, c.done + 1)) of \(c.total) into the film, \(Int(c.fraction * 100)) percent")
+            }
             HStack(spacing: 8) {
                 Image(systemName: "film").font(.system(size: 10.5)).frame(width: 12)
                 Text("\(DailiesFormat.count(model.footage.count, "take")) \u{00B7} \(DailiesFormat.hoursMinutes(model.dailiesTotalSeconds))")

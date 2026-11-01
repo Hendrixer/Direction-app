@@ -3,7 +3,8 @@ import Foundation
 /// Locks, checked one operation at a time so the error names it (agent-timeline.md › errors).
 /// A lock keeps the cut, and color and sound stay open under it. A locked scene is its stretch of V1
 /// and every picture over or under it; it may move whole when something before it changes length, but
-/// what's in it and when may not change. After picture lock the same holds for the whole film.
+/// what's in it and when may not change. After picture lock the same holds for the whole film, except
+/// the graphics over the picture (captions, titles, lower thirds, credits), which finishing places.
 enum TimelineLocks {
     static let afterPictureLock: Set<String> = ["balance", "matchBalance", "cameraLUT", "color", "gain", "fade", "duck", "audio", "placeMusic", "syncSound"]
 
@@ -11,13 +12,23 @@ enum TimelineLocks {
         guard c.state.pictureLocked, !afterPictureLock.contains(op.type) else { return }
         if op.type == "placeMade", op.track?.hasPrefix("A") == true { return }
         if op.type == "remove", let id = op.clipID, w.s.clips.first(where: { $0.id == id })?.kind == .audio { return }
-        throw DirectionError("picture_locked", "Picture is locked. After picture lock only color and sound change; the director can unlock picture from the Film menu.")
+        if ["placeGraphic", "title"].contains(op.type) { return }
+        if ["move", "remove"].contains(op.type), let id = op.clipID, let clip = w.s.clips.first(where: { $0.id == id }), isGraphic(clip, graphics(w.project)) { return }
+        throw DirectionError("picture_locked", "Picture is locked. After picture lock only color, sound and the graphics over the picture change; the director can unlock picture from the Film menu.")
     }
+
+    /// The film's checked graphics, by asset id.
+    static func graphics(_ p: Project) -> Set<String> { Set(p.assets.filter { $0.graphic != nil }.map(\.id)) }
+    /// A graphic over the picture: a title or a checked graphic on V2 or above. It sits over the cut
+    /// without changing it, so picture lock leaves it open.
+    static func isGraphic(_ c: Clip, _ graphics: Set<String>) -> Bool { c.layer > 0 && (c.kind == .title || c.assetID.map(graphics.contains) ?? false) }
 
     static func check(before: Project, after: Project, si: Int, context: EditContext) throws {
         let b = before.sequences[si], a = after.sequences[si]
-        if context.state.pictureLocked {
-            guard samePicture(b, a) else { throw DirectionError("picture_locked", "Picture is locked. Finishing changes color and sound, not timing.") }
+        // Picture lock locks every scene with it, and the graphics over them stay open there too.
+        let graphicsOpen = context.state.pictureLocked
+        if graphicsOpen {
+            guard samePicture(b, a, graphics: graphics(before).union(graphics(after))) else { throw DirectionError("picture_locked", "Picture is locked. Finishing changes color, sound and the graphics over the picture, not the cut.") }
         }
         let locked = context.dailies.lockedAssetIDs
         guard !locked.isEmpty else { return }
@@ -33,13 +44,14 @@ enum TimelineLocks {
                 if let shift { guard abs(shift - d) < 1e-6 else { throw fail } } else { shift = d }
             }
             let d = shift ?? 0
-            guard signature(b, before, span.start, span.end) == signature(a, after, span.start + d, span.end + d) else { throw fail }
+            guard signature(b, before, span.start, span.end, graphicsOpen: graphicsOpen) == signature(a, after, span.start + d, span.end + d, graphicsOpen: graphicsOpen) else { throw fail }
         }
     }
 
     /// The same picture: every clip that isn't sound cut, placed and treated the same, in the same frame.
-    static func samePicture(_ b: Sequence, _ a: Sequence) -> Bool {
-        func timing(_ s: Sequence) -> [String] { s.clips.filter { $0.kind != .audio }.map { c in "\(c.id)|\(c.assetID ?? "")|\(c.start.seconds)|\(c.sourceRange.start.seconds)|\(c.sourceRange.duration.seconds)|\(c.speed)|\(c.layer)|\(c.hold?.seconds ?? -1)|\(json(c.effects))|\(json(c.transition))|\(c.blend ?? "")|\(c.aboveLook ?? false)|\(json(c.framing))" }.sorted() }
+    /// Clips of `graphics` over the picture are left out.
+    static func samePicture(_ b: Sequence, _ a: Sequence, graphics: Set<String>? = nil) -> Bool {
+        func timing(_ s: Sequence) -> [String] { s.clips.filter { c in c.kind != .audio && !(graphics.map { isGraphic(c, $0) } ?? false) }.map { c in "\(c.id)|\(c.assetID ?? "")|\(c.start.seconds)|\(c.sourceRange.start.seconds)|\(c.sourceRange.duration.seconds)|\(c.speed)|\(c.layer)|\(c.hold?.seconds ?? -1)|\(json(c.effects))|\(json(c.transition))|\(c.blend ?? "")|\(c.aboveLook ?? false)|\(json(c.framing))" }.sorted() }
         return timing(b) == timing(a) && b.width == a.width && b.height == a.height && b.frameRate == a.frameRate
     }
 
@@ -66,9 +78,11 @@ enum TimelineLocks {
 
     /// The cut inside [ws, we), relative to ws: every picture there, from where in which take, how it's
     /// framed and joined, where its sound starts and ends, and what reaches in from the cuts at either
-    /// edge. Color and sound-only clips are left out; they stay open.
-    static func signature(_ s: Sequence, _ p: Project, _ ws: Double, _ we: Double) -> [String] {
+    /// edge. Color and sound-only clips are left out; they stay open, as the graphics over the picture do
+    /// when `graphicsOpen`.
+    static func signature(_ s: Sequence, _ p: Project, _ ws: Double, _ we: Double, graphicsOpen: Bool = false) -> [String] {
         var rows: [String] = []
+        let open = graphicsOpen ? graphics(p) : nil
         func cut(_ c: Clip, _ source: Double) -> Double { c.hold != nil ? c.start.seconds : c.start.seconds + (source - c.sourceRange.start.seconds) / c.speed }
         func src(_ c: Clip, _ t: Double) -> Double { c.hold != nil ? c.sourceRange.start.seconds : c.sourceRange.start.seconds + (t - c.start.seconds) * c.speed }
         func windowed(_ keys: [Keyframe]?, _ c: Clip?) -> [Double] {
@@ -78,7 +92,7 @@ enum TimelineLocks {
             for k in keys { let t = c.map { cut($0, k.t) } ?? k.t; if t >= ws - 1e-6 && t <= we + 1e-6 { out += [r(t - ws), k.v] } }
             return out.map(r)
         }
-        for c in s.clips where c.kind != .audio {
+        for c in s.clips where c.kind != .audio && !(open.map { isGraphic(c, $0) } ?? false) {
             let snd = c.soundRange
             let lo = min(c.start.seconds, snd.start.seconds), hi = max(c.end.seconds, snd.end.seconds)
             var f: [String: String] = ["track": c.trackName]

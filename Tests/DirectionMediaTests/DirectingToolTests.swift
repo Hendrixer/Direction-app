@@ -43,3 +43,78 @@ import DirectionCore
     let answered = try store.notes().first { $0.id == note.id }
     #expect(answered?.lifecycle == .answered && answered?.latestAnswer?.delta == "−4.2 s")
 }
+
+/// A film with one take of `seconds` with sound, cut whole, and the runtime the editor uses.
+private func oneTakeFilm(_ seconds: Double = 10) throws -> (ProjectStore, ToolRuntime) {
+    let path = FileManager.default.temporaryDirectory.appendingPathComponent("direction-directing-" + UUID().uuidString + ".direction")
+    let store = try ProjectStore.create(at: path, name: "Launch film")
+    let asset = MediaAsset(id: "take-1", name: "A011_C001.mov", path: "/fixture.mov", duration: .init(seconds: seconds), video: [.init(id: 1, width: 320, height: 180, frameRate: 24)], audio: [.init(id: 2, index: 0, label: "Dialogue", channels: 1, sampleRate: 48_000)])
+    _ = try store.addAsset(asset, append: true, expectedRevision: 0)
+    return (store, try ToolRuntime(store: store))
+}
+
+private func expectRefused(_ code: String, _ body: () async throws -> Void) async {
+    do { try await body(); Issue.record("Expected \(code)") }
+    catch let e as DirectionError { #expect(e.code == code, "\(e.code): \(e.message)") }
+    catch { Issue.record("Unexpected error: \(error)") }
+}
+
+@Test func aNoteOnTheWholeCutReachesTheEditorAsAShortExcerpt() async throws {
+    let (store, runtime) = try oneTakeFilm(400)
+    defer { try? FileManager.default.removeItem(at: store.url) }
+    try store.saveTranscript(SourceTranscript(assetID: "take-1", audioTrackID: 2, words: (0..<700).map { i in TranscriptWord(id: "w\(i)", text: "word\(i)", range: .init(start: Double(i) * 0.5, end: Double(i) * 0.5 + 0.3)) }))
+    let note = try store.addComment(text: "Shorter all over.", sequenceID: nil, revision: try store.revision(), extra: NoteFields(kind: .pace))
+    #expect(note.transcriptContext.count == 500)
+    _ = try store.turnOver(noteIDs: [note.id], latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
+    let turnovers = try await runtime.invoke("direction_turnovers").value, feedback = try await runtime.invoke("direction_feedback").value
+    let shown = try #require(turnovers["turnovers"].array?.first?["notes"].array?.first)
+    let excerpt = try #require(shown["transcriptContext"]["excerpt"].string)
+    #expect(excerpt.hasPrefix("word0 word1 ") && excerpt.hasSuffix(" word39\u{2026}") && shown["transcriptContext"]["wordCount"].int == 500)
+    #expect(try turnovers.data().count < 8_000 && feedback.data().count < 4_000)
+    // A moment's excerpt is the words around it.
+    let moment = try store.addComment(text: "Hold here.", sequenceID: nil, revision: try store.revision(), time: .init(seconds: 100))
+    #expect(moment.transcriptExcerpt(limit: 4) == "\u{2026}word198 word199 word200 word201\u{2026}")
+}
+
+@Test func olderToolsAndRestoreHoldToTheLocks() async throws {
+    let (store, runtime) = try oneTakeFilm()
+    defer { try? FileManager.default.removeItem(at: store.url) }
+    func call(_ name: String, _ args: [String: JSONValue]) async throws -> JSONValue { try await runtime.invoke(name, arguments: .object(args)).value }
+    func edit(_ op: String) async throws {
+        _ = try await call("direction_edit", ["baseEditRevision": .number(Double(try store.revision())), "operations": .array([try JSONDecoder().decode(JSONValue.self, from: Data(op.utf8))])])
+    }
+    let whole = Double(try store.revision())
+    _ = try await call("direction_remove_range", ["start": .number(1), "end": .number(2), "baseEditRevision": .number(whole)])
+    let trimmed = Double(try store.revision())
+    let id = try #require(try store.read().sequences[0].clips.min { $0.start < $1.start }).id
+    try await edit(#"{"op":"addEffect","target":"\#(id)","effect":"blur","params":{"radius":3}}"#)
+    let blurred = Double(try store.revision())
+    try await edit(#"{"op":"balance","clipID":"\#(id)","exposure":0.3}"#)
+    let warm = Double(try store.revision())
+    // After picture lock: no timing and no taking the blur off, but the color can go back.
+    try store.lockPicture(cutID: nil, locked: true)
+    await expectRefused("picture_locked") { _ = try await call("direction_remove_range", ["start": .number(3), "end": .number(4), "baseEditRevision": .number(warm)]) }
+    await expectRefused("picture_locked") { _ = try await call("direction_restore", ["revision": .number(whole), "baseEditRevision": .number(warm)]) }
+    await expectRefused("picture_locked") { _ = try await call("direction_restore", ["revision": .number(trimmed), "baseEditRevision": .number(warm)]) }
+    _ = try await call("direction_restore", ["revision": .number(blurred), "baseEditRevision": .number(warm)])
+    let clip = try #require(try store.read().sequences[0].clips.first { $0.id == id })
+    let restored = Double(try store.revision())
+    #expect(clip.grade.exposure == 0 && clip.effects?.first?.name == "blur" && restored == warm + 1)
+    try store.lockPicture(cutID: nil, locked: false)
+    // A locked scene keeps its blur through a restore.
+    _ = try await call("direction_log_dailies", ["scenes": .array([.object(["number": .number(1), "title": .string("Cold open")])]), "takes": .array([.object(["assetID": .string("take-1"), "sceneNumber": .number(1)])])])
+    try store.lockScene(id: try store.dailies().scenes[0].id, locked: true)
+    await expectRefused("scene_locked") { _ = try await call("direction_restore", ["revision": .number(trimmed), "baseEditRevision": .number(Double(try store.revision()))]) }
+}
+
+@Test func olderToolsSayWhichNoteTheyAnswer() async throws {
+    let (store, runtime) = try oneTakeFilm()
+    defer { try? FileManager.default.removeItem(at: store.url) }
+    let note = try store.addComment(text: "Lose the pause.", sequenceID: nil, revision: try store.revision(), time: .init(seconds: 1), extra: NoteFields(kind: .pace))
+    _ = try store.turnOver(noteIDs: [note.id], latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
+    let args: [String: JSONValue] = ["start": .number(5), "end": .number(6), "baseEditRevision": .number(Double(try store.revision()))]
+    await expectRefused("bad_argument") { _ = try await runtime.invoke("direction_remove_range", arguments: .object(args)) }
+    _ = try await runtime.invoke("direction_remove_range", arguments: .object(args.merging(["notes": .array([.number(Double(note.number ?? 0))])]) { _, b in b }))
+    let record = try store.editRecords().last
+    #expect(try store.read().sequences[0].duration == MediaTime(seconds: 9) && record?.notes == [note.number ?? 0])
+}

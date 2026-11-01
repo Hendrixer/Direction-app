@@ -65,6 +65,15 @@ enum EditorJobs {
             v["lockedCut"] = state.pictureLockedCutID.flatMap { id in (try? store.cuts())?.first { $0.id == id }?.name } ?? "the latest cut"
             let lufs = UserDefaults.standard.object(forKey: "loudnessTarget") as? Double ?? -14
             v["loudness"] = "\(Int(lufs)) LUFS"
+            v["ducking"] = ducking(UserDefaults.standard.object(forKey: "musicDucking") as? Double ?? 6)
+            if let credits = state.credits, !credits.isEmpty {
+                v["credits"] = "The director wrote the credits (a role, then its names, a line each; a blank line between credits):\n\n" + credits.split(separator: "\n", omittingEmptySubsequences: false).map { $0.isEmpty ? ">" : "> " + $0 }.joined(separator: "\n")
+                    + "\n\nRoll them at the end: copy the Credits roll example (`direction_graphic_examples` with name `credits-roll`) into `Graphics/credits/`, put these words in its credits field exactly as written, check it with `direction_graphic` (note `unasked`), then `placeGraphic` it at the cut\u{2019}s length, after the last shot, where it plays on black. Add where it plays to the titles item\u{2019}s detail."
+            } else {
+                v["credits"] = "The director hasn\u{2019}t written credits yet; titles and credits are theirs. Leave that item for them."
+            }
+            let licenses = state.licenses ?? []
+            v["licenses"] = licenses.isEmpty ? "No licenses are on file yet." : "Licenses on file in the film: " + licenses.map { $0.path }.joined(separator: ", ") + "."
         case .style:
             v["request"] = run.request.map { $0.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n") } ?? "> Make a style from this film."
             let cuts = try store.cuts()
@@ -162,9 +171,12 @@ enum EditorJobs {
                 "- Ask before guessing: \(prefs.askBeforeGuessing ? "yes" : "no")",
                 "- When notes conflict: \(order)",
                 "- Handles: \(Int(prefs.handleSeconds)) s",
+                "- Music under dialogue: \(ducking(prefs.musicDuckDB ?? 6))",
             ].joined(separator: "\n"),
         ]
     }
+    /// Settings › Cutting › Music under dialogue, the default a note can override.
+    static func ducking(_ db: Double) -> String { db > 0 ? "duck it \(Int(db)) dB (`duck`) where a note doesn\u{2019}t say otherwise" : "don\u{2019}t duck it unless a note asks" }
     private static func minutes(_ s: Double) -> String { String(format: "%d:%02d", Int(s) / 60, Int(s) % 60) }
 
     /// "- Note 3 (Picture, at 01:12:08): Tighter on her. The sky is winning."

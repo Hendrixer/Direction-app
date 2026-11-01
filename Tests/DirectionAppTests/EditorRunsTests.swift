@@ -232,6 +232,21 @@ struct EditorJobTests {
         #expect(!EditorJobs.role.contains("{{") && EditorJobs.role.contains("\"finished\""))
     }
 
+    @Test func theFinishJobCarriesTheDirectorsCreditsAndLicenses() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("finish-\(UUID().uuidString).direction")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = try ProjectStore.create(at: dir, name: "Launch film")
+        let run = EditorRun(job: .finish, program: "claudeCode", version: "")
+        #expect(try EditorJobs.text(for: run, store: store).contains("hasn\u{2019}t written credits yet"))
+        try store.saveCredits("Featuring\nMaya Chen\n\nCamera\nSam Ortiz")
+        let license = FileManager.default.temporaryDirectory.appendingPathComponent("North Light \(UUID().uuidString).pdf")
+        try Data("license".utf8).write(to: license); defer { try? FileManager.default.removeItem(at: license) }
+        let file = try store.addLicense(from: license)
+        let text = try EditorJobs.text(for: run, store: store)
+        #expect(text.contains("> Featuring\n> Maya Chen\n>\n> Camera\n> Sam Ortiz") && text.contains("credits-roll") && text.contains(file.path))
+        #expect(text.contains("direction_measure_audio") && !text.contains("{{"))
+    }
+
     @Test func commandLinesUseOnlyTheCheckedFlags() {
         let i = EditorProgram.Invocation(job: "Do the job.", role: "Be the editor.", version: "claude-opus-5-5", session: nil, folder: URL(fileURLWithPath: "/f/Editor"), mcpConfig: URL(fileURLWithPath: "/f/Editor/.mcp.json"), schema: URL(fileURLWithPath: "/f/Editor/.direction/result.schema.json"), helper: "/A/direction", film: URL(fileURLWithPath: "/f"), runID: "run-1", scripts: true)
         let claude = EditorProgram.claudeCode.arguments(i)
@@ -412,6 +427,100 @@ struct EditorRunnerTests {
         m.runs.takeTurnoverBack(m)
         #expect(try store.turnover(t.id).state == .cancelled)
         EditorRunner.shared.programOverride = [.claudeCode: Self.fake]
+    }
+
+    /// A notes turnover that waits for the OK, in a film whose window finds the work (Direction starts the editor).
+    private func readBackFilm(_ store: ProjectStore) throws -> (FilmModel, Turnover, ReviewComment) {
+        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1")],
+                                         values: [EditorSetupKey.runsOn: "claudeCode", EditorSetupKey.signedIn(.claudeCode): true])
+        var b = Brief(); b.logline = "One sentence."; b.feeling = "Quiet."; try store.saveBrief(b)
+        let note = try store.addComment(text: "The sky is too much.", sequenceID: nil, revision: try store.revision(), extra: NoteFields(kind: .picture))
+        let t = try store.turnOver(noteIDs: [note.id], latitude: .faithful, waitForOK: true, cutID: nil, sequenceID: nil)
+        let m = FilmModel()
+        m.runtime = try ToolRuntime(store: store)
+        return (m, t, note)
+    }
+    /// The fake has sent its read-back call, the runner has read it, and the fake waits for `.fake-go`.
+    private func asked(_ dir: URL, _ store: ProjectStore, _ id: String) async throws {
+        for _ in 0..<200 {
+            if FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/.fake-asked").path), try store.run(id)?.state == .working { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        throw DirectionError("timeout", "The fake program never asked.")
+    }
+    /// The job text the program was last started with (it runs over several lines).
+    private func jobText(_ dir: URL) -> String { args(dir).dropFirst().prefix { !$0.hasPrefix("--") }.joined(separator: "\n") }
+    private func go(_ dir: URL) throws { try Data().write(to: dir.appendingPathComponent("Editor/.fake-go")) }
+    private func again(_ dir: URL) {
+        for name in [".fake-asked", ".fake-go"] { try? FileManager.default.removeItem(at: dir.appendingPathComponent("Editor/\(name)")) }
+    }
+    private func readBack(_ store: ProjectStore, _ t: Turnover, _ note: ReviewComment, _ plan: String) throws {
+        _ = try store.reportTurnover(id: t.id, state: nil, readBack: [ReadBackLine(noteID: note.id, plan: plan, delta: "crop")], progress: nil, phase: nil, percent: nil, message: nil)
+    }
+
+    /// Correcting a line of the read-back (frame 24) sends the editor back to rewrite it; it posts the new
+    /// read-back and waits for the OK again, and the OK sends it to cut.
+    @Test func aCorrectedReadBackGoesBackToTheEditorAndWaitsForTheOKAgain() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let (m, t, note) = try readBackFilm(store); defer { m.close() }
+        try scenario("readback", dir)
+        let run = try start(.turnover, store: store, turnoverID: t.id)
+        try await asked(dir, store, run.id)
+        try readBack(store, t, note, "Reframe to about 1.6\u{00D7}; sky down to a third.")
+        try go(dir)
+        _ = try await wait(store, run.id) { $0.state == .waitingForYou && !EditorRunner.shared.isLive(run.id) }
+        m.refresh(force: true)
+        #expect(try store.run(run.id)?.invocations == 1)
+
+        again(dir)
+        _ = try store.adjustReadBack(turnoverID: t.id, noteID: note.id, text: "Not that tight. Keep the horizon.")
+        m.refresh(force: true)
+        try await asked(dir, store, run.id)
+        let told = jobText(dir), number = note.number.map(String.init) ?? "–"
+        #expect(told.hasPrefix("I corrected your read-back.") && told.contains("For note \(number) I said: \u{201C}Not that tight. Keep the horizon.\u{201D}"), "\(told)")
+        #expect(args(dir).suffix(2) == ["--resume", "fake-session-1"])
+        try readBack(store, t, note, "Reframe to about 1.25\u{00D7}, horizon kept; sky down to about half.")
+        try go(dir)
+        _ = try await wait(store, run.id) { $0.state == .waitingForYou && $0.invocations == 2 && !EditorRunner.shared.isLive(run.id) }
+        // The rewrite waits for the OK: nothing more goes to the editor until the director acts.
+        m.refresh(force: true)
+        #expect(!EditorRunner.shared.isLive(run.id))
+        #expect(try store.turnover(t.id).state == .readBack && store.run(run.id)?.invocations == 2)
+
+        again(dir)
+        try scenario("slow", dir)
+        _ = try store.approveReadBack(turnoverID: t.id)
+        m.refresh(force: true)
+        _ = try await wait(store, run.id) { $0.invocations == 3 && $0.state == .working }
+        let cut = jobText(dir)
+        #expect(cut.hasPrefix("I approved your read-back. Cut it.") && !cut.contains("I corrected"), "\(cut)")
+        EditorRunner.shared.stop(run.id, store: store)
+        _ = try await ended(store, run.id)
+    }
+
+    /// An OK or an answer given in the seconds before the program exits isn't lost: the run goes on, told both.
+    @Test func anAnswerBeforeTheEditorExitsStillContinuesTheRun() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let (m, t, note) = try readBackFilm(store); defer { m.close() }
+        try scenario("readback", dir)
+        let run = try start(.turnover, store: store, turnoverID: t.id)
+        try await asked(dir, store, run.id)
+        try readBack(store, t, note, "Two ways: hold on her, or cut to the window and back.")
+        let q = try store.ask(EditorQuestion(id: newID("question"), turnoverID: t.id, kind: "question", noteIDs: [note.id], text: "Hold on her, or cut away?", detail: nil,
+                                             choices: [.init(id: "hold", label: "Hold on her"), .init(id: "cut", label: "Cut away")], allowsText: false, answer: nil, createdAt: 0))
+        _ = try store.answerQuestion(id: q.id, choiceID: "hold", text: nil)
+        _ = try store.approveReadBack(turnoverID: t.id)
+        try scenario("slow", dir)
+        try go(dir)
+        let waited = try await wait(store, run.id) { !$0.state.isActive && !EditorRunner.shared.isLive(run.id) && $0.endedAt != nil }
+        #expect(try waited.state == .waitingForYou && store.turnover(t.id).state == .cutting)
+        m.refresh(force: true)
+        _ = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        let told = jobText(dir)
+        #expect(told.hasPrefix("I approved your read-back. Cut it.") && told.contains("I chose \u{201C}Hold on her\u{201D}."), "\(told)")
+        #expect(args(dir).suffix(2) == ["--resume", "fake-session-1"])
+        EditorRunner.shared.stop(run.id, store: store)
+        _ = try await ended(store, run.id)
     }
 
     private func pid(_ dir: URL, _ name: String) async throws -> pid_t {

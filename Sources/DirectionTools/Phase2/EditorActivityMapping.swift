@@ -52,6 +52,8 @@ public enum EditorActivityLog {
             return ActivityInput(verb: "Watching", object: timecode(s, c.fps) + "\u{2013}" + timecode(e, c.fps), mono: true, time: s, tool: name)
         case "direction_contact_sheet":
             return ActivityInput(verb: "Looking at", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
+        case "direction_measure_audio" where a["assetID"] == .null:
+            return ActivityInput(verb: "Measuring", object: "the mix", tool: name)
         case "direction_transcribe", "direction_measure_audio", "direction_listen", "direction_sounds":
             return ActivityInput(verb: "Listening to", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
         case "direction_sync_takes":

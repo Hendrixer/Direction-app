@@ -72,10 +72,12 @@ public enum SpendCheck: Equatable, Sendable {
     /// Past the month's cap. Nothing overrides it.
     case cap(estimate: Double, spent: Double, cap: Double)
 
-    public static func of(estimate: Double, turnoverSpent: Double, monthSpent: Double, askAbove: Double, stopAt: Double?, approved: Bool) -> SpendCheck {
+    /// `priced` is false when the version lists no price: its estimate says nothing, so it always needs the
+    /// director's yes, and it never goes out once the month's cap is reached.
+    public static func of(estimate: Double, turnoverSpent: Double, monthSpent: Double, askAbove: Double, stopAt: Double?, approved: Bool, priced: Bool = true) -> SpendCheck {
         let cent = 0.005
-        if let stopAt, monthSpent + estimate > stopAt + cent { return .cap(estimate: estimate, spent: monthSpent, cap: stopAt) }
-        if !approved, turnoverSpent + estimate > askAbove + cent { return .overLimit(estimate: estimate, spent: turnoverSpent, limit: askAbove) }
+        if let stopAt, monthSpent + estimate > stopAt + cent || (!priced && monthSpent >= stopAt - cent) { return .cap(estimate: estimate, spent: monthSpent, cap: stopAt) }
+        if !approved, !priced || turnoverSpent + estimate > askAbove + cent { return .overLimit(estimate: estimate, spent: turnoverSpent, limit: askAbove) }
         return .ok
     }
 }
@@ -87,24 +89,54 @@ public enum SpendLedger {
     /// Tests use `OpenRouter.Overrides.ledger`.
     public static var url: URL { OpenRouter.overrides.ledger ?? supportDirectory.appendingPathComponent("spend.json") }
 
-    struct File: Codable { var entries: [SpendEntry] = [] }
+    struct File: Codable {
+        var entries: [SpendEntry] = []
+        /// Entries this build can't read, such as a kind from a newer one: written back as they were.
+        var unread: [JSONValue] = []
+        init() {}
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            for raw in try c.decodeIfPresent([JSONValue].self, forKey: .entries) ?? [] {
+                if let e = try? raw.decode(SpendEntry.self) { entries.append(e) } else { unread.append(raw) }
+            }
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(try entries.map { try JSONValue.wrapping($0) } + unread, forKey: .entries)
+        }
+        private enum CodingKeys: String, CodingKey { case entries }
+        /// What the unread entries hold since `start`, so they still count against the month.
+        func unreadSpent(since start: Double) -> Double {
+            unread.filter { ($0["at"].double ?? 0) >= start }.reduce(0) { $0 + ($1["spend"].double ?? $1["estimate"].double ?? 0) }
+        }
+    }
 
     /// Runs `body` with the ledger locked against every other process, and saves what it leaves.
     @discardableResult
     public static func transaction<T>(_ body: (inout [SpendEntry]) throws -> T) throws -> T {
+        try locked { try body(&$0.entries) }
+    }
+
+    /// A record that's there but can't be read is never written over: its history and the month's total would go.
+    private static func locked<T>(_ body: (inout File) throws -> T) throws -> T {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let fd = open(url.path + ".lock", O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
         guard fd >= 0 else { throw DirectionError("ledger_unavailable", "Direction couldn\u{2019}t open its spend record.") }
         defer { close(fd) }
         while flock(fd, LOCK_EX) != 0 { guard errno == EINTR else { throw DirectionError("ledger_unavailable", "Direction couldn\u{2019}t lock its spend record.") } }
         defer { flock(fd, LOCK_UN) }
-        var file = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(File.self, from: $0) } ?? File()
+        var file = File()
+        if FileManager.default.fileExists(atPath: url.path) {
+            do { file = try JSONDecoder().decode(File.self, from: Data(contentsOf: url)) }
+            catch { throw DirectionError("ledger_unavailable", "Direction can\u{2019}t read its spend record (\(url.path)), so nothing that costs money is made until it can. Nothing in it was changed; ask the director to look at it.") }
+        }
         let before = file.entries
-        let result = try body(&file.entries)
+        let result = try body(&file)
         if file.entries != before {
             // Keep thirteen months: this one and a year of history.
             let cutoff = Calendar.current.date(byAdding: .month, value: -13, to: Date())!.timeIntervalSince1970
             file.entries.removeAll { $0.at < cutoff }
+            file.unread.removeAll { ($0["at"].double ?? cutoff) < cutoff }
             try JSONEncoder.direction.encode(file).write(to: url, options: .atomic)
         }
         return result
@@ -114,9 +146,10 @@ public enum SpendLedger {
 
     /// Entries since the 1st of this month. The month resets on the 1st.
     public static func month(_ entries: [SpendEntry], now: Date = Date()) -> [SpendEntry] {
-        let start = Calendar.current.dateInterval(of: .month, for: now)?.start.timeIntervalSince1970 ?? 0
+        let start = monthStart(now)
         return entries.filter { $0.at >= start }
     }
+    static func monthStart(_ now: Date) -> Double { Calendar.current.dateInterval(of: .month, for: now)?.start.timeIntervalSince1970 ?? 0 }
     public static func monthSpent(_ entries: [SpendEntry], now: Date = Date()) -> Double { month(entries, now: now).reduce(0) { $0 + $1.amount } }
     public static func turnoverSpent(_ entries: [SpendEntry], filmID: String?, turnoverID: String?) -> Double {
         guard let turnoverID else { return 0 }
@@ -137,18 +170,34 @@ public enum SpendLedger {
     /// Checks both limits and holds the estimate in one locked step, so two processes can't both slip under a limit.
     /// `approvedBy` is a spend question the director said yes to, with the `budget` it allows: every request that
     /// names it may go past the turnover's limit until together they've used that much.
-    public static func reserve(_ entry: SpendEntry, approvedBy question: String? = nil, budget: Double? = nil, askAbove: Double = SharedSettings.spendAskAbove, stopAt: Double? = SharedSettings.spendStopAt, now: Date = Date()) throws -> SpendCheck {
-        try transaction { entries in
-            if let question {
-                let used = entries.filter { $0.questionID == question }.reduce(0) { $0 + $1.amount }
-                if let budget, used + entry.estimate > budget + 0.005 {
-                    throw DirectionError("spend_over_question", "The director agreed to about \(MadeFormat.money(budget)) for that plan and \(MadeFormat.money(used)) of it is used; this would cost about \(MadeFormat.money(entry.estimate)). Ask again for the rest.")
-                }
-            }
-            let check = SpendCheck.of(estimate: entry.estimate, turnoverSpent: turnoverSpent(entries, filmID: entry.filmID, turnoverID: entry.turnoverID), monthSpent: monthSpent(entries, now: now), askAbove: askAbove, stopAt: stopAt, approved: question != nil)
-            if check == .ok { var e = entry; e.questionID = question; e.spend = nil; entries.append(e) }
+    public static func reserve(_ entry: SpendEntry, approvedBy question: String? = nil, budget: Double? = nil, priced: Bool = true, askAbove: Double = SharedSettings.spendAskAbove, stopAt: Double? = SharedSettings.spendStopAt, now: Date = Date()) throws -> SpendCheck {
+        try locked { file in
+            let check = try check(entry, others: file.entries, unread: file.unreadSpent(since: monthStart(now)), approvedBy: question, budget: budget, priced: priced, askAbove: askAbove, stopAt: stopAt, now: now)
+            if check == .ok { var e = entry; e.questionID = question; e.spend = nil; file.entries.append(e) }
             return check
         }
+    }
+    /// A held request moving to another version (the first turned it down) is checked again at its new estimate
+    /// against everything else, in one locked step. The hold changes only when it passes.
+    public static func adjust(_ id: String, version: String, estimate: Double, priced: Bool = true, approvedBy question: String? = nil, budget: Double? = nil, askAbove: Double = SharedSettings.spendAskAbove, stopAt: Double? = SharedSettings.spendStopAt, now: Date = Date()) throws -> SpendCheck {
+        try locked { file in
+            guard let i = file.entries.firstIndex(where: { $0.id == id }) else { throw DirectionError("ledger_unavailable", "Direction lost its hold on that request\u{2019}s spend.") }
+            var entry = file.entries[i]; entry.version = version; entry.estimate = estimate
+            var others = file.entries; others.remove(at: i)
+            let check = try check(entry, others: others, unread: file.unreadSpent(since: monthStart(now)), approvedBy: question, budget: budget, priced: priced, askAbove: askAbove, stopAt: stopAt, now: now)
+            if check == .ok { file.entries[i] = entry }
+            return check
+        }
+    }
+    private static func check(_ entry: SpendEntry, others entries: [SpendEntry], unread: Double, approvedBy question: String?, budget: Double?, priced: Bool, askAbove: Double, stopAt: Double?, now: Date) throws -> SpendCheck {
+        if let question {
+            let used = entries.filter { $0.questionID == question }.reduce(0) { $0 + $1.amount }
+            if let budget, used + entry.estimate > budget + 0.005 {
+                throw DirectionError("spend_over_question", "The director agreed to about \(MadeFormat.money(budget)) for that plan and \(MadeFormat.money(used)) of it is used; this would cost about \(MadeFormat.money(entry.estimate)). Ask again for the rest.")
+            }
+        }
+        return SpendCheck.of(estimate: entry.estimate, turnoverSpent: turnoverSpent(entries, filmID: entry.filmID, turnoverID: entry.turnoverID), monthSpent: monthSpent(entries, now: now) + unread,
+                             askAbove: askAbove, stopAt: stopAt, approved: question != nil, priced: priced)
     }
     /// What OpenRouter reported. Without a report, the estimate stands as the spend.
     public static func settle(_ id: String, spend: Double?, assetIDs: [String]) throws {

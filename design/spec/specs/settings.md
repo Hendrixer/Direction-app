@@ -26,7 +26,7 @@ Frame: `screens/42-settings-general.html` · Render: `renders/42-settings-genera
 |---|---|---|---|---|
 | Start | When Direction opens | Select: Reopen the last film / Show Films / Start a new film | Reopen the last film | The window shown at launch. |
 | Start | Show Films when no film is open | Switch | On | When the last film window closes, the Films window opens. Off quits the app instead. |
-| Playback | Start screenings full screen | Switch | Off | Entering Screening (`⌘3` or Start screening) also enters full screen. |
+| Playback | Start screenings full screen | Switch | Off | Entering Screening (`⌘3` or Start screening) also enters full screen. Leaving Screening leaves the full screen it entered; a window that was already full screen stays so. |
 | Playback | Hide controls in Screening after | Select: 1 second / 2 seconds / 4 seconds / Never | 2 seconds | Idle time before Screening goes to frame 14 (picture only). |
 | Playback | Audio output | Select: System default / every Core Audio output | System default | The playback device. |
 | Look | Film grain | Switch | On | The 3.5% grain over UI surfaces. It's never drawn over the picture. |
@@ -96,6 +96,8 @@ Frame: `screens/44-settings-cutting.html` · Render: `renders/44-settings-cuttin
 | Color | Looks folder | Path field (read-only, folder icon) with **Change…** and **Show in Finder** | `~/Movies/Direction/Looks` | LUTs here appear in the Look sheet (frame 63). Subfolders become groups. |
 | Color | Convert log footage automatically | Switch | On | Sub-label: "Apple Log, S-Log3, LogC and V-Log become normal video before any look. Camera LUTs live in the Camera folder." |
 
+**Not in the app yet**, so their rows are left out until the feature exists: Name new cuts (the editor names each cut "Cut 4" when it delivers it, in its own process; a date name needs that and every "Cutting Cut 4" to agree), Keep earlier cuts (nothing archives a cut), and Play from proxies (Direction makes no proxies and plays the originals). Music under dialogue reaches the editor with each turnover's preferences and the finishing job.
+
 **Acceptance:**
 - [ ] The Play changes duration updates when handles change, e.g. "0:46" at 2.0 s.
 - [ ] The frame rate becomes read-only once the Assembly exists, with the sub-label explaining why.
@@ -151,10 +153,12 @@ Frame: `screens/47-settings-storage.html` · Render: `renders/47-settings-storag
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
 | Library | Location | Path field (read-only, SF Pro 12, folder icon) and **Change…** | `~/Movies/Direction` | Where film libraries, proxies and renders live. Change… opens a folder picker, then a confirm sheet: "Move 61.4 GB to the new location?" with Move / Use without moving / Cancel. |
-| Library | When you bring footage | Seg: Link to originals / Copy into library | Link to originals | Linking leaves files in place, so footage can go missing (frame 52). Copying uses library space. |
+| Library | When you bring footage | Seg: Link to originals / Copy into library | Link to originals | Linking leaves files in place, so footage can go missing (frame 52). Copying uses library space: each file Direction brings in is copied first, off the main thread, into the film's own `Footage/` folder in its package, and the take points at the copy. The copy keeps the original's name ("C0001 2.MP4" when that's taken; never over another file), the same file brought twice is copied once, and the copies move and go to the Trash with the film. The logging page says "Copying into the film · 3 of 12" and Dailies' sidebar shows the same with a bar. |
 | Usage | Using 61.4 GB on Macintosh HD | Stacked meter: Copied footage (steel-9), Proxies (steel-8), Cuts (steel-7), Render cache (steel-6) | — | Read-only. A legend with sizes sits under the meter. Bars are proportional to the disk's capacity. |
 | Cleanup | Render cache | Button "Clear 6.6 GB" | — | Deletes renders that can be rebuilt. It's disabled while the editor is cutting, with the sub-label "Available when the editor finishes." |
 | Cleanup | Proxies for locked films | Select: Keep / Delete after 30 days / Delete now | Delete after 30 days | Frees proxy space once picture is locked. |
+
+**Not in the app yet:** Proxies for locked films. Direction makes no proxies, so the row is left out until it does. Copied footage in the meter is what's in the films' `Footage/` folders.
 
 The meter uses only steel colors, never voice or status colors. If free disk is under 10 GB, a `.banner.bad` appears above the Usage group: "Less than 10 GB free. The editor may not be able to finish a cut."
 

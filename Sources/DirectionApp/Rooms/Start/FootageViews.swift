@@ -4,10 +4,11 @@ import QuickLook
 import UniformTypeIdentifiers
 import DirectionCore
 
-/// Which files Direction brings in. Originals stay where they are.
+/// Which files Direction brings in. Originals stay where they are; Settings › Storage can ask for copies.
 enum FootageFiles {
     static let video: Set<String> = ["mov", "mp4", "m4v", "mxf", "braw", "r3d"]
     static let sound: Set<String> = ["wav", "aif", "aiff", "m4a", "mp3"]
+    static let still: Set<String> = ["jpg", "jpeg", "png"]
     static let script: Set<String> = ["pdf", "fdx"]
 
     /// Files and folders → the footage and sound inside them, sorted by name.
@@ -25,10 +26,34 @@ enum FootageFiles {
                 files.filter { script.contains(ext($0)) })
     }
 
-    /// Where proxies go, as Settings › Storage shows it.
-    static var proxyFolder: String {
-        let path = UserDefaults.standard.string(forKey: "libraryFolder") ?? (NSHomeDirectory() + "/Movies/Direction")
-        return (path as NSString).abbreviatingWithTildeInPath
+    /// What a drop on a film's window brings: a film to open, footage and sound (folders opened), and scripts.
+    /// A still comes in only when it's dropped itself, never from inside a folder (a camera card's thumbnails).
+    static func route(_ urls: [URL]) -> FootageDrop {
+        let (footage, scripts) = expand(urls)
+        return FootageDrop(film: urls.first { $0.pathExtension == "direction" }, footage: footage + urls.filter { still.contains($0.pathExtension.lowercased()) }, scripts: scripts)
+    }
+
+    /// Copies a file into a film's Footage folder under its own name, or "Name 2.mov" when that's taken,
+    /// never over another file. It's written to `temp` first, so a copy cut short never looks finished.
+    /// A copy of the same file already there (same name, size and date) is used instead of a second one.
+    static func copy(_ url: URL, into folder: URL, via temp: URL) throws -> URL {
+        let fm = FileManager.default
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        let base = url.deletingPathExtension().lastPathComponent, ext = url.pathExtension.isEmpty ? "" : "." + url.pathExtension
+        let named = { (n: Int) in n == 1 ? folder.appendingPathComponent(url.lastPathComponent) : folder.appendingPathComponent("\(base) \(n)\(ext)") }
+        let source = try fm.attributesOfItem(atPath: url.path)
+        var n = 1
+        while let there = try? fm.attributesOfItem(atPath: named(n).path) {
+            if there[.size] as? NSNumber == source[.size] as? NSNumber, there[.modificationDate] as? Date == source[.modificationDate] as? Date { return named(n) }
+            n += 1
+        }
+        do { try fm.copyItem(at: url, to: temp) } catch { try? fm.removeItem(at: temp); throw error }
+        while true {
+            do { try fm.moveItem(at: temp, to: named(n)); return named(n) }
+            // Taken since it was checked: the next name.
+            catch where fm.fileExists(atPath: named(n).path) { n += 1 }
+            catch { try? fm.removeItem(at: temp); throw error }
+        }
     }
 
     /// Mounted camera cards and other removable volumes.
@@ -48,6 +73,21 @@ enum FootageFiles {
         }
         return out
     }
+}
+
+/// A drop on a film's window, sorted by what each file is.
+struct FootageDrop: Equatable {
+    var film: URL?
+    var footage: [URL] = []
+    var scripts: [URL] = []
+}
+
+/// Footage on its way into the film's Footage folder: files copied, of how many, and how far the one being copied is.
+struct FootageCopying: Equatable {
+    var done = 0
+    var total = 0
+    var current = 0.0
+    var fraction: Double { min(1, (Double(done) + current) / Double(max(1, total))) }
 }
 
 // MARK: 04 · Bring footage
@@ -155,7 +195,7 @@ struct OnboardingFootageDrop: View {
             Text("Brief saved. \u{201C}\(Self.firstSentences(model.brief.feeling))\u{201D}").lineLimit(1)
             Button("Edit brief") { model.sheet = .brief }.buttonStyle(.gate(.ghost, .small))
             Spacer(minLength: 12)
-            Text("Nothing is moved or copied. Proxies go to \(FootageFiles.proxyFolder).").lineLimit(1)
+            Text(UserDefaults.standard.string(forKey: SettingsKey.footageImport) == "copy" ? "Copies go in the film. Your originals stay where they are." : "Nothing is moved or copied.").lineLimit(1)
         }
         .font(.system(size: 12.5)).foregroundStyle(Gate.Text.tertiary)
         .frame(height: 22)
@@ -301,13 +341,14 @@ extension FilmModel {
     /// The stage line under the progress (footage-index.md › 05): the latest of Reading → Finding
     /// shots → Looking at footage → Listening → Sorting into scenes to have started. Counts in SF Mono.
     var loggingStage: (text: Text, spoken: String)? {
-        let assets = footage.filter { !$0.isImage }
-        guard !assets.isEmpty else { return nil }
         func line(_ words: String, _ n: Int? = nil, _ of: Int? = nil) -> (Text, String) {
             guard let n, let of else { return (Text(words), words) }
             let mono = { (v: Int) in Text(String(v)).font(.system(size: 11.5, design: .monospaced)) }
             return (Text("\(words) \u{00B7} ") + mono(n) + Text(" of ") + mono(of), "\(words), \(n) of \(of)")
         }
+        if let c = copyingFootage { return line("Copying into the film", min(c.total, c.done + 1), c.total) }
+        let assets = footage.filter { !$0.isImage }
+        guard !assets.isEmpty else { return nil }
         if loggedCount > 0 || !dailies.scenes.isEmpty { return line("Sorting into scenes") }
         let speaking = assets.filter { !$0.audio.isEmpty }
         let transcribed = Set(transcripts.filter { !$0.words.isEmpty }.map(\.assetID))
@@ -384,7 +425,8 @@ struct OnboardingLoggingView: View {
     // MARK: Summary
 
     private func summary(_ rows: [LoggingRow]) -> some View {
-        let total = model.footage.count, logged = model.loggedCount, finished = !model.isLogging
+        // Not finished while files are still coming in: a copy can take minutes before its take exists.
+        let total = model.footage.count, logged = model.loggedCount, finished = !model.isLogging && model.importingFootage == 0
         let seconds = model.dailiesTotalSeconds
         let loggedSeconds = model.footage.filter { model.dailies.takes[$0.id] != nil }.reduce(0) { $0 + $1.duration.seconds }
         let problems = rows.filter { if case .needsYou = $0.status { true } else { false } }.count
@@ -538,7 +580,7 @@ struct OnboardingLoggingView: View {
                 DailiesSayLine(text: findingLine(scenes.count))
                 ForEach(scenes) { s in sceneRow(s) }
                 Hairline()
-                DailiesSayLine(text: "No script found. I'll build one from the transcript for the Script room.", detail: "Have one? Drop the PDF here.")
+                DailiesSayLine(text: "No script found. I'll build one from the transcript for the Script room.")
             }
             .padding(.horizontal, 22).padding(.vertical, 24)
         }

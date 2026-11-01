@@ -104,9 +104,12 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
 enum DeliveryWatch {
     private static var running: Set<String> = []
     private static var finished: [String] = []
+    private static weak var watching: FilmModel?
 
     /// Call whenever the film's jobs change (SystemBanners does).
     static func check(_ film: FilmModel) {
+        // Another film: what the last one was delivering stopped with it and must not hold back this one's.
+        if watching !== film { watching = film; running = []; finished = [] }
         let exports = film.jobs.filter { $0.kind == "export" && !ScreeningCopy.jobIDs.contains($0.id) }
         for job in exports where !job.isTerminal { running.insert(job.id) }
         for job in exports where job.isTerminal && running.contains(job.id) {

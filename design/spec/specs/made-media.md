@@ -42,8 +42,8 @@ Nobody picks versions: there are dozens, they change monthly, and what's best de
 
 1. **What can make it.** From OpenRouter's list, the versions for the kind that take the frames it sends (`supported_frame_images`; a last frame always comes with a first), offer its length, and take a person if a frame shows one.
 2. **A person in a frame.** Direction looks at every frame and reference it will send, on this Mac (Vision's faces and bodies; the back of a head counts). ByteDance's service (Seedance, Seedream) refuses input images that may show a real person unless that person was registered with ByteDance, so those are left out. A version that turned down a frame with a person is skipped for a week (`made-refusals.json` beside the spend ledger).
-3. **How good.** Ratings are the Artificial Analysis arenas, read 31 Oct 2026 (image to video for shots, image editing for stills), in `MadeRanking.ratings`. Versions without a rating come after every rated one.
-4. **If it's turned down.** A request a version refuses for what's in it (a person, a policy) goes to the next one, up to two more, and the result's `note` says so: "Seedance 2.5 wouldn't take a frame with a person in it, so this used MiniMax H3." A refusal costs nothing.
+3. **How good.** Ratings are the Artificial Analysis arenas, read 31 Oct 2026 (image to video for shots, image editing for stills), in `MadeRanking.ratings`. Versions without a rating come after every rated one, and versions OpenRouter lists no price for come after every priced one.
+4. **If it's turned down.** A request a version refuses for what's in it (a person, a policy) goes to the next one, up to two more, and the result's `note` says so: "Seedance 2.5 wouldn't take a frame with a person in it, so this used MiniMax H3." A refusal costs nothing. The next version is checked against both limits and the spend question's yes again; if it would pass one, the job ends with `spend_over_limit` or `spend_cap` and nothing more is sent.
 
 The editor never names a version; `direction_services` tells it what Direction would use. Music and voice keep the defaults in the table.
 
@@ -94,6 +94,8 @@ Every paid service goes through **OpenRouter**: one key, one bill, many versions
 | Stop for the month at | $50.00 | Nothing is made past this. The editor is told `spend_cap`. |
 
 - A yes covers the plan it priced: requests that name the question (`spendQuestionID`) may go past the turnover's limit until they've used the question's estimate plus 10%. More than that needs another question.
+- A version OpenRouter lists no price for needs a yes to a spend question whatever the turnover has spent, and nothing goes to one once the month's cap is reached.
+- A shot is paid for once it's sent: stopping it, or losing it while it's made, keeps its charge. Only OpenRouter saying it couldn't make the shot gives the hold back, unless it reports a charge.
 - Nothing made on this Mac costs anything or counts toward either limit.
 - The month resets on the 1st. "Spent this month" sums Direction's own record of every made thing, per kind.
 

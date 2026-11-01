@@ -64,20 +64,24 @@ struct MediaFixture: Sendable {
     func compile(revision: Int? = nil) async throws -> CompiledSequence { try await SequenceRenderer.compile(project: store.read(revision: revision), cacheDirectory: runtime.cacheDirectory) }
     func cleanup() { try? FileManager.default.removeItem(at: directory) }
 
-    static func writeTone(to url: URL, frequency: Double, seconds: Double) throws {
+    /// A mono 48 kHz tone, silent over `quiet` (seconds) when given.
+    static func writeTone(to url: URL, frequency: Double, seconds: Double, quiet: Range<Double>? = nil) throws {
         let count = Int(seconds * 48_000), bytes = count * 2
         var data = Data()
         func text(_ s: String) { data.append(contentsOf: s.utf8) }
         func u32(_ value: UInt32) { var v = value.littleEndian; withUnsafeBytes(of: &v) { data.append(contentsOf: $0) } }
         func u16(_ value: UInt16) { var v = value.littleEndian; withUnsafeBytes(of: &v) { data.append(contentsOf: $0) } }
         text("RIFF"); u32(UInt32(36 + bytes)); text("WAVEfmt "); u32(16); u16(1); u16(1); u32(48_000); u32(96_000); u16(2); u16(16); text("data"); u32(UInt32(bytes))
-        for i in 0..<count { let value = Int16(sin(Double(i) * 2 * .pi * frequency / 48_000) * 7_000); u16(UInt16(bitPattern: value)) }
+        for i in 0..<count { let value = quiet?.contains(Double(i) / 48_000) == true ? 0 : Int16(sin(Double(i) * 2 * .pi * frequency / 48_000) * 7_000); u16(UInt16(bitPattern: value)) }
         try data.write(to: url)
     }
 }
 
-func meanColor(_ url: URL) throws -> (Double, Double, Double) {
-    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw DirectionError("test_frame", "Cannot read test image.") }
+/// The mean color of a frame, or of part of it (fractions of the frame from its top left).
+func meanColor(_ url: URL, in part: CGRect? = nil) throws -> (Double, Double, Double) {
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let whole = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw DirectionError("test_frame", "Cannot read test image.") }
+    let w = Double(whole.width), h = Double(whole.height)
+    guard let image = part.map({ whole.cropping(to: CGRect(x: $0.minX * w, y: $0.minY * h, width: $0.width * w, height: $0.height * h).integral) }) ?? whole else { throw DirectionError("test_frame", "Cannot crop test image.") }
     var bytes = [UInt8](repeating: 0, count: 4)
     let context = CGContext(data: &bytes, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
     context.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))

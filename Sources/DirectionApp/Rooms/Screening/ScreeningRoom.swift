@@ -29,6 +29,9 @@ struct ScreeningStage: View {
     @State private var dockHovered = false
     @State private var window: NSWindow?
     @State private var fullScreen = false
+    /// Settings › General › Start screenings full screen. Leaving Screening leaves the full screen it entered.
+    @AppStorage(SettingsKey.screeningFullScreen) private var startsFullScreen = false
+    @State private var enteredFullScreen = false
     @State private var showsVolume = false
     @State private var screeningsSeen = 0
     @State private var clock = WakeClock()
@@ -69,7 +72,7 @@ struct ScreeningStage: View {
         .onContinuousHover { phase in if case .active = phase { wake() } }
         .focusable().focusEffectDisabled().focused($focused)
         .onKeyPress(phases: .down) { handle($0) }
-        .background(WindowReader { window = $0; fullScreen = $0?.styleMask.contains(.fullScreen) ?? false })
+        .background(WindowReader { window = $0; fullScreen = $0?.styleMask.contains(.fullScreen) ?? false; enterFullScreenIfAsked($0) })
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { n in if (n.object as? NSWindow) === window { fullScreen = true } }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { n in if (n.object as? NSWindow) === window { fullScreen = false } }
         .task(id: activity) { await hideWhenIdle() }
@@ -85,7 +88,10 @@ struct ScreeningStage: View {
                 UserDefaults.standard.set(screeningsSeen + 1, forKey: key)
             }
         }
-        .onDisappear { setTrafficLights(true); NSCursor.setHiddenUntilMouseMoves(false) }
+        .onDisappear {
+            setTrafficLights(true); NSCursor.setHiddenUntilMouseMoves(false)
+            if enteredFullScreen, let window, window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+        }
     }
 
     // MARK: Picture
@@ -269,6 +275,11 @@ struct ScreeningStage: View {
     }
 
     private func toggleFullScreen() { (window ?? NSApp.keyWindow)?.toggleFullScreen(nil) }
+    private func enterFullScreenIfAsked(_ window: NSWindow?) {
+        guard startsFullScreen, !model.isPreview, !enteredFullScreen, let window, !window.styleMask.contains(.fullScreen) else { return }
+        enteredFullScreen = true
+        window.toggleFullScreen(nil)
+    }
 
     private func applyVolume() {
         guard !model.isPreview else { return }

@@ -63,6 +63,16 @@ extension FilmModel {
         }
         perform { _ = try $0.updateFinishing([item]) }
     }
+    /// Write credits: kept in the film, where the finish job reads them and rolls them at the end.
+    func saveCredits(_ text: String) {
+        if isPreview { directing.write(credits: text.trimmingCharacters(in: .whitespacesAndNewlines)); return }
+        perform { _ = try $0.saveCredits(text) }
+    }
+    /// Add license: the file is copied into the film's Licenses folder, never over another, and recorded.
+    func addLicense(_ url: URL) {
+        if isPreview { directing.add(license: LicenseFile(path: "Licenses/" + url.lastPathComponent, original: url.lastPathComponent, addedAt: Date().timeIntervalSince1970)); return }
+        perform { _ = try $0.addLicense(from: url) }
+    }
 }
 
 // MARK: Checklist (36)
@@ -255,7 +265,7 @@ struct FinishItemPopover: View {
             Text(item.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary)
             Text(item.detail).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
             if item.id == "titles" {
-                GateTextArea(text: $text, placeholder: "Credits, one per line", minHeight: 96)
+                GateTextArea(text: $text, placeholder: "A role, then its names, a line each. A blank line between credits.", minHeight: 96)
             }
             HStack(spacing: 8) {
                 Spacer()
@@ -264,7 +274,7 @@ struct FinishItemPopover: View {
                 case "licenses":
                     Button("Choose License\u{2026}") { chooseLicense() }.buttonStyle(.gate(.normal)).keyboardShortcut(.defaultAction)
                 case "titles":
-                    Button("Save Credits") { save(detail: "Credits written: " + text.split(separator: "\n").map(String.init).joined(separator: " \u{00B7} ")) }
+                    Button("Save Credits") { model.saveCredits(text); close() }
                         .buttonStyle(.gate(.normal)).keyboardShortcut(.defaultAction).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 case "captions":
                     Button("Names Are Right") { save(detail: item.detail + " Names checked.") }.buttonStyle(.gate(.normal)).keyboardShortcut(.defaultAction)
@@ -275,6 +285,7 @@ struct FinishItemPopover: View {
         }
         .padding(14)
         .frame(width: 320)
+        .onAppear { if item.id == "titles", text.isEmpty { text = model.directing.credits ?? "" } }
     }
 
     private func save(detail: String) {
@@ -286,7 +297,8 @@ struct FinishItemPopover: View {
     private func chooseLicense() {
         let panel = NSOpenPanel(); panel.title = "Add a license"; panel.prompt = "Add"; panel.allowsMultipleSelection = false; panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        save(detail: item.detail + " License on file: \(url.lastPathComponent).")
+        model.addLicense(url)
+        close()
     }
 }
 

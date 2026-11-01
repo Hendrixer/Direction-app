@@ -44,6 +44,11 @@ final class AppModel {
             NSApp?.windows.first { $0.frameAutosaveName == "DirectionMainWindow" }?.makeKeyAndOrderFront(nil)
             return
         }
+        guard mayCloseFilm(opening: "\u{201C}\(filmName(url))\u{201D}") else { return }
+        show(url)
+    }
+
+    private func show(_ url: URL) {
         do {
             film?.close()
             let model = try FilmModel(url: url)
@@ -57,7 +62,32 @@ final class AppModel {
         } catch { self.error = error.localizedDescription }
     }
 
-    func closeFilm() { film?.close(); film = nil; reloadFilms(); NSApp.dockTile.badgeLabel = nil }
+    /// Back to Films. False when the director kept a running delivery going instead.
+    @discardableResult
+    func closeFilm() -> Bool {
+        guard mayCloseFilm(opening: nil) else { return false }
+        film?.close(); film = nil; reloadFilms(); NSApp.dockTile.badgeLabel = nil
+        return true
+    }
+
+    /// Closing a film stops its running deliveries, so opening another film or going back to Films asks
+    /// first, the way Quit does. `opening` names what would open instead; nil is Films.
+    func mayCloseFilm(opening: String?) -> Bool {
+        guard let film, !QuitGuard.runningDeliveries(film).isEmpty else { return true }
+        return askToStopDelivering(film, opening)
+    }
+    /// Keep Delivering (false) or Stop and Open (true). Tests answer for the director.
+    @ObservationIgnored var askToStopDelivering: @MainActor (FilmModel, String?) -> Bool = AppModel.askToStopDelivering(_:opening:)
+
+    static func askToStopDelivering(_ film: FilmModel, opening: String?) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = opening.map { "Open \($0) and stop delivering?" } ?? "Close \(film.filmName) and stop delivering?"
+        alert.informativeText = "\(film.filmName) is still being delivered. If you \(opening == nil ? "close it" : "open another film") now, the files won\u{2019}t be finished. You can deliver again later."
+        alert.addButton(withTitle: opening == nil ? "Stop and Close" : "Stop and Open")
+        alert.addButton(withTitle: "Keep Delivering")
+        alert.buttons.first?.hasDestructiveAction = true
+        return alert.runModal() == .alertFirstButtonReturn
+    }
 
     /// Back to Films. A new film you haven't put anything into (no title, brief, footage or notes)
     /// goes to the Trash instead of cluttering the list.
@@ -65,8 +95,7 @@ final class AppModel {
         guard let film, let url = film.url else { closeFilm(); return }
         let pristine = film.isUntitled && !film.hasFootage && film.brief.logline.isEmpty && film.brief.feeling.isEmpty && film.notes.isEmpty && film.cuts.isEmpty
         let projectID = film.project?.id
-        closeFilm()
-        guard pristine else { return }
+        guard closeFilm(), pristine else { return }
         NSWorkspace.shared.recycle([url]) { _, error in
             MainActor.assumeIsolated { if error == nil { FilmLibraryIndex.noteTrashed(url.path); CacheCleanup.forget(film: url, projectID: projectID); self.reloadFilms() } }
         }
@@ -79,11 +108,12 @@ final class AppModel {
 
     /// New film: a .direction package in the library folder, named later in the brief.
     func newFilm(named name: String = "Untitled film") {
+        guard mayCloseFilm(opening: "a new film") else { return }
         let folder = URL(fileURLWithPath: UserDefaults.standard.string(forKey: "libraryFolder") ?? (NSHomeDirectory() + "/Movies/Direction"))
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var target = folder.appendingPathComponent(name + ".direction"), n = 2
         while FileManager.default.fileExists(atPath: target.path) { target = folder.appendingPathComponent("\(name) \(n).direction"); n += 1 }
-        do { _ = try ProjectStore.create(at: target, name: target.deletingPathExtension().lastPathComponent); open(target) } catch { self.error = error.localizedDescription }
+        do { _ = try ProjectStore.create(at: target, name: target.deletingPathExtension().lastPathComponent); show(target) } catch { self.error = error.localizedDescription }
     }
 
     /// Dock badge: what's waiting for the director.

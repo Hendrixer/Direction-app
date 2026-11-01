@@ -249,6 +249,62 @@ func toneWAV(seconds: Double, rate: Int = 8_000) -> Data {
         }
     }
 
+    /// A version that turned the request down hands it on; the hold moves to the next one's price only if
+    /// that still fits the limits and the director's yes.
+    @Test func aHoldMovesToTheNextVersionOnlyWithinTheLimits() throws {
+        let ledger = temporaryFile("spend.json"); defer { try? FileManager.default.removeItem(at: ledger); try? FileManager.default.removeItem(atPath: ledger.path + ".lock") }
+        try OpenRouter.$overrides.withValue(.init(ledger: ledger)) {
+            let held = SpendEntry(kind: .shot, version: "bytedance/seedance-2.5", estimate: 1.15, filmID: "film-1", turnoverID: "turnover-1")
+            #expect(try SpendLedger.reserve(held, askAbove: 5, stopAt: 50) == .ok)
+            // $6.00 at the next version is past the $5.00 turnover limit; the hold stays as it was.
+            #expect(try SpendLedger.adjust(held.id, version: "minimax/hailuo-3", estimate: 6, askAbove: 5, stopAt: 50) == .overLimit(estimate: 6, spent: 0, limit: 5))
+            #expect(SpendLedger.entries().map(\.estimate) == [1.15] && SpendLedger.entries().first?.version == "bytedance/seedance-2.5")
+            // It's checked against everything but itself: $4.50 fits.
+            #expect(try SpendLedger.adjust(held.id, version: "minimax/hailuo-3", estimate: 4.5, askAbove: 5, stopAt: 50) == .ok)
+            let moved = try #require(SpendLedger.entries().first)
+            #expect(moved.version == "minimax/hailuo-3" && moved.estimate == 4.5)
+            // A yes covers the plan it priced, not a dearer version than it priced.
+            let approved = SpendEntry(kind: .shot, version: "bytedance/seedance-2.5", estimate: 1.15, filmID: "film-1", turnoverID: "turnover-1")
+            #expect(try SpendLedger.reserve(approved, approvedBy: "question-1", budget: 2, askAbove: 5, stopAt: 50) == .ok)
+            expectError("spend_over_question") { _ = try SpendLedger.adjust(approved.id, version: "minimax/hailuo-3", estimate: 2.5, approvedBy: "question-1", budget: 2, askAbove: 5, stopAt: 50) }
+            #expect(try SpendLedger.adjust(approved.id, version: "minimax/hailuo-3", estimate: 1.9, approvedBy: "question-1", budget: 2, askAbove: 5, stopAt: 50) == .ok)
+            // The month's cap stops it whatever was agreed.
+            #expect(try SpendLedger.adjust(approved.id, version: "alibaba/wan-3.0", estimate: 1.9, approvedBy: "question-1", budget: 2, askAbove: 5, stopAt: 6) == .cap(estimate: 1.9, spent: 4.5, cap: 6))
+            // No price, no going ahead without a yes; and not at all once the month is spent.
+            #expect(try SpendLedger.adjust(held.id, version: "someone/unpriced", estimate: 0, priced: false, askAbove: 5, stopAt: 50) == .overLimit(estimate: 0, spent: 1.9, limit: 5))
+            #expect(try SpendLedger.reserve(SpendEntry(kind: .shot, version: "someone/unpriced", estimate: 0, filmID: "film-1", turnoverID: "turnover-2"), approvedBy: "question-2", priced: false, askAbove: 5, stopAt: 50) == .ok)
+            #expect(SpendCheck.of(estimate: 0, turnoverSpent: 0, monthSpent: 50, askAbove: 5, stopAt: 50, approved: true, priced: false) == .cap(estimate: 0, spent: 50, cap: 50))
+            #expect(SpendCheck.of(estimate: 0, turnoverSpent: 0, monthSpent: 50, askAbove: 5, stopAt: 50, approved: true) == .ok)
+        }
+    }
+
+    /// A record Direction can't read is never written over, and an entry it doesn't know (a kind from a newer
+    /// build) is kept as it was and still counts against the month.
+    @Test func aRecordThatCantBeReadIsNeverWrittenOver() throws {
+        let ledger = temporaryFile("spend.json"); defer { try? FileManager.default.removeItem(at: ledger); try? FileManager.default.removeItem(atPath: ledger.path + ".lock") }
+        try OpenRouter.$overrides.withValue(.init(ledger: ledger)) {
+            let broken = Data("{\"entries\": [{\"id\": \"spend-1\", \"at\": 17".utf8)
+            try broken.write(to: ledger)
+            let shot = SpendEntry(kind: .shot, version: "google/veo-3.1", estimate: 1, filmID: "film-1", turnoverID: "turnover-1")
+            expectError("ledger_unavailable") { _ = try SpendLedger.reserve(shot, askAbove: 5, stopAt: 50) }
+            expectError("ledger_unavailable") { try SpendLedger.record(shot) }
+            #expect(SpendLedger.entries().isEmpty)
+            #expect(try Data(contentsOf: ledger) == broken)
+
+            let now = Date().timeIntervalSince1970
+            let newer: JSONValue = .object(["id": .string("spend-newer"), "at": .number(now), "kind": .string("graphic"), "service": .string("openrouter"), "version": .string("someone/graphics"), "estimate": .number(30), "spend": .number(30)])
+            let known = try JSONValue.wrapping(SpendEntry(kind: .music, version: "google/lyria-3-clip", estimate: 0.04, spend: 0.04))
+            try JSONValue.object(["entries": .array([newer, known])]).data().write(to: ledger)
+            #expect(SpendLedger.entries().map(\.kind) == [.music])
+            // The $30 this build can't name is still in the month: $25 more passes $50.
+            guard case let .cap(_, spent, cap) = try SpendLedger.reserve(SpendEntry(kind: .shot, version: "google/veo-3.1", estimate: 25), askAbove: 100, stopAt: 50) else { Issue.record("Expected the cap"); return }
+            #expect(abs(spent - 30.04) < 1e-9 && cap == 50)
+            #expect(try SpendLedger.reserve(shot, askAbove: 5, stopAt: 50) == .ok)
+            let saved = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: ledger))["entries"].array ?? []
+            #expect(saved.count == 3 && saved.contains(newer))
+        }
+    }
+
     /// Two writers at once: this process and a second one (python, holding the same flock) each add 60 entries.
     @Test func theLedgerIsSafeAcrossTwoWriters() async throws {
         let ledger = temporaryFile("spend.json"); defer { try? FileManager.default.removeItem(at: ledger); try? FileManager.default.removeItem(atPath: ledger.path + ".lock") }

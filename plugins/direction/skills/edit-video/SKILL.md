@@ -12,4 +12,4 @@ Resolve the film from the user's request or `direction_projects` and pass its `p
 5. **Watch what you changed.** `direction_watch` gives a filmstrip of a passage with its sound described; `direction_frame` renders one exact frame and `direction_preview` a short video (up to 30 s, a job). Check cut points and anything over the picture before saying it's done.
 6. **Export when asked.** `direction_export` with a new path (it never overwrites), preset `h264`, `hevc` or `prores`, and `width`/`height` for another size of the same shape, such as the footage's 3840 × 2160. Exports, previews, transcription and indexing are jobs: poll `direction_job` until they finish.
 
-Footage must be SDR (HDR is refused at import). `direction_measure_audio` reports sample peak and RMS, not LUFS. Say plainly when something isn't supported rather than working around it.
+Footage must be SDR (HDR is refused at import). `direction_measure_audio` on a take reports its sample peak and RMS, not LUFS; without `assetID` it measures the cut's mix in LUFS (integrated, ITU-R BS.1770-4) with sample and true peak. Say plainly when something isn't supported rather than working around it.

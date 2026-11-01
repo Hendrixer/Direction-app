@@ -279,4 +279,39 @@ public enum SequenceRenderer {
             return .object(["path": .string(output.path), "mimeType": .string("audio/wav"), "editRevision": .number(Double(compiled.revision)), "range": try .wrapping(range)])
         } catch { reader.cancelReading(); try? FileManager.default.removeItem(at: output); throw error }
     }
+
+    /// The mix as it plays and delivers, measured by LoudnessMeter over the whole cut or a range of it. It's
+    /// read in stereo a buffer at a time as it's mixed, so a long film never sits in memory.
+    public static func loudness(_ compiled: CompiledSequence, range: MediaRange? = nil) async throws -> JSONValue {
+        let range = range ?? MediaRange(start: .zero, duration: compiled.sequence.duration)
+        guard range.isValid, range.duration > .zero, range.end <= compiled.sequence.duration else { throw DirectionError("invalid_range", "Measure a range inside the cut.") }
+        let tracks = try await compiled.composition.loadTracks(withMediaType: .audio)
+        guard !tracks.isEmpty else { throw DirectionError("no_audio", "The cut has no enabled audio.") }
+        let reader = try AVAssetReader(asset: compiled.composition)
+        reader.timeRange = range.cmRange
+        let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 48_000, AVNumberOfChannelsKey: 2, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsFloatKey: true, AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsNonInterleaved: false]
+        let mix = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: settings); mix.audioMix = compiled.audioMix
+        reader.add(mix)
+        guard reader.startReading() else { throw reader.error ?? DirectionError("measure_failed", "Cannot read the cut\u{2019}s sound.") }
+        var meter = LoudnessMeter(sampleRate: 48_000, channels: 2), samples: [Float] = []
+        do {
+            while let sample = mix.copyNextSampleBuffer() {
+                try Task.checkCancellation()
+                guard let data = CMSampleBufferGetDataBuffer(sample) else { continue }
+                let n = CMSampleBufferGetNumSamples(sample) * 2
+                if samples.count != n { samples = [Float](repeating: 0, count: n) }
+                guard samples.withUnsafeMutableBytes({ CMBlockBufferCopyDataBytes(data, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!) }) == kCMBlockBufferNoErr else { throw DirectionError("measure_failed", "The cut\u{2019}s sound came back unreadable.") }
+                samples.withUnsafeBufferPointer { meter.add($0) }
+            }
+            guard reader.status == .completed else { throw reader.error ?? DirectionError("measure_failed", "Measuring the cut\u{2019}s sound stopped.") }
+        } catch { reader.cancelReading(); throw error }
+        func r(_ x: Double) -> JSONValue { .number((x * 100).rounded() / 100) }
+        var value: [String: JSONValue] = [
+            "integratedLUFS": meter.integrated.map(r) ?? .null, "samplePeakDBFS": r(meter.samplePeakDBFS), "truePeakDBTP": r(meter.truePeakDBTP),
+            "range": try .wrapping(range), "seconds": r(meter.seconds), "editRevision": .number(Double(compiled.revision)), "sequenceID": .string(compiled.sequence.id),
+            "method": .string("ITU-R BS.1770-4 (EBU R128): K-weighted stereo mix, 400 ms blocks every 100 ms, gated at \u{2212}70 LUFS and 10 LU under; true peak 4\u{00D7} oversampled."),
+        ]
+        if meter.integrated == nil { value["note"] = .string("Nothing to measure: loudness needs at least 0.4 s of sound above \u{2212}70 LUFS.") }
+        return .object(value)
+    }
 }

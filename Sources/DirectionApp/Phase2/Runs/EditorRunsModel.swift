@@ -21,6 +21,8 @@ import DirectionTools
     @ObservationIgnored private var offeredSetup = false
     @ObservationIgnored private var known: [String: EditorRunState] = [:]
     @ObservationIgnored private var recovered = false
+    /// Read-back corrections already sent to each waiting run.
+    @ObservationIgnored private var sentCorrections: [String: [String: String]] = [:]
     /// Bumped when your own session's latest call goes stale, so the pill stops saying it works.
     private var tick = 0
     @ObservationIgnored private var staleTask: Task<Void, Never>?
@@ -197,18 +199,27 @@ import DirectionTools
         runs.append(run)
     }
 
-    /// What the director said since the run stopped to wait, in words for the editor.
+    /// What the director said since the run asked, in words for the editor. Corrections to a read-back that
+    /// waits for the OK send the editor back to post a new one; it then waits for the OK again.
     private func continuation(for run: EditorRun, film: FilmModel) -> String? {
-        let since = run.endedAt ?? run.updatedAt
+        // From when it asked, not when it exited: an answer can come in before the program has gone.
+        let since = run.askedAt ?? run.endedAt ?? run.updatedAt
         var said: [String] = []
         if let t = film.turnovers.first(where: { $0.id == run.turnoverID }) {
-            if t.readBackApproved, t.state == .cutting, t.updatedAt > since {
+            let corrections = t.noteIDs.compactMap { id in t.adjustments[id].map { "For note \(film.noteNumber(id)) I said: \u{201C}\($0)\u{201D}" } }
+            if t.readBackApproved, t.state == .cutting, run.askedForOK ?? (t.updatedAt > since) {
                 said.append("I approved your read-back. Cut it.")
-                for (id, text) in t.adjustments { said.append("For note \(film.noteNumber(id)) I said: \u{201C}\(text)\u{201D}") }
+                said += corrections
+            } else if t.state == .readBack, !t.readBackApproved, !t.adjustments.isEmpty, sentCorrections[run.id] != t.adjustments {
+                // Each set of corrections goes once; a new read-back clears them, and new ones go again.
+                sentCorrections[run.id] = t.adjustments
+                said.append("I corrected your read-back. Post a new one that honors what I said, then wait for my OK again.")
+                said += corrections
             }
+            if t.adjustments.isEmpty { sentCorrections[run.id] = nil }
         }
         for q in film.questions where q.turnoverID == run.turnoverID {
-            guard let a = q.answer, a.at > since else { continue }
+            guard let a = q.answer, a.at > since || q.createdAt >= since else { continue }
             let choice = a.choiceID.flatMap { id in q.choices.first { $0.id == id }?.label }
             said.append("You asked: \u{201C}\(q.text)\u{201D} " + [choice.map { "I chose \u{201C}\($0)\u{201D}." }, a.text.map { "I said: \u{201C}\($0)\u{201D}" }].compactMap { $0 }.joined(separator: " "))
         }

@@ -335,6 +335,37 @@ public struct FinishingItem: Codable, Hashable, Sendable, Identifiable {
     ]
 }
 
+extension DirectingState {
+    /// Write credits (finish.md › 36): the credits, and the director's titles item done.
+    public mutating func write(credits: String) {
+        self.credits = credits
+        let lines = credits.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        finish("titles", detail: "Credits written: " + lines.joined(separator: " \u{00B7} "))
+    }
+    /// Add license (finish.md › 36): the file on record, and the licenses item done.
+    public mutating func add(license: LicenseFile) {
+        licenses = (licenses ?? []) + [license]
+        let detail = (finishing ?? FinishingItem.defaults).first { $0.id == "licenses" }?.detail ?? ""
+        finish("licenses", detail: detail + " License on file: \(URL(fileURLWithPath: license.path).lastPathComponent).")
+    }
+    mutating func finish(_ id: String, detail: String) {
+        var items = finishing ?? FinishingItem.defaults
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        items[i].state = "done"; items[i].detail = detail.trimmingCharacters(in: .whitespaces); items[i].progress = nil
+        finishing = items
+    }
+}
+
+/// A license the director added in Finish, copied into the film so it travels with it.
+public struct LicenseFile: Codable, Hashable, Sendable {
+    /// In the film's folder: Licenses/<name>.
+    public var path: String
+    /// The name of the file the director chose.
+    public var original: String
+    public var addedAt: Double
+    public init(path: String, original: String, addedAt: Double) { self.path = path; self.original = original; self.addedAt = addedAt }
+}
+
 public struct EditorStatus: Codable, Hashable, Sendable {
     public var phase: String
     public var detail: String?
@@ -352,6 +383,11 @@ public struct DirectingState: Codable, Hashable, Sendable {
     public var finishing: [FinishingItem]?
     public var deliveredAt: Double?
     public var deliveredPaths: [String]?
+    /// The director's credits, as written in Finish: a role, then its names, a line each, and a blank line
+    /// between credits. The finish job rolls them at the end.
+    public var credits: String?
+    /// License files copied into the film (Licenses/), in the order they were added.
+    public var licenses: [LicenseFile]?
     public var editorPaused: Bool = false
     /// The director's standing instructions to the editor (Settings › Editor).
     public var preferences: EditorPreferences?
@@ -369,8 +405,10 @@ public struct EditorPreferences: Codable, Hashable, Sendable {
     public var conflictOrder: [NoteKind] = NoteKind.allCases
     /// Seconds of untouched picture either side of a change in Play changes.
     public var handleSeconds: Double = 2
-    public init(twoWaysForFeeling: Bool = true, askBeforeGuessing: Bool = true, conflictOrder: [NoteKind] = NoteKind.allCases, handleSeconds: Double = 2) {
-        self.twoWaysForFeeling = twoWaysForFeeling; self.askBeforeGuessing = askBeforeGuessing; self.conflictOrder = conflictOrder; self.handleSeconds = handleSeconds
+    /// dB music ducks under dialogue where a note doesn't say; 0 doesn't duck. nil in films turned over before it was asked.
+    public var musicDuckDB: Double?
+    public init(twoWaysForFeeling: Bool = true, askBeforeGuessing: Bool = true, conflictOrder: [NoteKind] = NoteKind.allCases, handleSeconds: Double = 2, musicDuckDB: Double? = nil) {
+        self.twoWaysForFeeling = twoWaysForFeeling; self.askBeforeGuessing = askBeforeGuessing; self.conflictOrder = conflictOrder; self.handleSeconds = handleSeconds; self.musicDuckDB = musicDuckDB
     }
 }
 
@@ -389,4 +427,13 @@ extension ReviewComment {
     /// Notes the editor is allowed to see.
     public var visibleToEditor: Bool { noteState != .draft && noteState != .dropped && !(isOutside && outsideState != "accepted") }
     public var latestAnswer: NoteAnswer? { answers?.last }
+    /// The words said where the note is, as plain text: about `limit` of them around its moment, or from
+    /// the start of its range or of the cut, with "…" where words are left out.
+    public func transcriptExcerpt(limit: Int = 40) -> String {
+        let words = transcriptContext, at = time ?? range?.start ?? .zero
+        let k = words.firstIndex { $0.range.end > at } ?? words.count
+        let start = max(0, min(k - limit / 2, words.count - limit)), end = min(words.count, start + limit)
+        guard start < end else { return "" }
+        return (start > 0 ? "\u{2026}" : "") + words[start..<end].map(\.text).joined(separator: " ") + (end < words.count ? "\u{2026}" : "")
+    }
 }

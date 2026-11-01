@@ -134,7 +134,7 @@ Frame: `screens/04-footage-drop.html` · Render: `renders/04-footage-drop@2x.png
 - Centered stack: three fanned 150 pt 16:9 cards (−8°, 0°, +7°), then the title (Archivo 800 34 at 125%), body 13.5/1.5 `--text-3` max 50ch, buttons (36 pt), and a 12 pt `--text-4` line of supported formats with icons.
 - Footer row 18 pt below the zone: brief reminder with an Edit link (left), storage note (right).
 
-**Content:** Title "Bring footage". Body: "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes. Your files stay where they are." Buttons: "Choose folder… ⌘O", ghost "From a camera card". Formats: "MOV, MP4, MXF, BRAW, R3D" · "WAV, separate sound synced by timecode" · "A script, if you have one (PDF, FDX)". Footer: "Brief saved. "Tired, then proud. Quiet, not triumphant."" and "Nothing is moved or copied. Proxies go to ~/Movies/Direction."
+**Content:** Title "Bring footage". Body: "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes. Your files stay where they are." Buttons: "Choose folder… ⌘O", ghost "From a camera card". Formats: "MOV, MP4, MXF, BRAW, R3D" · "WAV, separate sound synced by timecode" · "A script, if you have one (PDF, FDX)". Footer: "Brief saved. "Tired, then proud. Quiet, not triumphant."" and "Nothing is moved or copied." ("Copies go in the film. Your originals stay where they are." when Settings › Storage copies footage. Direction makes no proxies, so the footer doesn't name a proxy folder.)
 
 **States and variants**
 - Drag over: border becomes 1.5 pt solid `--text-1`, the fill lifts to steel-3, and the title changes to "Drop to add 214 files" (count from the drag pasteboard).
@@ -165,12 +165,13 @@ Frame: `screens/05-footage-logging.html` · Render: `renders/05-footage-logging@
 - Rows are ordered: needs you first, then in progress, then done, then queued.
 - Aside: ion uppercase label, `.say` rows, scene list (52 × 30 thumbnails, title 13 pt, mono 11 meta), pending scenes at 45% opacity.
 
-**Content:** Per `story.md`. Pill: "Logging 131 of 214" with a meter at 61%. Estimate: "About 6 minutes left. You can start circling takes now." Problem rows: "No audio. Separate sound file?" with a "Find sound…" small button; "Can't read this file. It may be damaged." with a ghost "Skip". Done rows show the first transcribed line in quotes, or "No dialogue · wind". Aside closing message: "No script found. I'll build one from the transcript for the Script room." / "Have one? Drop the PDF here."
+**Content:** Per `story.md`. Pill: "Logging 131 of 214" with a meter at 61%. Estimate: "About 6 minutes left. You can start circling takes now." Problem rows: "No audio. Separate sound file?" with a "Find sound…" small button; "Can't read this file. It may be damaged." with a ghost "Skip". Done rows show the first transcribed line in quotes, or "No dialogue · wind". Aside closing message: "No script found. I'll build one from the transcript for the Script room." ("Have one? Drop the PDF here." comes back when Direction can read a script; until then a PDF or FDX dropped on the film gets the toast "Direction can't read scripts yet" / "The Script room is built from what was said in the takes." and is never imported as footage.)
 
 **States and variants**
 - Row status icons: alert triangle (needs you), spinner (logging/transcribing, with an 80 pt prism progress bar and the step name), green check (done), blank and 45% opacity (queued).
-- All done: the summary title becomes "Footage logged", the progress bar disappears, and stats keep their values.
-- With a script dropped: aside row becomes "Script matched to 92% of lines." and Script uses it.
+- All done: the summary title becomes "Footage logged", the progress bar disappears, and stats keep their values. Not while files are still coming in.
+- Copying (Settings › Storage › Copy into library): the stage line reads "Copying into the film · 3 of 12" until the last file is in the film's Footage folder.
+- With a script dropped (not built yet): aside row becomes "Script matched to 92% of lines." and Script uses it.
 - Paused (sleep, disk full): banner at top `.banner.bad` "Logging paused. Disk is full." with "Open Storage settings".
 
 **Interactions:** Rows are selectable; Space previews the take (Quick Look style player sheet). Context menu: Show in Finder, Skip, Mark Not usable, Assign to Scene ›. "Find sound…" opens a file picker filtered to audio. Clicking an aside scene opens it in Dailies.

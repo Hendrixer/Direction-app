@@ -39,6 +39,11 @@ import DirectionTools
         var exited: Int32?
         var outputClosed = false
         var finished = false
+        /// This invocation's start, the first time it asked the director something, and whether a read-back
+        /// waits on the OK (it posted one, or one was waiting when it began).
+        let began = Date().timeIntervalSince1970
+        var askedAt: Double?
+        var waitsForOK = false
         init(runID: String, store: ProjectStore, program: EditorProgram, process: Process) { self.runID = runID; self.store = store; self.program = program; self.process = process }
     }
 
@@ -129,7 +134,10 @@ import DirectionTools
                 r.state = .starting; r.reason = nil; r.detail = nil; r.held = false; r.pausedByQuit = false
                 r.pid = p.processIdentifier; r.ownerPID = getpid(); r.startedAt = r.startedAt ?? Date().timeIntervalSince1970; r.endedAt = nil; r.invocations += 1
             }
-            if run.job == .turnover || run.job == .assemble, let id = run.turnoverID { reopenTurnover(id, store: store) }
+            if run.job == .turnover || run.job == .assemble, let id = run.turnoverID {
+                reopenTurnover(id, store: store)
+                if let t = try? store.turnover(id) { l.waitsForOK = t.state == .readBack && !t.readBackApproved }
+            }
             stayAwake()
             onChange?(store.url)
         } catch {
@@ -157,6 +165,11 @@ import DirectionTools
         case .toolStarted(let id, let name, let input):
             l.pending.insert(id)
             if let r = try? l.store.run(l.runID), r.state == .starting { _ = try? l.store.updateRun(l.runID) { $0.state = .working } }
+            // Asking: anything the director does from here on answers it, even before the program exits.
+            let tool = name.hasPrefix("mcp__direction__") ? String(name.dropFirst("mcp__direction__".count)) : name
+            let readBack = tool == "direction_turnover_update" && input["readBack"] != .null
+            if readBack || tool == "direction_ask" { l.askedAt = l.askedAt ?? Date().timeIntervalSince1970 }
+            if readBack { l.waitsForOK = true }
             // Direction's own tools write their activity in the MCP server; the rest is the program's.
             let isDirection = name.hasPrefix("mcp__direction__") || name.hasPrefix("direction_")
             if !isDirection, let a = EditorActivityLog.programActivity(tool: name, path: input["file_path"].string ?? input["path"].string ?? input["notebook_path"].string) {
@@ -183,18 +196,21 @@ import DirectionTools
         l.process.terminationHandler = nil
         if !l.buffer.isEmpty { output(l, Data("\n".utf8)) }
         guard let run = try? l.store.run(l.runID) else { live[l.runID] = nil; return }
-        var exit = RunStateMachine.Exit(status: status, intent: l.intent, finished: Self.finished(run, store: l.store), waitingForYou: Self.waitingForYou(run, store: l.store), failures: l.failures, spendCap: l.spendCap, lastErrorLine: l.stderrTail.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }))
+        // Only a turnover that waits for the director's OK has one to wait on.
+        let forOK = l.waitsForOK && run.turnoverID.flatMap { try? l.store.turnover($0) }?.waitForOK == true
+        let answered = Self.answered(run, store: l.store, since: l.began, waitedForOK: forOK)
+        var exit = RunStateMachine.Exit(status: status, intent: l.intent, finished: Self.finished(run, store: l.store), waitingForYou: Self.waitingForYou(run, store: l.store) || answered, failures: l.failures, spendCap: l.spendCap, lastErrorLine: l.stderrTail.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }))
         if status != 0 { exit.failures += l.stderrTail }
         if status != 0 || !l.failures.isEmpty {
             DirectionLog.error("\(l.program.name) exited with status \(status) in run \(l.runID). Failures: \(l.failures.joined(separator: " | ").prefix(1_500)). Last stderr: \(l.stderrTail.suffix(8).joined(separator: " | "))", "editor")
         }
         let result = l.result.flatMap(EditorResult.parse)
         live[l.runID] = nil
-        end(l.runID, store: l.store, outcome: RunStateMachine.outcome(exit), cost: l.cost, tokens: l.tokens, result: result)
+        end(l.runID, store: l.store, outcome: RunStateMachine.outcome(exit), cost: l.cost, tokens: l.tokens, result: result, asked: (l.askedAt ?? l.began, forOK))
     }
 
     /// Records how a run ended, and what that means for its turnover.
-    private func end(_ runID: String, store: ProjectStore, outcome o: RunStateMachine.Outcome, cost: Double? = nil, tokens: Int? = nil, result: EditorResult? = nil) {
+    private func end(_ runID: String, store: ProjectStore, outcome o: RunStateMachine.Outcome, cost: Double? = nil, tokens: Int? = nil, result: EditorResult? = nil, asked: (at: Double, forOK: Bool)? = nil) {
         guard let run = try? store.updateRun(runID, { r in
             // A pause the director asked for stays a pause even if the program exits on its own.
             if r.state == .paused && o.state != .done && o.reason != .pausedByQuit { r.endedAt = Date().timeIntervalSince1970 }
@@ -202,6 +218,7 @@ import DirectionTools
             if let cost { r.spend = (r.spend ?? 0) + cost }
             if let tokens { r.tokens = (r.tokens ?? 0) + tokens }
             if let result { r.summary = result.summary; r.needsYou = result.needsYou }
+            if let asked { r.askedAt = asked.at; r.askedForOK = asked.forOK }
             r.pid = nil
         }) else { return }
         let ended = "Run \(run.id) (\(run.job.rawValue)) ended \(run.state.rawValue)\(run.reason.map { ": \($0.rawValue)" } ?? "")\(run.detail.map { " \u{2014} \($0)" } ?? "")"
@@ -332,6 +349,13 @@ import DirectionTools
             return open.contains { $0.turnoverID == id }
         }
         return open.contains { $0.turnoverID == nil && $0.createdAt >= (run.startedAt ?? run.createdAt) }
+    }
+
+    /// The director already answered what this invocation asked before the program exited: the OK to the
+    /// read-back it waited on, or a question it asked. The run goes on as if it had waited.
+    static func answered(_ run: EditorRun, store: ProjectStore, since: Double, waitedForOK: Bool) -> Bool {
+        if waitedForOK, let id = run.turnoverID, let t = try? store.turnover(id), t.readBackApproved, t.state == .cutting { return true }
+        return ((try? store.questions()) ?? []).contains { $0.turnoverID == run.turnoverID && $0.createdAt >= since && $0.answer != nil }
     }
 
     /// A failed run leaves its turnover stopped at the note it was on (frame 58).

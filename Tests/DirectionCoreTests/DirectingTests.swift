@@ -99,6 +99,47 @@ private func directedStore() throws -> (ProjectStore, Project, ReviewCut) {
     #expect(try store.playedRevision(of: cut) == cut.editRevision)
 }
 
+@Test func captionsPlacedAfterPictureLockPlayAndDeliverWithTheLockedCut() throws {
+    let (store, _, cut) = try directedStore()
+    var captions = MediaAsset(id: "asset-captions", name: "captions-1", path: "/captions-1.mov", duration: .init(seconds: 4), video: [.init(id: 1, width: 320, height: 180, frameRate: 30)]); captions.graphic = "captions-1"
+    _ = try store.addAsset(captions, append: false, expectedRevision: try store.revision())
+    try store.lockPicture(cutID: cut.id, locked: true)
+    func edit(_ ops: String...) throws -> EditResult { try store.edit(EditBatch(baseEditRevision: try store.revision(), operations: ops.map { try op($0) })) }
+    let placed = try edit(#"{"op":"placeGraphic","graphic":"captions-1","at":1,"seconds":3}"#)
+    #expect(placed.committed)
+    #expect(try store.playedRevision(of: cut) == placed.editRevision)
+    expectError("picture_locked") { _ = try edit(#"{"op":"trim","clipID":"clip-main","edge":"tail","frames":-3}"#) }
+    // The store's own lock rule lets the graphic come off again, and nothing else.
+    var remove = EditOperation("remove"); remove.clipID = placed.operations[0].clipIDs?.first
+    _ = try store.apply(.init(baseEditRevision: try store.revision(), summary: "Took the captions off", operations: [remove]))
+    var trim = EditOperation("removeRange"); trim.range = MediaRange(start: 1, end: 2)
+    expectError("picture_locked") { _ = try store.apply(.init(baseEditRevision: try store.revision(), summary: "Trim", operations: [trim])) }
+}
+
+@Test func creditsAndLicensesAreKeptWithTheFilm() throws {
+    let (store, _, cut) = try directedStore()
+    try store.lockPicture(cutID: cut.id, locked: true)
+    expectError("invalid_credits") { _ = try store.saveCredits("  \n ") }
+    let state = try store.saveCredits("Featuring\nMaya Chen\n\nCamera\nSam Ortiz\n")
+    #expect(state.credits == "Featuring\nMaya Chen\n\nCamera\nSam Ortiz")
+    #expect(state.finishing?.first { $0.id == "titles" }.map { [$0.state, $0.detail] } == ["done", "Credits written: Featuring \u{00B7} Maya Chen \u{00B7} Camera \u{00B7} Sam Ortiz"])
+    // A license is copied into the film, never over another, and recorded.
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("licenses-" + UUID().uuidString)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let chosen = folder.appendingPathComponent("North Light.pdf")
+    try Data("first".utf8).write(to: chosen)
+    let first = try store.addLicense(from: chosen)
+    try Data("second".utf8).write(to: chosen)
+    let second = try store.addLicense(from: chosen)
+    #expect(first.path == "Licenses/North Light.pdf" && second.path == "Licenses/North Light 2.pdf" && second.original == "North Light.pdf")
+    #expect(try String(contentsOf: store.url.appendingPathComponent(first.path), encoding: .utf8) == "first")
+    #expect(try String(contentsOf: store.url.appendingPathComponent(second.path), encoding: .utf8) == "second")
+    let saved = try store.directingState()
+    #expect(saved.licenses == [first, second] && saved.credits == state.credits)
+    #expect(saved.finishing?.first { $0.id == "licenses" }.map { [$0.state, $0.detail] } == ["done", "Every track needs a license before you publish. License on file: North Light.pdf. License on file: North Light 2.pdf."])
+}
+
 @Test func aLaterLoggingBatchKeepsTheScenesBeforeIt() throws {
     let (store, _, _) = try directedStore()
     _ = try store.logDailies(Dailies(scenes: [DailiesScene(id: "scene-2", number: 2, title: "The ridge")], takes: [:]))

@@ -316,18 +316,13 @@ struct CuttingPane: View {
     var app: AppModel?
     var preview = false
     @AppStorage(SettingsKey.handleSeconds) private var handles = 2.0
-    @AppStorage(SettingsKey.cutNaming) private var naming = "number"
     @AppStorage(SettingsKey.frameRate) private var frameRate = "match"
     @AppStorage(SettingsKey.loudness) private var loudness = -14.0
     @AppStorage(SettingsKey.ducking) private var ducking = 6.0
     // Shared, so the editor's tools see whether it may add transitions without a note.
     @AppStorage(SettingsKey.transitions, store: SharedSettings.defaults) private var transitions = "hard"
-    @AppStorage(SettingsKey.keepCuts) private var keepCuts = "all"
-    @AppStorage(SettingsKey.playFromProxies) private var proxies = true
 
     private var film: FilmModel? { app?.film }
-    private var nextCut: String { "Cut \(max(2, (film?.cuts.count ?? 3) + 1))" }
-    private var today: String { Date().formatted(.dateTime.month(.abbreviated).day()) }
     private var handlesDetail: String {
         if let film, let cut = film.latestCut, !film.changedRanges(in: cut).isEmpty {
             return "Untouched picture shown before and after each change. Play changes runs \(Timecode.duration(film.changesDuration(in: cut)))."
@@ -341,9 +336,6 @@ struct CuttingPane: View {
             SettingsGroup(label: "Reviewing changes") {
                 SettingsRow(label: "Handles in Play changes", detail: handlesDetail, first: true) {
                     GateStepper(value: $handles, range: 0...5, step: 0.5) { String(format: "%.1f s", $0) }
-                }
-                SettingsRow(label: "Name new cuts") {
-                    GateSegmented(options: [("number", nextCut), ("date", today), ("both", "Both")], selection: $naming)
                 }
             }
             SettingsGroup(label: "Picture and sound") {
@@ -359,12 +351,6 @@ struct CuttingPane: View {
                 SettingsRow(label: "Transitions") {
                     GateSelect(options: [("hard", "Hard cuts unless a note asks"), ("editor", "Editor\u{2019}s choice")], selection: $transitions)
                 }
-            }
-            SettingsGroup(label: "Keeping cuts") {
-                SettingsRow(label: "Keep earlier cuts", detail: "Earlier cuts stay playable and comparable in History.", first: true) {
-                    GateSelect(options: [("all", "All of them"), ("last5", "Last 5"), ("lockedAndCurrent", "Only locked and current")], selection: $keepCuts)
-                }
-                SettingsRow(label: "Play from proxies", detail: "Smaller copies for smooth playback. Deliveries always use the originals.") { GateSwitch(isOn: $proxies) }
             }
             FootageColorGroup(preview: preview)
         }
@@ -580,7 +566,6 @@ struct StoragePane: View {
     var preview = false
     @AppStorage(SettingsKey.libraryFolder) private var library = SettingsKey.defaultLibrary
     @AppStorage(SettingsKey.footageImport) private var footage = "link"
-    @AppStorage(SettingsKey.proxyCleanup) private var proxies = "after30"
     @State private var usage: StorageUsage?
     @State private var clearing = false
 
@@ -624,9 +609,6 @@ struct StoragePane: View {
                 SettingsRow(label: "Render cache", detail: cutting ? "Available when the editor finishes." : "Rebuilt when needed. Nothing you made is lost.", first: true) {
                     Button(usage.map { "Clear \(SystemSupport.bytes($0.renderCache))" } ?? "Clear") { clearCache() }
                         .buttonStyle(.gate).disabled(cutting || clearing || (usage?.renderCache ?? 0) == 0)
-                }
-                SettingsRow(label: "Proxies for locked films") {
-                    GateSelect(options: [("keep", "Keep"), ("after30", "Delete after 30 days"), ("now", "Delete now")], selection: $proxies)
                 }
             }
         }
@@ -692,7 +674,12 @@ struct StorageUsage: Sendable {
         let libraryURL = URL(fileURLWithPath: library)
         var films: Int64 = 0, copied: Int64 = 0
         let items = (try? FileManager.default.contentsOfDirectory(at: libraryURL, includingPropertiesForKeys: nil)) ?? []
-        for item in items { if item.pathExtension == "direction" { films += size(of: item) } else { copied += size(of: item) } }
+        for item in items {
+            guard item.pathExtension == "direction" else { copied += size(of: item); continue }
+            // Copy into library puts takes in the film's own Footage folder.
+            let copies = size(of: MediaAsset.copies(in: item))
+            films += size(of: item) - copies; copied += copies
+        }
         var cache: Int64 = 0
         for project in (try? FileManager.default.contentsOfDirectory(at: cacheRoot, includingPropertiesForKeys: nil)) ?? [] {
             for name in clearable { cache += size(of: project.appendingPathComponent(name)) }

@@ -190,6 +190,8 @@ final class FilmModel {
 
     func close() {
         pollTask?.cancel(); pollTask = nil; renderTask?.cancel(); player.pause(); player.replaceCurrentItem(with: nil)
+        // The window's ⌘Z outlives the film: the next film's must not undo this one's steps.
+        undoManager?.removeAllActions(withTarget: self)
         if let runtime { Task { await runtime.cancelAll() } }
     }
 
@@ -605,12 +607,13 @@ final class FilmModel {
 
     @AppStorage("defaultLatitude") @ObservationIgnored var defaultLatitude = Latitude.faithful.rawValue
     @AppStorage("waitForReadBack") @ObservationIgnored var waitForReadBack = true
-    /// Settings › Editor as the editor will read them with the turnover.
+    /// Settings › Editor and Cutting as the editor will read them with the turnover.
     var editorPreferences: EditorPreferences {
         let d = UserDefaults.standard
         let order = (d.string(forKey: "conflictOrder") ?? "").split(separator: ",").compactMap { NoteKind(rawValue: String($0)) }
         return EditorPreferences(twoWaysForFeeling: d.object(forKey: "cutFeelingTwoWays") as? Bool ?? true, askBeforeGuessing: d.object(forKey: "askBeforeGuessing") as? Bool ?? true,
-                                 conflictOrder: order.count == NoteKind.allCases.count ? order : NoteKind.allCases, handleSeconds: handleSeconds)
+                                 conflictOrder: order.count == NoteKind.allCases.count ? order : NoteKind.allCases, handleSeconds: handleSeconds,
+                                 musicDuckDB: d.object(forKey: SettingsKey.ducking) as? Double ?? 6)
     }
     func turnOver(latitude: Latitude, waitForOK: Bool) {
         let ids = readyNotes.map(\.id), prefs = editorPreferences
@@ -744,22 +747,59 @@ final class FilmModel {
     func saveBrief(_ b: Brief) { brief = b; perform { try $0.saveBrief(b) } }
     /// Files on their way in. The footage step shows logging from the first one, not the drop zone.
     var importingFootage = 0
+    /// Files being copied into the film (Settings › Storage › Copy into library), while they are.
+    var copyingFootage: FootageCopying?
     func importFootage(_ urls: [URL]) {
-        guard let runtime else { return }
+        guard let runtime, let store, !urls.isEmpty else { return }
+        // Settings › Storage: link to the originals, or copy them into the film's Footage folder first.
+        let copies = UserDefaults.standard.string(forKey: SettingsKey.footageImport) == "copy" ? MediaAsset.copies(in: store.url) : nil
         importingFootage += urls.count
+        if copies != nil { var c = copyingFootage ?? FootageCopying(); c.total += urls.count; copyingFootage = c }
         Task {
             for url in urls {
+                var file = url
                 do {
+                    if let copies { file = try await copyIn(url, to: copies) }
                     // Footage goes to the library; the editor builds the assembly from circles.
-                    var args: [String: JSONValue] = ["path": .string(url.path), "append": .bool(false)]
+                    var args: [String: JSONValue] = ["path": .string(file.path), "append": .bool(false)]
                     // The film's rate comes from its first footage unless Settings › Cutting names one.
                     if let rate = Double(UserDefaults.standard.string(forKey: SettingsKey.frameRate) ?? "match") { args["frameRate"] = .number(rate) }
                     _ = try await runtime.invoke("direction_import", arguments: .object(args))
-                } catch { self.error = "\(url.lastPathComponent): \(error.localizedDescription)" }
+                } catch {
+                    self.error = "\(url.lastPathComponent): \(error.localizedDescription)"
+                    // A copy no take uses isn't kept.
+                    if file != url { refresh(force: true); if project?.assets.contains(where: { $0.path == file.path }) == false { try? FileManager.default.removeItem(at: file) } }
+                }
                 importingFootage = max(0, importingFootage - 1)
                 refresh(force: true)
             }
         }
+    }
+    /// Copies one file into the Footage folder off the main thread, with how far it's got for the logging page and Dailies.
+    func copyIn(_ url: URL, to folder: URL) async throws -> URL {
+        let temp = folder.appendingPathComponent(".\(UUID().uuidString).copying")
+        let size = max(1, (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.doubleValue ?? 1)
+        let watch = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                let written = (try? FileManager.default.attributesOfItem(atPath: temp.path)[.size] as? NSNumber)?.doubleValue ?? 0
+                self?.copyingFootage?.current = min(1, written / size)
+            }
+        }
+        defer {
+            watch.cancel()
+            if var c = copyingFootage { c.done += 1; c.current = 0; copyingFootage = c.done >= c.total ? nil : c }
+        }
+        return try await Task.detached(priority: .userInitiated) { try FootageFiles.copy(url, into: folder, via: temp) }.value
+    }
+    /// Dropped on the film: footage and sound come in, folders opened, held for the brief while it's being
+    /// written. Direction can't read a script yet, so a dropped one says so instead of failing as footage.
+    func bring(_ drop: FootageDrop) {
+        if !drop.footage.isEmpty {
+            if onboardingStep != nil { OnboardingSession.of(self).add(drop.footage, wait: true) } else { importFootage(drop.footage) }
+        }
+        if !drop.scripts.isEmpty { toast = Toast(title: "Direction can\u{2019}t read scripts yet", detail: "The Script room is built from what was said in the takes.") }
+        else if drop.footage.isEmpty { toast = Toast(title: "Those aren\u{2019}t video, sound or script files.") }
     }
     func chooseFootage() {
         let panel = NSOpenPanel(); panel.title = "Bring footage"; panel.allowedContentTypes = [.movie, .audio, .image, .folder]; panel.allowsMultipleSelection = true; panel.canChooseDirectories = true

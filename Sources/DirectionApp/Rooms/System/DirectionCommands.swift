@@ -85,8 +85,7 @@ private struct CloseItem: View {
         Button(app.film == nil ? "Close Window" : "Close Film") {
             guard let key = NSApp.keyWindow else { return }
             if key.frameAutosaveName == "DirectionMainWindow", app.film != nil {
-                app.closeFilm()
-                if !UserDefaults.standard.bool(forKey: SettingsKey.showFilmsWhenEmpty) { NSApp.terminate(nil) }
+                if app.closeFilm(), !UserDefaults.standard.bool(forKey: SettingsKey.showFilmsWhenEmpty) { NSApp.terminate(nil) }
             } else { key.performClose(nil) }
         }
         .shortcut(.closeFilm)

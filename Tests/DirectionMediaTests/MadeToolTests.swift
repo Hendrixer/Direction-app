@@ -351,6 +351,86 @@ private struct MadeFixture {
         #expect(OpenRouter.$overrides.withValue(f.overrides) { MadeRefusals.refusedPeople() } == ["bytedance/seedance-2.5"])
     }
 
+    /// The next version after a refusal usually costs more: it's held to the limits like the first.
+    @Test func aDearerVersionAfterARefusalStopsAtTheLimit() async throws {
+        let refusal = data(.object(["error": .object(["message": .string("The request was flagged by moderation.")])]))
+        let stub = OpenRouterStub { r, _ in
+            if r.httpMethod == "POST" && r.url!.path.hasSuffix("/videos") { return (400, refusal, [:]) }
+            return (404, Data(), [:])
+        }
+        var f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        f.overrides.quality = .best
+        f.overrides.refusals = f.media.directory.appendingPathComponent("refusals.json")
+        var catalog = MadeCatalog.builtIn; catalog.fetchedAt = Date().timeIntervalSince1970
+        catalog.versions += [MadeVersion(id: "bytedance/seedance-2.5", name: "Seedance 2.5", listing: .video, skus: ["duration_seconds": "0.23"], durations: Array(4...30), resolutions: ["720p"], frames: ["first_frame", "last_frame"]),
+                             MadeVersion(id: "minimax/hailuo-3", name: "H3", listing: .video, skus: ["duration_seconds": "1.2"], durations: Array(5...15), resolutions: ["2K"], frames: ["first_frame", "last_frame"])]
+        try JSONEncoder.direction.encode(catalog).write(to: try #require(f.overrides.catalog))
+        // $1.15 at Seedance is under the $5.00 limit; H3 would be $6.00.
+        let done = try await f.finish(try await f.make(["kind": .string("shot"), "ask": .string("Slow push in on the desk."), "seconds": .number(5)]))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+        let result = try #require(done.result)
+        #expect(result["status"].string == "spend_over_limit" && abs((result["estimate"].double ?? 0) - 6) < 1e-9 && result["versionName"].string == "H3")
+        #expect(result["note"].string == "Seedance 2.5 wouldn\u{2019}t take what was asked. H3 would make it instead.")
+        // Only the refused request went out, and the hold went back.
+        #expect(stub.bodies("/videos").map { $0["model"].string ?? "" } == ["bytedance/seedance-2.5"])
+        #expect(try f.ledger.isEmpty && f.media.store.madeRecords().isEmpty)
+    }
+
+    /// Once a shot is sent it's paid for: stopping it or losing it keeps the charge. Only OpenRouter saying
+    /// it couldn't make it gives the hold back, unless it charged anyway.
+    @Test func aShotThatWasSentKeepsItsChargeWhenStoppedOrLost() async throws {
+        let mode = Mode("making")
+        let stub = OpenRouterStub { r, n in
+            if r.httpMethod == "POST" && r.url!.path.hasSuffix("/videos") { return (202, data(.object(["id": .string("vid-\(n)"), "status": .string("pending")])), [:]) }
+            switch mode.value {
+            case "lost": return (502, data(.object(["error": .object(["message": .string("Bad gateway")])])), [:])
+            case "charged": return (200, data(.object(["id": .string("vid"), "status": .string("failed"), "error": .string("Content policy"), "usage": .object(["cost": .number(0.3)])])), [:])
+            default: return (200, data(.object(["id": .string("vid"), "status": .string("in_progress")])), [:])
+            }
+        }
+        let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("A ridge at dusk."), "seconds": .number(4)]
+
+        // Stopped while it's being made: the job is the runtime's own, so it can be cancelled, and the $0.80 stays.
+        let job = try await f.make(shot)
+        let id = try #require(job["id"].string)
+        for _ in 0..<200 {
+            if (try await f.call("direction_job", ["jobID": .string(id)]))["phase"].string?.contains("making the shot") == true { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(try await f.call("direction_cancel_job", ["jobID": .string(id)])["cancellationRequested"].bool == true)
+        #expect(try await f.finish(job).status == "cancelled")
+        #expect(f.ledger.map(\.spend) == [0.8])
+
+        // Lost while it's being made: the polls fail, and the $0.80 still stays.
+        mode.value = "lost"
+        #expect(try await f.finish(try await f.make(shot)).status == "failed")
+        #expect(f.ledger.map(\.spend) == [0.8, 0.8])
+
+        // OpenRouter says it failed and charged 30¢: that's what's kept.
+        mode.value = "charged"
+        let failed = try await f.finish(try await f.make(shot))
+        #expect(failed.status == "failed" && failed.error?.contains("Content policy") == true)
+        #expect(f.ledger.map(\.spend) == [0.8, 0.8, 0.3])
+    }
+
+    /// A version OpenRouter lists no price for would pass every check at $0; the director says yes first.
+    @Test func aVersionWithNoPriceNeedsTheDirectorsYes() async throws {
+        let stub = OpenRouterStub { _, _ in (500, Data(), [:]) }
+        let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        var catalog = MadeCatalog.builtIn; catalog.fetchedAt = Date().timeIntervalSince1970
+        catalog.versions.removeAll { $0.id == "google/veo-3.1" }
+        catalog.versions.append(MadeVersion(id: "someone/new-shots", name: "New Shots", listing: .video, durations: Array(4...10), resolutions: ["1080p"], frames: ["first_frame"]))
+        try JSONEncoder.direction.encode(catalog).write(to: try #require(f.overrides.catalog))
+        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("A ridge at dusk."), "seconds": .number(4)]
+        let plan = try await f.call("direction_estimate", ["turnover": .string(f.turnover.id), "steps": .array([.object(shot)])])
+        #expect(plan["steps"].array?.first?["version"].string == "someone/new-shots" && plan["steps"].array?.first?["priced"].bool == false)
+        #expect(plan["needsQuestion"].bool == true && plan["unpricedSteps"].double == 1 && plan["message"].string?.contains("no price") == true)
+        let over = try await f.make(shot)
+        #expect(over["status"].string == "spend_over_limit" && over["priced"].bool == false && over["message"].string?.contains("lists no price for New Shots") == true)
+        #expect(stub.requests.isEmpty && f.ledger.isEmpty)
+    }
+
     @Test func aChangedShotSendsTheRangeItself() async throws {
         let movie = try Data(contentsOf: try await MediaFixture.make().source)
         let stub = videoStub(movie, cost: 0.56)
@@ -462,6 +542,13 @@ private func videoStub(_ movie: Data, cost: Double) -> OpenRouterStub {
         if path.hasSuffix("/content") { return (200, movie, ["Content-Type": "video/mp4"]) }
         return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "usage": .object(["cost": .number(cost)])])), [:])
     }
+}
+
+/// What a stub answers, changed between requests.
+private final class Mode: @unchecked Sendable {
+    private let lock = NSLock(); private var current: String
+    init(_ value: String) { current = value }
+    var value: String { get { lock.withLock { current } } set { lock.withLock { current = newValue } } }
 }
 
 private final class Counter: @unchecked Sendable {

@@ -55,11 +55,10 @@ public actor ToolRuntime {
             return ToolResponse(.object(["asset": try .wrapping(saved), "editRevision": .number(Double(output.editRevision))]))
         case "direction_edit": return try await invokeEdit(a)
         case "direction_remove_range":
-            let p = try store.read(), range = try secondsRange(a)
+            let range = try secondsRange(a)
             var op = EditOperation("removeRange"); op.range = range; op.ripple = a["ripple"].bool ?? true
-            let output = try store.apply(.init(baseEditRevision: try baseRevision(a), sequenceID: a["sequenceID"].string, idempotencyKey: a["idempotencyKey"].string ?? UUID().uuidString, summary: a["summary"].string ?? "Removed \(range.start)–\(range.end)", operations: [op]))
-            _ = p
-            return ToolResponse(try .wrapping(output))
+            let result = try olderEdit(a, base: try baseRevision(a), sequenceID: a["sequenceID"].string, summary: a["summary"].string ?? "Removed \(range.start)–\(range.end)", [op])
+            return ToolResponse(try .wrapping(store.read(revision: result.editRevision)))
         case "direction_audio":
             let p = try store.read(), assetID = try a.requiredString("assetID")
             let asset = try p.asset(assetID)
@@ -75,7 +74,7 @@ public actor ToolRuntime {
             if let v = a["highPassHz"].double { settings.effects.highPassHz = v }; if let v = a["bassDB"].double { settings.effects.bassDB = v }; if let v = a["trebleDB"].double { settings.effects.trebleDB = v }
             if let v = a["compressor"].bool { settings.effects.compressor = v }; if let v = a["thresholdDB"].double { settings.effects.thresholdDB = v }; if let v = a["limiter"].bool { settings.effects.limiter = v }
             var op = EditOperation("audio"); op.assetID = assetID; op.clipID = a["clipID"].string; op.audioTrackID = trackID; op.audio = settings
-            let updated = try store.apply(.init(baseEditRevision: try baseRevision(a), sequenceID: a["sequenceID"].string, idempotencyKey: a["idempotencyKey"].string ?? UUID().uuidString, summary: "Updated \(stream.label) in \(asset.name)", operations: [op]))
+            let updated = try olderEdit(a, base: try baseRevision(a), sequenceID: a["sequenceID"].string, summary: "Updated \(stream.label) in \(asset.name)", [op])
             return ToolResponse(.object(["editRevision": .number(Double(updated.editRevision)), "trackID": .number(Double(trackID)), "settings": try .wrapping(settings)]))
         case "direction_add_comment":
             let p = try store.read(revision: a["revision"].int)
@@ -84,20 +83,20 @@ public actor ToolRuntime {
             let time = range == nil ? try optionalTime(a["time"]) : nil
             let region: FrameRegion? = a["region"] == .null ? nil : try a["region"].decode(FrameRegion.self)
             let c = try store.addComment(text: a.requiredString("text"), author: a["author"].string ?? "Director", sequenceID: a["sequenceID"].string, revision: p.editRevision, cutID: a["cutID"].string, range: range, time: time, region: region)
-            return ToolResponse(try .wrapping(c))
+            return ToolResponse(try c.forEditor())
         case "direction_feedback":
             // Drafts, dropped notes and outside notes the director hasn't accepted stay private.
             let comments = try store.comments(since: Int64(a["since"].int ?? 0))
-            return ToolResponse(.object(["comments": try .wrapping(comments.filter(\.visibleToEditor)), "nextCursor": .number(Double(comments.last?.cursor ?? Int64(a["since"].int ?? 0))), "hasMore": .bool(comments.count == 500)]))
+            return ToolResponse(.object(["comments": .array(try comments.filter(\.visibleToEditor).map { try $0.forEditor() }), "nextCursor": .number(Double(comments.last?.cursor ?? Int64(a["since"].int ?? 0))), "hasMore": .bool(comments.count == 500)]))
         case "direction_feedback_context":
             return try await feedbackContext(id: a.requiredString("commentID"), includeMedia: a["includeMedia"].bool ?? true, includeAudio: a["includeAudio"].bool ?? true)
         case "direction_feedback_reply":
             let updated = try store.reply(commentID: a.requiredString("commentID"), text: a.requiredString("text"), author: a["author"].string ?? "Agent", revision: a["revision"].int, status: a["status"].string)
-            return ToolResponse(try .wrapping(updated))
+            return ToolResponse(try updated.forEditor())
         case "direction_create_cut":
             return ToolResponse(try .wrapping(store.createCut(name: a.requiredString("name"), sequenceID: a["sequenceID"].string, revision: a["revision"].int)))
         case "direction_cuts": return ToolResponse(try .wrapping(store.cuts()))
-        case "direction_restore": return ToolResponse(try .wrapping(store.restore(revision: try requiredInt(a, "revision"), expectedRevision: try baseRevision(a), key: a["idempotencyKey"].string ?? UUID().uuidString)))
+        case "direction_restore": return ToolResponse(try .wrapping(store.restore(revision: try requiredInt(a, "revision"), expectedRevision: try baseRevision(a), key: a["idempotencyKey"].string ?? UUID().uuidString, keepingLocks: true)))
         case "direction_transcript":
             let offset = max(0, a["offset"].int ?? 0), limit = min(5_000, max(1, a["limit"].int ?? 1_000))
             if let assetID = a["assetID"].string {
@@ -126,7 +125,7 @@ public actor ToolRuntime {
             if ids.isEmpty { return ToolResponse(.object(["editRevision": .number(Double(p.editRevision)), "removedWords": .number(0)])) }
             let ranges = try TranscriptEditing.deletionRanges(wordIDs: ids, words: words)
             let ops = ranges.map { r in var op = EditOperation("removeRange"); op.range = r; op.ripple = true; return op }
-            let result = try store.apply(.init(baseEditRevision: p.editRevision, sequenceID: sequence.id, idempotencyKey: a["idempotencyKey"].string ?? UUID().uuidString, summary: "Removed \(ids.count) transcript words and their footage", operations: ops))
+            let result = try olderEdit(a, base: p.editRevision, sequenceID: sequence.id, summary: "Removed \(ids.count) transcript words and their footage", ops)
             return ToolResponse(.object(["editRevision": .number(Double(result.editRevision)), "removedWords": .number(Double(ids.count)), "removedRanges": try .wrapping(ranges)]))
         case "direction_transcribe":
             let p = try store.read(), asset = try p.asset(a.requiredString("assetID"))
@@ -157,7 +156,13 @@ public actor ToolRuntime {
             }
             return ToolResponse(try .wrapping(job))
         case "direction_measure_audio":
-            let p = try store.read(), asset = try p.asset(a.requiredString("assetID"))
+            guard let assetID = a["assetID"].string else {
+                // No take: the cut's mix, as it plays and delivers.
+                let p = try store.read(revision: a["revision"].int), range = a["start"] == .null && a["end"] == .null ? nil : try secondsRange(a)
+                let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory)
+                return ToolResponse(try await SequenceRenderer.loudness(compiled, range: range))
+            }
+            let p = try store.read(), asset = try p.asset(assetID)
             guard let track = a["trackID"].int.flatMap(Int32.init(exactly:)) ?? asset.audio.first?.id else { throw DirectionError("no_audio", "The source has no audio.") }
             return ToolResponse(try await AudioProcessor.measure(asset: asset, trackID: track, directory: cacheDirectory.appendingPathComponent("Audio")))
         case "direction_frame":
@@ -221,12 +226,16 @@ public actor ToolRuntime {
     public func cancelAll() { for task in tasks.values { task.cancel() } }
 
     func startJob(kind: String, revision: Int, phase: String, assetID: String? = nil, operation: @escaping @Sendable () async throws -> JSONValue) throws -> JobRecord {
+        try startJob(kind: kind, revision: revision, phase: phase, assetID: assetID, progress: nil) { _ in try await operation() }
+    }
+    /// `operation` gets the job's record, to report its phase and progress on.
+    func startJob(kind: String, revision: Int, phase: String, assetID: String? = nil, progress: Double?, operation: @escaping @Sendable (JobRecord) async throws -> JSONValue) throws -> JobRecord {
         let now = Date().timeIntervalSince1970
-        let job = JobRecord(id: newID("job"), kind: kind, revision: revision, ownerPID: getpid(), status: "running", phase: phase, progress: nil, result: nil, error: nil, createdAt: now, updatedAt: now, assetID: assetID)
+        let job = JobRecord(id: newID("job"), kind: kind, revision: revision, ownerPID: getpid(), status: "running", phase: phase, progress: progress, result: nil, error: nil, createdAt: now, updatedAt: now, assetID: assetID)
         try store.saveJob(job)
         tasks[job.id] = Task { [store] in
             var completed = job
-            do { completed.result = try await operation(); try Task.checkCancellation(); completed.status = "completed"; completed.phase = "Completed"; completed.progress = 1 }
+            do { completed.result = try await operation(job); try Task.checkCancellation(); completed.status = "completed"; completed.phase = "Completed"; completed.progress = 1 }
             catch { completed.status = Task.isCancelled || error is CancellationError ? "cancelled" : "failed"; completed.error = error.localizedDescription; completed.phase = completed.status == "cancelled" ? "Cancelled" : "Failed" }
             if completed.status == "failed" { DirectionLog.error("The \(kind) job failed\(assetID.map { " on \($0)" } ?? ""): \(completed.error ?? "")", "jobs") }
             completed.updatedAt = Date().timeIntervalSince1970
@@ -244,7 +253,7 @@ public actor ToolRuntime {
             .object(["source": try .wrapping(anchor), "currentProjection": try currentSequence.map { try JSONValue.wrapping(ReviewAnchoring.project(anchor, onto: $0)) } ?? .null])
         }
         let assetIDs = Set(comment.anchors.compactMap(\.assetID))
-        var value: [String: JSONValue] = ["comment": try .wrapping(comment), "originalSequence": try .wrapping(originalSequence), "sourceAssets": try .wrapping(original.assets.filter { assetIDs.contains($0.id) }), "anchors": .array(anchors), "currentEditRevision": .number(Double(current.editRevision)), "coordinateSpace": .string("region: normalized rendered output frame, origin top-left; pinned to original editRevision"), "transcriptContext": try .wrapping(comment.transcriptContext)]
+        var value: [String: JSONValue] = ["comment": try comment.forEditor(), "originalSequence": try .wrapping(originalSequence), "sourceAssets": try .wrapping(original.assets.filter { assetIDs.contains($0.id) }), "anchors": .array(anchors), "currentEditRevision": .number(Double(current.editRevision)), "coordinateSpace": .string("region: normalized rendered output frame, origin top-left; pinned to original editRevision"), "transcript": .string(comment.transcriptContext.map(\.text).joined(separator: " "))]
         var frames: [JSONValue] = [], imagePaths: [String] = [], audioPaths: [String] = []
         if includeMedia && originalSequence.duration > .zero {
             let compiled = try await SequenceRenderer.compile(project: original, sequenceID: comment.sequenceID, cacheDirectory: cacheDirectory, previewMaxDimension: 1280, looks: try? store.lookContext())
@@ -268,8 +277,29 @@ public actor ToolRuntime {
         return ToolResponse(.object(value), imagePaths: imagePaths, audioPaths: audioPaths)
     }
 
+    /// The tools from before edit functions go in as direction_edit's batches do, checked against the locks
+    /// and the notes, with notes saying which ones they answer. A stale revision is still revision_conflict
+    /// for them (agent-contract.md).
+    private func olderEdit(_ a: JSONValue, base: Int, sequenceID: String?, summary: String, _ operations: [EditOperation]) throws -> EditResult {
+        if case .array(let notes) = a["notes"] { guard notes.allSatisfy({ $0.int != nil }) else { throw DirectionError("invalid_arguments", "notes lists note numbers, like [1, 4].") } }
+        do { return try store.edit(EditBatch(baseEditRevision: base, sequenceID: sequenceID, idempotencyKey: a["idempotencyKey"].string ?? UUID().uuidString, summary: summary, notes: a["notes"].array?.compactMap(\.int), operations: operations)) }
+        catch let e as DirectionError where e.code == "stale_revision" { throw DirectionError("revision_conflict", e.message) }
+    }
+
     private func baseRevision(_ a: JSONValue) throws -> Int { try requiredInt(a, "baseEditRevision") }
     private func requiredInt(_ a: JSONValue, _ key: String) throws -> Int { guard let n = a[key].double, n.isFinite, n.rounded() == n, let v = a[key].int, v >= 0 else { throw DirectionError("invalid_arguments", "\(key) must be a nonnegative integer.") }; return v }
     private func optionalTime(_ value: JSONValue) throws -> MediaTime? { guard value != .null else { return nil }; guard let v = value.double, v.isFinite && v >= 0 else { throw DirectionError("invalid_time", "Time must be a nonnegative number of seconds.") }; return .init(seconds: v) }
     private func secondsRange(_ a: JSONValue) throws -> MediaRange { guard let start = a["start"].double, let end = a["end"].double, start.isFinite && end.isFinite && start >= 0 && end > start else { throw DirectionError("invalid_range", "Provide start/end seconds, with 0 ≤ start < end.") }; return .init(start: start, end: end) }
+}
+
+extension ReviewComment {
+    /// A note as the editor reads it: the words said there as a short excerpt with their count, in place of
+    /// every captured word and its timing, so a note on the whole cut stays small. Word cuts take their ids
+    /// from direction_transcript.
+    func forEditor() throws -> JSONValue {
+        var plain = self; plain.transcriptContext = []
+        guard case .object(var fields) = try JSONValue.wrapping(plain) else { return .null }
+        fields["transcriptContext"] = .object(["excerpt": .string(transcriptExcerpt()), "wordCount": .number(Double(transcriptContext.count))])
+        return .object(fields)
+    }
 }

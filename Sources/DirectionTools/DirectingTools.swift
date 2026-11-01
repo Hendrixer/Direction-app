@@ -92,7 +92,7 @@ extension ToolRuntime {
                 }
                 return .object([
                     "turnover": try .wrapping(t),
-                    "notes": try .wrapping(included),
+                    "notes": .array(try included.map { try $0.forEditor() }),
                     "libraryNamed": .array(named),
                     "questions": try .wrapping(questions.filter { $0.turnoverID == t.id }),
                     "latitudeMeaning": .string(t.latitude.detail),
@@ -151,7 +151,8 @@ extension ToolRuntime {
                 }
                 state = try store.updateFinishing(items)
             }
-            return ToolResponse(.object(["pictureLocked": .bool(state.pictureLocked), "items": try .wrapping(state.finishing ?? [])]))
+            return ToolResponse(.object(["pictureLocked": .bool(state.pictureLocked), "items": try .wrapping(state.finishing ?? []),
+                                         "credits": state.credits.map(JSONValue.string) ?? .null, "licenses": try .wrapping(state.licenses ?? [])]))
 
         case "direction_add_outside_note":
             let p = try store.read(revision: a["revision"].int)
@@ -159,7 +160,7 @@ extension ToolRuntime {
             let time = range == nil ? a["time"].double.map { MediaTime(seconds: $0) } : nil
             let person = Person(name: try a.requiredString("name"), role: a["role"].string)
             let c = try store.addComment(text: a.requiredString("text"), author: person.name, sequenceID: nil, revision: p.editRevision, cutID: a["cutID"].string, range: range, time: time, extra: NoteFields(authorRole: "outside", person: person, sceneID: a["sceneID"].string, assignNumber: false))
-            return ToolResponse(try .wrapping(c))
+            return ToolResponse(try c.forEditor())
 
         case "direction_editor_status":
             try store.setEditorStatus(phase: a.requiredString("phase"), detail: a["detail"].string, progress: a["progress"].double, agent: a["agent"].string)

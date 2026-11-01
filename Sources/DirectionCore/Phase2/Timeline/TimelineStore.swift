@@ -15,14 +15,34 @@ extension ProjectStore {
         let notes = try Data.fetchAll(db, sql: "SELECT payload FROM comments").compactMap { try? JSONDecoder().decode(ReviewComment.self, from: $0) }
         return EditContext(transcripts: transcripts, dailies: try Self.value(db, DirectingKey.dailies, as: Dailies.self) ?? Dailies(), state: try Self.value(db, DirectingKey.state, as: DirectingState.self) ?? DirectingState(), turnoverLatitude: turnovers.last { $0.state.isOpen && $0.kind == "notes" }?.latitude, noteNumbers: Set(notes.filter(\.visibleToEditor).compactMap(\.number)), filmURL: url)
     }
+    /// The same, for measuring a batch's operations on the cut as the ones before them leave it.
+    public func editContext() throws -> EditContext { try database.read { db in try editContext(db) } }
+
+    /// A batch as its idempotency key records it. Direction's own measurements aren't part of the request,
+    /// so a retry matches even if they're re-measured.
+    static func request(_ batch: EditBatch) throws -> Data {
+        var plain = batch; plain.operations = batch.operations.map { var o = $0; o.resolved = nil; return o }
+        return try JSONEncoder.direction.encode(plain)
+    }
+
+    /// What a batch committed under its key did, so a retry gets it back even once the cut has moved on;
+    /// nil when the key is new. The same key with another request is refused.
+    public func recordedEdit(_ batch: EditBatch) throws -> EditResult? {
+        let request = try Self.request(batch)
+        return try database.read { db in
+            guard let row = try Row.fetchOne(db, sql: "SELECT request, revision FROM idempotency WHERE key = ?", arguments: [batch.idempotencyKey]) else { return nil }
+            let prior: Data = row["request"], revision: Int = row["revision"]
+            guard prior == request, try db.tableExists("edit_changes"), let data = try Data.fetchOne(db, sql: "SELECT payload FROM edit_changes WHERE revision = ?", arguments: [revision]) else { throw DirectionError("idempotency_conflict", "This idempotency key was used with a different request.") }
+            return try JSONDecoder().decode(EditResult.self, from: data)
+        }
+    }
 
     /// Checks every operation and either returns the predicted result (validateOnly) or commits the batch
-    /// as one revision. Errors carry the index of the operation that failed.
-    public func edit(_ batch: EditBatch, validateOnly: Bool = false) throws -> EditResult {
+    /// as one revision. Errors carry the index of the operation that failed. `asked` is the batch as the
+    /// editor sent it, before Direction filled in what it measures and the style's numbers; its key records that.
+    public func edit(_ batch: EditBatch, validateOnly: Bool = false, asked: EditBatch? = nil) throws -> EditResult {
         guard !batch.idempotencyKey.isEmpty && batch.idempotencyKey.count <= 256 else { throw DirectionError("bad_argument", "Provide an idempotency key of 1–256 characters.") }
-        // Direction's own measurements aren't part of the request, so a retry matches even if they're re-measured.
-        var plain = batch; plain.operations = batch.operations.map { var o = $0; o.resolved = nil; return o }
-        let request = try JSONEncoder.direction.encode(plain)
+        let request = try Self.request(asked ?? batch)
         func current(_ db: Database) throws -> Project {
             guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM state WHERE id = 1") else { throw DirectionError("corrupt_project", "Missing project state.") }
             return try JSONDecoder().decode(Project.self, from: data)

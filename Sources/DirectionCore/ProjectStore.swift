@@ -127,10 +127,28 @@ public final class ProjectStore: Sendable {
         }
     }
 
+    /// `keepingLocks` is the editor's restore: it can't undo a locked scene or anything under picture lock,
+    /// checked as direction_edit checks them (TimelineLocks), so color and sound stay open.
     @discardableResult
-    public func restore(revision: Int, expectedRevision: Int, key: String) throws -> Project {
+    public func restore(revision: Int, expectedRevision: Int, key: String, keepingLocks: Bool = false) throws -> Project {
         let prior = try read(revision: revision)
-        return try update(expectedRevision: expectedRevision, key: key, request: Data("restore:\(revision)".utf8), summary: "Restored revision \(revision)") { p in let current = p.editRevision; p = prior; p.editRevision = current }
+        return try database.write { db in
+            let context = keepingLocks ? try editContext(db) : nil
+            return try Self.commit(db, expectedRevision: expectedRevision, key: key, request: Data("restore:\(revision)".utf8), summary: "Restored revision \(revision)") { p in
+                let before = p, current = p.editRevision
+                p = prior; p.editRevision = current
+                if let context { try Self.checkLocks(before: before, after: p, context: context) }
+            }
+        }
+    }
+
+    /// The locks between the cut as it stands and a whole project coming back, sequence by sequence. A
+    /// sequence it doesn't have counts as emptied.
+    static func checkLocks(before: Project, after: Project, context: EditContext) throws {
+        var aligned = after
+        aligned.sequences = before.sequences.map { b in after.sequences.first { $0.id == b.id } ?? { var gone = b; gone.clips = []; gone.tracks = nil; return gone }() }
+        for si in before.sequences.indices { try TimelineLocks.check(before: before, after: aligned, si: si, context: context) }
+        if context.state.pictureLocked && after.sequences.count != before.sequences.count { throw DirectionError("picture_locked", "Picture is locked. Finishing changes color and sound, not timing.") }
     }
 
     public func createCut(name: String, sequenceID: String?, revision: Int?) throws -> ReviewCut {

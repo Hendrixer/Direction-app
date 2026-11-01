@@ -82,15 +82,31 @@ extension ToolRuntime {
         }
         if case .array(let notes) = b["notes"] { guard notes.allSatisfy({ $0.int != nil }) else { throw DirectionError("bad_argument", "notes lists note numbers, like [1, 4].") } }
         var batch = EditBatch(baseEditRevision: base, sequenceID: b["sequenceID"].string, idempotencyKey: b["idempotencyKey"].string ?? UUID().uuidString, summary: b["summary"].string ?? "Edited the cut", notes: b["notes"].array?.compactMap(\.int), operations: ops)
+        // A retry of a batch that went in gets back what it did, even once the cut has moved on.
+        let asked = batch
+        if !validateOnly, let done = try store.recordedEdit(asked) { return ToolResponse(try .wrapping(done)) }
         let p = try store.read()
         guard p.editRevision == base else { throw DirectionError("stale_revision", "This batch is based on revision \(base); the cut is now at \(p.editRevision). Read direction_timeline again and replan.") }
-        let s = try p.sequence(batch.sequenceID)
+        // Each operation is measured on the cut as the ones before it leave it (a swapped take, a removed
+        // range), worked out here as the store will, and only when a measured one follows others; the
+        // batch still commits as one.
+        _ = try p.sequence(batch.sequenceID)
+        var cut = p, through = 0, context: EditContext?
         for i in batch.operations.indices {
-            do { try await resolve(&batch.operations[i], p, s) }
+            if i > through, Self.measured.contains(batch.operations[i].type) {
+                if context == nil { context = try store.editContext() }
+                do { cut = try EditReducer.run(EditBatch(baseEditRevision: base, sequenceID: batch.sequenceID, notes: batch.notes, operations: Array(batch.operations[through..<i])), on: cut, context: context).project }
+                catch let e as DirectionError { throw DirectionError(e.code, e.message, index: through + (e.index ?? 0)) }
+                through = i
+            }
+            do { try await resolve(&batch.operations[i], cut, try cut.sequence(batch.sequenceID)) }
             catch let e as DirectionError { throw DirectionError(e.code, e.message, index: i) }
         }
-        return ToolResponse(try .wrapping(store.edit(batch, validateOnly: validateOnly)))
+        return ToolResponse(try .wrapping(store.edit(batch, validateOnly: validateOnly, asked: asked)))
     }
+
+    /// The operations `resolve` measures the cut for.
+    static let measured: Set<String> = ["technique", "reframe", "matchBalance", "addEffect", "setEffect", "transition", "pin", "zoomThrough", "tightenPauses", "layout", "autoZoom", "zoomTo", "punchIn", "emphasisPunch", "slowPush"]
 
     private func resolve(_ op: inout EditOperation, _ p: Project, _ s: DirectionCore.Sequence) async throws {
         func clip(_ id: String?) -> Clip? { id.flatMap { id in s.clips.first { $0.id == id } } }

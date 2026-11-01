@@ -69,6 +69,11 @@ public struct EditorRun: Codable, Hashable, Sendable, Identifiable {
     public var needsYou: [String] = []
     /// Invocations so far: the first start, then each resume, continue or try again.
     public var invocations = 0
+    /// When the last invocation first asked the director something (posted a read-back, asked a question), or
+    /// began when it asked nothing new: what the director did since is news to the editor.
+    public var askedAt: Double?
+    /// The last invocation waited on the director's OK to a read-back.
+    public var askedForOK: Bool?
     /// A logging run's batch: the takes it logs (footage-index.md › Logging in batches). Older runs logged everything.
     public var assetIDs: [String]?
     /// A style run: what the director asked for, in their words, and whether to learn from this film's cut.

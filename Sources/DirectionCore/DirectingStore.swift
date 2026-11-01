@@ -302,13 +302,13 @@ extension ProjectStore {
         }
     }
     /// The revision a cut plays and delivers: its own, or once picture is locked on it, the newest one whose
-    /// picture is still the cut's, so the color and sound finished after the lock come with it.
+    /// picture is still the cut's, so the color, sound and graphics finished after the lock come with it.
     public func playedRevision(of cut: ReviewCut) throws -> Int {
         let state = try directingState()
         guard state.pictureLocked, state.pictureLockedCutID == cut.id else { return cut.editRevision }
         let head = try read()
-        guard head.editRevision > cut.editRevision, let now = try? head.sequence(cut.sequenceID),
-              let then = try? read(revision: cut.editRevision).sequence(cut.sequenceID), TimelineLocks.samePicture(then, now) else { return cut.editRevision }
+        guard head.editRevision > cut.editRevision, let now = try? head.sequence(cut.sequenceID), let locked = try? read(revision: cut.editRevision),
+              let then = try? locked.sequence(cut.sequenceID), TimelineLocks.samePicture(then, now, graphics: TimelineLocks.graphics(locked).union(TimelineLocks.graphics(head))) else { return cut.editRevision }
         return head.editRevision
     }
     public func updateFinishing(_ items: [FinishingItem]) throws -> DirectingState {
@@ -317,6 +317,31 @@ extension ProjectStore {
             for item in items { if let i = current.firstIndex(where: { $0.id == item.id }) { current[i] = item } else { current.append(item) } }
             s.finishing = current
         }
+    }
+
+    /// The director's credits (finish.md › 36, Write credits), kept in the film for the finish job to roll
+    /// at the end. The titles item is the director's, and it's done.
+    @discardableResult
+    public func saveCredits(_ text: String) throws -> DirectingState {
+        let credits = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !credits.isEmpty, credits.count <= 2_000 else { throw DirectionError("invalid_credits", "Write the credits in 1 to 2,000 characters.") }
+        return try updateDirectingState(summary: "Wrote the credits") { $0.write(credits: credits) }
+    }
+
+    /// Copies a license into the film's Licenses folder under a name of its own, never over another
+    /// file, and records it. The licenses item is done once one is on file.
+    @discardableResult
+    public func addLicense(from source: URL) throws -> LicenseFile {
+        let fm = FileManager.default, folder = url.appendingPathComponent("Licenses", isDirectory: true)
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        let base = source.deletingPathExtension().lastPathComponent, ext = source.pathExtension.isEmpty ? "" : "." + source.pathExtension
+        var target = folder.appendingPathComponent(source.lastPathComponent), n = 2
+        while fm.fileExists(atPath: target.path) { target = folder.appendingPathComponent("\(base) \(n)\(ext)"); n += 1 }
+        try fm.copyItem(at: source, to: target)
+        let file = LicenseFile(path: "Licenses/" + target.lastPathComponent, original: source.lastPathComponent, addedAt: Date().timeIntervalSince1970)
+        do { _ = try updateDirectingState(summary: "Added the license \(source.lastPathComponent)") { $0.add(license: file) } }
+        catch { try? fm.removeItem(at: target); throw error }
+        return file
     }
 
     // MARK: Notes
@@ -670,11 +695,12 @@ extension ProjectStore {
 }
 
 /// A lock keeps the cut: the editor can't recut a locked scene, and nothing can move a frame after picture
-/// lock. Color and sound stay open under both.
+/// lock. Color and sound stay open under both, and after picture lock so do the graphics over the picture.
 enum LockRules {
     static func check(before: Project, after: Project, dailies: Dailies, state: DirectingState) throws {
         let lockedAssets = dailies.lockedAssetIDs
         guard state.pictureLocked || !lockedAssets.isEmpty else { return }
+        let graphics = TimelineLocks.graphics(before).union(TimelineLocks.graphics(after))
         for old in before.sequences {
             guard let new = after.sequences.first(where: { $0.id == old.id }) else {
                 if state.pictureLocked { throw DirectionError("picture_locked", "Picture is locked. Unlock it from the Film menu to change the edit.") }
@@ -683,8 +709,9 @@ enum LockRules {
             let newClips = Dictionary(new.clips.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             if state.pictureLocked {
                 let timing = { (c: Clip) in "\(c.assetID ?? "")|\(c.start.seconds)|\(c.sourceRange.start.seconds)|\(c.sourceRange.duration.seconds)|\(c.speed)|\(c.layer)" }
-                guard old.clips.count == new.clips.count, old.clips.allSatisfy({ c in newClips[c.id].map { timing($0) == timing(c) } ?? false }) else {
-                    throw DirectionError("picture_locked", "Picture is locked. Finishing can change color and sound, not timing.")
+                let was = old.clips.filter { !TimelineLocks.isGraphic($0, graphics) }, now = new.clips.filter { !TimelineLocks.isGraphic($0, graphics) }
+                guard was.count == now.count, was.allSatisfy({ c in newClips[c.id].map { timing($0) == timing(c) } ?? false }) else {
+                    throw DirectionError("picture_locked", "Picture is locked. Finishing can change color, sound and the graphics over the picture, not timing.")
                 }
             }
             for c in old.clips where c.assetID.map(lockedAssets.contains) ?? false {

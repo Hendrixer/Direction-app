@@ -62,6 +62,61 @@ struct FilmModelTests {
         first.close()
     }
 
+    /// Closing a film stops its delivery, so opening another one, or Films, asks first: Keep Delivering
+    /// leaves everything as it was, Stop and Open opens the other film.
+    @Test func openingAnotherFilmDuringADeliveryAsksFirst() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-switch-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        if ProcessInfo.processInfo.environment["DIRECTION_LIBRARY_PATH"] == nil { setenv("DIRECTION_LIBRARY_PATH", dir.appendingPathComponent("library.sqlite").path, 1) }
+        let a = dir.appendingPathComponent("Launch.direction"), b = dir.appendingPathComponent("Teaser.direction")
+        _ = try ProjectStore.create(at: a, name: "Launch"); _ = try ProjectStore.create(at: b, name: "Teaser")
+        let app = AppModel()
+        app.open(a)
+        let first = try #require(app.film)
+        let now = Date().timeIntervalSince1970
+        try first.store?.saveJob(JobRecord(id: "job-delivery", kind: "export", revision: 0, ownerPID: getpid(), status: "running", phase: "Exporting", progress: 0.3, result: nil, error: nil, createdAt: now, updatedAt: now))
+        first.refresh(force: true)
+        var asked: [String?] = []
+        app.askToStopDelivering = { _, opening in asked.append(opening); return false }
+        app.open(b)
+        #expect(app.film === first)
+        #expect(!app.closeFilm() && app.film === first)
+        #expect(asked == ["\u{201C}Teaser\u{201D}", nil])
+        app.askToStopDelivering = { _, _ in true }
+        app.open(b)
+        #expect(app.film !== first && app.film?.url?.lastPathComponent == "Teaser.direction")
+        app.film?.close()
+    }
+
+    /// The last film's delivery stopped when it closed; its job must not keep the next film's
+    /// "is delivered" from being said.
+    @Test func aDeliveryStoppedWithTheLastFilmDoesNotSilenceTheNext() {
+        func export(_ id: String, _ status: String, path: String? = nil) -> JobRecord {
+            JobRecord(id: id, kind: "export", revision: 0, ownerPID: getpid(), status: status, phase: "", progress: nil, result: path.map { .object(["path": .string($0)]) }, error: nil, createdAt: 0, updatedAt: 0)
+        }
+        let last = FilmModel(preview: true), next = FilmModel(preview: true)
+        last.jobs = [export("job-last", "running")]
+        DeliveryWatch.check(last)
+        var told: [String] = []
+        next.onNotify = { title, _, _ in told.append(title) }
+        next.jobs = [export("job-next", "running")]
+        DeliveryWatch.check(next)
+        next.jobs = [export("job-next", "completed", path: "/tmp/direction-none/Film.mp4")]
+        DeliveryWatch.check(next)
+        #expect(told == ["Film is delivered"])
+    }
+
+    @Test func closingAFilmTakesItsUndoStepsWithIt() {
+        let m = FilmModel(preview: true), undo = UndoManager()
+        undo.groupsByEvent = false
+        m.undoManager = undo
+        undo.beginUndoGrouping(); m.registerUndo("Circle Take") { _ in }; undo.endUndoGrouping()
+        #expect(undo.canUndo)
+        m.close()
+        #expect(!undo.canUndo)
+    }
+
     @Test func changingRoomsStopsTheCutWhereItIs() {
         let m = SampleFilm.make(room: .screening)
         m.playing = true

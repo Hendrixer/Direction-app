@@ -91,21 +91,26 @@ extension MadeCatalog {
             if needs.kind.listing == .video, !v.changesVideo, let s = needs.seconds, let longest = v.durations.max(), Double(longest) < s - 0.5 { return false }
             return true
         }
-        func price(_ v: MadeVersion) -> Double {
-            MadeEstimator.estimate(needs.kind, version: v, seconds: needs.seconds ?? 5, sound: needs.sound, fromImage: needs.firstFrame || needs.lastFrame).spend
+        func estimate(_ v: MadeVersion) -> MadeEstimate {
+            MadeEstimator.estimate(needs.kind, version: v, seconds: needs.seconds ?? 5, sound: needs.sound, fromImage: needs.firstFrame || needs.lastFrame)
         }
+        func price(_ v: MadeVersion) -> Double { estimate(v).spend }
         let rated = fits.sorted { (MadeRanking.rating($0), -price($0)) > (MadeRanking.rating($1), -price($1)) }
         guard let top = rated.first else { return [] }
+        let ordered: [MadeVersion]
         switch quality {
         case .best:
-            return rated
+            ordered = rated
         case .balanced:
             let close = rated.filter { MadeRanking.rating($0) >= MadeRanking.rating(top) - MadeRanking.closeToBest }.sorted { price($0) < price($1) }
-            return close + rated.filter { !close.contains($0) }
+            ordered = close + rated.filter { !close.contains($0) }
         case .cheapest:
             let good = rated.filter { MadeRanking.rating($0) >= MadeRanking.goodEnough }.sorted { price($0) < price($1) }
-            return good + rated.filter { !good.contains($0) }
+            ordered = good + rated.filter { !good.contains($0) }
         }
+        // A version with no listed price would look free; it comes after every priced one.
+        let priced = ordered.filter { estimate($0).priced }
+        return priced + ordered.filter { !priced.contains($0) }
     }
 }
 

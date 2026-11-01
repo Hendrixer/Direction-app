@@ -65,14 +65,18 @@ public struct MediaAsset: Codable, Hashable, Sendable, Identifiable {
 
     /// Footage: what the director brought in, which Direction looks at, listens to, syncs and logs as
     /// takes. Not a graphic's render, and not a file the editor wrote into the film's folder or took
-    /// from a style (a delivery's mixed sound, a whoosh). Made clips are footage.
+    /// from a style (a delivery's mixed sound, a whoosh). Made clips and copied takes are footage.
     public func isFootage(film: URL, styles: URL = SharedSettings.stylesFolder) -> Bool {
         guard graphic == nil else { return false }
         let path = URL(fileURLWithPath: self.path).standardizedFileURL.path
         let inside = { (folder: URL) in path.hasPrefix(folder.standardizedFileURL.path + "/") }
-        if madeID != nil || inside(film.appendingPathComponent("Made")) { return true }
+        if madeID != nil || inside(film.appendingPathComponent("Made")) || inside(Self.copies(in: film)) { return true }
         return !inside(film) && !inside(styles)
     }
+
+    /// Where Settings › Storage › Copy into library puts footage: the film's own Footage folder, so the
+    /// copies move with the film and go to the Trash with it.
+    public static func copies(in film: URL) -> URL { film.appendingPathComponent("Footage", isDirectory: true) }
 }
 
 extension Project {

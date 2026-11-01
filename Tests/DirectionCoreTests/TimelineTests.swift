@@ -404,6 +404,33 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     #expect(r.operations.count == 3)
 }
 
+@Test func pictureLockLeavesTheGraphicsOverThePictureOpen() throws {
+    var cut = TimelineCut.make()
+    var captions = MediaAsset(id: "g", name: "captions-1.mov", path: "/captions-1.mov", duration: .init(seconds: 9), video: [.init(id: 1, width: 1920, height: 1080, frameRate: 30)]); captions.graphic = "captions-1"
+    cut.project.assets.append(captions)
+    cut.context.state.pictureLocked = true
+    let locked = cut.project.sequences[0]
+    // Captions go on over the picture, move and come off; a title can follow the last shot, on black.
+    let placed = try cut.apply(#"{"op":"placeGraphic","graphic":"captions-1","at":1,"seconds":3}"#)
+    let id = try #require(placed.operations[0].clipIDs?.first)
+    _ = try cut.apply(#"{"op":"move","clipID":"\#(id)","to":{"at":5}}"#, #"{"op":"title","text":"Thanks for watching","at":13}"#)
+    #expect(clip(cut.project, id).start == MediaTime(seconds: 5) && clip(cut.project, id).trackName == "V2" && cut.project.sequences[0].duration == MediaTime(seconds: 16))
+    _ = try cut.apply(#"{"op":"remove","clipID":"\#(id)","ripple":true}"#)
+    #expect(cut.project.sequences[0].clips.filter { $0.kind != .title } == locked.clips)
+    // Everything else stays as it was locked.
+    expectFailure("picture_locked", index: 0) { _ = try cut.run([#"{"op":"trim","clipID":"c1","edge":"tail","frames":-3}"#]) }
+    expectFailure("picture_locked", index: 0) { _ = try cut.run([#"{"op":"cutaway","assetID":"d","sourceRange":{"start":1,"end":3},"at":10}"#]) }
+    expectFailure("picture_locked", index: 0) { _ = try cut.run([#"{"op":"title","text":"In the story","at":2,"layer":0}"#]) }
+    expectFailure("picture_locked", index: 1) { _ = try cut.run([#"{"op":"placeGraphic","graphic":"captions-1","at":1,"seconds":3}"#, #"{"op":"addEffect","target":"c2","effect":"blur","params":{"radius":3}}"#]) }
+    let again = try cut.apply(#"{"op":"placeGraphic","graphic":"captions-1","at":1,"seconds":3}"#)
+    expectFailure("picture_locked", index: 0) { _ = try cut.run([#"{"op":"move","clipID":"\#(again.operations[0].clipIDs![0])","to":{"at":16,"track":"V1"}}"#]) }
+    // Picture lock locks every scene, so captions go over one locked before it; before picture lock they don't.
+    cut.context.dailies.scenes[1].locked = true
+    _ = try cut.run([#"{"op":"placeGraphic","graphic":"captions-1","at":10,"seconds":2}"#])
+    cut.context.state.pictureLocked = false
+    expectFailure("scene_locked", index: 0) { _ = try cut.run([#"{"op":"placeGraphic","graphic":"captions-1","at":10,"seconds":2}"#]) }
+}
+
 // MARK: The store
 
 @Test func editsCommitAsOneRevisionAndKeepTheirNotes() throws {

@@ -59,7 +59,7 @@ Rules for the words:
 ## 5. Make it, priced
 
 - Write every step as `direction_make` arguments and send them together to `direction_estimate` with the turnover. Under the limit, make them and say so in the read-back ("Note 3: an establishing shot of the street at night, two ways, about $1.20."). Over it, ask **one** spend question for the plan with a no-spend choice first, and pass its id as `spendQuestionID` on every step.
-- **You don't choose versions.** Direction picks one for each request from what it needs and the director's Made with setting, and skips versions that won't take a frame with a person in it. If one turns a request down, Direction uses the next and the job's `note` says so; put that in your answer. The estimate shows what will be used.
+- **You don't choose versions.** Direction picks one for each request from what it needs and the director's Made with setting, and skips versions that won't take a frame with a person in it. If one turns a request down, Direction uses the next and the job's `note` says so; put that in your answer. If the next one would pass a limit, the job's result is `spend_over_limit` or `spend_cap` instead: ask as it says. The estimate shows what will be used. A version OpenRouter lists no price for always needs the director's yes, so `needsQuestion` is true for a plan that uses one.
 - Silent unless the shot needs its own sound and the footage can't give it (`sound: true`).
 
 ## 6. Judge every frame before placing

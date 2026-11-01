@@ -69,12 +69,14 @@ enum ClipRendering {
         var dip: (amount: Double, white: Bool)?
         if let tin = c.transition {
             let cut = c.start.seconds
-            if tin.type == "dissolve" { let span = tin.before + tin.after; if span > 0 && t < cut + tin.after { alpha *= min(1, max(0, (t - (cut - tin.before)) / span)) } }
+            if let p = dissolved(tin, cut: cut, t: t) { alpha *= p }
             else if tin.isDip && tin.after > 0 && t >= cut - 1e-9 && t < cut + tin.after { dip = (1 - (t - cut) / tin.after, tin.type == "dipToWhite") }
         }
-        if let tout = l.outgoing, tout.isDip, tout.before > 0 {
+        if let tout = l.outgoing {
             let cut = c.end.seconds
-            if t >= cut - tout.before && t < cut { dip = ((t - (cut - tout.before)) / tout.before, tout.type == "dipToWhite") }
+            // The outgoing shot fades as the incoming one comes up, so it fades where the incoming has no picture too.
+            if let p = dissolved(tout, cut: cut, t: t) { alpha *= 1 - p }
+            else if tout.isDip, tout.before > 0, t >= cut - tout.before && t < cut { dip = ((t - (cut - tout.before)) / tout.before, tout.type == "dipToWhite") }
         }
         if alpha < 1 { image = opacity(image, max(0, alpha)) }
         if let dip, dip.amount > 0 {
@@ -82,6 +84,14 @@ enum ClipRendering {
             image = CIImage(color: CIColor(red: v, green: v, blue: v, alpha: min(1, dip.amount))).cropped(to: bounds).applyingFilter("CISourceAtopCompositing", parameters: [kCIInputBackgroundImageKey: image])
         }
         return image.cropped(to: bounds)
+    }
+
+    /// How far through a dissolve a frame is, 0–1, or nil outside it. The incoming shot plays at this share
+    /// and the outgoing one at the rest, and the compositor adds the two.
+    static func dissolved(_ tr: ClipTransition, cut: Double, t: Double) -> Double? {
+        let span = tr.before + tr.after
+        guard tr.type == "dissolve", span > 0, t < cut + tr.after else { return nil }
+        return min(1, max(0, (t - (cut - tr.before)) / span))
     }
 
     /// How far through a transition drawn from both shots a frame is, 0–1, or nil outside it.

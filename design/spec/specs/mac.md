@@ -45,6 +45,7 @@ Every menu item has a matching context-menu item or button where it applies, and
 - **Notifications** (UserNotifications) for a cut ready, an editor question, a can't-do and a delivery finishing, each switchable in Settings › Notifications and held during screenings when asked. Clicking one opens the film in the right room. They respect Focus.
 - **Sleep:** while playing or screening, the display stays awake (`ProcessInfo.beginActivity` with `.idleDisplaySleepDisabled`); it's released on pause.
 - **Quit** with a delivery running asks first: "Quit and stop delivering?"
+- **Opening another film** (or a new one, or going back to Films) with a delivery running asks the same way, since closing a film stops its delivery: "Open “Teaser” and stop delivering?" with **Stop and Open** (or **Stop and Close**) and **Keep Delivering**. Keep Delivering leaves the film open and delivering.
 - **Appearance:** dark only by design (`.darkAqua`), because footage is judged against black.
 - **Accessibility:** VoiceOver labels on every control and mark (the marks' shapes are announced: "Director's mark at 01:12:08", "Editor's suggestion"), Reduce Motion (no shimmer, fades for slides and the sweep), Reduce Transparency (glass becomes solid steel-3), Increase Contrast (hairlines use line-2). Icon-only buttons have help tags (tooltips) with their shortcut.
 - **Pointer:** I-beam in text, resize cursors on region and range handles, a pointing hand on nothing (Mac controls don't use it).

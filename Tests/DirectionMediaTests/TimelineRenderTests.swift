@@ -21,11 +21,11 @@ struct TimelineRenderTests {
         catch let e as DirectionError { #expect(e.code == code, "\(e.code): \(e.message)"); #expect(e.index == 0); if let text { #expect(e.message.contains(text), "\(e.message)") } }
         catch { Issue.record("Unexpected error: \(error)") }
     }
-    func frame(_ f: MediaFixture, _ t: Double, look: (@Sendable (CIImage, String?, Int) -> CIImage)? = nil) async throws -> (Double, Double, Double) {
+    func frame(_ f: MediaFixture, _ t: Double, in part: CGRect? = nil, look: (@Sendable (CIImage, String?, Int) -> CIImage)? = nil) async throws -> (Double, Double, Double) {
         let compiled = try await SequenceRenderer.compile(project: f.store.read(), sequenceID: nil, cacheDirectory: f.runtime.cacheDirectory, previewMaxDimension: nil, looks: nil, look: look)
         let url = f.directory.appendingPathComponent(UUID().uuidString + ".png")
         _ = try await SequenceRenderer.frame(compiled, at: .init(seconds: t), to: url)
-        return try meanColor(url)
+        return try meanColor(url, in: part)
     }
 
     @Test func aDissolveIsHalfOfEachAtItsMidpoint() async throws {
@@ -38,6 +38,27 @@ struct TimelineRenderTests {
         #expect(red.0 > red.2 * 2 && blue.2 > blue.0 * 2)
         // At the cut, halfway through: each channel sits between the two pictures.
         #expect(mid.0 > blue.0 + 20 && mid.0 < red.0 - 20 && mid.2 > red.2 + 20 && mid.2 < blue.2 - 20)
+    }
+
+    @Test func aDissolveFadesTheOutgoingShotWhereTheIncomingHasNoPicture() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        _ = try await edit(f, [#"{"op":"removeRange","range":{"start":1,"end":2}}"#])
+        let clips = try f.store.read().sequences[0].clips.sorted { $0.start < $1.start }
+        // The blue shot coming in is pillarboxed: only its middle 40%, like a vertical clip in a wide cut.
+        _ = try await edit(f, [#"{"op":"addEffect","target":"\#(clips[1].id)","effect":"transform","params":{"crop":{"l":0.3,"r":0.3,"t":0,"b":0}}}"#,
+                               #"{"op":"transition","editPoint":"\#(clips[0].id)|\#(clips[1].id)","type":"dissolve","frames":12}"#])
+        let bars = CGRect(x: 0, y: 0, width: 0.1, height: 1), middle = CGRect(x: 0.45, y: 0, width: 0.1, height: 1)
+        func light(_ v: Double) -> Double { pow(v / 255, 2.2) }
+        let red = try await frame(f, 0.7, in: bars), half = try await frame(f, 1.0, in: bars), after = try await frame(f, 1.3, in: bars)
+        // In the bars the red shot is about half at the cut and gone after it, rather than full until it pops off.
+        #expect(red.0 > 120 && abs(light(half.0) / light(red.0) - 0.5) < 0.1 && after.0 < 4 && after.2 < 4, "\(red) \(half) \(after)")
+        // Where both shots have picture it's the crossfade it always was.
+        let mid = try await frame(f, 1.0, in: middle), blue = try await frame(f, 1.3, in: middle)
+        #expect(mid.0 > blue.0 + 20 && mid.0 < red.0 - 20 && mid.2 > red.2 + 20 && mid.2 < blue.2 - 20, "\(mid) \(blue)")
+        // A dip still plays over each shot: black at the cut, all of it.
+        _ = try await edit(f, [#"{"op":"transition","editPoint":"\#(clips[0].id)|\#(clips[1].id)","type":"dipToBlack","frames":12}"#])
+        let dark = try await frame(f, 1.0), before = try await frame(f, 0.9, in: bars)
+        #expect(dark.0 < 6 && dark.2 < 6 && before.0 > 40 && before.0 < red.0 - 20, "\(dark) \(before)")
     }
 
     @Test func anOpacityKeyFadesThePictureIn() async throws {
@@ -138,6 +159,66 @@ struct TimelineRenderTests {
         try f.store.saveTranscript(.init(assetID: asset.id, audioTrackID: asset.audio[0].id, provider: "test", words: [TranscriptWord(id: "w0", text: "One", range: .init(start: 0.1, end: 0.4)), TranscriptWord(id: "w1", text: "two", range: .init(start: 1.2, end: 1.4))]))
         let tightened = try await edit(f, [#"{"op":"tightenPauses","range":{"start":0,"end":1.5},"longerThan":0.4,"to":0.2}"#])
         #expect(tightened["delta"].double == 0 && tightened["operations"].array?[0]["summary"].string?.hasPrefix("Tightened 0") != true)
+    }
+
+    @Test func aLaterOperationMeasuresTheTakeAnEarlierOneSwappedIn() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let id = try f.store.read().sequences[0].clips[0].id
+        let split = try await edit(f, [#"{"op":"split","clipID":"\#(id)","at":1.5}"#])
+        let blue = try #require(split["operations"].array?[0]["clipIDs"].array?[0].string)
+        // A red still of the cut to swap in for the blue half.
+        let still = try await f.runtime.invoke("direction_frame", arguments: .object(["time": .number(0.5)])).imagePaths[0]
+        let red = try #require(try await f.runtime.invoke("direction_import", arguments: .object(["path": .string(still)])).value["asset"]["id"].string)
+        let swap = #"{"op":"replaceTake","clipID":"\#(blue)","withAssetID":"\#(red)","alignOn":"head"}"#, match = #"{"op":"matchBalance","clipID":"\#(blue)","toClipID":"\#(id)"}"#
+        let start = Double(try f.store.revision())
+        func grade() throws -> ColorGrade { try #require(f.store.read().sequences[0].clips.first { $0.id == blue }).grade }
+        func back() async throws { _ = try await f.runtime.invoke("direction_restore", arguments: .object(["revision": .number(start), "baseEditRevision": .number(Double(try f.store.revision()))])) }
+        _ = try await edit(f, [match])
+        let onBlue = try grade()
+        // Swapped and matched in one batch, the match measures the still, as it does in a batch after the swap.
+        try await back()
+        _ = try await edit(f, [swap, match])
+        let inBatch = try grade()
+        try await back()
+        _ = try await edit(f, [swap])
+        _ = try await edit(f, [match])
+        let after = try grade()
+        #expect(inBatch == after && inBatch != onBlue, "\(inBatch) \(after) \(onBlue)")
+    }
+
+    @Test func aPauseIsFoundWhereTheRemovalBeforeItInTheBatchLeftIt() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        // Four seconds of tone, quiet from 1.5 to 2.5 s, with a word either side of the quiet.
+        let wav = f.directory.appendingPathComponent("pause.wav")
+        try MediaFixture.writeTone(to: wav, frequency: 440, seconds: 4, quiet: 1.5..<2.5)
+        let store = try ProjectStore.create(at: f.directory.appendingPathComponent("Pause.direction"), name: "Pause")
+        let runtime = try ToolRuntime(store: store)
+        _ = try await runtime.invoke("direction_import", arguments: .object(["path": .string(wav.path), "append": .bool(true)]))
+        let asset = try store.read().assets[0]
+        try store.saveTranscript(.init(assetID: asset.id, audioTrackID: asset.audio[0].id, provider: "test", words: [TranscriptWord(id: "w0", text: "One", range: .init(start: 0.2, end: 1.4)), TranscriptWord(id: "w1", text: "two", range: .init(start: 2.6, end: 3.8))]))
+        let ops = try [#"{"op":"removeRange","range":{"start":0,"end":1}}"#, #"{"op":"tightenPauses","range":{"start":0,"end":3},"longerThan":0.5,"to":0.2}"#].map { try JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
+        let result = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "summary": .string("Tighter"), "operations": .array(ops)])).value
+        // After the removal the quiet is at 0.5–1.5 s, and all of it goes: the pause keeps 0.2 s.
+        let tightened = try #require(result["operations"].array?[1]["changes"].array?.first)
+        #expect(abs((result["newLength"].double ?? 0) - 2) < 0.05, "\(result["newLength"])")
+        #expect(abs((tightened["old"]["start"].double ?? 0) - 1.5) < 0.05 && abs((tightened["old"]["end"].double ?? 0) - 2.5) < 0.05, "\(tightened)")
+    }
+
+    @Test func aRetriedBatchGetsBackWhatItDidOnceTheCutHasMovedOn() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let base = try f.store.revision()
+        // punchIn takes the style's scales, which the batch didn't send; the retry matches all the same.
+        let ops = try [#"{"op":"removeRange","range":{"start":0,"end":0.5}}"#, #"{"op":"punchIn","range":{"start":0,"end":2}}"#].map { try JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
+        func send(_ key: String, _ operations: [JSONValue]) async throws -> JSONValue {
+            try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(base)), "idempotencyKey": .string(key), "summary": .string("Tighter"), "operations": .array(operations)])).value
+        }
+        let first = try await send("tighter", ops)
+        let again = try await send("tighter", ops)
+        #expect(again == first && first["committed"].bool == true && first["editRevision"].int == base + 1)
+        #expect(try f.store.revision() == base + 1)
+        // The same key with another batch is refused, and a new batch on the old revision is stale.
+        do { _ = try await send("tighter", Array(ops.prefix(1))); Issue.record("Expected idempotency_conflict") } catch let e as DirectionError { #expect(e.code == "idempotency_conflict") }
+        do { _ = try await send("tighter-again", ops); Issue.record("Expected stale_revision") } catch let e as DirectionError { #expect(e.code == "stale_revision") }
     }
 
     @Test func aCutWithEffectsExportsAndMatchesItsFrames() async throws {

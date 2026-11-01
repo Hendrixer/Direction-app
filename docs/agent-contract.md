@@ -72,9 +72,9 @@ Times are cut seconds unless an argument says source (`sourceRange` is in the ta
 
 `validateOnly: true` checks everything and returns the predicted result without committing. The result lists, per operation, its summary, notes, delta (`"−4.2 s"`) and changed ranges in the new cut and the old cut with their scenes; Changes and Play changes are built from it, and the revision keeps it (`ProjectStore.editRecord(revision:)`). Errors are `{index, code, message}`, pointing at the operation that failed: `scene_locked`, `picture_locked`, `stale_revision`, `overlap`, `unknown_op`, `bad_argument`, `missing_media`, `no_words`, `look_is_yours`, `words_are_yours`, `shader_invalid`, `shader_too_slow`. On `stale_revision`, read the timeline again and deliberately replan; do not blindly resubmit with a new number. An exact committed retry with the same idempotency key returns its original result; a changed batch with that key fails.
 
-V1 is the story; V2 and up are overlays (cutaways, graphics, made shots); A1 is V1's own sound plus any sound-only clips on A1, A2 music, A3 effects. Story operations keep every layer in sync. Same-track clips cannot overlap. Operations that need the footage itself (`reframe` with `follow`, `matchBalance`, `stabilize`, the quiet in `tightenPauses`, a shader's compile and speed check) are measured by Direction before the batch runs.
+V1 is the story; V2 and up are overlays (cutaways, graphics, made shots); A1 is V1's own sound plus any sound-only clips on A1, A2 music, A3 effects. Story operations keep every layer in sync. Same-track clips cannot overlap. Operations that need the footage itself (`reframe` with `follow`, `matchBalance`, `stabilize`, the quiet in `tightenPauses`, a shader's compile and speed check) are measured by Direction before the batch runs, each on the cut as the operations before it in the batch leave it.
 
-Batches written before edit functions still work: send them as `{"batch": {…}}` with `type` naming each operation, `{value,timescale}` times, and the old shapes (insert places without rippling, trim takes a source `range`, move takes `at` and `layer`). `direction_remove_range`, `direction_audio` and `direction_edit_transcript` remain as shorthands for `removeRange`, `audio` and `removeWords`; they report `revision_conflict` on a stale revision as before.
+Batches written before edit functions still work: send them as `{"batch": {…}}` with `type` naming each operation, `{value,timescale}` times, and the old shapes (insert places without rippling, trim takes a source `range`, move takes `at` and `layer`). `direction_remove_range`, `direction_audio` and `direction_edit_transcript` remain as shorthands for `removeRange`, `audio` and `removeWords`. They go in as `direction_edit` batches do, checked against locks and notes, and take `notes` for the note numbers they answer; they report `revision_conflict` on a stale revision as before.
 
 Convenience range removal:
 
@@ -97,7 +97,7 @@ Use the actual stream ID from `direction_inspect`, not a presumed 0/1 index:
 }
 ```
 
-Send to `direction_audio`. With no `clipID`, it changes that source stream everywhere. With `clipID`, it sets an override for that occurrence. Partial parameters include gainDB, fadeIn/fadeOut seconds, highPassHz, bassDB, trebleDB, compressor, thresholdDB, and limiter. Every source stream is independent. `direction_measure_audio` provides sample peak/RMS/waveform data; do not interpret those fields as LUFS/true-peak measurements.
+Send to `direction_audio`. With no `clipID`, it changes that source stream everywhere. With `clipID`, it sets an override for that occurrence. Partial parameters include gainDB, fadeIn/fadeOut seconds, highPassHz, bassDB, trebleDB, compressor, thresholdDB, and limiter. Every source stream is independent. `direction_measure_audio` with `assetID` provides a source track's sample peak/RMS/waveform data; do not interpret those fields as LUFS. Without `assetID` it measures the cut's mix as it plays and delivers, over the whole cut or `start`/`end`: `integratedLUFS` (ITU-R BS.1770-4, gated), `samplePeakDBFS` and `truePeakDBTP`.
 
 ## Local transcript and text cuts
 
@@ -132,7 +132,7 @@ A comment captures immutable editRevision, original sequence/cut, original time,
 - the original comment and sequence snapshot;
 - technical metadata for the referenced source assets;
 - each source anchor and its current projection (`exact`, `split`, `removed`, `ambiguous`);
-- captured transcript words;
+- the transcript words captured with it, as plain text;
 - actual PNG frames sampled from the original edited picture, with requested/actual times and revision;
 - a bounded mixed WAV audio sample when audio exists;
 - parameters for requesting a short original-revision video preview.
@@ -143,7 +143,7 @@ After editing, use `direction_feedback_reply` with text, resulting revision, and
 
 ## Saved cuts and history
 
-`direction_create_cut` names a snapshot; `direction_cuts` lists them. `direction_restore` restores content from an earlier revision as a new revision and requires baseEditRevision. Comments and history remain. Transcript analysis is maintained separately from edit snapshots, while captured comment transcript context is immutable.
+`direction_create_cut` names a snapshot; `direction_cuts` lists them. `direction_restore` restores content from an earlier revision as a new revision and requires baseEditRevision. It is checked against the locks as edits are: it can't change a locked scene, and after picture lock only color and sound come back. Comments and history remain. Transcript analysis is maintained separately from edit snapshots, while captured comment transcript context is immutable.
 
 ## Export, previews, and jobs
 
@@ -169,7 +169,7 @@ The director's app adds a working relationship on top of editing. Notes are priv
 | `direction_add_outside_note` | Bring in a note from someone else; it waits in the director's Outside inbox and stays invisible to the editor until accepted. |
 | `direction_editor_status` | A one-line status for the app's editor pill. |
 
-Locks are enforced on every edit, one operation at a time. Through `direction_edit`, anything that would change what plays over a locked scene, on any track, fails with `scene_locked` and its index (a change earlier in the cut may still move the scene whole); after picture lock any picture change fails with `picture_locked`, while color and sound still work. `direction_feedback` omits drafts, dropped notes and outside notes the director hasn't accepted. Notes carry `number` (permanent, never reused), `kind` (feeling, story, pace, picture, sound; earlier kinds win conflicts), `scriptAction` for notes made in the Script room, and `answers`.
+Locks are enforced on every edit, one operation at a time. Through `direction_edit`, anything that would change what plays over a locked scene, on any track, fails with `scene_locked` and its index (a change earlier in the cut may still move the scene whole); after picture lock any change to the cut fails with `picture_locked`, while color, sound and the graphics over the picture (captions, titles, credits placed with `placeGraphic` or `title` on V2 and up, and moving or removing them) still work. `direction_feedback` omits drafts, dropped notes and outside notes the director hasn't accepted. Notes carry the words said where they are as `transcriptContext: {excerpt, wordCount}` (about 40 words; take word ids for cuts from `direction_transcript`), `number` (permanent, never reused), `kind` (feeling, story, pace, picture, sound; earlier kinds win conflicts), `scriptAction` for notes made in the Script room, and `answers`.
 
 ## Verification
 

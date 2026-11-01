@@ -46,6 +46,20 @@ struct MadeRoutingTests {
         #expect(order.firstIndex(of: "someone/unrated")! > order.firstIndex(of: "bytedance/seedance-2.5")!)
     }
 
+    /// A version with no listed price would look free, so Balanced and Cheapest would reach for it first.
+    @Test func versionsWithNoListedPriceComeAfterEveryPricedOne() {
+        var catalog = Self.catalog
+        let i = catalog.versions.firstIndex { $0.id == "minimax/hailuo-3-max" }!
+        catalog.versions[i].skus = [:]
+        for q in MadeQuality.allCases {
+            let order = catalog.route(fromFrame, quality: q).map(\.id)
+            #expect(order.last == "minimax/hailuo-3-max", "\(q): \(order)")
+            #expect(order.count == Self.catalog.route(fromFrame, quality: q).count)
+        }
+        #expect(catalog.route(fromFrame, quality: .balanced).first?.id == "minimax/hailuo-3")
+        #expect(catalog.route(fromFrame, quality: .cheapest).first?.id == "kwaivgi/kling-v3.0-pro")
+    }
+
     @Test func versionsThatCantMakeItAreLeftOut() {
         let bridge = MadeNeeds(kind: .bridge, firstFrame: true, lastFrame: true, seconds: 5)
         #expect(!ids(bridge, .best).contains("runway/gen-4.5"))

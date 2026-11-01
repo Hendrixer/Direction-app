@@ -1,7 +1,7 @@
 #!/bin/bash
 # A stand-in for `claude -p … --output-format stream-json --verbose` (EditorRunnerTests).
 # It runs in the film's Editor folder, records its arguments there, and prints canned events
-# for the scenario in .fake-scenario: done, unfinished, auth, slow, crash.
+# for the scenario in .fake-scenario: done, unfinished, auth, slow, crash, readback.
 folder="$PWD"
 printf '%s\n' "$@" > "$folder/.fake-args"
 printf '%s\n' "${DIRECTION_RUN_ID:-}" > "$folder/.fake-run-id"
@@ -36,6 +36,15 @@ case "$scenario" in
     read_notes
     (sleep 300 </dev/null >/dev/null 2>&1 & echo $! > "$folder/.fake-straggler")
     echo '{"type":"result","subtype":"success","is_error":false,"result":"{\"finished\": true, \"summary\": \"Logged 1 take.\", \"needsYou\": []}","total_cost_usd":0.1,"session_id":"'"$session"'"}'
+    ;;
+  readback)
+    # Posts a read-back, says so in .fake-asked and waits for .fake-go before its turn ends, so the
+    # test can play Direction's side of the call and the director's in between.
+    echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_rb","name":"mcp__direction__direction_turnover_update","input":{"turnoverID":"t","readBack":[{"noteID":"n","plan":"Drop the second wide."}]}}]},"session_id":"'"$session"'"}'
+    touch "$folder/.fake-asked"
+    for _ in $(seq 400); do [ -f "$folder/.fake-go" ] && break; sleep 0.05; done
+    echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_rb","content":[{"type":"text","text":"{}"}]}]},"session_id":"'"$session"'"}'
+    echo '{"type":"result","subtype":"success","is_error":false,"result":"{\"finished\": false, \"summary\": \"Read back 1 note.\", \"needsYou\": [\"OK the read-back\"]}","total_cost_usd":0.05,"session_id":"'"$session"'"}'
     ;;
   stubborn)
     # Ignores Ctrl-C and SIGTERM; only SIGKILL stops it.

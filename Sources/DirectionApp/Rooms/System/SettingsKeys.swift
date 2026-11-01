@@ -21,13 +21,10 @@ enum SettingsKey {
     static let conflictOrder = "conflictOrder"        // "feeling,story,pace,picture,sound"
     // Cutting
     static let handleSeconds = "handleSeconds"
-    static let cutNaming = "cutNaming"                // "number" | "date" | "both"
     static let frameRate = "frameRateForNewFilms"     // "match" | "23.976" | …
     static let loudness = "loudnessTarget"            // LUFS as Double
     static let ducking = "musicDucking"               // dB as Double; 0 = don't duck
     static let transitions = "transitions"            // "hard" | "editor"
-    static let keepCuts = "keepCuts"                  // "all" | "last5" | "lockedAndCurrent"
-    static let playFromProxies = "playFromProxies"
     // Notifications (the four switches use NotificationKey)
     static let outsideNotes = "notifyOutside"         // "now" | "hourly" | "daily" | "never"
     static let holdDuringScreening = "holdDuringScreening"
@@ -35,7 +32,6 @@ enum SettingsKey {
     // Storage
     static let libraryFolder = "libraryFolder"
     static let footageImport = "footageImport"        // "link" | "copy"
-    static let proxyCleanup = "proxyCleanup"          // "keep" | "after30" | "now"
     // Sharing
     static let linkNotes = "linkViewersCanNote"
     static let linkExpiry = "linkExpiryDays"          // Int days; 0 = never
@@ -55,10 +51,10 @@ enum SettingsKey {
         [
             whenOpening: "lastFilm", showFilmsWhenEmpty: true, screeningFullScreen: false, hideControlsAfter: 2.0, audioOutput: "", filmGrain: true, reduceMotion: "system",
             defaultLatitude: Latitude.faithful.rawValue, waitForReadBack: true, cutFeelingTwoWays: true, askBeforeGuessing: true, conflictOrder: defaultConflictOrder,
-            handleSeconds: 2.0, cutNaming: "number", frameRate: "match", loudness: -14.0, ducking: 6.0, transitions: "hard", keepCuts: "all", playFromProxies: true,
+            handleSeconds: 2.0, frameRate: "match", loudness: -14.0, ducking: 6.0, transitions: "hard",
             NotificationKey.cutReady: true, NotificationKey.question: true, NotificationKey.cant: true, NotificationKey.delivery: true,
             outsideNotes: "hourly", holdDuringScreening: true, notificationSound: "default",
-            footageImport: "link", proxyCleanup: "after30",
+            footageImport: "link",
             linkNotes: true, linkExpiry: 7, linkWatermark: true, linkDownload: false, linkPassword: false, creditOutsideNotes: true,
         ]
     }

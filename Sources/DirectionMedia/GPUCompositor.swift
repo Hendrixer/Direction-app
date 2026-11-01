@@ -93,6 +93,9 @@ public final class GPUCompositor: NSObject, AVVideoCompositing, @unchecked Senda
                     // A push, a wipe or the editor's own transition draws the two shots together.
                     if let tr = layer.clip.transition, let progress = ClipRendering.progress(tr, cut: layer.clip.start.seconds, t: t) {
                         track = TransitionShader.apply(from: track, to: picture, progress: progress, transition: tr, bounds: bounds)
+                    } else if let tr = layer.clip.transition, ClipRendering.dissolved(tr, cut: layer.clip.start.seconds, t: t) != nil {
+                        // A dissolve adds the two shots at their shares, so where one has no picture the other still fades.
+                        track = picture.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: track])
                     } else { track = picture.composited(over: track) }
                     if layer.clip.layer == 0 && layer.clip.range.contains(.init(seconds: t)) { story = layer.clip.assetID }
                 }
