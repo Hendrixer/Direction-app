@@ -132,3 +132,43 @@ struct StyleTests {
         #expect(!FileManager.default.fileExists(atPath: copy.path) && none == nil)
     }
 }
+
+/// A study's music in its notes: the cues, the breaks, how far under the voice, the sounds heard and what the
+/// page credits, and the style keeps the cues but not every sound heard.
+@Test func aStudysMusicIsWrittenOutAndTheStyleKeepsItsCues() {
+    let cues = [VideoStudy.Cue(start: 0, end: 112, instruments: ["piano", "bowed strings"], tempo: 92, key: "A minor", underSpeech: 0.8, startsOnCut: nil, endsOnCut: true),
+                VideoStudy.Cue(start: 130, end: 190, instruments: ["synth"], tempo: nil, key: nil, underSpeech: 0, startsOnCut: true, endsOnCut: false)]
+    let sound = VideoStudy.Sound(loudness: -14.2, truePeak: -1.1, music: 0.8, musicUnderSpeech: 0.5, cues: cues, stings: [111, 129.5], breaks: [VideoStudy.Stretch(start: 112, end: 130)],
+                                 musicUnderVoiceDB: -18, musicAloneDB: -6.5, effects: [VideoStudy.Effect(at: 12, sound: "whoosh", onCut: true), VideoStudy.Effect(at: 40, sound: "whoosh", onCut: false), VideoStudy.Effect(at: 41, sound: "ticking clock", onCut: false)],
+                                 cutsHeard: 30, hitsOnCuts: 6, risersIntoCuts: 2)
+    let study = VideoStudy(title: "Consumerism", by: "A filmmaker", seconds: 200, pace: .init(shots: 31, cutsPerMinute: 9, averageShot: 6.5, medianShot: 5, longestShot: 20, firstCut: 3, cutsByMinute: [9, 10, 8, 4]),
+                           sound: sound, picture: .init(close: 0.5, medium: 0.3, wide: 0.2, noFace: 0.2, punchIns: 0.1, brightness: 0.4, contrast: 0.2, saturation: 0.3, warmth: 0.05),
+                           musicCredits: ["Music: Film Score Collection Vol. 3"], shots: [])
+    let md = study.markdown
+    #expect(study.summary.contains("2 music cues"))
+    #expect(md.contains("- In the pauses between words the music sits 18 dB under the voice; with nobody talking it plays 7 dB under it."))
+    #expect(md.contains("- 2 music cues, 1:26 on average, the longest 1:52; 0.6 a minute."))
+    #expect(md.contains("- The music stops for 1 stretch of talk, the longest 0:18: at 1:52."))
+    #expect(md.contains("- 2 short bursts of music (risers, transitions, hits) at 1:51, 2:10."))
+    #expect(md.contains("- Of the 30 cuts with no word starting on them, 6 land on a hit and the level rises into 2 (a riser)."))
+    #expect(md.contains("whoosh 2 (1 on a cut) at 0:12, 0:40; ticking clock 1 at 0:41."))
+    #expect(md.contains("1. 0:00\u{2013}1:52 (1:52): piano, bowed strings \u{00B7} about 92 beats a minute \u{00B7} A minor \u{00B7} under the voice 80% of it \u{00B7} ends on a cut"))
+    #expect(md.contains("2. 2:10\u{2013}3:10 (1:00): synth \u{00B7} no steady beat \u{00B7} no one talking over it \u{00B7} starts on a cut"))
+    #expect(md.contains("## Music on the page") && md.contains("- Music: Film Score Collection Vol. 3"))
+    let kept = StyleSource(study).measured?.sound
+    #expect(kept?.cues == cues && kept?.effects == nil && kept?.musicUnderVoiceDB == -18)
+}
+
+@Test func thePageSaysWhatMusicItUses() {
+    let description = """
+    How we got here, and why it matters.
+
+    ♪ Music: Story Loops, Film Score Collection Vol. 3
+    Song: "Late Night" by Jazz Trio (licensed from Musicbed)
+    Our tracking app helps you save money
+    Follow me on Instagram
+    """
+    let credits = VideoStudy.musicCredits(description: description, track: "Late Night", artist: "Jazz Trio")
+    #expect(credits == ["\u{201C}Late Night\u{201D} by Jazz Trio", "\u{266A} Music: Story Loops, Film Score Collection Vol. 3", "Song: \"Late Night\" by Jazz Trio (licensed from Musicbed)"])
+    #expect(VideoStudy.musicCredits(description: nil, track: nil, artist: nil).isEmpty)
+}

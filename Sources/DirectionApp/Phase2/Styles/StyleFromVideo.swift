@@ -38,10 +38,11 @@ enum ReferenceVideo {
     static func folder(_ id: String, film: URL) -> URL { VideoStudy.referenceFolder(id, film: film) }
     static func study(_ r: BriefReference, film: URL) -> VideoStudy? { VideoStudy.read(in: folder(r.id, film: film)) }
 
-    /// What the page said about a downloaded video: its title and who made it.
-    static func about(_ folder: URL) -> (title: String?, by: String?) {
-        guard let data = try? Data(contentsOf: folder.appendingPathComponent("video.info.json")), let info = try? JSONDecoder().decode(JSONValue.self, from: data) else { return (nil, nil) }
-        return (info["title"].string, info["channel"].string ?? info["uploader"].string)
+    /// What the page said about a downloaded video: its title, who made it, and what it says about the music.
+    static func about(_ folder: URL) -> (title: String?, by: String?, credits: [String]) {
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent("video.info.json")), let info = try? JSONDecoder().decode(JSONValue.self, from: data) else { return (nil, nil, []) }
+        let artist = info["artist"].string ?? info["artists"].array?.compactMap(\.string).joined(separator: ", ")
+        return (info["title"].string, info["channel"].string ?? info["uploader"].string, VideoStudy.musicCredits(description: info["description"].string, track: info["track"].string, artist: artist))
     }
 
     /// Fetches a link into `folder`, or puts a file there by a link to it (the original stays where it is),
@@ -87,7 +88,7 @@ extension FilmModel {
             do {
                 let (file, downloaded) = try await ReferenceVideo.fetch(video, into: folder)
                 let about = ReferenceVideo.about(folder)
-                _ = try await VideoStudying.study(video: file, folder: folder, cacheDirectory: runtime.cacheDirectory, title: about.title ?? r.title, by: about.by, link: downloaded ? path : URL(fileURLWithPath: path).lastPathComponent)
+                _ = try await VideoStudying.study(video: file, folder: folder, cacheDirectory: runtime.cacheDirectory, title: about.title ?? r.title, by: about.by, link: downloaded ? path : URL(fileURLWithPath: path).lastPathComponent, credits: about.credits)
                 ReferenceVideo.removeVideo(in: folder)
             } catch {
                 ReferenceVideo.removeVideo(in: folder)
@@ -114,7 +115,7 @@ extension FilmModel {
                     let (file, downloaded) = try await ReferenceVideo.fetch(v, into: folder)
                     learning = one ? "Studying the video" : "Studying video \(i + 1) of \(videos.count)"
                     let about = ReferenceVideo.about(folder)
-                    _ = try await VideoStudying.study(video: file, folder: folder, cacheDirectory: runtime.cacheDirectory, title: about.title ?? v.name, by: about.by, link: downloaded ? v.link.trimmingCharacters(in: .whitespacesAndNewlines) : v.file?.lastPathComponent)
+                    _ = try await VideoStudying.study(video: file, folder: folder, cacheDirectory: runtime.cacheDirectory, title: about.title ?? v.name, by: about.by, link: downloaded ? v.link.trimmingCharacters(in: .whitespacesAndNewlines) : v.file?.lastPathComponent, credits: about.credits)
                 }
                 learning = nil
                 let request = ask.isEmpty ? "Make a style from \(one ? "this video" : "these videos"): how \(one ? "it\u{2019}s" : "they\u{2019}re") paced, framed, captioned and how \(one ? "it sounds" : "they sound")." : ask

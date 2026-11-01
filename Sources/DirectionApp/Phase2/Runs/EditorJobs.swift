@@ -108,7 +108,7 @@ enum EditorJobs {
             return "\"" + (p.hasPrefix(base) ? String(p.dropFirst(base.count)) : path) + "\""
         }
         return """
-        Learn it from \(studies.count == 1 ? "this video" : "these videos") the director likes. Direction has studied each in its own folder: `study.md` is what it measured (pace, words, sound, framing, captions, and every shot), `transcript.txt` the words with their times, and `sheet-N.jpg` a frame every two seconds. Look at any moment up close with `direction_study_frames`.
+        Learn it from \(studies.count == 1 ? "this video" : "these videos") the director likes. Direction has studied each in its own folder: `study.md` is what it measured (pace, words, sound, its music cue by cue, framing, captions, and every shot), `transcript.txt` the words with their times, and `sheet-N.jpg` a frame every two seconds. Look at any moment up close with `direction_study_frames`.
         \(rows.joined(separator: "\n"))
 
         Follow \u{201C}From a video\u{201D} in the skill. Save with `studies: [\(names.joined(separator: ", "))]` so the style keeps where it came from and Direction\u{2019}s numbers. The videos are removed once the style is saved, so take every still you want to keep first.

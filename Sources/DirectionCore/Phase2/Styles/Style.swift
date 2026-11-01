@@ -69,14 +69,14 @@ public struct StyleSource: Codable, Hashable, Sendable {
     public var by: String?
     public var link: String?
     public var studiedAt: Double?
-    /// What Direction measured, without the list of shots.
+    /// What Direction measured, without the list of shots or of the sounds heard.
     public var measured: VideoStudy?
     public init(title: String, by: String? = nil, link: String? = nil, studiedAt: Double? = nil, measured: VideoStudy? = nil) {
         self.title = title; self.by = by; self.link = link; self.studiedAt = studiedAt; self.measured = measured
     }
-    /// From a study: its numbers, its shots left out.
+    /// From a study: its numbers and its music cues; its shots and every sound heard left out.
     public init(_ study: VideoStudy) {
-        var numbers = study; numbers.shots = []
+        var numbers = study; numbers.shots = []; numbers.sound?.effects = nil
         self.init(title: study.title, by: study.by, link: study.link, studiedAt: study.studiedAt, measured: numbers)
     }
 }

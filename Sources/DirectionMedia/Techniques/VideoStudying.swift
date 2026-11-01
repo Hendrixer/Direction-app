@@ -25,9 +25,9 @@ public enum VideoStudying {
     static let steps = ["Listening", "Reading the words on screen", "Finding the cuts", "Looking at the picture"]
 
     /// Measures `video` into `folder`: transcript.txt and the contact sheets (`TutorialStudy.prepare`), study.json
-    /// and study.md. Given `words`, they're used instead of listening. Progress is the step in words and how
+    /// and study.md. `credits` are the lines about its music on its page. Given `words`, they're used instead of listening. Progress is the step in words and how
     /// far through the whole study, 0–1. Sound that can't be measured is left out rather than failing the study.
-    public static func study(video: URL, folder: URL, cacheDirectory: URL, title: String?, by: String?, link: String?, words given: [TranscriptWord]? = nil,
+    public static func study(video: URL, folder: URL, cacheDirectory: URL, title: String?, by: String?, link: String?, credits: [String]? = nil, words given: [TranscriptWord]? = nil,
                              progress: (@Sendable (String, Double) -> Void)? = nil) async throws -> VideoStudy {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let asset = try await MediaInspector.inspect(url: video, thumbnailDirectory: cacheDirectory.appendingPathComponent("Thumbnails"))
@@ -39,7 +39,7 @@ public enum VideoStudying {
         if heard == nil, !asset.audio.isEmpty { heard = await TutorialStudy.listen(asset, cacheDirectory: cacheDirectory) }
         let words = (heard ?? []).sorted { $0.range.start < $1.range.start }
         say(0, 0.6)
-        let sound = await Self.sound(asset, cacheDirectory: cacheDirectory)
+        let listened = await Self.listen(asset, cacheDirectory: cacheDirectory)
         try Task.checkCancellation()
 
         // The screen is read before the cuts are found, so the captions' place can be covered while looking for them.
@@ -56,9 +56,10 @@ public enum VideoStudying {
         _ = try await TutorialStudy.prepare(video: video, folder: folder, cacheDirectory: cacheDirectory, words: heard)
 
         let shots = zip(ranges, middles).map { r, m in VideoStudy.Shot(start: r.lowerBound, end: r.upperBound, framing: m.face.map { framing($0.h) }, text: m.text) }
+        let sound = listened.flatMap { Self.sound($0, words: words, cuts: ranges.dropFirst().map(\.lowerBound), seconds: seconds) }
         let study = VideoStudy(title: title ?? video.deletingPathExtension().lastPathComponent, by: by, link: link, seconds: seconds, width: asset.video.first?.width, height: asset.video.first?.height,
                                pace: pace(ranges, seconds: seconds), words: Self.words(words, seconds: seconds), sound: sound, picture: picture(middles),
-                               onScreen: asset.video.isEmpty ? nil : onScreen(looks, captions: captions), shots: shots)
+                               onScreen: asset.video.isEmpty ? nil : onScreen(looks, captions: captions), musicCredits: credits.flatMap { $0.isEmpty ? nil : $0 }, shots: shots)
         try JSONEncoder.direction.encode(study).write(to: folder.appendingPathComponent(VideoStudy.fileName), options: .atomic)
         try Data(study.markdown.utf8).write(to: folder.appendingPathComponent("study.md"), options: .atomic)
         say(3, 1)
@@ -144,19 +145,153 @@ public enum VideoStudying {
 
     // MARK: Sound
 
-    struct Heard: Sendable { var music: Double; var speech: Double }
+    /// One second as the classifier heard it: how sure it is of music and of speech, and the instruments and
+    /// other sounds it's fairly sure of, by the names a director uses.
+    struct Heard: Sendable {
+        var music: Double
+        var speech: Double
+        var instruments: [String: Double] = [:]
+        var others: [String: Double] = [:]
+    }
 
-    /// Loudness and true peak of the first audio track, and the share of its seconds with music and with music
-    /// under speech. Read from the same 48 kHz copy the transcript is made from.
-    static func sound(_ asset: MediaAsset, cacheDirectory: URL) async -> VideoStudy.Sound? {
+    /// What was heard, before the cuts are known: loudness, each second, and the music's features.
+    struct Listened: Sendable {
+        var meter: LoudnessMeter?
+        var heard: [Heard]
+        var features: MusicListening.Features?
+    }
+
+    /// The first audio track, from the same 48 kHz copy the transcript is made from.
+    static func listen(_ asset: MediaAsset, cacheDirectory: URL) async -> Listened? {
         guard let track = asset.audio.first?.id, let file = try? await AudioProcessor.extract(asset: asset, trackID: track, directory: cacheDirectory) else { return nil }
         let meter = try? loudness(file)
         let heard = (try? await hear(file)) ?? []
+        let features = try? await Task.detached(priority: .userInitiated) { try MusicListening.features(file) }.value
+        return Listened(meter: meter, heard: heard, features: features)
+    }
+
+    /// Loudness and true peak, how much of it has music and music under speech, and what the music does: its
+    /// cues, the stretches of talk it leaves alone, how far under the voice it sits, the other sounds heard, and
+    /// the hits and risers on the cuts that have no word starting on them.
+    static func sound(_ l: Listened, words: [TranscriptWord], cuts: [Double], seconds: Double) -> VideoStudy.Sound? {
+        let heard = l.heard
         func share(_ test: (Heard) -> Bool) -> Double? { heard.isEmpty ? nil : Double(heard.filter(test).count) / Double(heard.count) }
-        let sound = VideoStudy.Sound(loudness: meter?.integrated, truePeak: meter.flatMap { $0.peak > 0 ? $0.truePeakDBTP : nil },
+        var sound = VideoStudy.Sound(loudness: l.meter?.integrated, truePeak: l.meter.flatMap { $0.peak > 0 ? $0.truePeakDBTP : nil },
                                      music: share { $0.music >= musicHeard }, musicUnderSpeech: share { $0.music >= musicHeard && $0.speech >= speechHeard })
+        if !heard.isEmpty { score(&sound, heard: heard, features: l.features, words: words, cuts: cuts, seconds: seconds) }
         return sound == VideoStudy.Sound() ? nil : sound
     }
+
+    // MARK: Music
+
+    /// Music under two seconds apart is one stretch; a stretch under six seconds is a sting (a riser, a
+    /// transition, a hit); talk of four seconds or more between cues is a break.
+    static let musicGap = 2.0, cueLength = 6.0, breakLength = 4.0
+    /// An instrument is in a cue when it's heard in a quarter of its seconds.
+    static let inCue = 0.25
+
+    static func score(_ sound: inout VideoStudy.Sound, heard: [Heard], features f: MusicListening.Features?, words: [TranscriptWord], cuts: [Double], seconds: Double) {
+        let spoken = words.map { $0.range.start.seconds...max($0.range.start.seconds, $0.range.end.seconds) }
+        let quiet = spoken.map { max(0, $0.lowerBound - 0.05)...($0.upperBound + 0.05) }
+        let isMusic = heard.map { $0.music >= musicHeard }, isSpeech = heard.map { $0.speech >= speechHeard }
+
+        // Stretches of music, in whole seconds.
+        var runs: [(Double, Double)] = []
+        for (i, on) in isMusic.enumerated() where on {
+            if let last = runs.last, Double(i) - last.1 <= musicGap { runs[runs.count - 1].1 = Double(i + 1) } else { runs.append((Double(i), Double(i + 1))) }
+        }
+        let long = runs.filter { $0.1 - $0.0 >= cueLength }
+        sound.stings = runs.filter { $0.1 - $0.0 < cueLength }.map(\.0)
+        func onCut(_ t: Double, within: Double) -> Bool { cuts.contains { abs($0 - t) <= within } }
+        func speechShare(_ a: Double, _ b: Double) -> Double {
+            let r = max(0, Int(a))..<min(heard.count, Int(b))
+            return r.isEmpty ? 0 : Double(r.filter { isSpeech[$0] }.count) / Double(r.count)
+        }
+
+        let noteQuiet = f.map { MusicListening.noteMask(quiet, $0) } ?? [], onsetQuiet = f.map { MusicListening.onsetMask(quiet, $0) } ?? []
+        var cues: [VideoStudy.Cue] = []
+        for (a, b) in long {
+            let bounds = [a] + (f.map { MusicListening.changes($0, from: a, to: b, quiet: noteQuiet) } ?? []) + [b]
+            for (s, e) in zip(bounds, bounds.dropFirst()) {
+                let secondsIn = heard[max(0, Int(s))..<min(heard.count, Int(e))]
+                var counts: [String: Int] = [:]
+                for h in secondsIn { for name in h.instruments.keys { counts[name, default: 0] += 1 } }
+                let instruments = counts.filter { Double($0.value) >= inCue * Double(secondsIn.count) }.sorted { ($0.value, $1.key) > ($1.value, $0.key) }.prefix(4).map(\.key)
+                var tempo: Double?, key: String?
+                if let f {
+                    let oa = max(0, Int(s * MusicListening.onsetRate)), ob = min(f.onsets.count, Int(e * MusicListening.onsetRate))
+                    if oa < ob { tempo = MusicListening.tempo(f.onsets[oa..<ob], quiet: Array(onsetQuiet[oa..<ob])) }
+                    key = MusicListening.key(MusicListening.notes(f, from: s, to: e, quiet: noteQuiet))
+                }
+                cues.append(VideoStudy.Cue(start: s, end: e, instruments: instruments, tempo: tempo.map { ($0 * 2).rounded() / 2 }, key: key, underSpeech: speechShare(s, e),
+                                           startsOnCut: s < 1 ? nil : onCut(s, within: 1), endsOnCut: e > seconds - 1 ? nil : onCut(e, within: 1)))
+            }
+        }
+        sound.cues = cues
+
+        // Talk the music leaves alone: before the first cue, between cues and after the last.
+        if !cues.isEmpty {
+            let edges = [0.0] + cues.flatMap { [$0.start, $0.end] } + [seconds]
+            sound.breaks = stride(from: 0, to: edges.count - 1, by: 2).map { (edges[$0], edges[$0 + 1]) }
+                .filter { $0.1 - $0.0 >= breakLength && speechShare($0.0, $0.1) >= 0.5 }.map { VideoStudy.Stretch(start: $0.0, end: $0.1) }
+        }
+
+        // The music against the voice: in the pauses between words, and with nobody talking.
+        if let f, spoken.count >= 20, let voice = MusicListening.level(f, in: spoken) {
+            let sorted = spoken.sorted { $0.lowerBound < $1.lowerBound }
+            let pauses = zip(sorted, sorted.dropFirst()).compactMap { w, next -> ClosedRange<Double>? in
+                let a = w.upperBound + 0.1, b = next.lowerBound - 0.1, mid = (a + b) / 2
+                return b - a >= 0.15 && Int(mid) < isMusic.count && isMusic[Int(mid)] ? a...b : nil
+            }
+            let alone = isMusic.indices.filter { i in isMusic[i] && !spoken.contains { $0.overlaps(Double(i) - 0.25...Double(i) + 1.25) } }.map { Double($0)...Double($0 + 1) }
+            sound.musicUnderVoiceDB = MusicListening.level(f, in: pauses).map { (($0 - voice) * 2).rounded() / 2 }
+            sound.musicAloneDB = MusicListening.level(f, in: alone).map { (($0 - voice) * 2).rounded() / 2 }
+        }
+
+        // Other sounds, each where it starts: the same sound again within three seconds is the same one going on.
+        var effects: [VideoStudy.Effect] = [], last: [String: Int] = [:]
+        for (i, h) in heard.enumerated() {
+            for name in h.others.keys.sorted() {
+                defer { last[name] = i }
+                guard last[name].map({ i - $0 > 3 }) ?? true else { continue }
+                effects.append(VideoStudy.Effect(at: Double(i), sound: name, onCut: cuts.isEmpty ? nil : onCut(Double(i) + 0.5, within: 0.75)))
+            }
+        }
+        sound.effects = effects
+
+        // Hits and risers, on the cuts no word starts on (with no words, the cuts in seconds with no talk).
+        if let f {
+            let starts = words.map(\.range.start.seconds)
+            let clear = cuts.filter { c in words.isEmpty ? !(Int(c) < isSpeech.count && isSpeech[Int(c)]) : !starts.contains { abs($0 - c) <= 0.15 } }
+            sound.cutsHeard = clear.count
+            sound.hitsOnCuts = clear.filter { MusicListening.hit(f, at: $0) }.count
+            sound.risersIntoCuts = clear.filter { c in !spoken.contains { $0.overlaps((c - 2)...c) } && MusicListening.riser(f, into: c) }.count
+        }
+    }
+
+    /// Apple's sound classifier's names for instruments and voices in music, as a director says them.
+    static let instrumentNames: [String: String] = [
+        "plucked_string_instrument": "plucked strings", "guitar": "guitar", "electric_guitar": "electric guitar", "bass_guitar": "bass guitar", "acoustic_guitar": "acoustic guitar",
+        "steel_guitar_slide_guitar": "slide guitar", "guitar_strum": "strummed guitar", "banjo": "banjo", "sitar": "sitar", "mandolin": "mandolin", "ukulele": "ukulele",
+        "keyboard_musical": "keys", "piano": "piano", "electric_piano": "electric piano", "organ": "organ", "electronic_organ": "electronic organ", "hammond_organ": "Hammond organ",
+        "synthesizer": "synth", "harpsichord": "harpsichord", "percussion": "percussion", "drum_kit": "drum kit", "drum": "drums", "snare_drum": "snare", "bass_drum": "kick drum",
+        "timpani": "timpani", "tabla": "tabla", "cymbal": "cymbal", "hi_hat": "hi-hat", "tambourine": "tambourine", "marimba_xylophone": "marimba", "glockenspiel": "glockenspiel",
+        "vibraphone": "vibraphone", "mallet_percussion": "mallets", "steelpan": "steel pan", "orchestra": "orchestra", "brass_instrument": "brass", "french_horn": "French horn",
+        "trumpet": "trumpet", "trombone": "trombone", "bowed_string_instrument": "bowed strings", "violin_fiddle": "violin", "cello": "cello", "double_bass": "double bass",
+        "wind_instrument": "woodwinds", "flute": "flute", "saxophone": "saxophone", "clarinet": "clarinet", "oboe": "oboe", "bassoon": "bassoon", "harp": "harp",
+        "harmonica": "harmonica", "accordion": "accordion", "theremin": "theremin", "singing_bowl": "singing bowl", "singing": "vocals", "choir_singing": "choir",
+        "humming": "humming", "whistling": "whistling", "rapping": "rap vocals", "disc_scratching": "scratching",
+    ]
+    /// Its names for sounds an editor adds, or the footage has: effects, a clock, a camera.
+    static let effectNames: [String: String] = [
+        "whoosh_swoosh_swish": "whoosh", "boom": "boom", "thump_thud": "thud", "click": "click", "beep": "beep", "tick": "ticking clock", "tick_tock": "ticking clock", "clock": "clock",
+        "bell": "bell", "chime": "chime", "wind_chime": "wind chime", "gong": "gong", "glass_clink": "clink", "glass_breaking": "glass breaking", "camera": "camera shutter",
+        "typing": "typing", "typing_computer_keyboard": "typing", "typewriter": "typing", "slap_smack": "slap", "knock": "knock", "door_slam": "door slam",
+        "coin_dropping": "coins", "crumpling_crinkling": "paper", "tearing": "tearing", "zipper": "zipper", "alarm_clock": "alarm", "ringtone": "ringtone",
+        "telephone_bell_ringing": "phone ringing", "door_bell": "doorbell", "squeak": "squeak", "fireworks": "fireworks", "firecracker": "firecracker",
+    ]
+    /// How sure the classifier must be before an instrument, or another sound, counts in a second.
+    static let instrumentHeard = 0.3, otherHeard = 0.35
 
     static func loudness(_ url: URL) throws -> LoudnessMeter {
         let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: true)
@@ -200,6 +335,8 @@ public enum VideoStudying {
                 case .speech: h.speech = max(h.speech, c.confidence)
                 default: break
                 }
+                if c.confidence >= VideoStudying.instrumentHeard, let name = VideoStudying.instrumentNames[c.identifier] { h.instruments[name] = max(h.instruments[name] ?? 0, c.confidence) }
+                if c.confidence >= VideoStudying.otherHeard, let name = VideoStudying.effectNames[c.identifier] { h.others[name] = max(h.others[name] ?? 0, c.confidence) }
             }
             seconds.append(h)
         }

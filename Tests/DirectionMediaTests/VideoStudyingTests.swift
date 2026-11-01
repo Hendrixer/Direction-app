@@ -167,7 +167,7 @@ import DirectionCore
         let root = try root(); defer { try? FileManager.default.removeItem(at: root) }
         let started = Date()
         let study = try await VideoStudying.study(video: video, folder: root, cacheDirectory: root.appendingPathComponent("cache"), title: nil, by: nil, link: video.lastPathComponent, words: [])
-        print("STUDY \(String(format: "%.1f", Date().timeIntervalSince(started))) s\n" + study.markdown.split(separator: "\n").prefix(28).joined(separator: "\n"))
+        print("STUDY \(String(format: "%.1f", Date().timeIntervalSince(started))) s\n" + study.markdown.components(separatedBy: "\n## Shots")[0])
         #expect(study.pace.shots > 0)
     }
 
