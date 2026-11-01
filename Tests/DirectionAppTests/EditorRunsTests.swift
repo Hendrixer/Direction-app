@@ -320,6 +320,7 @@ struct EditorJobTests {
         #expect(codex.first == "exec" && codex.last == "Do the job.")
         for flag in codex where flag.hasPrefix("--") { #expect(EditorProgram.codexExecFlags.contains(flag), "\(flag) isn't in codexExecFlags") }
         #expect(codex.contains("mcp_servers.direction.args=[\"mcp\",\"--project\",\"/f\"]"))
+        #expect(codex.contains("mcp_servers.direction.tool_input_schema_max_bytes=32768"))
         let codexAgain = EditorProgram.codex.arguments(resumed)
         #expect(Array(codexAgain.prefix(2)) == ["exec", "resume"] && codexAgain.suffix(2) == ["s-1", "Do the job."])
         for flag in codexAgain where flag.hasPrefix("--") { #expect(EditorProgram.codexResumeFlags.contains(flag), "\(flag) isn't in codexResumeFlags") }

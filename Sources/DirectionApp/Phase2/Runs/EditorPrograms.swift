@@ -119,6 +119,8 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
                 "--config", "mcp_servers.direction.command=\(toml(i.helper))",
                 "--config", "mcp_servers.direction.args=[\(toml("mcp")),\(toml("--project")),\(toml(i.film.path))]",
                 "--config", "mcp_servers.direction.env.DIRECTION_RUN_ID=\(toml(i.runID))",
+                // Codex strips a tool's field descriptions, then its nested shapes, past 5,000 bytes of schema; direction_edit's is bigger.
+                "--config", "mcp_servers.direction.tool_input_schema_max_bytes=32768",
                 "--config", "sandbox_workspace_write.network_access=false",
                 "--config", "approval_policy=\"never\"",
                 "--output-schema", i.schema.path,

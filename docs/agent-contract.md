@@ -50,6 +50,16 @@ For a persistent local API, run `direction api --project PATH`. Write one JSON o
 
 Each response preserves `id` and contains `result` or `error: {code,message}`. API JSON returns local media paths; MCP additionally emits inline image/audio content. There is no HTTP listener. Local clients run with the user's file access; this is not a sandbox for untrusted agents.
 
+### Tool arguments
+
+Each tool's `inputSchema` is what the editor reads to shape its call, and Direction checks every call against it before running anything (`ToolCatalog.validate`). Neither Claude Code nor Codex constrains the model to the schema for MCP tools, so the schema has to be plain enough for both to pass on intact, and the check is what holds the line.
+
+- Every field has a `type`; objects list their `properties` with `required` and `additionalProperties: false`; arrays type their `items`; fixed sets are `enum`. Codex turns a field with no type into `{}` and drops its description, and an array with no items into a list of text. `ToolSchemaTests` fails on either, apart from a short list of free-form settings (an effect's params, keyframes, a style's tokens).
+- One shape per field where possible. A field that genuinely takes two (an edit time: seconds or `{value, timescale}`) is a nested `anyOf` whose every branch is typed. Never at the top level, never `$ref`, `oneOf`, `allOf` or `pattern`.
+- Codex drops `minimum`, `maximum`, lengths, patterns and defaults, so a range or a unit also goes in the field's description ("progress: a number, 0–1").
+- Codex strips descriptions, then nested shapes, from a schema over 5,000 bytes. Direction starts Codex with `mcp_servers.direction.tool_input_schema_max_bytes=32768`, and every schema stays under that; Claude Code cuts a tool's description at 4,096 characters.
+- A refusal is `invalid_arguments` with every problem at once, each with its path, what it takes and what came instead, and ends saying nothing was changed: Codex doesn't show the model that a result was an error, so the words have to.
+
 ## Reading and editing the cut
 
 The editor reads the cut as OpenTimelineIO and changes it only through named edit functions, which Direction carries out exactly. No tool accepts a timeline document. The full contract, with every operation, effect and error, is in `agent-timeline.md`; `direction_edit_catalog` returns the same vocabulary as data.
