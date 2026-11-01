@@ -86,7 +86,22 @@ public enum JSONValue: Codable, Hashable, Sendable {
     public var bool: Bool? { if case .bool(let b) = self { return b }; return nil }
     public var array: [Self]? { if case .array(let a) = self { return a }; return nil }
     public static func wrapping<T: Encodable>(_ value: T) throws -> Self { try JSONDecoder().decode(Self.self, from: JSONEncoder.direction.encode(value)) }
-    public func decode<T: Decodable>(_ type: T.Type) throws -> T { try JSONDecoder().decode(type, from: JSONEncoder.direction.encode(self)) }
+    /// A value in the wrong shape says which field and what it should be, so the caller can put it right.
+    public func decode<T: Decodable>(_ type: T.Type) throws -> T {
+        do { return try JSONDecoder().decode(type, from: JSONEncoder.direction.encode(self)) }
+        catch let e as DecodingError { throw DirectionError("invalid_arguments", Self.says(e)) }
+    }
+    static func says(_ e: DecodingError) -> String {
+        func path(_ keys: [CodingKey]) -> String {
+            keys.map { $0.intValue.map { "[\($0)]" } ?? ".\($0.stringValue)" }.joined().trimmingPrefix(".").description
+        }
+        switch e {
+        case .typeMismatch(_, let c), .dataCorrupted(let c): return (c.codingPath.isEmpty ? "" : path(c.codingPath) + ": ") + c.debugDescription
+        case .valueNotFound(_, let c): return "\(path(c.codingPath)) is required."
+        case .keyNotFound(let key, let c): return "\(path(c.codingPath + [key])) is required."
+        @unknown default: return e.localizedDescription
+        }
+    }
     public func data(pretty: Bool = false) throws -> Data { let e = JSONEncoder.direction; if pretty { e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes] }; return try e.encode(self) }
     public func requiredString(_ key: String) throws -> String { guard let s = self[key].string, !s.isEmpty else { throw DirectionError("invalid_arguments", "\(key) must be a nonempty string.") }; return s }
 }

@@ -209,6 +209,21 @@ struct MediaIntegrationTests {
         #expect(abs((time?.seconds ?? 0) - 3) < 0.08)
     }
 
+    /// Effects on a clip's sound (a high-pass, the compressor, the limiter) play in the cut and measure: the
+    /// processed sound stays open until it's in (Coded love's Cut 2 wouldn't play with the narration limited).
+    @Test func aClipsSoundEffectsPlayInTheCutAndMeasure() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let p = try f.store.read(), asset = p.assets[0]
+        let clip = try #require(try p.sequence(nil).clips.first { $0.assetID == asset.id })
+        _ = try await f.runtime.invoke("direction_audio", arguments: .object(["assetID": .string(asset.id), "trackID": .number(Double(asset.audio[0].id)), "clipID": .string(clip.id),
+                                                                              "highPassHz": .number(80), "compressor": .bool(true), "thresholdDB": .number(-24), "limiter": .bool(true),
+                                                                              "baseEditRevision": .number(Double(p.editRevision)), "idempotencyKey": .string(UUID().uuidString)]))
+        let compiled = try await f.compile()
+        let loudness = try await SequenceRenderer.loudness(compiled)
+        #expect(loudness["integratedLUFS"].double != nil, "\(loudness)")
+        _ = try await SequenceRenderer.frame(compiled, at: MediaTime(seconds: 1), to: f.directory.appendingPathComponent("effects.png"), maxDimension: 320)
+    }
+
     @Test func detectsChangedSourcesAndProtectsExistingExports() async throws {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         let compiled = try await f.compile()

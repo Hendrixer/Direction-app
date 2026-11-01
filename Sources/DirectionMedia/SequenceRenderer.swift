@@ -52,6 +52,8 @@ public enum SequenceRenderer {
         func above(_ c: Clip) -> Bool { c.aboveLook ?? sequence.tracks?[c.trackName]?.aboveLook ?? false }
         let ratio = previewMaxDimension.map { min(1, Double($0) / Double(max(sequence.width, sequence.height))) } ?? scale
         var layers: [RenderLayer] = [], audioParameters: [AVMutableAudioMixInputParameters] = []
+        // A track doesn't keep its file open: sound processed for a clip's effects is held until it's in the cut.
+        var processedFiles: [AVURLAsset] = []
         for clip in sequence.clips.sorted(by: { ($0.layer, $0.start.seconds, $0.id) < ($1.layer, $1.start.seconds, $1.id) }) {
             try Task.checkCancellation()
             // Every transition but a dip shows both shots, so each plays its handle across the cut.
@@ -132,7 +134,9 @@ public enum SequenceRenderer {
                 let inputTrack: AVAssetTrack?
                 if settings.effects.isActive {
                     let processed = try await AudioProcessor.processed(asset: asset, trackID: stream.id, effects: settings.effects, directory: cacheDirectory.appendingPathComponent("Audio"))
-                    inputTrack = try await AVURLAsset(url: processed).loadTracks(withMediaType: .audio).first
+                    let file = AVURLAsset(url: processed)
+                    processedFiles.append(file)
+                    inputTrack = try await file.loadTracks(withMediaType: .audio).first
                 } else { inputTrack = sourceAudio.first { $0.trackID == stream.id } }
                 guard let inputTrack, let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw DirectionError("audio_track_failed", "Cannot load source audio track \(stream.id).") }
                 let available = try await inputTrack.load(.timeRange)
@@ -152,6 +156,7 @@ public enum SequenceRenderer {
                 audioParameters.append(mix)
             }
         }
+        withExtendedLifetime(processedFiles) {}
         if composition.duration < sequence.duration.cmTime { composition.insertEmptyTimeRange(.init(start: composition.duration, duration: CMTimeSubtract(sequence.duration.cmTime, composition.duration))) }
         let settings = RenderSettings(looks: looks, fps: fps, size: CGSize(width: sequence.width, height: sequence.height), look: look)
         // Instructions tile the cut exactly, so marks closer than a microsecond merge rather than leave a gap.

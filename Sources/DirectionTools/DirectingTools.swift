@@ -11,7 +11,14 @@ private struct TakeInput: Decodable {
 }
 private struct ReadBackInput: Decodable {
     var noteID: String; var plan: String; var delta: String?; var twoWays: Bool?
-    var conflictWithNoteID: String?; var following: String?; var range: String?; var detail: String?; var cantYet: String?
+    var conflictWithNoteID: String?; var following: String?; var range: JSONValue?; var detail: String?; var cantYet: String?
+    /// Where two notes overlap, as written ("0:00–0:06"), or as {start, end} in seconds.
+    var rangeText: String? {
+        if let s = range?.string { return s }
+        guard let a = range?["start"].double, let b = range?["end"].double else { return nil }
+        func t(_ x: Double) -> String { String(format: "%d:%04.1f", Int(x) / 60, x.truncatingRemainder(dividingBy: 60)) }
+        return "\(t(a))\u{2013}\(t(b))"
+    }
 }
 private struct ChoiceInput: Decodable { var id: String?; var label: String; var detail: String?; var assetID: String?; var recommended: Bool? }
 private struct FinishingInput: Decodable { var id: String; var title: String?; var detail: String?; var state: String?; var by: [String]?; var progress: Double? }
@@ -118,7 +125,7 @@ extension ToolRuntime {
             let readBack: [ReadBackLine]? = try a["readBack"].array.map { lines in
                 try lines.map { value in
                     let r = try value.decode(ReadBackInput.self)
-                    let conflict = r.conflictWithNoteID.map { Conflict(withNoteID: $0, following: r.following ?? r.noteID, range: r.range, detail: r.detail) }
+                    let conflict = r.conflictWithNoteID.map { Conflict(withNoteID: $0, following: r.following ?? r.noteID, range: r.rangeText, detail: r.detail) }
                     return ReadBackLine(noteID: r.noteID, plan: r.plan, delta: r.delta, twoWays: r.twoWays ?? false, conflict: conflict, cantYet: r.cantYet)
                 }
             }
