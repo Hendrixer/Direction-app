@@ -33,14 +33,19 @@ public enum SDRCopy {
         do {
             try await withTaskCancellationHandler { @Sendable in try await box.session.export(to: temp, as: .mov) } onCancel: { box.session.cancelExport() }
             try Task.checkCancellation()
-            let base = url.deletingPathExtension().lastPathComponent
-            var n = 1, target = folder.appendingPathComponent(base + ".mov")
-            while FileManager.default.fileExists(atPath: target.path) { n += 1; target = folder.appendingPathComponent("\(base) \(n).mov") }
-            try FileManager.default.moveItem(at: temp, to: target)
-            return target
+            return try place(temp, as: url, in: folder)
         } catch {
             session.cancelExport(); try? FileManager.default.removeItem(at: temp)
             throw error
         }
+    }
+
+    /// A finished copy Direction made (this, SeekableCopy) takes the original's name as a .mov, or "Name 2.mov" when that's taken.
+    static func place(_ temp: URL, as original: URL, in folder: URL) throws -> URL {
+        let base = original.deletingPathExtension().lastPathComponent
+        var n = 1, target = folder.appendingPathComponent(base + ".mov")
+        while FileManager.default.fileExists(atPath: target.path) { n += 1; target = folder.appendingPathComponent("\(base) \(n).mov") }
+        try FileManager.default.moveItem(at: temp, to: target)
+        return target
     }
 }

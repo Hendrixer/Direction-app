@@ -102,4 +102,21 @@ extension ProjectStore {
             }
         }
     }
+
+    /// Points a take at the copy Direction made of its file so it plays from any frame (SeekableCopy). The
+    /// copy is the same picture and sound, so it keeps the take's name and must match its length within a frame.
+    @discardableResult
+    public func useSeekableCopy(_ link: AssetRelink, key: String = UUID().uuidString) throws -> Project {
+        let current = try read()
+        guard let take = current.assets.first(where: { $0.id == link.assetID }) else { throw DirectionError("asset_not_found", "Take \(link.assetID) isn't footage in this film.") }
+        return try update(expectedRevision: current.editRevision, key: key, request: try JSONEncoder.direction.encode(link), summary: "Made a copy of \(take.name) that plays from any frame") { p in
+            guard let i = p.assets.firstIndex(where: { $0.id == link.assetID }) else { throw DirectionError("asset_not_found", "Take \(link.assetID) isn't footage in this film.") }
+            guard FootageMatch.durationMatches(p.assets[i], link.duration) else { throw DirectionError("relink_length_mismatch", "The copy of \(p.assets[i].name) isn\u{2019}t the same length.") }
+            p.assets[i].seekableCopyOf = p.assets[i].path
+            p.assets[i].path = URL(fileURLWithPath: link.path).standardizedFileURL.path
+            p.assets[i].fileSize = link.fileSize
+            p.assets[i].modifiedAt = link.modifiedAt
+            p.assets[i].bookmark = link.bookmark
+        }
+    }
 }

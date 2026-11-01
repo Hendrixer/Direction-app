@@ -178,6 +178,21 @@ final class FilmModel {
         knownDelivered = Set(turnovers.filter { $0.state == .delivered }.map(\.id))
         knownQuestions = Set(questions.map(\.id))
         room = defaultRoom
+        copyStallingTakes()
+    }
+
+    /// Takes brought in before Direction copied files with open keyframes stall playback where a cut starts
+    /// just before one: each gets its copy now, in place (SeekableCopy).
+    func copyStallingTakes() {
+        guard let store, let runtime else { return }
+        Task {
+            let copied = await SeekableCopy.copyTakes(in: store, checked: runtime.cacheDirectory.appendingPathComponent("keyframes-checked.json"))
+            guard let first = copied.first else { return }
+            refresh(force: true)
+            toast = copied.count == 1
+                ? Toast(title: "Made a copy of \(first.name) that plays from any frame", detail: "Its file was written in a way that stalled playback. The copy is in the film\u{2019}s Footage folder, with the same picture and sound; the original stays as it is.")
+                : Toast(title: "Made copies of \(copied.count) takes that play from any frame", detail: "Their files were written in a way that stalled playback. The copies are in the film\u{2019}s Footage folder, with the same picture and sound; the originals stay as they are.")
+        }
     }
 
     // Phase 2 areas, each refreshed with the film (Sources/DirectionApp/Phase2).
@@ -770,17 +785,22 @@ final class FilmModel {
         importingFootage += urls.count
         if copies != nil { var c = copyingFootage ?? FootageCopying(); c.total += urls.count; copyingFootage = c }
         Task {
-            var toldHDR = false
+            var toldHDR = false, toldSeekable = false
             for url in urls {
                 var file = url
                 do {
-                    // HDR comes in as an SDR copy Direction makes in the Footage folder, so it isn't copied first.
-                    let hdr = await SDRCopy.isHDR(url)
+                    // HDR comes in as an SDR copy Direction makes in the Footage folder, and a file with open
+                    // keyframes as a copy that plays from any frame, so neither is copied first.
+                    let hdr = await SDRCopy.isHDR(url), seekable = hdr ? false : await SeekableCopy.isNeeded(url)
                     if hdr, !toldHDR {
                         toldHDR = true
                         toast = Toast(title: "Making SDR copies", detail: "Your HDR clips come in as SDR copies in the film\u{2019}s Footage folder. The originals stay as they are.")
                     }
-                    if let copies, !hdr { file = try await copyIn(url, to: copies) }
+                    if seekable, !toldSeekable {
+                        toldSeekable = true
+                        toast = Toast(title: "Making copies that play from any frame", detail: "Some of your clips were written in a way that stalls playback. They come in as copies in the film\u{2019}s Footage folder, with the same picture and sound. The originals stay as they are.")
+                    }
+                    if let copies, !hdr, !seekable { file = try await copyIn(url, to: copies) }
                     else if copies != nil, var c = copyingFootage { c.done += 1; copyingFootage = c.done >= c.total ? nil : c }
                     // Footage goes to the library; the editor builds the assembly from circles.
                     var args: [String: JSONValue] = ["path": .string(file.path), "append": .bool(false)]

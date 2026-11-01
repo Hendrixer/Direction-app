@@ -50,15 +50,18 @@ public actor ToolRuntime {
             let path = try a.requiredString("path")
             let original = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL.resolvingSymlinksInPath()
             var file = original
-            // HDR comes in as an SDR copy in the film's Footage folder; the original stays as it is.
-            if await SDRCopy.isHDR(original) {
-                guard try !store.read().assets.contains(where: { $0.sdrCopyOf == original.path }) else { throw DirectionError("already_imported", "This file is already in the project, as its SDR copy.") }
-                file = try await SDRCopy.make(original, in: MediaAsset.copies(in: store.url))
+            // HDR comes in as an SDR copy in the film's Footage folder, and a file with open keyframes as a
+            // copy that plays from any frame; the original stays as it is.
+            let hdr = await SDRCopy.isHDR(original), seekable = hdr ? false : await SeekableCopy.isNeeded(original)
+            if hdr || seekable {
+                guard try !store.read().assets.contains(where: { $0.sdrCopyOf == original.path || $0.seekableCopyOf == original.path }) else { throw DirectionError("already_imported", "This file is already in the project, as Direction\u{2019}s copy of it.") }
+                let copies = MediaAsset.copies(in: store.url)
+                file = hdr ? try await SDRCopy.make(original, in: copies) : try await SeekableCopy.make(original, in: copies)
             }
             let output: Project, asset: MediaAsset
             do {
                 var inspected = try await MediaInspector.inspect(url: file, thumbnailDirectory: cacheDirectory.appendingPathComponent("Thumbnails"))
-                if file != original { inspected.sdrCopyOf = original.path }
+                if hdr { inspected.sdrCopyOf = original.path } else if seekable { inspected.seekableCopyOf = original.path }
                 asset = inspected
                 let p = try store.read()
                 output = try store.addAsset(asset, append: a["append"].bool ?? false, sequenceID: a["sequenceID"].string, frameRate: a["frameRate"].double.map(FrameRate.nearest), expectedRevision: a["baseEditRevision"].int ?? p.editRevision, key: a["idempotencyKey"].string ?? UUID().uuidString)
