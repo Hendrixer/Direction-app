@@ -336,12 +336,8 @@ extension ScriptDocument {
         var entryOf: [String: Int] = [:]
         for (k, e) in entries.enumerated() { for m in e.members { entryOf["\(m.assetID):\(m.line)"] = k } }
 
-        // The cut's words, then runs of words from one source line in one clip.
-        var words = TranscriptEditing.words(in: sequence, transcripts: transcripts)
-        var voice = sequence
-        voice.clips = sequence.clips.filter { $0.kind == .audio && $0.assetID.map(audioOnly) == true }
-        if !voice.clips.isEmpty { words += TranscriptEditing.words(in: voice, transcripts: transcripts) }
-        words.sort { $0.range.start < $1.range.start }
+        // The cut's words (a voice-over on A1 among them), then runs of words from one source line in one clip.
+        let words = TranscriptEditing.words(in: sequence, transcripts: transcripts)
         struct Run { var asset: String; var clip: String; var line: Int; var words: [TimelineWord] }
         var runs: [Run] = []
         for w in words {

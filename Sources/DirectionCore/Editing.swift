@@ -1582,9 +1582,9 @@ struct EditWork {
         return change("Faded \(label(c))’s sound" + (op.fadeIn.map { " in over \($0) frames" } ?? "") + (op.fadeOut.map { (op.fadeIn != nil ? " and" : "") + " out over \($0) frames" } ?? ""), c)
     }
 
-    /// Words on a sound track: A1 is V1's own sound plus any sound-only clips on A1.
+    /// Words on a sound track: A1 is what's heard of V1 plus any sound-only clips on A1.
     func trackWords(_ t: Track) -> [TimelineWord] {
-        let clips = s.clips.filter { t.audio && t.layer == 0 ? ($0.layer == 0 && $0.hold == nil) : on($0, t) }
+        let clips = t.audio && t.layer == 0 ? TranscriptEditing.spoken(s) : s.clips.filter { on($0, t) }
         return TranscriptEditing.words(on: clips, transcripts: transcripts)
     }
 
@@ -1674,11 +1674,21 @@ public enum TranscriptEditing {
         Dictionary(grouping: transcripts, by: \.assetID).compactMapValues { alternatives in alternatives.max { ($0.selectedAt ?? 0) < ($1.selectedAt ?? 0) } }
     }
 
+    /// The words heard on the story track, in cut time: a narration on A1 and a talking head on V1 alike.
     public static func words(in sequence: Sequence, transcripts: [SourceTranscript]) -> [TimelineWord] {
-        let chosen = selected(transcripts)
-        let narrative = sequence.clips.filter { $0.kind == .video && $0.layer == 0 && $0.assetID.flatMap { chosen[$0] } != nil }
-        let clips = narrative.isEmpty ? sequence.clips.filter { $0.kind == .audio && $0.layer == 0 } : narrative
-        return words(on: clips, transcripts: transcripts)
+        words(on: spoken(sequence), transcripts: transcripts)
+    }
+
+    /// The story track's clips that are heard: sound on its own on A1, and V1's pictures that play their
+    /// own sound or have sound in sync under them. B-roll laid on V1 with its sound off says nothing.
+    public static func spoken(_ sequence: Sequence) -> [Clip] {
+        sequence.clips.filter { c in
+            guard c.layer == 0, c.hold == nil else { return false }
+            if c.kind == .audio { return true }
+            guard c.kind == .video else { return false }
+            let silent = !c.audioOverrides.isEmpty && c.audioOverrides.values.allSatisfy(\.muted)
+            return !silent || sequence.clips.contains { $0.synced == true && $0.kind == .audio && $0.start < c.end && $0.end > c.start }
+        }
     }
 
     /// Timed words for these clips, in cut time. A freeze has none.

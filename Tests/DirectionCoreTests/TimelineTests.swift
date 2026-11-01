@@ -227,6 +227,46 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool { abs(a
     expectFailure("bad_argument", index: 0) { _ = try cut.run([#"{"op":"tightenPauses","range":{"start":0,"end":4},"longerThan":0.5,"to":0.8}"#]) }
 }
 
+/// An essay: a narration on A1 with b-roll over it, then the narrator on camera. Both voices are the cut's words;
+/// the b-roll's own sound isn't, whether it's a cutaway or on V1 with its sound off.
+@Test func aNarrationIsTheCutsWordsUnderItsPictureAndBesideTheTalkingHead() throws {
+    var cut = TimelineCut.make()
+    func take(_ id: String, video: Bool) -> MediaAsset {
+        MediaAsset(id: id, name: id + (video ? ".mov" : ".wav"), path: "/\(id)", duration: .init(seconds: 20), video: video ? [.init(id: 1, width: 1920, height: 1080, frameRate: 30)] : [], audio: [.init(id: 2, index: 0, label: "Dialogue", channels: 1, sampleRate: 48_000)])
+    }
+    func line(_ asset: String, _ words: [(String, Double)]) -> SourceTranscript {
+        SourceTranscript(assetID: asset, audioTrackID: 2, words: words.enumerated().map { i, w in TranscriptWord(id: "\(asset)-w\(i)", text: w.0, range: .init(start: w.1, end: w.1 + 0.3)) })
+    }
+    cut.project.assets += [take("vo", video: false), take("street", video: true), take("head", video: true)]
+    cut.project.sequences[0].clips = []
+    cut.context.transcripts = [line("vo", [("Cinematic", 0.5), ("means", 1.2), ("chosen.", 3.0)]), line("street", [("horn", 1.0), ("dog", 6.0)]), line("head", [("Here\u{2019}s", 0.4), ("why.", 0.9)])]
+    try cut.apply(
+        #"{"op":"insert","assetID":"vo","sourceRange":{"start":0,"end":4}}"#,
+        #"{"op":"cutaway","assetID":"street","sourceRange":{"start":0,"end":2},"at":0}"#,
+        #"{"op":"insert","assetID":"head","sourceRange":{"start":0,"end":2},"at":4}"#
+    )
+    // B-roll on V1 under the narration, its sound off.
+    let s = cut.project.sequences[0]
+    #expect(s.clips.first { $0.assetID == "vo" }?.trackName == "A1" && s.clips.first { $0.assetID == "street" }?.trackName == "V2")
+    var silent = Clip(id: "broll", assetID: "street", name: "street", start: .init(seconds: 2), sourceRange: .init(start: 5, end: 7))
+    silent.audioOverrides["2"] = AudioSettings(muted: true)
+    cut.project.sequences[0].clips.append(silent)
+    let words = { TranscriptEditing.words(in: cut.project.sequences[0], transcripts: cut.context.transcripts) }
+    #expect(words().map(\.text) == ["Cinematic", "means", "chosen.", "Here\u{2019}s", "why."])
+
+    // The narration's words cut and tighten like a take's; everything over them moves with them.
+    let means = try #require(words().first { $0.text == "means" })
+    try cut.apply(#"{"op":"removeWords","wordIDs":["\#(means.id)"]}"#)
+    #expect(words().map(\.text) == ["Cinematic", "chosen.", "Here\u{2019}s", "why."] && close(cut.project.sequences[0].duration.seconds, 5.7))
+    try cut.apply(#"{"op":"tightenPauses","range":{"start":0,"end":3.7},"longerThan":0.5,"to":0.2}"#)
+    let tight = words()
+    // The 1.9 s pause in the narration is 0.2 s; the one before the narrator comes on camera is outside the range and stays.
+    #expect(close(tight[1].range.start.seconds - tight[0].range.end.seconds, 0.2, 1.0 / 30 + 1e-6) && close(tight[2].range.start.seconds - tight[1].range.end.seconds, 1.1, 1.0 / 30 + 1e-6))
+    // Music ducks under both voices: the narration's line and the narrator's on camera.
+    try cut.apply(#"{"op":"overwrite","assetID":"music","sourceRange":{"start":0,"end":4},"at":0,"track":"A2"}"#, #"{"op":"duck","track":"A2","under":"A1","dB":-12}"#)
+    #expect(cut.project.sequences[0].clips.first { $0.assetID == "music" }?.duckKeys?.count == 8)
+}
+
 @Test func speedAndFreezeKeepTheStoryInSync() throws {
     var cut = TimelineCut.make()
     _ = try cut.apply(#"{"op":"speed","clipID":"c2","rate":2}"#)
