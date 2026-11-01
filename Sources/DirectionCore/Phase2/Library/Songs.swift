@@ -57,6 +57,8 @@ public enum Stems {
     static let order = [fullMix, "Drums", "Bass", "Instruments", "Melody", "Vocals"]
     /// How far apart two parts of one song can be in length: a full mix and its stems are the same length, give or take an encoder's padding.
     static let lengthTolerance = 0.25
+    /// A sound heard as an effect this long or longer can still be a stem.
+    static let stemLength = 30.0
 
     /// A file's name as a song and the part it is: "ES_Neon Drive (Drums) - Artist" is the Drums of
     /// "ES Neon Drive - Artist". A name with no part in it is the song itself, and maybe its full mix.
@@ -99,23 +101,51 @@ public enum Stems {
     }
     static func key(_ s: String) -> String { clean(s).lowercased() }
 
+    /// A music library's code at the start of its file names, and the library: Epidemic Sound's "ES_".
+    static let libraries = ["ES": "Epidemic Sound"]
+
+    /// What a music library's file name says of the song: its title, short ("Try Again") and with its version
+    /// ("Try Again (Instrumental Version)"), the artist after " - ", and the library its code names.
+    /// "ES_Try Again (Instrumental Version) STEMS BASS - mr." is Try Again by mr., from Epidemic Sound.
+    public static func title(_ name: String) -> (short: String, long: String, artist: String?, library: String?) {
+        var raw = name, library: String?
+        if let code = raw.range(of: #"^[A-Z]{2,3}_"#, options: .regularExpression), let l = libraries[String(raw[code].dropLast())] { library = l; raw.removeSubrange(code) }
+        let base = read(raw).song
+        var long = base, artist: String?
+        if let dash = base.range(of: " - ", options: .backwards), let rawDash = raw.range(of: " - ", options: .backwards) {
+            long = String(base[..<dash.lowerBound])
+            // The artist as written, unless a part is named after it.
+            let written = raw[rawDash.upperBound...].trimmingCharacters(in: .whitespaces)
+            artist = read(written).part == nil ? written : String(base[dash.upperBound...])
+        }
+        let short = long.replacingOccurrences(of: #"\s*[\(\[][^\)\]]*[\)\]]\s*$"#, with: "", options: .regularExpression)
+        return (short.isEmpty ? long : short, long, artist?.isEmpty == true ? nil : artist, library)
+    }
+
+    /// A song put together from the sounds: its name, which part each is, and where it's from when its name says.
+    public struct Found: Hashable, Sendable { public var song: String; public var part: String; public var source: String? }
+
     /// Which of these sounds are parts of one song: music that's been listened to, on its own, the same length
     /// as the others and named the same once its part is taken out, with at least one stem among them. A sound
-    /// joins a song already kept the same way. By file: the song and the part.
-    public static func found(_ items: [ShelfItem]) -> [String: (song: String, part: String)] {
-        var out: [String: (song: String, part: String)] = [:]
+    /// joins a song already kept the same way. By file. A new song takes its title from the names, the version
+    /// too where two would share a title.
+    public static func found(_ items: [ShelfItem]) -> [String: Found] {
+        var out: [String: Found] = [:]
         func length(_ i: ShelfItem) -> Double? { i.measured?.seconds }
-        let open = items.filter { $0.song == nil && $0.kind == .music && length($0) != nil }
+        // A stem heard on its own (drums alone) can sound like an effect, but no effect is as long as a song.
+        let open = items.filter { $0.song == nil && length($0) != nil && ($0.kind == .music || ($0.kind == .effect && length($0)! >= stemLength)) }
         var placed = Set<String>()
-        // Into a song already kept: same name, same length, a part it hasn't got.
-        for song in MediaLibrary.songs(items) {
+        // Into a song already kept: named as its parts are, the same length, a part it hasn't got.
+        let kept = MediaLibrary.songs(items)
+        for song in kept {
             guard let seconds = length(song.lead) else { continue }
+            let named = Set(song.parts.map { key(read($0.name).song) } + [key(song.name)])
             var taken = Set(song.parts.compactMap { $0.part?.lowercased() })
             for i in open where !placed.contains(i.file) {
                 let r = read(i.name), part: String
-                if key(r.song) == key(song.name) { part = r.part ?? fullMix } else if key(i.name) == key(song.name) { part = fullMix } else { continue }
+                if named.contains(key(r.song)) { part = r.part ?? fullMix } else if named.contains(key(i.name)) { part = fullMix } else { continue }
                 guard abs(length(i)! - seconds) <= lengthTolerance, taken.insert(part.lowercased()).inserted else { continue }
-                out[i.file] = (song.name, part); placed.insert(i.file)
+                out[i.file] = Found(song: song.name, part: part, source: nil); placed.insert(i.file)
             }
         }
         // New songs: stems named alike, then a full mix that's named as the song is.
@@ -133,13 +163,24 @@ public enum Stems {
         for (k, g) in groups where g.count == 1 && g[0].part != fullMix && groups[key(g[0].item.name)] != nil {
             groups[key(g[0].item.name)]!.append((g[0].item, g[0].item.name, fullMix)); groups[k] = nil
         }
-        for g in groups.values {
+        var songs: [(title: (short: String, long: String, artist: String?, library: String?), members: [(item: ShelfItem, song: String, part: String)])] = []
+        for k in groups.keys.sorted() {
+            let g = groups[k]!
             let lengths = g.map { length($0.item)! }.sorted(), middle = lengths[lengths.count / 2]
             var parts = Set<String>(), members: [(item: ShelfItem, song: String, part: String)] = []
             for m in g.sorted(by: { $0.item.name < $1.item.name }) where abs(length(m.item)! - middle) <= lengthTolerance && parts.insert(m.part.lowercased()).inserted { members.append(m) }
             guard members.count >= 2, members.contains(where: { $0.part != fullMix }) else { continue }
-            let name = members.first { $0.part != fullMix }!.song
-            for m in members { out[m.item.file] = (name, m.part) }
+            songs.append((title(members.first { $0.part != fullMix }!.item.name), members))
+        }
+        // The short title where it's the only one; the version where two share it; then the artist.
+        var used = Set(kept.map { $0.name.lowercased() })
+        for (t, members) in songs {
+            let shared = songs.filter { $0.title.short.lowercased() == t.short.lowercased() }.count > 1
+            let choices = (shared ? [] : [t.short]) + [t.long] + (t.artist.map { ["\(t.long) - \($0)"] } ?? []) + [members[0].song]
+            let name = choices.first { !used.contains($0.lowercased()) } ?? "\(t.long) \(used.count + 1)"
+            used.insert(name.lowercased())
+            let source = t.library.map { l in t.artist.map { "\(l), by \($0)" } ?? l }
+            for m in members { out[m.item.file] = Found(song: name, part: m.part, source: source) }
         }
         return out
     }
@@ -174,7 +215,7 @@ extension MediaLibrary {
         let found = Stems.found(items())
         guard !found.isEmpty else { return [] }
         var changed: [ShelfItem] = []
-        for (file, a) in found { changed.append(try update(file) { $0.song = a.song; $0.part = a.part }) }
+        for (file, a) in found { changed.append(try update(file) { $0.song = a.song; $0.part = a.part; $0.kind = .music; if ($0.source ?? "").isEmpty { $0.source = a.source } }) }
         return changed
     }
 
@@ -197,11 +238,11 @@ extension MediaLibrary {
         guard !clean.isEmpty else { throw DirectionError("bad_name", "Give the song a name.") }
         guard clean != song.name else { return }
         guard !songs().contains(where: { $0.name.lowercased() == clean.lowercased() && $0.name != song.name }) else { throw DirectionError("name_taken", "Another song is already called \(clean).") }
-        for p in song.parts { try update(p.file) { $0.song = clean } }
+        for p in items() where p.song == song.name { try update(p.file) { $0.song = clean } }
     }
 
     /// Takes a song apart: each of its parts a sound on its own, and kept that way.
     public func partSong(_ song: Song) throws {
-        for p in song.parts { try update(p.file) { $0.song = ""; $0.part = nil } }
+        for p in items() where p.song == song.name { try update(p.file) { $0.song = ""; $0.part = nil } }
     }
 }

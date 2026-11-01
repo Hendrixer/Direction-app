@@ -13,4 +13,16 @@ struct LibraryWindowTests {
         // A sound effect isn't one of Direction's effects on the picture.
         #expect(!names("effect").contains("Whoosh") && names("effect").contains("Film grain") && names(nil).count == entries.count)
     }
+
+    @Test func aDroppedFolderBringsTheSoundsInIt() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-stems-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("Try Again"), withIntermediateDirectories: true)
+        for name in ["ES_Try Again (Instrumental Version) STEMS DRUMS - mr..wav", "ES_Try Again (Instrumental Version) - mr..wav", "License.pdf", ".DS_Store"] {
+            try Data("x".utf8).write(to: dir.appendingPathComponent("Try Again/" + name))
+        }
+        #expect(LibraryModel.inside(dir).map(\.lastPathComponent) == ["ES_Try Again (Instrumental Version) - mr..wav", "ES_Try Again (Instrumental Version) STEMS DRUMS - mr..wav"])
+        let one = dir.appendingPathComponent("Try Again/License.pdf")
+        #expect(LibraryModel.inside(one) == [one])
+    }
 }

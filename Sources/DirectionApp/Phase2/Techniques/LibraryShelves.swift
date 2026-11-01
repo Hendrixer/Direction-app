@@ -33,11 +33,12 @@ extension LibraryModel {
     func whole(_ e: LibraryEntry) -> LibraryEntry { e.partOf.flatMap { song in entries.first { $0.id == "song:" + song } } ?? e }
 
     /// Files dropped or chosen go on their shelf, sounds to Sounds and pictures to Images; anything else is
-    /// named in `problem`. Returns the first one's entry, to show it.
+    /// named in `problem`. A folder (a song's stems, unzipped) brings the sounds and pictures in it. Returns
+    /// the first one's entry, to show it.
     @discardableResult
     func add(_ urls: [URL]) -> String? {
         var first: String?, refused: [String] = []
-        for url in urls {
+        for url in urls.flatMap(Self.inside) {
             guard let kind = MediaLibrary.shelf(for: url) else { refused.append(url.lastPathComponent); continue }
             do {
                 let item = try (kind == .sounds ? MediaLibrary.sounds : MediaLibrary.images).add(url)
@@ -49,10 +50,17 @@ extension LibraryModel {
         return first
     }
 
+    /// A folder's sounds and pictures, in name order; a file is itself.
+    static func inside(_ url: URL) -> [URL] {
+        guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else { return [url] }
+        let all = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsPackageDescendants])?.allObjects as? [URL] ?? []
+        return all.filter { MediaLibrary.shelf(for: $0) != nil }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
     func chooseAndAdd() -> String? {
         let panel = NSOpenPanel()
         panel.title = "Add Sounds or Images"; panel.prompt = "Add"
-        panel.allowedContentTypes = [.audio, .image]; panel.allowsMultipleSelection = true; panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.audio, .image]; panel.allowsMultipleSelection = true; panel.canChooseDirectories = true
         guard panel.runModal() == .OK else { return nil }
         return add(panel.urls)
     }

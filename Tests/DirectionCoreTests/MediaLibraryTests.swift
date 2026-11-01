@@ -96,6 +96,8 @@ struct MediaLibraryTests {
     @Test func aNameReadsAsASongAndAPart() {
         func read(_ n: String) -> String { let r = Stems.read(n); return "\(r.song)|\(r.part ?? "-")" }
         #expect(read("ES_Neon Drive (Drums) - Moss") == "ES Neon Drive - Moss|Drums")
+        #expect(read("ES_Try Again (Instrumental Version) STEMS BASS - mr.") == "ES Try Again (Instrumental Version) - mr|Bass")
+        #expect(read("ES_Try Again (Instrumental Version) - mr.") == "ES Try Again (Instrumental Version) - mr|-")
         #expect(read("ES_Neon Drive - Moss") == "ES Neon Drive - Moss|-")
         #expect(read("Neon_Drive_STEMS_Bass") == "Neon Drive|Bass")
         #expect(read("Neon Drive Full Mix") == "Neon Drive|Full mix")
@@ -107,39 +109,56 @@ struct MediaLibraryTests {
     @Test func aSongsStemsAndFullMixComeTogetherByNameAndLength() throws {
         let dir = try scratch(); defer { try? FileManager.default.removeItem(at: dir) }
         let sounds = MediaLibrary(.sounds, folder: dir.appendingPathComponent("Sounds"))
-        for part in ["Drums", "Bass", "Instruments", "Melody"] { _ = try heard(sounds, dir, "ES_Neon Drive (\(part)) - Moss.wav", 134.0) }
-        _ = try heard(sounds, dir, "ES_Neon Drive - Moss.mp3", 134.05)
+        // As Epidemic Sound's zip unpacks: the full mix and its stems, the artist after " - ".
+        _ = try heard(sounds, dir, "ES_Try Again (Instrumental Version) - mr..wav", 134.05)
+        for part in ["BASS", "DRUMS", "INSTRUMENTS"] { _ = try heard(sounds, dir, "ES_Try Again (Instrumental Version) STEMS \(part) - mr..wav", 134.0) }
+        // Drums on their own were heard as an effect; as long as the song, they're still its stem.
+        try sounds.update("ES_Try Again (Instrumental Version) STEMS DRUMS - mr..wav") { $0.kind = .effect }
         // Not with them: the same name at another length, a stem of another song, and a song the director kept on its own.
-        _ = try heard(sounds, dir, "ES_Neon Drive (Vocals) - Moss.wav", 61)
+        _ = try heard(sounds, dir, "ES_Try Again (Instrumental Version) STEMS MELODY - mr. 2.wav", 61)
         _ = try heard(sounds, dir, "Other (Drums).wav", 134)
-        let apart = try heard(sounds, dir, "Neon Drive Radio (Bass).wav", 134)
+        let apart = try heard(sounds, dir, "Try Again Radio (Bass).wav", 134)
         try sounds.update(apart.file) { $0.song = "" }
         // A sound effect isn't a song's part, nor anything not listened to yet.
-        let whoosh = try sounds.add(try file(dir.appendingPathComponent("Neon Drive (Drum).wav"), "fx")); try sounds.update(whoosh.file) { $0.kind = .effect }
+        let whoosh = try sounds.add(try file(dir.appendingPathComponent("Try Again (Drum).wav"), "fx")); try sounds.update(whoosh.file) { $0.kind = .effect }
 
         let changed = try sounds.groupStems()
-        #expect(changed.count == 5)
+        #expect(changed.count == 4)
         let song = try #require(sounds.songs().first)
-        #expect(sounds.songs().count == 1 && song.name == "ES Neon Drive - Moss")
-        #expect(song.parts.map { $0.part ?? "" } == ["Full mix", "Drums", "Bass", "Instruments", "Melody"] && song.lead.file == "ES_Neon Drive - Moss.mp3")
-        #expect(song.partsText == "full mix and 4 stems: Drums, Bass, Instruments, Melody" && song.summary.hasPrefix("Music \u{00B7} 2:14 \u{00B7} 92 BPM"))
-        // Put together again, nothing changes; a stem that comes later joins it.
+        #expect(sounds.songs().count == 1 && song.name == "Try Again" && song.source == "Epidemic Sound, by mr.")
+        #expect(song.parts.map { $0.part ?? "" } == ["Full mix", "Drums", "Bass", "Instruments"] && song.lead.file == "ES_Try Again (Instrumental Version) - mr..wav" && song.parts.allSatisfy { $0.kind == .music })
+        #expect(song.partsText == "full mix and 3 stems: Drums, Bass, Instruments" && song.summary.hasPrefix("Music \u{00B7} 2:14 \u{00B7} 92 BPM \u{00B7} full mix and 3 stems"))
+        // Put together again, nothing changes; a stem that comes later named as the others joins it.
         #expect(try sounds.groupStems().isEmpty)
-        _ = try heard(sounds, dir, "ES_Neon Drive (Vocals) - Moss 2.wav", 134.01)
-        try sounds.renameSong(song, to: "Neon Drive")
-        #expect(try sounds.groupStems().isEmpty, "a later stem is named for the old song, so it waits")
-        try sounds.setSong("ES_Neon Drive (Vocals) - Moss 2.wav", song: "neon drive", part: "Vocals")
-        let whole = try #require(sounds.findSong("Neon Drive"))
-        #expect(whole.part == nil && whole.song.parts.count == 6 && whole.song.parts.last?.part == "Vocals")
+        _ = try heard(sounds, dir, "ES_Try Again (Instrumental Version) STEMS MELODY - mr..wav", 134.01)
+        #expect(try sounds.groupStems().map { $0.part } == ["Melody"])
+        // The vocal version is another song, so each is named with its version.
+        _ = try heard(sounds, dir, "ES_Try Again - mr..wav", 170)
+        _ = try heard(sounds, dir, "ES_Try Again STEMS DRUMS - mr..wav", 170)
+        try sounds.groupStems()
+        #expect(sounds.songs().map(\.name) == ["Try Again", "Try Again - mr."])
+        try sounds.renameSong(song, to: "Try Again (Instrumental)")
+        try sounds.renameSong(try #require(sounds.findSong("Try Again - mr.")?.song), to: "Try Again")
+        // One the director names by hand joins as the part they say.
+        try sounds.setSong("ES_Try Again (Instrumental Version) STEMS MELODY - mr. 2.wav", song: "try again", part: "Keys")
+        let whole = try #require(sounds.findSong("Try Again (Instrumental)"))
+        #expect(whole.part == nil && whole.song.parts.count == 5 && sounds.findSong("Try Again")?.song.parts.count == 3)
         // Found by a part's name in a note, or its file.
-        #expect(sounds.findSong("Neon Drive Drums")?.part?.file == "ES_Neon Drive (Drums) - Moss.wav")
-        #expect(sounds.findSong("ES_Neon Drive (Bass) - Moss.wav")?.part?.part == "Bass")
+        #expect(sounds.findSong("Try Again (Instrumental) Drums")?.part?.file == "ES_Try Again (Instrumental Version) STEMS DRUMS - mr..wav")
+        #expect(sounds.findSong("ES_Try Again (Instrumental Version) STEMS BASS - mr..wav")?.part?.part == "Bass")
         // One part each: a second Drums is refused, naming the one it has.
-        #expect(throws: DirectionError.self) { try sounds.setSong("Other (Drums).wav", song: "Neon Drive", part: "Drums") }
+        #expect(throws: DirectionError.self) { try sounds.setSong("Other (Drums).wav", song: "Try Again", part: "Drums") }
         // Taken apart, each is a sound on its own and stays one.
         try sounds.partSong(whole.song)
-        #expect(sounds.songs().isEmpty && sounds.items().filter { $0.song == "" }.count == 7)
+        #expect(sounds.songs().map(\.name) == ["Try Again"] && sounds.items().filter { $0.song == "" }.count == 6)
         #expect(try sounds.groupStems().isEmpty)
+    }
+
+    @Test func aMusicLibrarysNameSaysTheSongTheArtistAndWhereItsFrom() {
+        let t = Stems.title("ES_Try Again (Instrumental Version) STEMS BASS - mr.")
+        #expect(t.short == "Try Again" && t.long == "Try Again (Instrumental Version)" && t.artist == "mr." && t.library == "Epidemic Sound")
+        let plain = Stems.title("Neon Drive Stems - Drums")
+        #expect(plain.short == "Neon Drive" && plain.artist == nil && plain.library == nil)
     }
 
     @Test func aSongIsNamedWholeOrAPartAtATime() throws {
