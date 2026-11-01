@@ -255,6 +255,8 @@ extension FilmModel {
         let jobs = self.jobs.filter { $0.kind == "transcription" }
         if let last = jobs.first(where: { $0.assetID == assetID }) {
             if !last.isTerminal { return .transcribing }
+            // Nothing said in it (b-roll): no dialogue, not a failure. Jobs from before codes say so in words.
+            if last.status == "failed", last.errorCode == "no_speech" || (last.errorCode == nil && last.error?.hasPrefix("No timed speech") == true) { return .none }
             if last.status == "failed" { return .failed(last.error ?? "Transcription stopped.") }
         }
         guard asset(assetID)?.audio.isEmpty == false else { return .none }

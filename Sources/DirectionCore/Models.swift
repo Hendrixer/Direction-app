@@ -413,6 +413,8 @@ public struct JobRecord: Codable, Sendable, Identifiable {
     /// The take a job works on, when it works on one (transcription), so a job that died can be found
     /// and started again.
     public var assetID: String?
+    /// Why a failed job stopped, as a DirectionError's code: "no_speech" is a take with nothing said in it.
+    public var errorCode: String? = nil
     public init(id: String, kind: String, revision: Int, ownerPID: Int32, status: String, phase: String, progress: Double?, result: JSONValue?, error: String?, createdAt: Double, updatedAt: Double, assetID: String? = nil) { self.id = id; self.kind = kind; self.revision = revision; self.ownerPID = ownerPID; self.status = status; self.phase = phase; self.progress = progress; self.result = result; self.error = error; self.createdAt = createdAt; self.updatedAt = updatedAt; self.assetID = assetID }
     public var isTerminal: Bool { ["completed", "failed", "cancelled", "interrupted"].contains(status) }
 }

@@ -252,8 +252,10 @@ public actor ToolRuntime {
         tasks[job.id] = Task { [store] in
             var completed = job
             do { completed.result = try await operation(job); try Task.checkCancellation(); completed.status = "completed"; completed.phase = "Completed"; completed.progress = 1 }
-            catch { completed.status = Task.isCancelled || error is CancellationError ? "cancelled" : "failed"; completed.error = error.localizedDescription; completed.phase = completed.status == "cancelled" ? "Cancelled" : "Failed" }
-            if completed.status == "failed" { DirectionLog.error("The \(kind) job failed\(assetID.map { " on \($0)" } ?? ""): \(completed.error ?? "")", "jobs") }
+            catch { completed.status = Task.isCancelled || error is CancellationError ? "cancelled" : "failed"; completed.error = error.localizedDescription; completed.errorCode = (error as? DirectionError)?.code; completed.phase = completed.status == "cancelled" ? "Cancelled" : "Failed" }
+            // B-roll with nothing said in it isn't a failure.
+            if completed.errorCode == "no_speech" { DirectionLog.info("The \(kind) job heard no speech\(assetID.map { " on \($0)" } ?? "").", "jobs") }
+            else if completed.status == "failed" { DirectionLog.error("The \(kind) job failed\(assetID.map { " on \($0)" } ?? ""): \(completed.error ?? "")", "jobs") }
             completed.updatedAt = Date().timeIntervalSince1970
             try? store.saveJob(completed)
             self.finished(job.id)

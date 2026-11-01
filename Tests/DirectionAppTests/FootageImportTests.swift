@@ -63,6 +63,27 @@ struct FootageImportTests {
         m.close()
     }
 
+    /// B-roll with nothing said in it has no dialogue; it didn't fail. A job from before codes says so in words.
+    @Test func aTakeWithNothingSaidHasNoDialogueNotAFailure() throws {
+        let dir = try scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = try ProjectStore.create(at: dir.appendingPathComponent("Film.direction"), name: "Film")
+        func job(_ asset: String, _ error: String, code: String?) throws {
+            var j = JobRecord(id: newID("job"), kind: "transcription", revision: 0, ownerPID: 1, status: "failed", phase: "Failed", progress: nil, result: nil, error: error, createdAt: 1, updatedAt: 1, assetID: asset)
+            j.errorCode = code
+            try store.saveJob(j)
+        }
+        try job("broll", "No timed speech was recognized on this audio track.", code: "no_speech")
+        try job("older-broll", "No timed speech was recognized on this audio track.", code: nil)
+        try job("broken", "The audio track couldn\u{2019}t be read.", code: "audio_unreadable")
+        let m = FilmModel(preview: false)
+        m.runtime = try ToolRuntime(store: store)
+        m.refresh(force: true)
+        #expect(m.transcriptStatus("broll") == .none && m.transcriptStatus("older-broll") == .none)
+        #expect(m.transcriptStatus("broken") == .failed("The audio track couldn\u{2019}t be read."))
+        m.close()
+    }
+
     @Test func aCopiedTakeIsFootageButTheEditorsFilesAreNot() {
         let film = URL(fileURLWithPath: "/tmp/direction-footage/Film.direction")
         let copied = MediaAsset(name: "C0001.MP4", path: MediaAsset.copies(in: film).appendingPathComponent("C0001.MP4").path, duration: MediaTime(seconds: 4))
