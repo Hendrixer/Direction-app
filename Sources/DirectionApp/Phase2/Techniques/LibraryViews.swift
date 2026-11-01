@@ -6,8 +6,8 @@ import DirectionMedia
 import DirectionTools
 
 // The library (techniques.md › The library): every transition, move and effect the director can name, each
-// with its own icon and a preview made on this Mac, and the director's techniques learned from tutorials.
-// The same list answers "@" in a note or the brief.
+// with its own icon and a preview made on this Mac, the director's techniques learned from tutorials, and
+// their sounds and images (library.md, LibraryShelves.swift). The same list answers "@" in a note or the brief.
 
 @MainActor @Observable final class LibraryModel {
     static let shared = LibraryModel()
@@ -17,12 +17,20 @@ import DirectionTools
     /// Snapshots and previews: samples, nothing read from disk or made.
     var preview = false
     @ObservationIgnored private var making = false
+    /// The sound playing, by its file, and what went wrong bringing something in.
+    var playing: String?
+    var problem: String?
+    @ObservationIgnored var measuring = false
+    @ObservationIgnored var player: LibraryPlayer?
+    @ObservationIgnored var images: [String: NSImage] = [:]
 
     func load() {
-        entries = preview ? LibrarySamples.entries : LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder))
+        entries = preview ? LibrarySamples.entries : LibraryCatalog.all()
         guard !preview else { ready = []; return }
         ready = Set(entries.filter { FileManager.default.fileExists(atPath: ToolRuntime.previewURL(for: $0).path) }.map(\.id))
     }
+
+    func replaceEntry(at i: Int, with e: LibraryEntry) { entries[i] = e }
 
     func previewURL(_ e: LibraryEntry) -> URL? { ready.contains(e.id) ? ToolRuntime.previewURL(for: e) : nil }
     func poster(_ e: LibraryEntry) -> NSImage? { previewURL(e).flatMap { NSImage(contentsOf: $0.deletingPathExtension().appendingPathExtension("jpg")) } }
@@ -49,12 +57,23 @@ import DirectionTools
     func search(_ query: String, kind: String? = nil, footage: [FootageName] = []) -> [LibraryEntry] {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
         let words = q.split(separator: " ").map(String.init)
-        let pool = footage.map(\.entry) + entries.filter { kind == nil || $0.kind == kind || (kind == "yours" && !$0.isBuiltIn) }
-        guard !words.isEmpty else { return entries.filter { kind == nil || $0.kind == kind || (kind == "yours" && !$0.isBuiltIn) } + footage.map(\.entry) }
+        let pool = footage.map(\.entry) + entries.filter { Self.shown($0, kind: kind) }
+        guard !words.isEmpty else { return entries.filter { Self.shown($0, kind: kind) } + footage.map(\.entry) }
         let hits = pool.filter { e in words.allSatisfy { w in "\(e.name) \(e.summary) \(e.kind)".lowercased().contains(w) } }
         return hits.sorted { a, b in
             let pa = a.name.lowercased().hasPrefix(q), pb = b.name.lowercased().hasPrefix(q)
             return pa != pb ? pa : false
+        }
+    }
+
+    /// The window's kinds: Direction's transitions, moves and effects; the director's sounds, images and learned techniques.
+    static func shown(_ e: LibraryEntry, kind: String?) -> Bool {
+        switch kind {
+        case nil: true
+        case "yours": e.technique != nil
+        case "sounds": e.item?.isSound == true
+        case "images": e.item?.kind == .image
+        case let k?: e.item == nil && e.kind == k
         }
     }
 }
@@ -77,7 +96,8 @@ enum LibrarySamples {
 /// The window as a snapshot draws it, with an entry chosen.
 struct LibraryWindowPreview: View {
     var chosen: String?
-    var body: some View { LibraryWindow(app: nil, preview: false, initial: chosen) }
+    var kind: String? = nil
+    var body: some View { LibraryWindow(app: nil, preview: false, initial: chosen, kind: kind) }
 }
 
 struct LibraryWindow: View {
@@ -86,8 +106,12 @@ struct LibraryWindow: View {
     var initial: String? = nil
     @State private var library = LibraryModel.shared
     @State private var query = ""
-    @State private var kind: String? = nil
+    @State private var kind: String?
     @State private var chosen: String?
+    @State private var dropping = false
+    init(app: AppModel?, preview: Bool = false, initial: String? = nil, kind: String? = nil) {
+        self.app = app; self.preview = preview; self.initial = initial; _kind = State(initialValue: kind)
+    }
 
     var body: some View {
         let shown = library.search(query, kind: kind)
@@ -95,7 +119,6 @@ struct LibraryWindow: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     Text("Library").font(Gate.Font.title).foregroundStyle(Gate.Text.primary)
-                    GateSegmented(options: [(nil, "All"), ("transition", "Transitions"), ("move", "Moves"), ("effect", "Effects"), ("yours", "Learned")], selection: $kind)
                     Spacer(minLength: 8)
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(Gate.Text.tertiary)
@@ -103,33 +126,81 @@ struct LibraryWindow: View {
                             .startPlaceholder("Search", shown: query.isEmpty).frame(width: 150)
                     }
                     .padding(.horizontal, 10).frame(height: 28).background(GateFieldBackground())
+                    Button("Add Sounds or Images\u{2026}") { if let id = library.chooseAndAdd() { chosen = id } }.buttonStyle(.gate(.normal, .small))
+                        .help("Music, sound effects, logos and stills, kept for every film.")
                     Button("Learn a Technique\u{2026}") { app?.film?.sheet = .learnTechnique; NSApp.windows.first { $0.identifier?.rawValue == "main" }?.makeKeyAndOrderFront(nil) }
                         .buttonStyle(.gate(.normal, .small)).disabled(app?.film == nil).help(app?.film == nil ? "Open a film to learn a technique into it." : "Give the editor a video to learn from.")
                 }
                 .padding(.horizontal, 20).frame(height: 56)
+                // Kinds on a row of their own: Direction's, then the director's.
+                HStack {
+                    GateSegmented(options: [(nil, "All"), ("transition", "Transitions"), ("move", "Moves"), ("effect", "Effects"), ("sounds", "Sounds"), ("images", "Images"), ("yours", "Learned")], selection: $kind)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 20).padding(.bottom, 12)
                 .overlay(alignment: .bottom) { SystemHairline() }
+                if let problem = library.problem {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle").foregroundStyle(Gate.State.alert)
+                        Text(problem).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary)
+                        Spacer(minLength: 0)
+                        Button { library.problem = nil } label: { Image(systemName: "xmark") }.buttonStyle(.gate(.ghost, .small, icon: true)).help("Dismiss")
+                    }
+                    .padding(.horizontal, 20).padding(.vertical, 8).background(Gate.State.alertWash)
+                }
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 196, maximum: 260), spacing: 14)], spacing: 16) {
                         ForEach(shown) { e in LibraryCard(entry: e, library: library, chosen: (chosen ?? initial) == e.id) { chosen = e.id } }
                     }
                     .padding(20)
                     if shown.isEmpty {
-                        Text("Nothing in the library matches \u{201C}\(query)\u{201D}.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).padding(.top, 40)
+                        if query.isEmpty && (kind == "sounds" || kind == "images") {
+                            VStack(spacing: 6) {
+                                Text(kind == "sounds" ? "No sounds yet" : "No images yet").font(Gate.Font.brandM).foregroundStyle(Gate.Text.primary)
+                                Text(kind == "sounds" ? "Drop music and sound effects here. They\u{2019}re kept for every film, and a note names one with @." : "Drop logos and stills here. They\u{2019}re kept for every film, and a note names one with @.")
+                                    .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).multilineTextAlignment(.center).frame(maxWidth: 360)
+                            }
+                            .padding(.top, 60)
+                        } else {
+                            Text("Nothing in the library matches \u{201C}\(query)\u{201D}.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).padding(.top, 40)
+                        }
                     }
                 }
+                .overlay {
+                    if dropping {
+                        RoundedRectangle(cornerRadius: Gate.Radius.panel, style: .continuous).strokeBorder(Gate.Line.strong, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                            .background(RoundedRectangle(cornerRadius: Gate.Radius.panel, style: .continuous).fill(Gate.Surface.hover.opacity(0.4)))
+                            .overlay(Text("Add to the library").font(Gate.Font.title).foregroundStyle(Gate.Text.primary))
+                            .padding(10).allowsHitTesting(false)
+                    }
+                }
+                .dropDestination(for: URL.self) { urls, _ in
+                    guard let id = library.add(urls) else { return false }
+                    chosen = id; return true
+                } isTargeted: { dropping = $0 }
             }
             if let e = library.entries.first(where: { $0.id == (chosen ?? initial) }) ?? shown.first {
-                LibraryDetail(entry: e, library: library).frame(width: 340).overlay(alignment: .leading) { Rectangle().fill(Gate.Line.subtle).frame(width: 1) }
+                Group {
+                    if let item = e.item { LibraryItemDetail(entry: e, item: item, library: library) { chosen = $0 } } else { LibraryDetail(entry: e, library: library) }
+                }
+                .frame(width: 340).overlay(alignment: .leading) { Rectangle().fill(Gate.Line.subtle).frame(width: 1) }
             }
         }
-        .frame(minWidth: 860, minHeight: 540)
+        .frame(minWidth: 960, minHeight: 540)
         .background(Gate.Surface.ground)
         .preferredColorScheme(.dark)
         .task {
             if preview { library.preview = true }
             library.load()
             library.makePreviews()
+            library.measure()
         }
+        // Files put in the Sounds or Images folder in the Finder show up when you come back.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            guard !preview else { return }
+            library.load(); library.measure()
+        }
+        .onDisappear { library.stop() }
     }
 }
 
@@ -158,12 +229,12 @@ struct LibraryCard: View {
     var body: some View {
         Button(action: choose) {
             VStack(alignment: .leading, spacing: 8) {
-                LibraryPreview(entry: entry, library: library, playing: hovering)
+                if let item = entry.item { LibraryItemPreview(item: item, library: library) } else { LibraryPreview(entry: entry, library: library, playing: hovering) }
                 HStack(spacing: 8) {
                     LibraryIcon(name: entry.icon)
                     Text(entry.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).lineLimit(1)
                     Spacer(minLength: 0)
-                    if !entry.isBuiltIn { Text("Learned").font(Gate.Font.caption).foregroundStyle(Gate.Voice.director) }
+                    if entry.technique != nil { Text("Learned").font(Gate.Font.caption).foregroundStyle(Gate.Voice.director) }
                 }
                 Text(entry.summary).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).lineLimit(2, reservesSpace: true).fixedSize(horizontal: false, vertical: true)
             }

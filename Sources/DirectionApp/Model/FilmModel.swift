@@ -777,18 +777,26 @@ final class FilmModel {
     /// Files being copied into the film (Settings › Storage › Copy into library), while they are.
     var copyingFootage: FootageCopying?
     /// `places`: where the director filed each file in scene and setup folders, by its path; those takes
-    /// go to their scenes as they come in, before the editor logs (FootageFolders).
-    func importFootage(_ urls: [URL], places: [String: FootagePlace] = [:]) {
+    /// go to their scenes as they come in, before the editor logs (FootageFolders). Music goes to the
+    /// library's Sounds instead, for every film (library.md), unless `musicAsFootage`.
+    func importFootage(_ urls: [URL], places: [String: FootagePlace] = [:], musicAsFootage: Bool = false) {
         guard let runtime, let store, !urls.isEmpty else { return }
         // Settings › Storage: link to the originals, or copy them into the film's Footage folder first.
         let copies = UserDefaults.standard.string(forKey: SettingsKey.footageImport) == "copy" ? MediaAsset.copies(in: store.url) : nil
         importingFootage += urls.count
         if copies != nil { var c = copyingFootage ?? FootageCopying(); c.total += urls.count; copyingFootage = c }
         Task {
-            var toldHDR = false, toldSeekable = false
+            var toldHDR = false, toldSeekable = false, music: [(url: URL, name: String)] = []
             for url in urls {
                 var file = url
                 do {
+                    // A song isn't a take: it's kept with the director's sounds, and a note names it with "@".
+                    if !musicAsFootage, MediaLibrary.shelf(for: url) == .sounds, await LibraryMeasuring.isMusic(url) {
+                        music.append((url, try MediaLibrary.sounds.add(url).name))
+                        if copies != nil, var c = copyingFootage { c.done += 1; copyingFootage = c.done >= c.total ? nil : c }
+                        importingFootage = max(0, importingFootage - 1)
+                        continue
+                    }
                     // HDR comes in as an SDR copy Direction makes in the Footage folder, and a file with open
                     // keyframes as a copy that plays from any frame, so neither is copied first.
                     let hdr = await SDRCopy.isHDR(url), seekable = hdr ? false : await SeekableCopy.isNeeded(url)
@@ -816,6 +824,13 @@ final class FilmModel {
                 }
                 importingFootage = max(0, importingFootage - 1)
                 refresh(force: true)
+            }
+            if let first = music.first {
+                LibraryModel.shared.load(); LibraryModel.shared.measure()
+                let songs = music.map(\.url)
+                toast = Toast(title: music.count == 1 ? "\(first.name) is music, so it\u{2019}s in your Library" : "\(music.count) songs are in your Library",
+                              detail: "Sounds you keep are there for every film, not taken as footage. " + (music.count == 1 ? "Name it in a note with @\(first.name)." : "Name one in a note with @ and its name."),
+                              actionTitle: "Bring In as Footage", run: { [weak self] in self?.importFootage(songs, places: places, musicAsFootage: true) })
             }
         }
     }

@@ -2,25 +2,29 @@ import Foundation
 
 // The library (techniques.md › The library): every transition, move and effect the director can name, each
 // with a simple icon of its own, a sentence, and how the editor makes it. Direction's own come first; the
-// director's techniques (learned from tutorials) join them. "@Name" in a note or the brief names one.
+// director's techniques (learned from tutorials) join them, then their sounds and images (library.md).
+// "@Name" in a note or the brief names one.
 
 public struct LibraryEntry: Hashable, Sendable, Identifiable {
     /// "builtin-whip", or a technique's id.
     public var id: String
     public var name: String
-    /// transition, move or effect.
+    /// transition, move or effect; music, sound or image for the director's sounds and images.
     public var kind: String
     public var summary: String
-    /// An SF Symbol, monochrome (icons.md), different for every entry.
+    /// An SF Symbol, monochrome (icons.md), different for every transition, move, effect and technique; a sound
+    /// or image shows its kind's.
     public var icon: String
     /// How the editor makes it, in its own words: "transition type whip", "technique Grid flash".
     public var use: String
     /// A technique from the Techniques folder, rather than one of Direction's own.
     public var technique: Technique?
-    public init(id: String, name: String, kind: String, summary: String, icon: String, use: String, technique: Technique? = nil) {
-        self.id = id; self.name = name; self.kind = kind; self.summary = summary; self.icon = icon; self.use = use; self.technique = technique
+    /// A sound or an image from the director's library.
+    public var item: ShelfItem?
+    public init(id: String, name: String, kind: String, summary: String, icon: String, use: String, technique: Technique? = nil, item: ShelfItem? = nil) {
+        self.id = id; self.name = name; self.kind = kind; self.summary = summary; self.icon = icon; self.use = use; self.technique = technique; self.item = item
     }
-    public var isBuiltIn: Bool { technique == nil }
+    public var isBuiltIn: Bool { technique == nil && item == nil }
 }
 
 public enum LibraryCatalog {
@@ -67,8 +71,14 @@ public enum LibraryCatalog {
                              "square.stack.3d.forward.dottedline", "circle.hexagongrid", "triangle.lefthalf.filled", "seal", "rhombus", "hexagon", "octagon", "staroflife",
                              "burst", "bolt", "flame", "drop.triangle", "scribble.variable", "lasso", "circle.grid.cross", "square.on.circle", "diamond", "capsule.portrait"]
 
-    /// Everything the director can name: Direction's own, then their techniques, each with an icon no other has.
-    public static func entries(techniques: [Technique]) -> [LibraryEntry] {
+    /// Everything the director can name, from the folders: Direction's own, their techniques, sounds and images.
+    public static func all() -> [LibraryEntry] {
+        entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder), items: MediaLibrary.shelves.flatMap { $0.items() })
+    }
+
+    /// Everything the director can name: Direction's own, then their techniques, each with an icon no other has,
+    /// then their sounds and images.
+    public static func entries(techniques: [Technique], items: [ShelfItem] = []) -> [LibraryEntry] {
         var used = Set(builtIns.map(\.icon)), out = builtIns
         let builtInNames = Set(builtIns.map { $0.name.lowercased() })
         for t in techniques where !builtInNames.contains(t.name.lowercased()) {
@@ -78,7 +88,19 @@ public enum LibraryCatalog {
             out.append(LibraryEntry(id: t.id, name: t.name, kind: t.kind == "recipe" ? "move" : t.kind, summary: t.summary, icon: icon,
                                     use: t.kind == "recipe" ? "follow the steps of the technique \(t.name) (direction_technique)" : "the technique edit with name \"\(t.name)\"\(t.kind == "transition" ? " and an editPoint" : " and a clipID")", technique: t))
         }
+        let taken = Set(out.map { $0.name.lowercased() })
+        for i in items where !taken.contains(i.name.lowercased()) { out.append(entry(i)) }
         return out
+    }
+
+    /// A sound or image as the library lists it, and how the editor brings it into a film and uses it.
+    public static func entry(_ i: ShelfItem) -> LibraryEntry {
+        let bring = "direction_import with library \"\(i.name)\" (the film gets its own copy), then"
+        return switch i.kind {
+        case .music: LibraryEntry(id: "sound:" + i.file, name: i.name, kind: "music", summary: i.summary, icon: "music.note", use: "\(bring) placeMusic with its assetID", item: i)
+        case .effect: LibraryEntry(id: "sound:" + i.file, name: i.name, kind: "sound", summary: i.summary, icon: "waveform", use: "\(bring) overwrite it onto A3 where it lands", item: i)
+        case .image: LibraryEntry(id: "image:" + i.file, name: i.name, kind: "image", summary: i.summary, icon: "photo", use: "\(bring) cutaway with its assetID, and reframe it to its size and place", item: i)
+        }
     }
 
     /// The entries named with "@Name" in some words, longest name first so "@Grid flash big" finds Grid flash.
@@ -107,6 +129,12 @@ public enum LibraryCatalog {
 
     /// What the editor reads under a note that names some: "@Grid flash is the technique Grid flash: …".
     public static func explain(_ found: [LibraryEntry]) -> String {
-        found.map { "@\($0.name) is \($0.isBuiltIn ? "Direction's own \($0.kind)" : "the \($0.kind) technique \($0.name)"): \($0.summary) Use \($0.use)." }.joined(separator: " ")
+        found.map { e in
+            if let i = e.item {
+                let words = [i.note, i.source.map { "From \($0)." }].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                return "@\(e.name) is \(i.kind == .image ? "an image" : i.kind == .music ? "music" : "a sound effect") in the director's library: \(i.summary).\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
+            }
+            return "@\(e.name) is \(e.isBuiltIn ? "Direction's own \(e.kind)" : "the \(e.kind) technique \(e.name)"): \(e.summary) Use \(e.use)."
+        }.joined(separator: " ")
     }
 }

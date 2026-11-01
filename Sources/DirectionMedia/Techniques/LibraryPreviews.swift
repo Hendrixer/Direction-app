@@ -23,6 +23,8 @@ public enum LibraryPreviews {
 
     /// The preview for a library entry: Direction's own from its kind and name, a technique from its files.
     public static func subject(for entry: LibraryEntry) -> Subject? {
+        // A sound or image shows itself.
+        guard entry.item == nil else { return nil }
         if let t = entry.technique {
             if let tr = t.transition {
                 let source = tr.file.flatMap { try? String(contentsOf: t.url.appendingPathComponent($0), encoding: .utf8) } ?? TransitionShader.builtIn(tr.type)

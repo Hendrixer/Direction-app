@@ -88,7 +88,7 @@ extension ToolRuntime {
             let all = try store.turnovers(), notes = try store.notes(), questions = try store.questions()
             let shown = a["includeClosed"].bool == true ? all : all.filter(\.state.isOpen)
             // "@Name" in a note names something in the library: say what it is and how it's made.
-            let library = LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder))
+            let library = LibraryCatalog.all()
             // "@Scene 2", "@2A", "@2A Take 3" name footage: say which take, setup or scene, and where it is in the cut.
             let p = try store.read(), dailies = try store.dailies(), footage = FootageNames.all(dailies, assets: p.assets)
             let items: [JSONValue] = try shown.map { t in

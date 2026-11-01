@@ -47,8 +47,11 @@ public actor ToolRuntime {
             let p = try store.read(revision: a["revision"].int), sequence = try p.sequence(a["sequenceID"].string)
             return ToolResponse(.object(["project": try .wrapping(p), "sequence": try .wrapping(sequence), "durationSeconds": .number(sequence.duration.seconds), "projectPath": .string(store.url.path), "eventCursor": .number(Double(try store.eventCursor()))]))
         case "direction_import":
+            // A sound or image from the library comes in as the film's own copy, never as footage (library.md).
+            if let name = a["library"].string { return try await importFromLibrary(name, a) }
             let path = try a.requiredString("path")
             let original = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL.resolvingSymlinksInPath()
+            if let shelf = MediaLibrary.holding(original), let item = shelf.items().first(where: { shelf.url($0).standardizedFileURL.resolvingSymlinksInPath() == original }) { return try await importFromLibrary(item.file, a) }
             var file = original
             // HDR comes in as an SDR copy in the film's Footage folder, and a file with open keyframes as a
             // copy that plays from any frame; the original stays as it is.

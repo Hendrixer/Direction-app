@@ -54,7 +54,7 @@ enum EditorJobs {
             v["circles"] = "The director circled \(dailies.takes.values.filter(\.circled).count) takes."
             v["sync"] = syncRules(dailies, assets: p.assets, layout: try store.directingState().layout, styleLayouts: applied.layouts)
             let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }.sorted { ($0.number ?? 0) < ($1.number ?? 0) }
-            let library = LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder))
+            let library = LibraryCatalog.all()
             let footage = FootageMention(names: FootageNames.all(dailies, assets: p.assets), dailies: dailies, assets: p.assets, cut: try? p.sequence(nil))
             v["notes"] = included.map { noteLine($0, library: library, footage: footage) }.joined(separator: "\n")
             v["waitForOK"] = t.waitForOK
@@ -184,7 +184,7 @@ enum EditorJobs {
         }
         if let a = brief.avoid, !a.isEmpty { b.append("- Avoid: \(a)") }
         // "@Name" in the brief names something in the library.
-        let named = LibraryCatalog.mentions(in: [brief.logline, brief.feeling, brief.avoid ?? ""].joined(separator: "\n"), entries: LibraryCatalog.entries(techniques: TechniqueLibrary.list(in: SharedSettings.techniquesFolder)))
+        let named = LibraryCatalog.mentions(in: [brief.logline, brief.feeling, brief.avoid ?? ""].joined(separator: "\n"), entries: LibraryCatalog.all())
         if !named.isEmpty { b.append("- Named in the brief: \(LibraryCatalog.explain(named))") }
         b.append(contentsOf: styleLines(applied))
         let prefs = state.preferences ?? EditorPreferences()

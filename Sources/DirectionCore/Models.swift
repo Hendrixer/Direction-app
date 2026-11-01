@@ -63,19 +63,21 @@ public struct MediaAsset: Codable, Hashable, Sendable, Identifiable {
     public var sdrCopyOf: String? = nil
     /// A copy of a file with open keyframes that plays from any frame (SeekableCopy): the original's path.
     public var seekableCopyOf: String? = nil
+    /// A film's copy of a sound or image from the library (library.md): its file on the shelf. Not footage.
+    public var fromLibrary: String? = nil
     public init(id: String = newID("asset"), name: String, path: String, duration: MediaTime, video: [VideoStream] = [], audio: [AudioStream] = [], fileSize: Int64 = 0, modifiedAt: Double = 0, bookmark: Data? = nil, thumbnailPath: String? = nil) {
         self.id = id; self.name = name; self.path = path; self.duration = duration; self.video = video; self.audio = audio; self.fileSize = fileSize; self.modifiedAt = modifiedAt; self.bookmark = bookmark; self.thumbnailPath = thumbnailPath
     }
 
     /// Footage: what the director brought in, which Direction looks at, listens to, syncs and logs as
     /// takes. Not a graphic's render, and not a file the editor wrote into the film's folder or took
-    /// from a style (a delivery's mixed sound, a whoosh). Made clips and copied takes are footage.
+    /// from a style or the library (a delivery's mixed sound, a whoosh, a logo). Made clips and copied takes are footage.
     public func isFootage(film: URL, styles: URL = SharedSettings.stylesFolder) -> Bool {
         guard graphic == nil else { return false }
         let path = URL(fileURLWithPath: self.path).standardizedFileURL.path
         let inside = { (folder: URL) in path.hasPrefix(folder.standardizedFileURL.path + "/") }
         if madeID != nil || inside(film.appendingPathComponent("Made")) || inside(Self.copies(in: film)) { return true }
-        return !inside(film) && !inside(styles)
+        return !inside(film) && !inside(styles) && MediaLibrary.holding(URL(fileURLWithPath: path)) == nil
     }
 
     /// Where Settings › Storage › Copy into library puts footage: the film's own Footage folder, so the

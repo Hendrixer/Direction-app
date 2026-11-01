@@ -14,6 +14,8 @@ enum StyleFixtures {
             "changes-keep-rule": { .film(answered()) },
             "layout-picker-style": { picker() },
             "library": { library() },
+            "library-sounds": { library(kind: "sounds") },
+            "library-images": { library(kind: "images") },
             "mention-list": { mentions() },
             "learn-technique": { SnapshotScene(size: CGSize(width: 520, height: 400), LearnTechniqueSheet(model: ChangesFixtures.cut4()).frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground)) },
             "style-from-video": { SnapshotScene(size: CGSize(width: 540, height: 470), StyleFromVideoSheet(model: ChangesFixtures.cut4(), videos: [
@@ -57,12 +59,13 @@ enum StyleFixtures {
         return SnapshotScene(size: CGSize(width: 620, height: 980), StyleEditSheet(draft: .init(style), folder: StyleSamples.folder) {}.frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground))
     }
 
-    /// The library as it is on this Mac (DIRECTION_TECHNIQUES_PATH and DIRECTION_CACHE_DIR point it at a scratch
-    /// copy in a snapshot run), Grid flash chosen.
-    private static func library() -> SnapshotScene {
+    /// The library as it is on this Mac (DIRECTION_TECHNIQUES_PATH, DIRECTION_SOUNDS_PATH, DIRECTION_IMAGES_PATH
+    /// and DIRECTION_CACHE_DIR point it at scratch copies in a snapshot run): Grid flash chosen, or the first sound or image.
+    private static func library(kind: String? = nil) -> SnapshotScene {
         let library = LibraryModel.shared
         library.preview = false; library.load()
-        return SnapshotScene(size: CGSize(width: 1180, height: 760), LibraryWindowPreview(chosen: library.entries.first { $0.name == "Grid flash" }?.id))
+        let chosen = kind == nil ? library.entries.first { $0.name == "Grid flash" } : library.entries.first { LibraryModel.shown($0, kind: kind) }
+        return SnapshotScene(size: CGSize(width: 1180, height: 760), LibraryWindowPreview(chosen: chosen?.id, kind: kind))
     }
 
     /// "@gr" typed in a note: the list under it.

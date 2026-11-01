@@ -8,6 +8,8 @@ export DIRECTION_LIBRARY_PATH="$direction_root/build/verification/test-library.s
 export DIRECTION_CACHE_DIR="$direction_root/build/verification/caches"
 export DIRECTION_LOG_DIR="$direction_root/build/verification/logs"
 export DIRECTION_STYLES_PATH="$direction_root/build/verification/styles"
+export DIRECTION_SOUNDS_PATH="$direction_root/build/verification/sounds"
+export DIRECTION_IMAGES_PATH="$direction_root/build/verification/images"
 swift test
 direction_bin="$(swift build --show-bin-path)"
 python3 "$direction_root/scripts/smoke.py" "$direction_bin/direction" "$DIRECTION_TEST_ARTIFACTS/two-track-source.mov" "$DIRECTION_TEST_ARTIFACTS"
