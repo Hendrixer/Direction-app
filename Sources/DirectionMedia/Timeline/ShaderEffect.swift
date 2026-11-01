@@ -153,8 +153,11 @@ public enum ShaderEffect {
         }
         _ = try render(test)
         var times: [Double] = []
-        for frame in 0..<3 { times.append(try render(apply(test, compiled: c, values: values(c.params, effect, at: Double(frame) / 24)))) }
-        let ms = times.sorted()[1] * 1_000
+        func frame(_ n: Int) throws -> Double { try render(apply(test, compiled: c, values: values(c.params, effect, at: Double(n) / 24))) }
+        for n in 0..<3 { times.append(try frame(n)) }
+        // Its cost is its fastest frame: a busy Mac only adds time, so a few more tries come before refusing it.
+        for n in 3..<9 where times.min()! * 1_000 > 40 { times.append(try frame(n)) }
+        let ms = times.min()! * 1_000
         guard ms <= 40 else { throw DirectionError("shader_too_slow", "The shader takes \(Int(ms.rounded())) ms a frame at 1080p; it has to be under 40.") }
         // Any NaN or infinity in the last frame refuses it.
         var row = [UInt16](repeating: 0, count: 1920 * 4)

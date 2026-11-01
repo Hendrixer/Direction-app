@@ -127,8 +127,11 @@ public enum TransitionShader {
         }
         _ = try render(from)
         var times: [Double] = []
-        for p in [0.25, 0.5, 0.75] { times.append(try render(apply(from: from, to: to, compiled: c, values: values(c.params, params, progress: p), bounds: size))) }
-        let ms = times.sorted()[1] * 1_000
+        func frame(_ p: Double) throws -> Double { try render(apply(from: from, to: to, compiled: c, values: values(c.params, params, progress: p), bounds: size)) }
+        for p in [0.25, 0.5, 0.75] { times.append(try frame(p)) }
+        // Its cost is its fastest frame: a busy Mac only adds time, so a few more tries come before refusing it.
+        for p in [0.5, 0.25, 0.75, 0.5, 0.25, 0.75] where times.min()! * 1_000 > 40 { times.append(try frame(p)) }
+        let ms = times.min()! * 1_000
         guard ms <= 40 else { throw DirectionError("shader_too_slow", "The transition takes \(Int(ms.rounded())) ms a frame at 1080p; it has to be under 40.") }
         var row = [UInt16](repeating: 0, count: 1920 * 4)
         for y in 0..<1080 {

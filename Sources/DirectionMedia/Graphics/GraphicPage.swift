@@ -121,13 +121,17 @@ final class GraphicPage: NSObject, WKNavigationDelegate {
 
     // MARK: Frames
 
-    /// Sets t, awaits render and fonts, and snapshots with alpha. Fails past 2 s, on a thrown error, or on any request for the internet.
+    /// Sets t, awaits render and fonts, and snapshots with alpha. The page's part fails past 2 s, on a thrown error,
+    /// or on any request for the internet; the snapshot is Direction's, and a busy Mac (an editor run, playback,
+    /// indexing) can slow it, so it has a longer allowance of its own and doesn't blame the page.
     func frame(_ t: Double) async throws -> (image: GraphicImage, milliseconds: Double) {
-        let started = Date()
-        let image = try await withTimeout(2, DirectionError("graphic_frame_timeout", "The frame at \(String(format: "%.2f", t)) s took longer than 2 s to draw.")) {
+        let started = Date(), at = String(format: "%.2f", t)
+        try await withTimeout(2, DirectionError("graphic_frame_timeout", "The frame at \(at) s took longer than 2 s to draw.")) {
             _ = try await self.call(Double.self, "return String(await window.__direction.frame(\(t)))", timeout: nil)
             try await self.check()
-            return try await self.snapshot()
+        }
+        let image = try await withTimeout(10, DirectionError("graphic_snapshot_timeout", "Direction couldn\u{2019}t take the picture of the frame at \(at) s within 10 s; the Mac may be busy. Try again.")) {
+            try await self.snapshot()
         }
         return (image, Date().timeIntervalSince(started) * 1000)
     }
