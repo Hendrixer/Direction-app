@@ -41,3 +41,12 @@ struct SettingsPagesTests {
         #expect(StyleLibrary.list(in: folder).first?.rules.first?.text == "Tighten every pause over 0.3 s.")
     }
 }
+
+/// A shot clicked in a take is the one lit: the frame the player lands on can report a hair before the
+/// shot's start (29.97 frames a second against a start written at 30), and that's still the shot.
+@Test @MainActor func theShotClickedIsTheShotLit() {
+    let shots = [Shot(assetID: "t", number: 1, start: 0, end: 26.867), Shot(assetID: "t", number: 2, start: 26.867, end: 30.8), Shot(assetID: "t", number: 3, start: 30.8, end: 32.333)]
+    #expect(DailiesShotsRow.under(30.7974, in: shots, fps: 29.97)?.number == 3)
+    #expect(DailiesShotsRow.under(30.8 - 1 / 29.97, in: shots, fps: 29.97)?.number == 2)
+    #expect(DailiesShotsRow.under(0, in: shots, fps: 30)?.number == 1)
+}

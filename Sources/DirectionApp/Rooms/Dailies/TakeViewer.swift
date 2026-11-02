@@ -16,6 +16,8 @@ struct DailiesTakeViewer: View {
 
     private var take: TakeInfo? { model.dailies.takes[takeID] }
     private var asset: MediaAsset? { model.asset(takeID) }
+    /// The take's own frame rate: its timecodes count frames the way its shots do.
+    private var fps: Double { asset?.video.first?.frameRate ?? 24 }
     private var duration: Double { model.dailiesDuration(takeID) }
     private var lines: [DailiesLine] { model.dailiesLines(takeID) }
     private var position: Double { model.isPreview ? preview.takePosition ?? 0 : player.position }
@@ -99,7 +101,7 @@ struct DailiesTakeViewer: View {
             }
             .frame(width: w, height: height)
             .clipShape(RoundedRectangle(cornerRadius: Gate.Radius.frame))
-            .overlay(alignment: .bottomTrailing) { HUDTag("\(Timecode.format(position)) / \(Timecode.duration(duration))").padding(12) }
+            .overlay(alignment: .bottomTrailing) { HUDTag("\(Timecode.format(position, fps: fps)) / \(Timecode.duration(duration))").padding(12) }
             .contentShape(Rectangle())
             .onTapGesture { toggle() }
             .position(x: g.size.width / 2, y: g.size.height / 2)
@@ -111,7 +113,7 @@ struct DailiesTakeViewer: View {
         HStack(spacing: 12) {
             Button { toggle() } label: { Image(systemName: playing ? "pause.fill" : "play.fill") }
                 .buttonStyle(.gate(.normal, icon: true)).help(playing ? "Pause (Space)" : "Play (Space)")
-            TimecodeLabel(time: position, total: duration)
+            TimecodeLabel(time: position, total: duration, fps: fps)
             DailiesTakeStrip(position: position, duration: duration, asset: asset, art: art, preview: model.isPreview, shots: hasShots ? model.index.shots(takeID) : [], sounds: model.index.sounds(takeID)) { player.seek($0) }
             Button { player.muted.toggle() } label: { Image(systemName: player.muted ? "speaker.slash" : "speaker.wave.2") }
                 .buttonStyle(.gate(.ghost, icon: true)).help(player.muted ? "Unmute" : "Mute")
@@ -440,6 +442,9 @@ private struct DailiesWaveform: View {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var activity: NSObjectProtocol?
+    /// A seek on its way: the clock still reports where the take was, so it isn't read until the seek lands.
+    @ObservationIgnored private var seeking = false
+    @ObservationIgnored private var seeks = 0
 
     func load(_ asset: MediaAsset?, at time: Double, autoplay: Bool) {
         guard let asset else { return }
@@ -457,8 +462,17 @@ private struct DailiesWaveform: View {
         playing = player.rate != 0; keepAwake()
     }
     func seek(_ seconds: Double) {
-        position = max(0, seconds)
-        player.seek(to: CMTime(seconds: position, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        let target = max(0, seconds)
+        position = target; seeking = true; seeks += 1
+        let n = seeks
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            // Only the latest seek lets the clock be read again; one it replaced lands nowhere.
+            Task { @MainActor in
+                guard let self, n == self.seeks else { return }
+                self.seeking = false
+                if finished { self.position = target }
+            }
+        }
     }
     func shuttle(_ rate: Float) { player.rate = rate; playing = rate != 0; keepAwake() }
     func stop() {
@@ -471,7 +485,7 @@ private struct DailiesWaveform: View {
     private func observe() {
         if timeObserver == nil {
             timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 24), queue: .main) { [weak self] time in
-                MainActor.assumeIsolated { guard let self, time.seconds.isFinite else { return }; self.position = time.seconds; self.playing = self.player.rate != 0 }
+                MainActor.assumeIsolated { guard let self, time.seconds.isFinite, !self.seeking else { return }; self.position = time.seconds; self.playing = self.player.rate != 0 }
             }
         }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }

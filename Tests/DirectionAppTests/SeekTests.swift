@@ -57,6 +57,24 @@ struct SeekTests {
         }
     }
 
+    /// A take in Dailies, the same way: clicking a shot while the take plays lands on the shot's start and stays,
+    /// so the shot clicked is the one lit, not the one the take was in.
+    @Test func aShotClickedInATakeStaysWhereItLands() async throws {
+        let (m, dir) = try await film(); defer { m.close(); try? FileManager.default.removeItem(at: dir) }
+        let p = DailiesTakePlayer(); defer { p.stop() }
+        p.load(try #require(m.project?.assets.first), at: 0, autoplay: false)
+        for _ in 0..<200 where p.player.currentItem?.status != .readyToPlay { try await Task.sleep(for: .milliseconds(25)) }
+        for target in [4.5, 1.2, 3.3] {
+            p.toggle()
+            try await Task.sleep(for: .milliseconds(300))
+            p.toggle(); p.seek(target)
+            var lowest = p.position
+            for _ in 0..<30 { try await Task.sleep(for: .milliseconds(10)); lowest = min(lowest, abs(p.position - target) < 0.05 ? p.position : -1) }
+            #expect(lowest >= 0, "the playhead left \(target) after the click")
+            #expect(abs(p.position - target) < 0.05)
+        }
+    }
+
     /// A drag sends a seek for every move; the playhead follows the pointer and the picture ends
     /// up where the drag stops.
     @Test func aDragEndsWhereThePointerStops() async throws {

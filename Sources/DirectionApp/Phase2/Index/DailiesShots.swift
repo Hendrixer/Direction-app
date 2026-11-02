@@ -18,10 +18,16 @@ struct DailiesShotsRow: View {
     @FocusState private var focused: Bool
 
     private var shots: [Shot] { model.index.shots(takeID) }
+
+    /// The shot the playhead is in, with half a frame of give: the player reports a frame's own time, which can
+    /// sit a hair before the start the index wrote for the shot.
+    static func under(_ position: Double, in shots: [Shot], fps: Double) -> Shot? {
+        shots.last { $0.start <= position + 0.5 / max(1, fps) }
+    }
     private var fps: Double { model.asset(takeID)?.video.first?.frameRate ?? 24 }
 
     var body: some View {
-        let shots = shots, current = model.index.shot(at: position, in: takeID)?.id
+        let shots = shots, current = Self.under(position, in: shots, fps: fps)?.id
         let width = CGFloat(shots.count) * DailiesShotCard.width + CGFloat(max(0, shots.count - 1)) * 10
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -34,15 +40,23 @@ struct DailiesShotsRow: View {
                     .popover(isPresented: $showSheet, arrowEdge: .bottom) { DailiesContactSheet(model: model, takeID: takeID) { t in seek(t); showSheet = false } }
             }
             .frame(maxWidth: max(240, width), alignment: .leading)
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 10) {
-                    ForEach(shots) { shot in
-                        DailiesShotCard(shot: shot, on: shot.id == current, art: preview.art[takeID] ?? model.dailiesArt(takeID), fps: fps) { seek(shot.start) }
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(shots) { shot in
+                            DailiesShotCard(shot: shot, on: shot.id == current, art: preview.art[takeID] ?? model.dailiesArt(takeID), fps: fps) { focused = true; seek(shot.start) }
+                                .id(shot.id)
+                        }
                     }
+                    .padding(.bottom, width > 700 ? 10 : 0)
+                }
+                .scrollIndicators(.automatic)
+                // The shot under the playhead is always in view: a click, ← →, or playing into the next one.
+                .onChange(of: current) { _, id in
+                    guard let id else { return }
+                    withAnimation(gateAnimation(Gate.Motion.settle)) { proxy.scrollTo(id) }
                 }
             }
-            .scrollIndicators(.never)
-            .scrollDisabled(width < 700)
         }
         .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -78,11 +92,13 @@ struct DailiesShotCard: View {
                 Text(SourceTimecode.range(shot.start, shot.end, fps: fps)).font(.system(size: 11, design: .monospaced)).monospacedDigit().foregroundStyle(Gate.Text.tertiary).lineLimit(1).padding(.top, 2)
                 Text(shot.look?.description ?? "Not described yet.").font(.system(size: 12)).foregroundStyle(shot.look == nil ? Gate.Text.disabled : Gate.Text.secondary)
                     .lineLimit(2).lineSpacing(1.6).frame(height: 32.4, alignment: .topLeading)
-                HStack(spacing: 4) {
+                    .help(shot.look?.description ?? "")
+                // Chips wrap inside the card instead of running into the next one.
+                FlowLayout(spacing: 4, lineSpacing: 4) {
                     if let size = shot.look?.size { Chip(size.capitalized, mono: false) }
                     ForEach(shot.look?.flags ?? [], id: \.self) { flag in Chip("\(flag.capitalized) at \(Timecode.duration(shot.middle))", mono: false) }
                 }
-                .frame(height: Gate.Size.chip).padding(.top, 2)
+                .frame(width: Self.width, alignment: .leading).padding(.top, 2)
             }
             .frame(width: Self.width, alignment: .leading)
             .contentShape(Rectangle())
