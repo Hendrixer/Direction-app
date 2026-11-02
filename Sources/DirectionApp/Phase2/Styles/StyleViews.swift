@@ -75,7 +75,7 @@ struct BriefStylePicker: View {
         HStack(spacing: 8) {
             Button { load(); open = true } label: { field }
                 .buttonStyle(.plain)
-                .popover(isPresented: $open, arrowEdge: .bottom) {
+                .gatePopover(isPresented: $open, arrowEdge: .bottom) {
                     StyleList(styles: styles, chosen: style) { picked in style = picked; open = false }
                 }
                 .accessibilityLabel("Style")
@@ -93,7 +93,7 @@ struct BriefStylePicker: View {
                     .background(RoundedRectangle(cornerRadius: Gate.Radius.control).fill(Gate.Surface.raised).overlay(RoundedRectangle(cornerRadius: Gate.Radius.control).strokeBorder(Gate.Line.subtle, lineWidth: 1)))
             }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-            .popover(isPresented: $asking, arrowEdge: .bottom) { MakeStylePopover(model: model) { asking = false } }
+            .gatePopover(isPresented: $asking, arrowEdge: .bottom) { MakeStylePopover(model: model) { asking = false } }
         }
         .task { load() }
         .onChange(of: model.runs.runs.filter { $0.job == .style }.map(\.state)) { _, _ in load() }
@@ -536,7 +536,7 @@ struct StyleParts: View {
     private func example(_ e: StyleExample) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Group {
-                if let image = NSImage(contentsOf: style.url.appendingPathComponent(e.still)) { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill) }
+                if let image = NSImage(contentsOf: style.url.appendingPathComponent(e.still)) { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill).clearOfGrain() }
                 else { Gate.Surface.sunken }
             }
             .frame(maxWidth: .infinity).aspectRatio(16 / 9, contentMode: .fit)

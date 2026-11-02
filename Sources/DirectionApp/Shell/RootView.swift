@@ -39,9 +39,9 @@ struct FilmWindow: View {
             if model.showCommandMenu { CommandMenuOverlay(model: model, app: app).zIndex(20) }
             if model.showShortcuts { ShortcutsOverlay(model: model).zIndex(20) }
             toast.zIndex(30)
-            // Grain sits on the chrome, never on a full-bleed picture.
-            if !screeningFullBleed { GrainOverlay().ignoresSafeArea().zIndex(40) }
         }
+        // Grain sits on the chrome, never on a picture, and not at all over a full-bleed one.
+        .grainOverlay(!screeningFullBleed)
         .background(Gate.Surface.ground)
         .ignoresSafeArea()
         // Nothing moves during playback except the playhead and time.

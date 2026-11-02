@@ -194,7 +194,7 @@ struct VersionSelect: View {
         let known = program.versions
         let options: [(String, String)] = known.map { ($0.id, $0.name) } + (known.contains { $0.id == version } ? [] : [(version, version)]) + [("\u{0}other", "Other\u{2026}")]
         GateSelect(options: options, selection: Binding(get: { version }, set: { v in if v == "\u{0}other" { other = known.contains { $0.id == version } ? "" : version; otherShown = true } else { version = v } }), minWidth: minWidth)
-            .popover(isPresented: $otherShown, arrowEdge: .bottom) {
+            .gatePopover(isPresented: $otherShown, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Any version \(program.name) accepts").font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary)
                     TextField("", text: $other).gateField().frame(width: 220).onSubmit(commit)

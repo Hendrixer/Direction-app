@@ -23,16 +23,50 @@ import AppKit
     }()
 }
 
-/// 3.5% noise over window chrome, the look of a screen blend without one: a blend over the whole window has to be
-/// composed again under anything that moves over it, like a popover opening or closing. Never drawn over the picture.
+/// 3.5% noise over window chrome, the look of a screen blend without one. Never over the picture: views marked
+/// `clearOfGrain()` cut themselves out of it (components.md › Picture).
 struct GrainOverlay: View {
     var opacity: Double = Gate.grain.window
+    /// The pictures' frames in the window's coordinates.
+    var holes: [CGRect] = []
     @AppStorage("filmGrain") private var enabled = true
     var body: some View {
         if enabled {
-            Image(nsImage: SurfaceTexture.grain).resizable(resizingMode: .tile).interpolation(.none)
-                .opacity(opacity).allowsHitTesting(false).accessibilityHidden(true)
+            GeometryReader { g in
+                let origin = g.frame(in: .global).origin
+                let cut = holes.reduce(Path()) { $0.union(Path($1.offsetBy(dx: -origin.x, dy: -origin.y))) }
+                grain.mask { Path(CGRect(origin: .zero, size: g.size)).subtracting(cut).fill() }
+            }
+            .allowsHitTesting(false).accessibilityHidden(true)
         }
+    }
+    private var grain: some View {
+        Image(nsImage: SurfaceTexture.grain).resizable(resizingMode: .tile).interpolation(.none).opacity(opacity)
+    }
+}
+
+/// Where the pictures are, for the grain to leave out.
+struct GrainHolesKey: PreferenceKey {
+    static let defaultValue: [CGRect] = []
+    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) { value += nextValue() }
+}
+
+extension View {
+    /// Footage, a look or a still: the window's grain stays off it.
+    func clearOfGrain() -> some View {
+        background {
+            GeometryReader { g in
+                let frame = g.frame(in: .global)
+                // Only what its scroll view shows, so a picture scrolled out of sight doesn't cut the grain over what's there.
+                let shown = g.bounds(of: .scrollView).map { frame.intersection($0.offsetBy(dx: frame.minX, dy: frame.minY)) } ?? frame
+                Color.clear.preference(key: GrainHolesKey.self, value: shown.isEmpty ? [] : [shown])
+            }
+        }
+    }
+
+    /// The window's grain over everything here except the pictures marked `clearOfGrain()`.
+    func grainOverlay(_ shown: Bool = true) -> some View {
+        overlayPreferenceValue(GrainHolesKey.self) { holes in if shown { GrainOverlay(holes: holes) } }
     }
 }
 

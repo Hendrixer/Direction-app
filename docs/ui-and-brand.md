@@ -7,7 +7,8 @@ The app uses the approved icon export from Scott's Documents/Direction Icon fold
 The current system follows [Gate 2.0](https://claude.ai/artifact/KBjd5vAbxK1p5fJFhFTG23), Scott's supplied design guide. Its extracted source and implementation mapping are in [design/gate](../design/gate/README.md). The previous monochrome app is preserved in commit `e81ec17`.
 
 - The semantic Gate tokens define the exact OKLCH steel ramp, text hierarchy, spacing, radii, type, and motion. Compatibility Palette names bind to these roles.
-- Work surfaces are black and near-neutral steel. A cached 192px noise tile supplies the guide's 3.5% window grain and 18% steel grain. Video remains clean black with no grain or tint over the picture or export.
+- Work surfaces are black and near-neutral steel. A cached 192px noise tile supplies the guide's 3.5% window grain and 18% steel grain. Video remains clean black with no grain or tint over the picture or export: every picture (players, thumbnails, stills, looks) is marked `clearOfGrain()` and cuts itself out of the window's grain.
+- Popovers are the system's, with its animation off: `gatePopover` fades the popover's window itself. The system animation steps at half the display's rate, 30 fps on a 60 Hz screen; the fade runs at the full rate.
 - Amber identifies the director's numbered notes, pins, ranges, and frame regions. Agent replies/status use a diamond and ion blue. Ordinary timecodes stay neutral.
 - The titlebar separates Dailies, Screening, and Notes. Screening hides the note sheet; selecting a moment or range opens it. The strip shows actual video-clip intervals at their true proportions.
 - Primary actions use steel with a bright top lip; secondary actions use raised neutral surfaces and quiet actions use ghost buttons. Native translucent material is reserved for floating HUDs.

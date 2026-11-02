@@ -90,7 +90,7 @@ struct ConflictOrderRow: View {
         SettingsRow(label: "When notes conflict") {
             Text(SettingsKey.conflictKinds(order).map(\.label).joined(separator: " \u{203A} ")).font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary)
             Button("Change\u{2026}") { open = true }.buttonStyle(.gate)
-                .popover(isPresented: $open, arrowEdge: .bottom) {
+                .gatePopover(isPresented: $open, arrowEdge: .bottom) {
                     VStack(alignment: .leading, spacing: 10) {
                         ConflictOrderList(order: $order)
                             .background(SystemCardBackground())

@@ -219,7 +219,7 @@ struct AnswerRow: View {
             actions
         }
         .fixedSize()
-        .popover(isPresented: Binding(get: { model.changes.keepingNoteID == note.id }, set: { if !$0 { model.changes.keepingNoteID = nil } }), arrowEdge: .bottom) {
+        .gatePopover(isPresented: Binding(get: { model.changes.keepingNoteID == note.id }, set: { if !$0 { model.changes.keepingNoteID = nil } }), arrowEdge: .bottom) {
             KeepRulePopover(model: model, note: note, suggestion: answer?.rule) { model.changes.keepingNoteID = nil }
         }
     }

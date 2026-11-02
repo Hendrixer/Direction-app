@@ -195,7 +195,7 @@ struct LibraryItemPreview: View {
         ZStack {
             RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Gate.Surface.sunken)
             if item.kind == .image {
-                if let image = library.image(item) { Image(nsImage: image).resizable().aspectRatio(contentMode: .fit).padding(large ? 18 : 12) }
+                if let image = library.image(item) { Image(nsImage: image).resizable().aspectRatio(contentMode: .fit).clearOfGrain().padding(large ? 18 : 12) }
                 else { LibraryIcon(name: "photo", size: 30) }
             } else if let levels = item.measured?.levels {
                 TimelineView(.animation(paused: library.playing != item.file)) { _ in

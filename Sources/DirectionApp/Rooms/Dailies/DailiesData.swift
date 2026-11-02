@@ -304,6 +304,7 @@ struct DailiesTakeThumb: View {
             else if let path = asset?.thumbnailPath, let poster = ThumbnailCache.image(path) { Image(nsImage: poster).resizable().aspectRatio(contentMode: .fill) }
         }
         .clipped()
+        .clearOfGrain()
         .task(id: taskKey) {
             guard !preview, let asset else { return }
             if scrub == nil, asset.thumbnailPath.flatMap(ThumbnailCache.image) != nil { image = nil; return }

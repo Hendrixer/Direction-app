@@ -25,7 +25,7 @@ struct MadeChip: View {
         }
         .buttonStyle(.plain)
         // Snapshots draw the popover where NSPopover puts it; NSPopover doesn't render offscreen.
-        .popover(isPresented: Binding(get: { open && !film.isPreview }, set: { if !$0, open { film.made.provenanceID = nil } }), arrowEdge: .bottom) {
+        .gatePopover(isPresented: Binding(get: { open && !film.isPreview }, set: { if !$0, open { film.made.provenanceID = nil } }), arrowEdge: .bottom) {
             MadeProvenance(film: film, record: record).background(Gate.Surface.panel)
         }
         .help("\(record.madeWith). Where it came from")
@@ -53,7 +53,7 @@ struct MadeProvenance: View {
             }
             .section(first: true)
             if playing && record.kind.isPicture && !film.isPreview {
-                PlayerSurface(player: film.made.playerForPicture).aspectRatio(film.aspect, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: Gate.Radius.frame))
+                PlayerSurface(player: film.made.playerForPicture).aspectRatio(film.aspect, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: Gate.Radius.frame)).clearOfGrain()
                     .padding(.horizontal, 16).padding(.bottom, 14)
             }
             if !record.asked.isEmpty && ![.slowMotion, .upscale].contains(record.kind) {

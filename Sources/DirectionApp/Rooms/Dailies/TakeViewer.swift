@@ -97,7 +97,7 @@ struct DailiesTakeViewer: View {
                         Text("This file isn't where it was.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary)
                         Text(asset?.path ?? "").font(Gate.Font.small).foregroundStyle(Gate.Text.disabled).lineLimit(1).truncationMode(.middle).frame(maxWidth: 420)
                     }
-                } else { PlayerSurface(player: player.player).allowsHitTesting(false) }
+                } else { PlayerSurface(player: player.player).allowsHitTesting(false).clearOfGrain() }
             }
             .frame(width: w, height: height)
             .clipShape(RoundedRectangle(cornerRadius: Gate.Radius.frame))

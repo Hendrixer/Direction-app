@@ -28,7 +28,7 @@ struct DailiesMadeGroup: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .popover(isPresented: Binding(get: { open && !model.isPreview }, set: { if !$0, open { made.dailiesID = nil } }), arrowEdge: .trailing) {
+        .gatePopover(isPresented: Binding(get: { open && !model.isPreview }, set: { if !$0, open { made.dailiesID = nil } }), arrowEdge: .trailing) {
             MadeProvenance(film: model, record: r, showsDailies: false).background(Gate.Surface.panel)
         }
         .help("\(r.kind.label) made with \(r.versionName)")

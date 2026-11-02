@@ -248,7 +248,7 @@ struct FinishRow: View {
                 }
             }
             .buttonStyle(.gate(.normal, .small))
-            .popover(isPresented: $acting, arrowEdge: .bottom) { FinishItemPopover(model: model, item: item) { acting = false } }
+            .gatePopover(isPresented: $acting, arrowEdge: .bottom) { FinishItemPopover(model: model, item: item) { acting = false } }
         }
     }
 }

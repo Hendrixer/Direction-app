@@ -82,7 +82,7 @@ struct DailiesSceneView: View {
             } label: { Image(systemName: "slider.horizontal.3").font(.system(size: 13)).foregroundStyle(Gate.Text.secondary).frame(width: 28, height: 28).contentShape(Rectangle()) }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().help("Sort and display")
         }
-        .popover(isPresented: $showMove, arrowEdge: .bottom) { DailiesMovePicker(model: model, ids: Array(selection)) { showMove = false } }
+        .gatePopover(isPresented: $showMove, arrowEdge: .bottom) { DailiesMovePicker(model: model, ids: Array(selection)) { showMove = false } }
     }
 
     /// "2 takes · 6:24": what's here, and nothing else. The editor's suggestion is on its take.
@@ -569,7 +569,7 @@ struct DailiesBinGrid<Action: View, Footer: View>: View {
                     action
                     DailiesSelectButton(selecting: $selecting, selection: $selection).disabled(takes.isEmpty)
                 }
-                .popover(isPresented: $showMove, arrowEdge: .bottom) { DailiesMovePicker(model: model, ids: Array(selection)) { showMove = false } }
+                .gatePopover(isPresented: $showMove, arrowEdge: .bottom) { DailiesMovePicker(model: model, ids: Array(selection)) { showMove = false } }
                 if takes.isEmpty {
                     VStack(spacing: 8) {
                         Text(emptyTitle).font(Gate.Font.brand(size: 24, width: 120)).foregroundStyle(Gate.Text.primary)

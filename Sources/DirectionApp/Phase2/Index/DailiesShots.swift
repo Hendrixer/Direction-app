@@ -57,7 +57,7 @@ struct DailiesShotsRow: View {
                 Button { showSheet = true } label: { HStack(spacing: 6) { Image(systemName: "square.grid.2x2"); Text("Contact sheet") } }
                     .buttonStyle(.gate(.normal))
                     .help("The take at a glance: 16 frames with their timecodes")
-                    .popover(isPresented: $showSheet, arrowEdge: .bottom) { DailiesContactSheet(model: model, takeID: takeID) { t in seek(t); showSheet = false } }
+                    .gatePopover(isPresented: $showSheet, arrowEdge: .bottom) { DailiesContactSheet(model: model, takeID: takeID) { t in seek(t); showSheet = false } }
             }
             .frame(maxWidth: max(240, width), alignment: .leading)
             ScrollViewReader { proxy in
@@ -151,7 +151,7 @@ struct ShotKeyframe: View {
                 FootageArtView(art: p.count > 1 ? FootageArt(rawValue: p[1]) ?? art : art)
                     .scaleEffect(zoom, anchor: UnitPoint(x: ax, y: ay)).brightness(b - 1)
             } else if let path, let image = ThumbnailCache.image(path) {
-                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill).clearOfGrain()
             } else {
                 FootageArtView(art: art)
             }

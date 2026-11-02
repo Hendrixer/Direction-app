@@ -181,7 +181,7 @@ struct ABStage<Foot: View>: View {
             } else if let why = side.unavailable ?? (ab.missing[i] ? "This version isn\u{2019}t on disk." : nil) {
                 Text(why).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).multilineTextAlignment(.center).padding(20)
             } else if ab.ready[i] {
-                PlayerSurface(player: ab.players[i]).allowsHitTesting(false)
+                PlayerSurface(player: ab.players[i]).allowsHitTesting(false).clearOfGrain()
             } else {
                 HStack(spacing: 8) { GateSpinner(); Text("Preparing picture").font(Gate.Font.small).foregroundStyle(Gate.Text.secondary) }
             }

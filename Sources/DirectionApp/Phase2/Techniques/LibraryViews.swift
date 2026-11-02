@@ -284,8 +284,8 @@ struct LibraryPreview: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Gate.Surface.sunken)
             if let url = library.previewURL(entry) {
                 // The poster under the video, so nothing goes blank while it starts.
-                if let poster = library.poster(entry) { Image(nsImage: poster).resizable().aspectRatio(contentMode: .fill).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous)) }
-                if playing { LoopingVideo(url: url).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous)) }
+                if let poster = library.poster(entry) { Image(nsImage: poster).resizable().aspectRatio(contentMode: .fill).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous)).clearOfGrain() }
+                if playing { LoopingVideo(url: url).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous)).clearOfGrain() }
             } else {
                 VStack(spacing: 6) {
                     LibraryIcon(name: entry.icon, size: 30)

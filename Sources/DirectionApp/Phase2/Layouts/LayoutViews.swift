@@ -124,7 +124,7 @@ struct LayoutButton: View {
         .help(current.map { "Layout: \($0.label)" } ?? "Layout")
         .accessibilityLabel("Layout")
         .accessibilityValue(current?.label ?? "As cut")
-        .popover(isPresented: Binding(get: { layouts.open && !model.isPreview }, set: { layouts.open = $0 }), arrowEdge: .top) {
+        .gatePopover(isPresented: Binding(get: { layouts.open && !model.isPreview }, set: { layouts.open = $0 }), arrowEdge: .top) {
             LayoutPicker(model: model).background(Gate.Surface.panel)
         }
         .onAppear { layouts.prepare(model) }

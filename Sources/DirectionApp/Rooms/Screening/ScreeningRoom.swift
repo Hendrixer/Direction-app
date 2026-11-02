@@ -131,7 +131,7 @@ struct ScreeningStage: View {
             Button { showsVolume.toggle() } label: { Image(systemName: muted || volume == 0 ? "speaker.slash" : "speaker.wave.2").font(.system(size: 12, weight: .medium)) }
                 .buttonStyle(.gate(.ghost, icon: true)).help("Volume")
                 .accessibilityLabel("Volume")
-                .popover(isPresented: $showsVolume, arrowEdge: .top) { volumePopover }
+                .gatePopover(isPresented: $showsVolume, arrowEdge: .top) { volumePopover }
             Button(action: toggleFullScreen) { Image(systemName: fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 12, weight: .medium)) }
                 .buttonStyle(.gate(.ghost, icon: true)).help(fullScreen ? "Exit Full Screen (F)" : "Full Screen (F)")
                 .accessibilityLabel(fullScreen ? "Exit full screen" : "Full screen")
@@ -439,7 +439,7 @@ struct ScreeningTitlebar: View {
                 HStack(spacing: 8) {
                     Button { model.showEditorPopover.toggle() } label: { EditorPill(state: model.pill, program: model.editorProgram) }
                         .buttonStyle(.plain)
-                        .popover(isPresented: $model.showEditorPopover, arrowEdge: .bottom) { EditorPopover(model: model) }
+                        .gatePopover(isPresented: $model.showEditorPopover, arrowEdge: .bottom) { EditorPopover(model: model) }
                         .help("The editor")
                     Button(action: end) {
                         HStack(spacing: 6) {

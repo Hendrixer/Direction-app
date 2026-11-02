@@ -77,7 +77,7 @@ struct SettingsView: View {
         .environment(\.settingsPreview, preview)
         .frame(width: Gate.Size.settingsWidth, height: preview ? nil : windowHeight)
         .background(Gate.Surface.ground)
-        .overlay { GrainOverlay().allowsHitTesting(false) }
+        .grainOverlay()
         .background { if !preview { SettingsWindowConfigurator(title: pages.stack.last?.title ?? tab.title) } }
         .background { tabKeys }
         .preferredColorScheme(.dark)

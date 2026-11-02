@@ -16,7 +16,7 @@ struct Titlebar: View {
                 HStack(spacing: 8) {
                     Button { model.showEditorPopover.toggle() } label: { EditorPill(state: model.pill, open: model.showEditorPopover || model.runs.previewPillOpen, program: model.editorProgram) }
                         .buttonStyle(.plain)
-                        .popover(isPresented: $model.showEditorPopover, arrowEdge: .bottom) { EditorPopover(model: model) }
+                        .gatePopover(isPresented: $model.showEditorPopover, arrowEdge: .bottom) { EditorPopover(model: model) }
                         .help("The editor")
                     if model.onboardingStep == nil {
                         Button { model.sheet = .share } label: { Image(systemName: "square.and.arrow.up") }

@@ -366,7 +366,7 @@ private struct BriefReferenceCard: View {
 
     @ViewBuilder private var thumb: some View {
         if preview { FootageArtView(art: art) }
-        else if let image { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill) }
+        else if let image { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill).clearOfGrain() }
         else {
             ZStack { Gate.Surface.sunken; Image(systemName: reference.path?.contains("://") == true ? "link" : "photo").font(.system(size: 14)).foregroundStyle(Gate.Text.disabled) }
         }

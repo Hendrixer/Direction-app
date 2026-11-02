@@ -252,6 +252,7 @@ private struct LookPicture: View {
         }
         .opacity(dimmed ? 0.45 : 1)
         .clipShape(shape)
+        .clearOfGrain()
         .overlay { if hairline && !selected { shape.strokeBorder(Gate.Line.subtle, lineWidth: 1) } }
         // `.look-tile.on`: a 1.5 pt text-1 ring with a dark line inside it.
         .overlay { if selected { shape.strokeBorder(Gate.Text.primary, lineWidth: 1.5).overlay(shape.inset(by: 1.5).strokeBorder(Color.black.opacity(0.45), lineWidth: 1)) } }

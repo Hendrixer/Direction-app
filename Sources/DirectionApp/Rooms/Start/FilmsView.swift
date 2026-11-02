@@ -35,8 +35,8 @@ struct FilmsView: View {
             }
             .background(films.isEmpty ? Gate.Surface.canvas : Gate.Surface.ground)
             if let film = trashing { trashSheet(film) }
-            GrainOverlay().ignoresSafeArea()
         }
+        .grainOverlay()
         .ignoresSafeArea()
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             Task { @MainActor in FilmsView.received(await FootageFiles.urls(from: providers), app: app) }

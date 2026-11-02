@@ -388,7 +388,7 @@ struct ChangeRow: View {
                 .buttonStyle(.gate(.ghost, .small))
                 .disabled(revertBlocker != nil)
                 .help(revertBlocker ?? "Ask the editor to put this back (⌘⌫)")
-                .popover(isPresented: Binding(get: { model.changes.revertNoteID == note.id }, set: { if !$0 { model.changes.revertNoteID = nil } }), arrowEdge: .bottom) {
+                .gatePopover(isPresented: Binding(get: { model.changes.revertNoteID == note.id }, set: { if !$0 { model.changes.revertNoteID = nil } }), arrowEdge: .bottom) {
                     RevertPopover(model: model, note: note, cut: cut)
                 }
         }

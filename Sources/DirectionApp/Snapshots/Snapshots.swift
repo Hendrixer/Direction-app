@@ -37,6 +37,7 @@ enum Snapshots {
             for id in registry.keys.sorted() { ok = render(id, to: dir.appendingPathComponent("\(id).png")) && ok }
             exit(ok ? 0 : 1)
         }
+        if args.contains("--popover-probe") { PopoverProbe.run() }
     }
 
     @discardableResult

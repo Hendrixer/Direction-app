@@ -80,6 +80,7 @@ struct FootageArtView: View {
                 }
             }.frame(width: w, height: h).clipped()
         }
+        .clearOfGrain()
     }
     private func figure(x: CGFloat, bottom: CGFloat, width: CGFloat, height: CGFloat, color: Color, in size: CGSize) -> some View {
         let w = size.width * width, h = size.height * height
@@ -96,7 +97,7 @@ struct Thumbnail: View {
     var art: FootageArt = .room
     var body: some View {
         // Fill the space it's given, never grow past it.
-        if let path, let image = ThumbnailCache.image(path) { Color.clear.overlay { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill) }.clipped() }
+        if let path, let image = ThumbnailCache.image(path) { Color.clear.overlay { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill) }.clipped().clearOfGrain() }
         else { FootageArtView(art: art) }
     }
 }
@@ -132,6 +133,7 @@ struct PictureView: View {
         }
         .aspectRatio(aspect, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: Gate.Radius.frame))
+        .clearOfGrain()
     }
 }
 
