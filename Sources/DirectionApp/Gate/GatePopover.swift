@@ -2,9 +2,9 @@ import SwiftUI
 import AppKit
 
 extension View {
-    /// `.popover`, faded by Direction instead of by macOS. The system's own popover animation steps at
-    /// half the display's rate, 30 fps on a 60 Hz screen; a fade of the popover's window runs at the full
-    /// rate. Everything else is the system popover: placement, arrow, closing on a click outside or Esc.
+    /// `.popover`, faded and scaled by Direction instead of by macOS. The system's own popover animation
+    /// steps at half the display's rate, 30 fps on a 60 Hz screen; Direction's runs at the full rate.
+    /// Everything else is the system popover: placement, arrow, closing on a click outside or Esc.
     func gatePopover<Content: View>(isPresented: Binding<Bool>, arrowEdge: Edge = .top, @ViewBuilder content: @escaping () -> Content) -> some View {
         modifier(GatePopoverModifier(isPresented: isPresented, arrowEdge: arrowEdge, popover: content))
     }
@@ -53,7 +53,7 @@ private struct GatePopoverAnchor<Content: View>: NSViewRepresentable {
     }
 }
 
-/// Shows one NSPopover for a `gatePopover` and runs its fade in and out.
+/// Shows one NSPopover for a `gatePopover` and runs its fade and scale in and out.
 @MainActor final class GatePopoverPresenter: NSObject, NSPopoverDelegate {
     /// Sized like the view it's attached to; never takes a click.
     final class Anchor: NSView {
@@ -113,15 +113,20 @@ private struct GatePopoverAnchor<Content: View>: NSViewRepresentable {
         fade(to: 0)
     }
 
-    /// Starts on the next turn of the run loop: asked inside a SwiftUI update, the animator often jumps to the end.
+    /// Fades the popover's window and, unless Reduce Motion is on, scales it between 0.98 and full size
+    /// (components.md › Popover). Starts on the next turn of the run loop: asked inside a SwiftUI update,
+    /// the animator often jumps to the end.
     private func fade(to alpha: CGFloat) {
         fades += 1
         let n = fades, reduced = SettingsKey.reducesMotion
         DispatchQueue.main.async { [weak self] in
             guard let self, n == self.fades, let window = self.popover?.contentViewController?.view.window else { return }
+            let duration = alpha > 0 ? Gate.Motion.settleDuration : Gate.Motion.snapDuration
+            let curve = reduced ? CAMediaTimingFunction(name: .linear) : CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
+            if !reduced { self.scale(window, toFull: alpha > 0, duration: duration, curve: curve) }
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = alpha > 0 ? Gate.Motion.settleDuration : Gate.Motion.snapDuration
-                context.timingFunction = reduced ? CAMediaTimingFunction(name: .linear) : CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
+                context.duration = duration
+                context.timingFunction = curve
                 window.animator().alphaValue = alpha
             } completionHandler: { [weak self] in
                 MainActor.assumeIsolated {
@@ -133,6 +138,32 @@ private struct GatePopoverAnchor<Content: View>: NSViewRepresentable {
         }
     }
 
+    private static let scaleKey = "gate.settle"
+
+    /// Scales the popover's frame view (its glass, arrow and content) about the arrow's tip, so the arrow
+    /// stays on what it points at. Runs in Core Animation, at the display's rate, like the fade.
+    private func scale(_ window: NSWindow, toFull: Bool, duration: Double, curve: CAMediaTimingFunction) {
+        // A new popover window gets its layers when it first draws, which may not have happened yet.
+        if window.contentView?.superview?.layer == nil { window.displayIfNeeded() }
+        guard let anchor, let anchorWindow = anchor.window, let frame = window.contentView?.superview, let layer = frame.layer else { return }
+        let aim = frame.convert(window.convertPoint(fromScreen: anchorWindow.convertPoint(toScreen: anchor.convert(NSPoint(x: anchor.bounds.midX, y: anchor.bounds.midY), to: nil))), from: nil)
+        let tip = CGPoint(x: min(max(aim.x, 0), frame.bounds.width), y: min(max(aim.y, 0), frame.bounds.height))
+        let pivot = CGPoint(x: layer.anchorPoint.x * layer.bounds.width, y: layer.anchorPoint.y * layer.bounds.height)
+        let s: CGFloat = 0.98
+        let small = CATransform3DConcat(CATransform3DMakeScale(s, s, 1), CATransform3DMakeTranslation((1 - s) * (tip.x - pivot.x), (1 - s) * (tip.y - pivot.y), 0))
+        let grow = CABasicAnimation(keyPath: "transform")
+        // Turned back partway, it goes on from where it is.
+        let now = layer.animation(forKey: Self.scaleKey) == nil ? nil : layer.presentation()?.transform
+        grow.fromValue = NSValue(caTransform3D: now ?? (toFull ? small : CATransform3DIdentity))
+        grow.toValue = NSValue(caTransform3D: toFull ? CATransform3DIdentity : small)
+        grow.duration = duration
+        grow.timingFunction = curve
+        // Shrinking holds at 0.98 until the popover closes; growing ends at the layer's own size.
+        grow.fillMode = .forwards
+        grow.isRemovedOnCompletion = toFull
+        layer.add(grow, forKey: Self.scaleKey)
+    }
+
     /// A click outside or Esc: fade first, then close.
     func popoverShouldClose(_ popover: NSPopover) -> Bool {
         close(animated: true)
@@ -141,7 +172,9 @@ private struct GatePopoverAnchor<Content: View>: NSViewRepresentable {
     }
 
     func popoverDidClose(_ notification: Notification) {
-        popover?.contentViewController?.view.window?.alphaValue = 1
+        let window = popover?.contentViewController?.view.window
+        window?.alphaValue = 1
+        window?.contentView?.superview?.layer?.removeAnimation(forKey: Self.scaleKey)
         if wanted { wanted = false; dismiss() }
         let settled = settled
         DispatchQueue.main.async { settled(false) }
