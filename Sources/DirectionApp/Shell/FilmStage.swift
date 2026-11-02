@@ -56,9 +56,13 @@ struct FilmTransport: View {
             Button { model.togglePlayback() } label: { Image(systemName: model.playing ? "pause.fill" : "play.fill") }
                 .buttonStyle(.gate(.normal, icon: true)).help(model.playing ? "Pause (Space)" : "Play (Space)")
             TimecodeLabel(time: model.position, total: model.duration, fps: model.fps)
+            // A notice showing its passage on the strip shows it, read-only; the pointer on the strip puts the
+            // director's own range back, to drag, pull longer or shorter, or draw again with ⌥ or ⇧.
+            let showing = model.notesUI.stripHighlightRestore != nil
             SceneStrip(scenes: model.stripScenes, duration: model.duration, playhead: model.position, marks: marks ?? model.noteMarks, range: model.anchorMode == .range ? model.rangeSelection : nil, tall: tall,
                        onSeek: { model.pause(); model.seek($0) },
-                       onRange: { a, b in model.rangeSelection = a...b; model.anchorMode = .range }) { scene in SceneContextMenu(model: model, scene: scene) }
+                       onRange: showing ? nil : { a, b in model.rangeSelection = a...b; model.anchorMode = .range }) { scene in SceneContextMenu(model: model, scene: scene) }
+                .onHover { if $0 && showing { model.endStripHighlight() } }
             if showsMarkButton {
                 Button { model.mark() } label: { PinMark(size: 12) }
                     .buttonStyle(.gate(.ghost, icon: true)).help("Mark this moment (N)").accessibilityLabel("Mark this moment")

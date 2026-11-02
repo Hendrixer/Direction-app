@@ -4,7 +4,7 @@ import DirectionCore
 
 /// Settings › General, Editor, Engines, Cutting, Styles, Notifications, Shortcuts, Storage, Sharing.
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, editor, engines, cutting, styles, notifications, shortcuts, storage, sharing
+    case general, editor, engines, cutting, styles, library, notifications, shortcuts, storage, sharing
     var id: String { rawValue }
     /// A remembered tab; Footage and Services went into Engines.
     static func stored(_ raw: String?) -> SettingsTab? {
@@ -19,6 +19,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .engines: "cpu"
         case .cutting: "film"
         case .styles: "swatchpalette"
+        case .library: "books.vertical"
         case .notifications: "bell"
         case .shortcuts: "keyboard"
         case .storage: "externaldrive"
@@ -99,6 +100,7 @@ struct SettingsView: View {
         case .engines: EnginesPane(app: app, preview: preview)
         case .cutting: CuttingPane(app: app, preview: preview)
         case .styles: StylesPane(app: app, preview: preview)
+        case .library: LibraryPane(preview: preview)
         case .notifications: NotificationsPane(preview: preview)
         case .shortcuts: ShortcutsPane(recording: recording)
         case .storage: StoragePane(app: app, preview: preview)
@@ -109,7 +111,7 @@ struct SettingsView: View {
     /// ⌘1…⌘9 choose a section while Settings is key; esc closes the window.
     private var tabKeys: some View {
         ZStack {
-            ForEach(Array(SettingsTab.allCases.enumerated()), id: \.offset) { i, t in
+            ForEach(Array(SettingsTab.allCases.prefix(9).enumerated()), id: \.offset) { i, t in
                 Button(t.title) { select(t) }.keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
             }
             Button("Close") { NSApp.keyWindow?.performClose(nil) }.keyboardShortcut(.cancelAction)

@@ -406,7 +406,7 @@ public struct ProjectEvent: Codable, Sendable, Identifiable {
     public var createdAt: Double
 }
 
-public struct JobRecord: Codable, Sendable, Identifiable {
+public struct JobRecord: Codable, Hashable, Sendable, Identifiable {
     public var id: String
     public var kind: String
     public var revision: Int

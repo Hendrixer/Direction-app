@@ -201,10 +201,12 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let view = notification.object as? NSTextView else { return }
+            // Deleting back into a name narrows a list that's open; it never opens one.
+            let deleting = (view.string as NSString).length < (parent.text as NSString).length
             parent.text = view.string
             measure(view)
             highlight(view)
-            updateMention(view)
+            updateMention(view, opening: !deleting)
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
@@ -221,15 +223,15 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
         weak var textView: NSTextView?
 
         /// Opens, narrows or closes the library at the "@" before the caret.
-        func updateMention(_ view: NSTextView) {
+        func updateMention(_ view: NSTextView, opening: Bool = true) {
             textView = view
             let library = LibraryModel.shared
             if library.entries.isEmpty { library.load() }
             let sel = view.selectedRange()
             guard view.window?.firstResponder === view, sel.length == 0, let t = MentionToken.find(view.string, caret: sel.location) else { closeMention(); return }
-            let found = Array(library.search(t.query, footage: parent.footage).prefix(6)), q = t.query.lowercased().trimmingCharacters(in: .whitespaces)
-            // A whole name written and a space after it: done.
-            if found.isEmpty || (t.query.hasSuffix(" ") && found.contains { $0.name.lowercased() == q }) { closeMention(); return }
+            guard mention != nil || opening else { return }
+            let found = MentionToken.offer(t.query, from: library.search(t.query, footage: parent.footage))
+            if found.isEmpty { closeMention(); return }
             if mention?.range.location != t.range.location { selected = 0 }
             mention = t; items = found; selected = min(selected, found.count - 1)
             showMention(view, at: t.range)

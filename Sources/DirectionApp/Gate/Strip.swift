@@ -41,7 +41,12 @@ struct SceneStrip<Menu: View>: View {
     @ViewBuilder var menu: (StripScene) -> Menu
 
     @State private var dragStart: Double?
-    @State private var selectingRange = false
+    @State private var dragging: Drag = .seek
+    @State private var moved = false
+
+    /// What a drag on the strip does, from where it starts: on the range's edge it resizes the range, inside it
+    /// it moves the range, elsewhere it moves the playhead (with ⌥ or ⇧, it draws a new range).
+    private enum Drag { case seek, draw, move(grab: Double, length: Double), lower, upper }
     @Environment(\.editorPlayhead) private var editorPlayhead
     private var sceneHeight: CGFloat { tall ? Gate.Component.Strip.tallScene : Gate.Component.Strip.scene }
     private var height: CGFloat { tall ? Gate.Component.Strip.tallHeight : Gate.Component.Strip.height }
@@ -63,8 +68,20 @@ struct SceneStrip<Menu: View>: View {
                 }
                 .padding(.top, 8)
                 if let range {
+                    let w = max(3, x(range.upperBound) - x(range.lowerBound))
                     RoundedRectangle(cornerRadius: 3).fill(Gate.Voice.directorWash).overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Gate.Voice.director, lineWidth: 1.5))
-                        .frame(width: max(3, x(range.upperBound) - x(range.lowerBound)), height: sceneHeight + 4).offset(x: x(range.lowerBound), y: 6).allowsHitTesting(false)
+                        .overlay {
+                            // Grips on both edges: the range can be pulled longer or shorter.
+                            if onRange != nil && w > 14 {
+                                HStack {
+                                    Capsule().fill(Gate.Voice.director).frame(width: 3, height: max(8, sceneHeight * 0.45))
+                                    Spacer(minLength: 0)
+                                    Capsule().fill(Gate.Voice.director).frame(width: 3, height: max(8, sceneHeight * 0.45))
+                                }
+                                .padding(.horizontal, 2.5)
+                            }
+                        }
+                        .frame(width: w, height: sceneHeight + 4).offset(x: x(range.lowerBound), y: 6).allowsHitTesting(false)
                 }
                 ForEach(marks) { mark in
                     ZStack {
@@ -88,16 +105,43 @@ struct SceneStrip<Menu: View>: View {
             }
             .frame(width: width, height: height, alignment: .topLeading)
             .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                guard case .active(let p) = phase, onRange != nil, let range else { if case .ended = phase { NSCursor.arrow.set() }; return }
+                switch grab(p.x, range: range, x: x) {
+                case .lower, .upper: NSCursor.resizeLeftRight.set()
+                case .move: NSCursor.openHand.set()
+                default: NSCursor.arrow.set()
+                }
+            }
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                 let t = time(at: value.location.x, scenes: scenes, total: total, usable: usable)
                 if dragStart == nil {
-                    dragStart = time(at: value.startLocation.x, scenes: scenes, total: total, usable: usable)
-                    selectingRange = onRange != nil && !NSEvent.modifierFlags.intersection([.option, .shift]).isEmpty
+                    let start = time(at: value.startLocation.x, scenes: scenes, total: total, usable: usable)
+                    dragStart = start; moved = false
+                    if let range, onRange != nil { dragging = grab(value.startLocation.x, range: range, x: x) } else { dragging = .seek }
+                    if case .move(_, let length) = dragging, let range { dragging = .move(grab: start - range.lowerBound, length: length) }
+                    if case .seek = dragging, onRange != nil, !NSEvent.modifierFlags.intersection([.option, .shift]).isEmpty { dragging = .draw }
+                    if case .move = dragging { NSCursor.closedHand.set() }
                 }
-                if selectingRange {
-                    if let start = dragStart, let onRange, abs(value.translation.width) > 4 { onRange(min(start, t), max(start, t)) }
-                } else { onSeek(t) }
-            }.onEnded { _ in dragStart = nil; selectingRange = false })
+                if abs(value.translation.width) > 3 { moved = true }
+                guard let start = dragStart, let onRange else { onSeek(t); return }
+                let shortest = min(0.1, total)
+                switch dragging {
+                case .seek: onSeek(t)
+                case .draw: if moved { onRange(min(start, t), max(start, t)) }
+                case .move(let grabbed, let length):
+                    guard moved else { return }
+                    let lower = max(0, min(total - length, t - grabbed))
+                    onRange(lower, lower + length)
+                case .lower: if moved, let range { onRange(max(0, min(t, range.upperBound - shortest)), range.upperBound) }
+                case .upper: if moved, let range { onRange(range.lowerBound, min(total, max(t, range.lowerBound + shortest))) }
+                }
+            }.onEnded { value in
+                // A click on the range that didn't drag it moves the playhead there, like anywhere else.
+                if !moved, let start = dragStart { switch dragging { case .move, .lower, .upper: onSeek(start); default: break } }
+                if case .move = dragging { NSCursor.openHand.set() }
+                dragStart = nil; dragging = .seek; moved = false
+            })
         }
         .frame(height: height)
         .accessibilityElement(children: .ignore)
@@ -129,6 +173,15 @@ struct SceneStrip<Menu: View>: View {
         .overlay(alignment: .top) { if scene.changed { Gate.Voice.prism.frame(height: 2) } }
         .clipShape(RoundedRectangle(cornerRadius: 3))
         .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(isCurrent || scene.locked ? Gate.Line.strong : Gate.Line.subtle, lineWidth: 1))
+    }
+
+    /// What a drag starting at `px` takes hold of: an edge of the range (within 6 pt), the range, or nothing.
+    private func grab(_ px: CGFloat, range: ClosedRange<Double>, x: (Double) -> CGFloat) -> Drag {
+        let lo = x(range.lowerBound), hi = x(range.upperBound)
+        if abs(px - lo) <= 6 && px <= (lo + hi) / 2 { return .lower }
+        if abs(px - hi) <= 6 { return .upper }
+        if px > lo && px < hi { return .move(grab: 0, length: range.upperBound - range.lowerBound) }
+        return .seek
     }
 
     private func xPosition(_ t: Double, scenes: [StripScene], total: Double, usable: CGFloat) -> CGFloat {

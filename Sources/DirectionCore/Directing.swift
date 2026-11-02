@@ -62,6 +62,9 @@ public struct DailiesScene: Codable, Hashable, Sendable, Identifiable {
     public var setups: [DailiesSetup]
     public var locked: Bool
     public var lockedAt: Double?
+    /// Locked because picture locked (true), or by the director on its own (false): the first open again when
+    /// picture unlocks. Scenes locked before this was kept have neither.
+    public var lockedWithPicture: Bool?
     /// The director's folder it came from ("01 Intro"): its number and title are theirs (FootageFolders).
     public var folder: String?
     public init(id: String = newID("scene"), number: Int, title: String, setups: [DailiesSetup] = [], locked: Bool = false) { self.id = id; self.number = number; self.title = title; self.setups = setups; self.locked = locked }

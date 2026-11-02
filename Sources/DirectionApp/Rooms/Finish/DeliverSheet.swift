@@ -228,8 +228,11 @@ struct DeliverSheet: View {
 
     private var cut: ReviewCut? { model.deliveryCut }
     private var sequence: DirectionCore.Sequence? { model.cutSequence(cut) ?? model.sequence }
-    private var target: URL { folder ?? recent.first ?? DeliveryFormat.defaultFolder(film: model.filmName) }
+    /// Where this film delivered last, or its own folder: another film's folder is in the menu, never the default.
+    private var target: URL { folder ?? lastHere ?? DeliveryFormat.defaultFolder(film: model.filmName) }
     private var recent: [URL] { recentFolders.split(separator: "\n").map { URL(fileURLWithPath: String($0)) } }
+    private var filmKey: String { "deliveryFolder." + (model.url?.path ?? model.filmName) }
+    private var lastHere: URL? { UserDefaults.standard.string(forKey: filmKey).map { URL(fileURLWithPath: $0) } }
     private var outputs: [DeliveryOutput] { DeliveryOutput.all.filter { chosen.contains($0.id) } }
     private var total: Int64 { outputs.map(estimate).reduce(0, +) }
     private var free: (Int64, String)? { model.isPreview ? (312_000_000_000, "Macintosh HD") : DeliveryFormat.freeSpace(at: target) }
@@ -442,6 +445,7 @@ struct DeliverSheet: View {
         guard !outputs.isEmpty, !tooBig else { return }
         let path = target.path
         recentFolders = ([path] + recent.map(\.path).filter { $0 != path }).prefix(5).joined(separator: "\n")
+        UserDefaults.standard.set(path, forKey: filmKey)
         model.delivery.start(model: model, outputs: outputs, folder: target, size: size, finderAlias: finderAlias)
         model.sheet = nil
     }

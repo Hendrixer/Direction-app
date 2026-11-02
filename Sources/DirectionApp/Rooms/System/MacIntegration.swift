@@ -317,7 +317,7 @@ struct FilmActions {
 
     func confirmUnlockPicture() {
         let alert = NSAlert(); alert.messageText = "Unlock picture?"
-        alert.informativeText = "The editor can change timing again, and finishing work may need redoing. This is logged in History."
+        alert.informativeText = "The editor can change the edit again, and the scenes that locked with the picture open again. Finishing work may need redoing. It\u{2019}s recorded in History."
         alert.addButton(withTitle: "Unlock Picture"); alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
         if alert.runModal() == .alertFirstButtonReturn { m.unlockPicture() }

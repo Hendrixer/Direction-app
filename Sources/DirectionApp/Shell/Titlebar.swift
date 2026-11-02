@@ -71,7 +71,7 @@ struct Titlebar: View {
                     }
                 } label: { crumbLabel(model.watchedCut?.name ?? (model.openTurnover?.kind == "assembly" ? "Assembly" : "No cuts yet"), bold: false, chevron: !model.cuts.isEmpty) }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().disabled(model.cuts.isEmpty)
-                if model.isPictureLocked { Chip("Picture locked", icon: "lock.fill", mono: false).padding(.leading, 6) }
+                if model.isPictureLocked { PictureLockChip(model: model).padding(.leading, 6) }
             }
         }
         .font(.system(size: 13))
@@ -130,5 +130,20 @@ struct RoomSwitcher: View {
         }
         .padding(2)
         .background(RoundedRectangle(cornerRadius: 9).fill(Gate.Surface.canvas).overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Gate.Line.subtle, lineWidth: 1)))
+    }
+}
+
+/// "Picture locked" beside the crumbs. Click it to unlock: it says so when you point at it.
+struct PictureLockChip: View {
+    var model: FilmModel
+    @State private var hovered = false
+    var body: some View {
+        Button { FilmActions(model).confirmUnlockPicture() } label: {
+            Chip(hovered ? "Unlock picture\u{2026}" : "Picture locked", icon: hovered ? "lock.open" : "lock.fill", mono: false)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .help("Unlock picture to change the edit")
+        .accessibilityLabel("Picture locked. Unlock picture")
     }
 }

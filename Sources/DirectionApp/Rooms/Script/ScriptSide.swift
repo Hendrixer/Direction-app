@@ -103,8 +103,10 @@ struct ScriptSidePanel: View {
         .background(selected ? Gate.Surface.panel : .clear)
         .overlay(alignment: .leading) { if selected { Gate.Voice.director.frame(width: 2) } }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { if editable { onEdit(note) } }
-        .onTapGesture { onSelect(note) }
+        // Selects at once; a double-click edits the words.
+        .onTapGesture {
+            if NSApp.currentEvent?.clickCount == 2, editable { onEdit(note) } else { onSelect(note) }
+        }
         .contextMenu {
             if editable { Button("Edit Words") { onEdit(note) } }
             NoteContextMenu(model: model, note: note)

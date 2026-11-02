@@ -11,7 +11,19 @@ enum ChangesFixtures {
             "31-play-changes": { .film(playing()) },
             "32-changes-thread": { .film(replying()) },
             "33-history": { .film(history()) },
+            "29-changes-question": { .film(question()) },
         ]
+    }
+
+    /// Cut 4 to review while the editor still waits on a decision: the question sits above the answers.
+    static func question() -> FilmModel {
+        let m = cut4()
+        m.position = SampleFilm.tc(0, 6, 12)
+        m.questions = [EditorQuestion(id: "question-music", turnoverID: nil, kind: "question", noteIDs: ["note-4"],
+                                      text: "Note 4: does \u{201C}drop the music\u{201D} mean bring the full song in at 0:09, or stop it there?", detail: nil,
+                                      choices: [.init(id: "in", label: "Bring the full song in"), .init(id: "out", label: "Stop the music there")],
+                                      allowsText: true, answer: nil, createdAt: SampleFilm.date(10, 26, 14, 2))]
+        return m
     }
 
     /// Cut 4 on screen in Changes, with every earlier cut registered so lengths and "was" ranges resolve.

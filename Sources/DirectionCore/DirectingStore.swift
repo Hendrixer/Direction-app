@@ -205,7 +205,7 @@ extension ProjectStore {
     public func lockScene(id: String, locked: Bool) throws {
         try mutate(DirectingKey.dailies, default: Dailies(), kind: "lock.updated", summary: locked ? "Locked a scene" : "Unlocked a scene") { d in
             guard let i = d.scenes.firstIndex(where: { $0.id == id }) else { throw DirectionError("scene_not_found", "Scene not found.") }
-            d.scenes[i].locked = locked; d.scenes[i].lockedAt = locked ? Date().timeIntervalSince1970 : nil
+            d.scenes[i].locked = locked; d.scenes[i].lockedAt = locked ? Date().timeIntervalSince1970 : nil; d.scenes[i].lockedWithPicture = locked ? false : nil
         }
     }
     /// The director adds a scene; it takes the next number.
@@ -288,14 +288,14 @@ extension ProjectStore {
             var scenes: [DailiesScene] = []
             for var s in update.scenes {
                 if let old = d.scenes.first(where: { $0.id == s.id }) {
-                    s.locked = old.locked; s.lockedAt = old.lockedAt; s.folder = old.folder
+                    s.locked = old.locked; s.lockedAt = old.lockedAt; s.lockedWithPicture = old.lockedWithPicture; s.folder = old.folder
                     // A scene from the director's folders keeps its number, title and setups; the editor adds setups and fills in what they are.
                     if old.folder != nil {
                         s.number = old.number; s.title = old.title
                         s.setups = old.setups.map { o in o.description.isEmpty ? (s.setups.first { $0.code == o.code } ?? o) : o } + s.setups.filter { n in !old.setups.contains { $0.code == n.code } }
                     }
                 }
-                else { s.locked = false; s.lockedAt = nil }
+                else { s.locked = false; s.lockedAt = nil; s.lockedWithPicture = nil }
                 scenes.append(s)
             }
             // A scene is never dropped by logging: the editor logs in batches, and the director's scenes stay.
@@ -327,14 +327,33 @@ extension ProjectStore {
         let status = EditorStatus(phase: phase, detail: detail, progress: progress, agent: agent, updatedAt: Date().timeIntervalSince1970)
         try database.write { db in try Self.setValue(db, DirectingKey.status, status); try Self.event(db, kind: "editor.status", revision: try currentRevision(db), summary: phase) }
     }
+    /// Locking picture locks every scene still open with it; unlocking picture opens those again, and keeps the
+    /// ones the director locked on their own.
     public func lockPicture(cutID: String?, locked: Bool) throws {
         if locked {
             let open = try notes().filter { $0.visibleToEditor && ![.accepted, .dropped].contains($0.lifecycle) && !$0.inInbox }
             guard open.isEmpty else { throw DirectionError("notes_open", "Accept or drop every open note before locking picture.") }
+            if try dailies().scenes.contains(where: { !$0.locked }) {
+                try mutate(DirectingKey.dailies, default: Dailies(), kind: "lock.updated", summary: "Locked every scene with the picture") { d in
+                    let now = Date().timeIntervalSince1970
+                    for i in d.scenes.indices where !d.scenes[i].locked { d.scenes[i].locked = true; d.scenes[i].lockedAt = now; d.scenes[i].lockedWithPicture = true }
+                }
+            }
         }
         _ = try updateDirectingState(summary: locked ? "Locked picture" : "Unlocked picture") { s in
             s.pictureLocked = locked; s.pictureLockedAt = locked ? Date().timeIntervalSince1970 : nil; s.pictureLockedCutID = locked ? cutID : nil
             if locked && s.finishing == nil { s.finishing = FinishingItem.defaults }
+        }
+        guard !locked else { return }
+        // A film locked before scenes knew why they locked: the ones that locked in a moment picture locked.
+        let times = try database.read { db in try Double.fetchAll(db, sql: "SELECT created_at FROM events WHERE kind = 'directing.updated' AND summary = 'Locked picture'") }
+        func withPicture(_ s: DailiesScene) -> Bool {
+            s.locked && (s.lockedWithPicture == true || (s.lockedWithPicture == nil && s.lockedAt.map { at in times.contains { abs($0 - at) < 10 } } ?? false))
+        }
+        if try dailies().scenes.contains(where: withPicture) {
+            try mutate(DirectingKey.dailies, default: Dailies(), kind: "lock.updated", summary: "Unlocked the scenes that locked with the picture") { d in
+                for i in d.scenes.indices where withPicture(d.scenes[i]) { d.scenes[i].locked = false; d.scenes[i].lockedAt = nil; d.scenes[i].lockedWithPicture = nil }
+            }
         }
     }
     /// The revision a cut plays and delivers: its own, or once picture is locked on it, the newest one whose

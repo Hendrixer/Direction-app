@@ -26,7 +26,8 @@ struct ScriptRoom: View {
     var body: some View { ScriptRoomContent(model: model, preview: preview) }
 }
 
-/// Builds the document only when the cut, transcripts or dailies change.
+/// Builds the document only when the cut, transcripts or dailies change. The film keeps it, so coming back to
+/// Script shows the page at once.
 @MainActor final class ScriptDocumentCache {
     private var key: [AnyHashable] = []
     private var document = ScriptDocument()
@@ -44,7 +45,6 @@ struct ScriptRoom: View {
 struct ScriptRoomContent: View {
     @Bindable var model: FilmModel
     @State private var pending: ScriptPreview?
-    @State private var cache = ScriptDocumentCache()
     @State private var player = ReadingPlayer()
 
     @State private var anchorID: String?
@@ -75,7 +75,7 @@ struct ScriptRoomContent: View {
     }
 
     var body: some View {
-        let doc = cache.document(for: model)
+        let doc = model.scriptCache.document(for: model)
         let marks = ScriptMarks(notes: model.scriptNotes, document: doc)
         HStack(spacing: 0) {
             outline(doc).frame(width: 200)

@@ -8,6 +8,7 @@ struct CuttingPanel: View {
     @Bindable var model: FilmModel
     var turnover: Turnover
     @Environment(\.openSettings) private var openSettings
+    @State private var width: CGFloat = 0
 
     private var ui: NotesUI { model.notesUI }
     private var blockers: [EditorQuestion] { model.openQuestions.sorted { $0.createdAt > $1.createdAt } }
@@ -42,9 +43,12 @@ struct CuttingPanel: View {
                         StepRow(model: model, turnover: turnover, note: note, status: status)
                     }
                 }
+                // As wide as the panel, never wider: nothing in it can push the rest off to the side.
+                .frame(width: width > 0 ? width : nil, alignment: .leading)
                 .animation(gateAnimation(Gate.Motion.glide), value: rows.map { "\($0.0.id)\($0.1)" })
                 .animation(gateAnimation(Gate.Motion.settle), value: blockers.map(\.id))
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             foot
         }
         .onAppear(perform: track)
@@ -308,11 +312,7 @@ struct ConflictNotice: View {
         model.notesUI.stripHighlightRestore = (model.anchorMode, model.rangeSelection)
         model.rangeSelection = range; model.anchorMode = .range
     }
-    private func endHighlight() {
-        guard let (mode, selection) = model.notesUI.stripHighlightRestore else { return }
-        model.notesUI.stripHighlightRestore = nil
-        model.anchorMode = mode; model.rangeSelection = selection
-    }
+    private func endHighlight() { model.endStripHighlight() }
 
     /// "00:25–00:46" or "00:25:00–00:46:12" → seconds.
     static func parseRange(_ text: String) -> ClosedRange<Double>? {
@@ -373,6 +373,13 @@ struct ErrorNotice: View {
 }
 
 extension FilmModel {
+    /// Puts back the director's own range after a notice showed its passage on the strip.
+    func endStripHighlight() {
+        guard let (mode, selection) = notesUI.stripHighlightRestore else { return }
+        notesUI.stripHighlightRestore = nil
+        anchorMode = mode; rangeSelection = selection
+    }
+
     /// VoiceOver hears what changed: blockers at once, progress at most every 10 s.
     func announceProgress(_ t: Turnover) {
         let ui = notesUI

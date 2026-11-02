@@ -104,8 +104,11 @@ struct ScreeningStage: View {
             .overlay { if model.isPreparing { GateSpinner() } }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
-            .onTapGesture(count: 2) { toggleFullScreen() }
-            .onTapGesture { if !ended { model.togglePlayback() } }
+            // A click plays or pauses at once; the second click of a double-click puts that back and goes full screen.
+            .onTapGesture {
+                if !ended { model.togglePlayback() }
+                if NSApp.currentEvent?.clickCount == 2 { toggleFullScreen() }
+            }
             .accessibilityHidden(true)
     }
 

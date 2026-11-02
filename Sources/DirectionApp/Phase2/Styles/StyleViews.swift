@@ -274,7 +274,6 @@ struct StylesPane: View {
             if !styles.isEmpty {
                 HStack { Spacer(); Button("New Style\u{2026}") { editing = .new }.buttonStyle(.gate) }.padding(.top, 2)
             }
-            TechniquesGroup(preview: preview)
             SettingsGroup(label: "Where they live") {
                 SettingsRow(label: "Styles folder", detail: "One folder for each style. Copy one to share it; drop one in to use it.", first: true) {
                     Text(displayPath).font(.system(size: 12)).foregroundStyle(Gate.Text.primary).lineLimit(1).truncationMode(.middle)

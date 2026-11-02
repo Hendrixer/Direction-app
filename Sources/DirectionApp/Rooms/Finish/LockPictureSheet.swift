@@ -69,11 +69,10 @@ extension FilmModel {
         return out
     }
 
-    /// Locks every scene, then the picture, and opens Finish.
+    /// Locks the picture, and every scene with it, and opens Finish.
     func confirmLockPicture() {
         guard picturelockBlockers.isEmpty else { return }
         if isPreview { directing.pictureLocked = true; sheet = nil; return }
-        perform { store in for s in self.dailies.scenes where !s.locked { try store.lockScene(id: s.id, locked: true) } }
         lockPicture()
     }
 }
@@ -103,7 +102,7 @@ struct LockPictureSheet: View {
                 .gateWell()
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Before you lock")
-                Text("You can unlock later from Finish or Film \u{203A} Unlock Picture. It\u{2019}s recorded in the history.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                Text("You can unlock it later: click Picture locked at the top of the window. The scenes open again with it.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
             }
             .padding(.horizontal, 22).padding(.vertical, 14)
 

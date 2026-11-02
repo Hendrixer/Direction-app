@@ -5,6 +5,7 @@ import DirectionCore
 /// The editor's questions and can't-dos, answered without leaving the room.
 struct QuestionsTab: View {
     @Bindable var model: FilmModel
+    @State private var width: CGFloat = 0
     private var answered: [EditorQuestion] {
         let turnover = model.notesTurnover?.id ?? model.lastTurnover?.id
         return model.questions.filter { $0.answer != nil && $0.turnoverID == turnover }
@@ -27,8 +28,10 @@ struct QuestionsTab: View {
                     ForEach(answered) { q in AnsweredLine(model: model, question: q) }
                 }
                 .padding(.vertical, 14).padding(.horizontal, 12)
+                .frame(width: width > 0 ? width : nil, alignment: .leading)
                 .animation(gateAnimation(Gate.Motion.glide), value: model.openQuestions.map(\.id))
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         }
     }
 }
@@ -83,11 +86,12 @@ struct QuestionCard: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let spend = question.spend { SpendLine(spend: spend) }
             if !question.noteIDs.isEmpty {
-                HStack(spacing: 5) {
+                // Wraps, so a question holding many notes never runs past the panel.
+                FlowLayout(spacing: 5, lineSpacing: 5) {
                     Chip("Holds", mono: false)
                     ForEach(question.noteIDs, id: \.self) { id in Chip(model.noteNumber(id), style: .director) }
                     // Only true while the editor cuts; a question during the read-back holds everything.
-                    if model.notesTurnover?.state != .readBack { Text("Everything else keeps cutting.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
+                    if model.notesTurnover?.state == .cutting { Text("Everything else keeps cutting.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1).frame(height: Gate.Size.chip) }
                 }
             }
             VStack(spacing: 8) {
@@ -194,7 +198,11 @@ struct CantNotice: View {
     var inset = true
 
     private var ui: NotesUI { model.notesUI }
-    private var confirmUnlock: DailiesScene? { ui.confirmingUnlock == question.id ? ui.choices[question.id].flatMap { id in question.choices.first { $0.id == id } }.flatMap(model.unlockScene) : nil }
+    private var confirmUnlock: [DailiesScene]? {
+        guard ui.confirmingUnlock == question.id, let c = ui.choices[question.id].flatMap({ id in question.choices.first { $0.id == id } }) else { return nil }
+        let scenes = model.unlockScenes(for: c)
+        return scenes.isEmpty ? nil : scenes
+    }
     private var choice: String? { ui.choices[question.id] }
     private var held: [ReviewComment] { question.noteIDs.compactMap(model.note) }
     private var numbers: String {
@@ -213,13 +221,13 @@ struct CantNotice: View {
                 Image(systemName: question.text.localizedCaseInsensitiveContains("lock") ? "lock.fill" : "exclamationmark.triangle")
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(Gate.State.alert)
                 Text("I can\u{2019}t do \(numbers) yet").font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary)
-                Spacer(minLength: 0)
-                ForEach(held) { c in Chip(c.number.map(String.init) ?? "–", style: .director) }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ForEach(held.prefix(3)) { c in Chip(c.number.map(String.init) ?? "–", style: .director) }
             }
             NoticeText(text: question.text, small: [question.detail, source].compactMap { $0 }.joined(separator: "\n"))
             VStack(spacing: 8) {
                 ForEach(question.choices) { c in
-                    CantChoiceRow(model: model, choice: c, on: choice == c.id, unlocks: model.unlockScene(for: c) != nil) { ui.choices[question.id] = c.id }
+                    CantChoiceRow(model: model, choice: c, on: choice == c.id, unlocks: !model.unlockScenes(for: c).isEmpty) { ui.choices[question.id] = c.id }
                 }
             }
             .accessibilityElement(children: .contain)
@@ -235,16 +243,20 @@ struct CantNotice: View {
         Notice(tone: .cant, inset: inset) { content }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("The editor can\u{2019}t do \(numbers)")
-        .alert(confirmUnlock.map { "Unlock \($0.number) \($0.title)?" } ?? "", isPresented: Binding(get: { confirmUnlock != nil }, set: { if !$0 { ui.confirmingUnlock = nil } })) {
+        .alert(confirmUnlock.map { "Unlock \(Self.list($0.map(\.label)))?" } ?? "", isPresented: Binding(get: { confirmUnlock != nil }, set: { if !$0 { ui.confirmingUnlock = nil } })) {
             Button("Cancel", role: .cancel) {}
             Button("Unlock") {
-                if let scene = confirmUnlock { model.lockScene(scene.id, false); model.answerQuestion(question) }
+                // Every scene the choice names, in one go: the editor never has to ask for the second.
+                if let scenes = confirmUnlock { for s in scenes { model.lockScene(s.id, false) }; model.answerQuestion(question) }
                 ui.confirmingUnlock = nil
             }
         } message: {
-            Text("The editor may change it for \(numbers) only.")
+            Text("The editor may change \(confirmUnlock?.count == 1 ? "it" : "them") for \(numbers) only.")
         }
     }
+
+    /// "0 Naration and 4 Focused".
+    static func list(_ names: [String]) -> String { names.count <= 1 ? names.first ?? "" : names.dropLast().joined(separator: ", ") + " and " + names.last! }
 
     private func show(_ c: QuestionChoice) {
         if let clip = model.sequence?.clips.first(where: { $0.assetID == c.assetID }) { model.pause(); model.seek(clip.start.seconds) }
@@ -307,18 +319,19 @@ struct CuttingStatusFoot: View {
 }
 
 extension FilmModel {
-    /// A choice that unlocks a locked scene needs your confirmation first; the editor never unlocks anything itself.
-    func unlockScene(for c: QuestionChoice) -> DailiesScene? {
-        guard c.label.lowercased().hasPrefix("unlock") else { return nil }
-        return scenes.first { $0.locked && c.label.localizedCaseInsensitiveContains($0.title) }
+    /// The locked scenes a choice unlocks: every one it names ("Unlock 0 Naration and 4 Focused", "I've unlocked
+    /// 4 Focused"). Unlocking needs your confirmation first; the editor never unlocks anything itself.
+    func unlockScenes(for c: QuestionChoice) -> [DailiesScene] {
+        guard c.label.localizedCaseInsensitiveContains("unlock") else { return [] }
+        return scenes.filter { $0.locked && !$0.title.isEmpty && c.label.localizedCaseInsensitiveContains($0.title) }
     }
-    /// Answer, or ask to confirm first when the choice unlocks a scene.
+    /// Answer, or ask to confirm first when the choice unlocks scenes.
     func answerOrConfirm(_ q: EditorQuestion) {
         guard let id = notesUI.choices[q.id], let c = q.choices.first(where: { $0.id == id }) else {
             if q.kind != "cant" { answerQuestion(q) }
             return
         }
-        if unlockScene(for: c) != nil { notesUI.confirmingUnlock = q.id } else { answerQuestion(q) }
+        if !unlockScenes(for: c).isEmpty { notesUI.confirmingUnlock = q.id } else { answerQuestion(q) }
     }
     /// ↑ / ↓ through a question's choices.
     func moveChoice(_ q: EditorQuestion, _ step: Int) {

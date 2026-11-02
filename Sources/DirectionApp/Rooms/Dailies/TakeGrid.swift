@@ -4,7 +4,8 @@ import DirectionCore
 
 // MARK: One scene (frame 07)
 
-/// A scene's takes, setup by setup. Click selects, the take number or C circles, Space opens.
+/// A scene's takes, setup by setup. Click watches a take, the take number or C circles. Select (or ⌘- and ⇧-click)
+/// picks several to circle, move or set aside together.
 struct DailiesSceneView: View {
     @Bindable var model: FilmModel
     var sceneID: String
@@ -12,6 +13,7 @@ struct DailiesSceneView: View {
     @State private var filter = Filter.all
     @State private var selection: Set<String> = []
     @State private var anchor: String?
+    @State private var selecting = false
     @State private var showMove = false
     @State private var hideUnusable = false
     @State private var longestFirst = false
@@ -52,9 +54,9 @@ struct DailiesSceneView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.automatic)
-        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: order.filter(selection.contains), available: !allTakes.isEmpty) { if let id = selection.first { model.openTakeID = id } } }
+        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: order.filter(selection.contains), available: !allTakes.isEmpty, selecting: selecting, showMove: $showMove) { if let id = selection.first { model.openTakeID = id } } }
         .dropDestination(for: String.self) { items, _ in dropHere(items) }
-        .modifier(DailiesGridKeys(model: model, order: order, columns: 4, selection: $selection, anchor: $anchor, showMove: $showMove))
+        .modifier(DailiesGridKeys(model: model, order: order, columns: 4, selection: $selection, anchor: $anchor, selecting: $selecting, showMove: $showMove))
         .focused($focused)
         .onAppear { focused = true; if let id = preview.selectedTakeID { selection = [id] } }
     }
@@ -71,6 +73,7 @@ struct DailiesSceneView: View {
             Spacer(minLength: 12)
             GateSegmented(options: [(Filter.all, "All \(allTakes.count)"), (.circled, "Circled \(allTakes.filter(\.circled).count)"), (.suggested, "Suggested \(allTakes.filter { $0.suggestion != nil }.count)")], selection: $filter)
                 .accessibilityLabel("Show takes")
+            DailiesSelectButton(selecting: $selecting, selection: $selection).disabled(allTakes.isEmpty)
             Menu {
                 Toggle("Longest Takes First", isOn: $longestFirst)
                 Toggle("Hide Not Usable", isOn: $hideUnusable)
@@ -99,8 +102,8 @@ struct DailiesSceneView: View {
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: 4), alignment: .leading, spacing: 18) {
                 ForEach(group.takes) { take in
-                    DailiesTakeCard(model: model, take: take, selected: selection.contains(take.assetID), payload: payload(take.assetID),
-                                    onSelect: { focused = true; DailiesGridKeys.click(take.assetID, order: order, selection: &selection, anchor: &anchor) },
+                    DailiesTakeCard(model: model, take: take, selected: selection.contains(take.assetID), selecting: selecting, payload: payload(take.assetID),
+                                    onSelect: { focused = true; DailiesGridKeys.click(take.assetID, order: order, selecting: &selecting, selection: &selection, anchor: &anchor) { model.openTakeID = $0 } },
                                     onOpen: { model.openTakeID = take.assetID })
                 }
             }
@@ -124,6 +127,7 @@ struct DailiesTakeCard: View {
     var model: FilmModel
     var take: TakeInfo
     var selected = false
+    var selecting = false
     var payload: String
     var onSelect: () -> Void
     var onOpen: () -> Void
@@ -135,7 +139,7 @@ struct DailiesTakeCard: View {
     var body: some View {
         let hovered = scrub != nil || preview.hoverTakeID == take.assetID
         VStack(alignment: .leading, spacing: 8) {
-            DailiesTakePicture(model: model, take: take, selected: selected, hovered: hovered, scrub: model.isPreview ? nil : scrub)
+            DailiesTakePicture(model: model, take: take, selected: selected, selecting: selecting, hovered: hovered, scrub: model.isPreview ? nil : scrub)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = max(1, $0) }
                 .onContinuousHover { phase in
                     // Moving across the picture scrubs the take.
@@ -157,8 +161,7 @@ struct DailiesTakeCard: View {
         }
         .opacity(take.unusable ? 0.55 : 1)
         .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture(count: 2).onEnded(onOpen))
-        .simultaneousGesture(TapGesture().onEnded(onSelect))
+        .onTapGesture(perform: onSelect)
         .contextMenu { DailiesTakeMenu(model: model, ids: [take.assetID], onOpen: onOpen) }
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
@@ -193,6 +196,8 @@ struct DailiesTakePicture: View {
     var model: FilmModel
     var take: TakeInfo
     var selected = false
+    /// Picking several: each take shows whether it's picked.
+    var selecting = false
     var hovered = false
     var scrub: Double? = nil
     var showsNumber = true
@@ -204,7 +209,10 @@ struct DailiesTakePicture: View {
         Color.clear.aspectRatio(16 / 9, contentMode: .fit)
             .overlay { DailiesTakeThumb(asset: model.asset(take.assetID), art: preview.art[take.assetID] ?? model.dailiesArt(take.assetID), preview: model.isPreview, scrub: scrub) }
             .overlay { if hovered { Color.white.opacity(0.04) } }
-            .overlay(alignment: .topTrailing) { if take.suggestion != nil { GemMark(size: 8).padding(7).accessibilityHidden(true) } }
+            .overlay(alignment: .topTrailing) {
+                if selecting { DailiesPickMark(on: selected).padding(7).accessibilityHidden(true) }
+                else if take.suggestion != nil { GemMark(size: 8).padding(7).accessibilityHidden(true) }
+            }
             .overlay(alignment: .bottomTrailing) { DailiesDurationTag(text: Timecode.duration(model.dailiesDuration(take.assetID))).padding(6) }
             .overlay(alignment: .bottomLeading) { if let g = model.dailies.syncGroup(for: take.assetID) { DailiesSyncBadge(model: model, group: g, assetID: take.assetID).padding(6) } }
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
@@ -280,13 +288,15 @@ struct DailiesTakeMenu: View {
     }
 }
 
-/// Keyboard for take grids: arrows move, C circles, X sets aside, M moves, Space or ↩ opens, ⌘A selects all.
+/// Keyboard for take grids: arrows move, C circles, X sets aside, M moves, Space or ↩ opens, ⌘A selects all,
+/// esc stops selecting.
 struct DailiesGridKeys: ViewModifier {
     var model: FilmModel
     var order: [String]
     var columns: Int
     @Binding var selection: Set<String>
     @Binding var anchor: String?
+    @Binding var selecting: Bool
     @Binding var showMove: Bool
 
     func body(content: Content) -> some View {
@@ -317,19 +327,27 @@ struct DailiesGridKeys: ViewModifier {
                 default: return .ignored
                 }
             }
-            .onCommand(#selector(NSResponder.selectAll(_:))) { selection = Set(order); anchor = order.first }
+            .onKeyPress(.escape) {
+                guard selecting, !TextInput.hasFocus else { return .ignored }
+                selecting = false; selection = []; return .handled
+            }
+            .onCommand(#selector(NSResponder.selectAll(_:))) { selecting = true; selection = Set(order); anchor = order.first }
     }
 
-    /// Click, ⌘-click toggles, ⇧-click extends from the anchor.
-    @MainActor static func click(_ id: String, order: [String], selection: inout Set<String>, anchor: inout String?) {
+    /// A click watches the take. While selecting it picks or unpicks it; ⌘-click does the same and starts
+    /// selecting, ⇧-click picks the run from the last take clicked.
+    @MainActor static func click(_ id: String, order: [String], selecting: inout Bool, selection: inout Set<String>, anchor: inout String?, open: (String) -> Void) {
         let flags = NSEvent.modifierFlags
-        if flags.contains(.command) {
+        if flags.contains(.shift), let a = anchor, let i = order.firstIndex(of: a), let j = order.firstIndex(of: id) {
+            selecting = true
+            selection = Set(order[min(i, j)...max(i, j)])
+        } else if flags.contains(.command) || selecting {
+            if !selecting { selection = []; selecting = true }
             if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
             anchor = id
-        } else if flags.contains(.shift), let a = anchor, let i = order.firstIndex(of: a), let j = order.firstIndex(of: id) {
-            selection = Set(order[min(i, j)...max(i, j)])
         } else {
             selection = [id]; anchor = id
+            open(id)
         }
     }
 }
@@ -401,6 +419,9 @@ struct DailiesSelectionBar: View {
     var ids: [String]
     /// There are takes on screen to select.
     var available = true
+    /// Picking several takes: the bar acts on all of them.
+    var selecting = false
+    @Binding var showMove: Bool
     var onOpen: () -> Void
     var body: some View {
         if available { bar }
@@ -410,16 +431,21 @@ struct DailiesSelectionBar: View {
         let circled = !takes.isEmpty && takes.allSatisfy(\.circled), unusable = !takes.isEmpty && takes.allSatisfy(\.unusable)
         // Always in the same place. With nothing selected it shows the keys, dimmed.
         return HStack(spacing: 4) {
-            Text(takes.isEmpty ? "Select a take" : takes.count == 1 ? model.dailiesLabel(takes[0]) : "\(takes.count) takes")
+            Text(title(takes))
                 .font(.system(size: 12, weight: .semibold, design: takes.isEmpty ? .default : .monospaced))
                 .foregroundStyle(takes.isEmpty ? Gate.Text.tertiary : Gate.Text.secondary).padding(.horizontal, 8)
             item(circled ? "Uncircle" : "Circle", key: "C", color: Gate.Voice.director) { model.toggleCircles(ids) }.disabled(takes.isEmpty || unusable)
-            item("Watch", key: "\u{21A9}") { onOpen() }.disabled(takes.count != 1)
+            if selecting { item("Move\u{2026}", key: "M") { showMove = true }.disabled(takes.isEmpty) }
+            else { item("Watch", key: "\u{21A9}") { onOpen() }.disabled(takes.count != 1) }
             item(unusable ? "Usable Again" : "Not Usable", key: "X") { model.toggleUnusable(ids) }.disabled(takes.isEmpty)
         }
         .opacity(takes.isEmpty ? 0.7 : 1)
         .padding(5).gateGlass(12).fixedSize()
         .frame(maxWidth: .infinity).padding(.bottom, 16)
+    }
+    private func title(_ takes: [TakeInfo]) -> String {
+        if takes.isEmpty { return selecting ? "Click takes to pick them" : "Click a take to watch it" }
+        return takes.count == 1 ? model.dailiesLabel(takes[0]) : "\(takes.count) takes"
     }
     private func item(_ title: String, key: String, color: Color = Gate.Text.primary, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -430,6 +456,33 @@ struct DailiesSelectionBar: View {
             .font(.system(size: 12.5, weight: .medium)).padding(.horizontal, 10).frame(height: 28).contentShape(Rectangle())
         }
         .buttonStyle(.gate(.ghost))
+    }
+}
+
+/// "Select" in a take grid's header: turns picking several takes on, "Done" turns it off.
+struct DailiesSelectButton: View {
+    @Binding var selecting: Bool
+    @Binding var selection: Set<String>
+    var body: some View {
+        Button(selecting ? "Done" : "Select") {
+            withAnimation(gateAnimation(Gate.Motion.snap)) { selecting.toggle(); selection = [] }
+        }
+        .buttonStyle(.gate(selecting ? .normal : .ghost))
+        .help(selecting ? "Stop selecting (esc)" : "Pick several takes to circle, move or set aside together")
+    }
+}
+
+/// While selecting, each take's corner says whether it's picked.
+struct DailiesPickMark: View {
+    var on: Bool
+    var body: some View {
+        ZStack {
+            Circle().fill(on ? Gate.Text.primary : Color.black.opacity(0.35))
+            Circle().strokeBorder(on ? Color.clear : Gate.Text.primary.opacity(0.8), lineWidth: 1.5)
+            if on { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Gate.Surface.canvas) }
+        }
+        .frame(width: 18, height: 18)
+        .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
     }
 }
 
@@ -500,6 +553,7 @@ struct DailiesBinGrid<Action: View, Footer: View>: View {
     @Environment(\.dailiesPreview) private var preview
     @State private var selection: Set<String> = []
     @State private var anchor: String?
+    @State private var selecting = false
     @State private var showMove = false
     @FocusState private var focused: Bool
 
@@ -513,6 +567,7 @@ struct DailiesBinGrid<Action: View, Footer: View>: View {
                     }
                     Spacer(minLength: 12)
                     action
+                    DailiesSelectButton(selecting: $selecting, selection: $selection).disabled(takes.isEmpty)
                 }
                 .popover(isPresented: $showMove, arrowEdge: .bottom) { DailiesMovePicker(model: model, ids: Array(selection)) { showMove = false } }
                 if takes.isEmpty {
@@ -531,8 +586,8 @@ struct DailiesBinGrid<Action: View, Footer: View>: View {
             .padding(.horizontal, 28).padding(.top, 24).padding(.bottom, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: takes.map(\.assetID).filter(selection.contains), available: !takes.isEmpty) { if let id = selection.first { model.openTakeID = id } } }
-        .modifier(DailiesGridKeys(model: model, order: takes.map(\.assetID), columns: 5, selection: $selection, anchor: $anchor, showMove: $showMove))
+        .safeAreaInset(edge: .bottom) { DailiesSelectionBar(model: model, ids: takes.map(\.assetID).filter(selection.contains), available: !takes.isEmpty, selecting: selecting, showMove: $showMove) { if let id = selection.first { model.openTakeID = id } } }
+        .modifier(DailiesGridKeys(model: model, order: takes.map(\.assetID), columns: 5, selection: $selection, anchor: $anchor, selecting: $selecting, showMove: $showMove))
         .focused($focused)
         .onAppear { focused = true }
     }
@@ -541,7 +596,7 @@ struct DailiesBinGrid<Action: View, Footer: View>: View {
         let id = take.assetID, dragging = preview.draggingTakeID == id, order = takes.map(\.assetID)
         let payload = selection.contains(id) ? order.filter(selection.contains).joined(separator: "\n") : id
         return VStack(alignment: .leading, spacing: 8) {
-            DailiesTakePicture(model: model, take: take, selected: selection.contains(id), showsNumber: false)
+            DailiesTakePicture(model: model, take: take, selected: selection.contains(id), selecting: selecting, showsNumber: false)
                 .draggable(payload) { DailiesTakeThumb(asset: model.asset(id), art: preview.art[id] ?? model.dailiesArt(id), preview: model.isPreview).frame(width: 168, height: 94.5).clipShape(RoundedRectangle(cornerRadius: 7)).rotationEffect(.degrees(-3)).opacity(0.92) }
             Text(model.dailiesCaption(take)).font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary).lineSpacing(1.8).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             if dragging { Text("Being dragged").font(Gate.Font.small).foregroundStyle(Gate.Text.disabled).frame(height: 22) }
@@ -549,8 +604,7 @@ struct DailiesBinGrid<Action: View, Footer: View>: View {
         }
         .opacity(dragging ? 0.55 : 1)
         .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture(count: 2).onEnded { model.openTakeID = id })
-        .simultaneousGesture(TapGesture().onEnded { focused = true; DailiesGridKeys.click(id, order: order, selection: &selection, anchor: &anchor) })
+        .onTapGesture { focused = true; DailiesGridKeys.click(id, order: order, selecting: &selecting, selection: &selection, anchor: &anchor) { model.openTakeID = $0 } }
         .contextMenu { DailiesTakeMenu(model: model, ids: selection.contains(id) ? order.filter(selection.contains) : [id]) { model.openTakeID = id } }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selection.contains(id) ? .isSelected : [])

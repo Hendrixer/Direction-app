@@ -431,6 +431,17 @@ enum MentionToken {
         }
         return nil
     }
+
+    /// What the list offers while a name is typed after "@". The library finds words anywhere in a name or what
+    /// it is, which is right for the first word; past it a name is being spelled out, so only names that start
+    /// with what's typed stay. A whole name with a space after it is finished, and so is the list: what follows
+    /// is the note.
+    static func offer(_ query: String, from found: [LibraryEntry]) -> [LibraryEntry] {
+        let q = query.lowercased(), typed = q.trimmingCharacters(in: .whitespaces)
+        if q.hasSuffix(" "), found.contains(where: { $0.name.lowercased() == typed }) { return [] }
+        guard typed.contains(" ") || q.hasSuffix(" ") else { return Array(found.prefix(6)) }
+        return Array(found.filter { $0.name.lowercased().hasPrefix(q) }.prefix(6))
+    }
 }
 
 /// "@" on a SwiftUI field (the brief): the list under the field while a name is being typed.
@@ -447,10 +458,7 @@ struct MentionsModifier: ViewModifier {
     }
     private var items: [LibraryEntry] {
         guard let t = token, dismissed != text else { return [] }
-        let found = Array(library.search(t.query).prefix(6))
-        // Once a whole name is written and followed by a space, it's done.
-        if t.query.hasSuffix(" "), found.contains(where: { $0.name.lowercased() == t.query.lowercased().trimmingCharacters(in: .whitespaces) }) { return [] }
-        return found
+        return MentionToken.offer(t.query, from: library.search(t.query))
     }
 
     func body(content: Content) -> some View {

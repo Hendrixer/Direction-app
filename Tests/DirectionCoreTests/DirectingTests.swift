@@ -87,6 +87,30 @@ private func directedStore() throws -> (ProjectStore, Project, ReviewCut) {
     #expect(try store.directingState().finishing?.count == FinishingItem.defaults.count)
 }
 
+/// Locking picture locks every scene with it; unlocking picture opens those again, so going back to the edit
+/// never leaves the editor asking to unlock scenes the director never locked. A scene locked on its own stays.
+@Test func scenesThatLockedWithThePictureOpenWithIt() throws {
+    let (store, _, cut) = try directedStore()
+    _ = try store.addScene(title: "Launch day")
+    let own = try store.addScene(title: "The ridge")
+    try store.lockScene(id: own.id, locked: true)
+    try store.lockPicture(cutID: cut.id, locked: true)
+    #expect(try store.dailies().scenes.allSatisfy(\.locked))
+    try store.lockPicture(cutID: nil, locked: false)
+    #expect(try store.dailies().scenes.filter(\.locked).map(\.id) == [own.id])
+
+    // A film locked before scenes knew why: the ones that locked in the moment picture locked open too.
+    try store.lockPicture(cutID: cut.id, locked: true)
+    try store.mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Locked before") { d in
+        for i in d.scenes.indices {
+            d.scenes[i].lockedWithPicture = nil
+            if d.scenes[i].id == own.id { d.scenes[i].lockedAt = (d.scenes[i].lockedAt ?? 0) - 3600 }
+        }
+    }
+    try store.lockPicture(cutID: nil, locked: false)
+    #expect(try store.dailies().scenes.filter(\.locked).map(\.id) == [own.id])
+}
+
 @Test func theLockedCutPlaysAndDeliversWithItsFinishing() throws {
     let (store, p, cut) = try directedStore()
     try store.lockPicture(cutID: cut.id, locked: true)

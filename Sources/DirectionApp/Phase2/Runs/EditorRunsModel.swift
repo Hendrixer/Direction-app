@@ -40,9 +40,11 @@ import DirectionTools
         let runner = EditorRunner.shared
         runner.register(store)
         if !recovered { recovered = true; runner.recover(store); EditorPrograms.shared.refreshIfNeeded() }
-        runs = (try? store.runs()) ?? []
+        // Set only when they differ, so the rooms aren't drawn again on every tick of a run.
+        let runs = (try? store.runs()) ?? [], activity = (try? store.activity(limit: 200)) ?? []
+        if runs != self.runs { self.runs = runs }
+        if activity != self.activity { self.activity = activity }
         Self.cleanUpStudies(runs, store: store)
-        activity = (try? store.activity(limit: 200)) ?? []
         watchOwnSession()
         announce(film)
         findWork(film, store: store)

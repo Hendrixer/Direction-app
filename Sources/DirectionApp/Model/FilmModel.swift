@@ -128,6 +128,7 @@ final class FilmModel {
     let isPreview: Bool
     @ObservationIgnored var runtime: ToolRuntime?
     @ObservationIgnored let player = AVPlayer()
+    @ObservationIgnored let scriptCache = ScriptDocumentCache()
     @ObservationIgnored private var compiled: CompiledSequence?
     @ObservationIgnored private var renderTask: Task<Void, Never>?
     @ObservationIgnored private var renderKey = ""
@@ -217,23 +218,44 @@ final class FilmModel {
 
     // MARK: Loading
 
+    /// Events that change only what the editor is doing, not the film: while it works they come several times a
+    /// second, so they read only their own part again. Any other event reads the whole film.
+    private static let workingKinds: Set<String> = ["editor.activity", "editor.run", "editor.status", "job.updated", "index.updated",
+                                                    "graphic.updated", "graphic.words", "made.created", "look.updated", "look.proposed", "look.camera", "transcript.updated"]
+
     func refresh(force: Bool = false) {
         guard let store else { return }
         do {
             let latest = try store.eventCursor()
             guard force || latest != cursor else { return }
-            project = try store.read()
-            brief = try store.brief(); dailies = try store.dailies(); directing = try store.directingState(); editorStatus = try store.editorStatus()
-            notes = try store.notes(); cuts = try store.cuts().sorted { $0.createdAt < $1.createdAt }
-            turnovers = try store.turnovers(); questions = try store.questions()
-            transcripts = try store.transcripts(); jobs = try store.jobs()
-            let newEvents = try store.events(since: max(0, cursor)); events = Array((events + newEvents).suffix(200))
+            let newEvents = try store.events(since: max(0, cursor))
+            let kinds = Set(newEvents.map(\.kind))
+            let whole = force || cursor < 0 || newEvents.count >= 500 || !kinds.isSubset(of: Self.workingKinds)
+            func changed(_ k: String...) -> Bool { whole || !kinds.isDisjoint(with: k) }
+            // Only what differs is set, so a room isn't drawn again for nothing.
+            func set<T: Equatable>(_ path: ReferenceWritableKeyPath<FilmModel, T>, _ value: T) { if self[keyPath: path] != value { self[keyPath: path] = value } }
+            if whole {
+                set(\.project, try store.read())
+                set(\.brief, try store.brief()); set(\.dailies, try store.dailies()); set(\.directing, try store.directingState())
+                set(\.notes, try store.notes()); set(\.cuts, try store.cuts().sorted { $0.createdAt < $1.createdAt })
+                set(\.turnovers, try store.turnovers()); set(\.questions, try store.questions())
+            }
+            if changed("editor.status") { set(\.editorStatus, try store.editorStatus()) }
+            if changed("transcript.updated") { set(\.transcripts, try store.transcripts()) }
+            if changed("job.updated") { set(\.jobs, try store.jobs()) }
+            if !newEvents.isEmpty { events = Array((events + newEvents).suffix(200)) }
             cursor = latest
-            announceDeliveredCuts()
-            announceQuestions()
-            loadDisplayed()
+            if whole {
+                announceDeliveredCuts()
+                announceQuestions()
+            }
+            if changed("look.updated", "look.proposed", "look.camera") { loadDisplayed() }
             // The index first: whether the editor may start logging depends on what it's still doing.
-            index.refresh(self); runs.refresh(self); looks.refresh(self); graphics.refresh(self); made.refresh(self)
+            if changed("index.updated", "job.updated") { index.refresh(self) }
+            runs.refresh(self)
+            if changed("look.updated", "look.proposed", "look.camera") { looks.refresh(self) }
+            if changed("graphic.updated", "graphic.words") { graphics.refresh(self) }
+            if changed("made.created") { made.refresh(self) }
         } catch { self.error = error.localizedDescription }
     }
 
@@ -465,8 +487,11 @@ final class FilmModel {
     }
     func badge(for room: Room) -> (String, Bool)? {
         switch room {
-        // What waits on the director in Notes: marks to write up and outside notes to decide.
-        case .notes: let n = draftNotes.count + inbox.count; return n > 0 ? (String(n), true) : nil
+        // What waits on the director in Notes: the editor's questions first, in its color; then marks to write
+        // up and outside notes to decide.
+        case .notes:
+            if !openQuestions.isEmpty { return (String(openQuestions.count), false) }
+            let n = draftNotes.count + inbox.count; return n > 0 ? (String(n), true) : nil
         case .changes: let n = unreviewedAnswers.count; return n > 0 ? (String(n), false) : nil
         default: return nil
         }
@@ -485,7 +510,9 @@ final class FilmModel {
         // The cut stops where it is when you change rooms; nothing plays in a room you can't see it in.
         if self.room != room, playing || playingChanges { if playingChanges { stopChanges() } else { pause() } }
         if self.room != room { previousRoom = self.room }
-        withAnimation(gateAnimation(Gate.Motion.glide)) { self.room = room }
+        // The room is there the moment its tab is clicked: nothing fades or slides in.
+        var now = Transaction(); now.disablesAnimations = true
+        withTransaction(now) { self.room = room }
         if room == .screening { startScreening() }
     }
 

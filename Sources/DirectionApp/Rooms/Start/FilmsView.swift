@@ -121,8 +121,8 @@ struct FilmsView: View {
                      renaming: renaming == film.id ? $renameText : nil, renameFocused: $renameFocused,
                      commitRename: { commitRename(film) })
             .contentShape(Rectangle())
-            .simultaneousGesture(TapGesture(count: 2).onEnded { open(film) })
-            .simultaneousGesture(TapGesture().onEnded { selection = film.id; gridFocused = true })
+            // One click opens. Arrows and Return work the same from the keyboard.
+            .onTapGesture { guard renaming != film.id else { return }; selection = film.id; open(film) }
             .contextMenu {
                 Button("Open") { open(film) }
                 Button("Open in New Window") {}.disabled(true)

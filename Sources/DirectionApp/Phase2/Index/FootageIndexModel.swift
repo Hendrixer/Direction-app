@@ -54,17 +54,20 @@ import DirectionMedia
         self.film = film
         guard let store = film.store, film.project != nil else { return }
         do {
-            takes = try store.indexTakes()
-            job = film.jobs.first { $0.kind == "index" && !$0.isTerminal }
+            let fresh = try store.indexTakes()
+            if fresh != takes { takes = fresh }
+            let running = film.jobs.first { $0.kind == "index" && !$0.isTerminal }
+            if running != job { job = running }
             let assets = film.footage.filter { !$0.isImage }
             var s: [String: IndexState] = [:]
             for a in assets {
                 guard let t = takes[a.id], t.fingerprint == TakeIndex.fingerprint(a) else { s[a.id] = job != nil ? .looking : .waiting; continue }
                 s[a.id] = t.state == .looking && job == nil ? .waiting : t.state
             }
-            states = s
+            if s != states { states = s }
             let done = s.values.filter { $0 == .done || $0 == .failed }.count
-            looking = job != nil && !assets.isEmpty ? IndexProgress(done: done, total: assets.count) : nil
+            let progress = job != nil && !assets.isEmpty ? IndexProgress(done: done, total: assets.count) : nil
+            if progress != looking { looking = progress }
             shotCache = shotCache.filter { takes[$0.key]?.updatedAt == $0.value.stamp }
             autoStart(film, assets: assets)
             listen(film, assets: assets)

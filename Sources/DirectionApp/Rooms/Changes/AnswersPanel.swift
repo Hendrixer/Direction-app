@@ -45,6 +45,8 @@ struct AnswersPanel: View {
     private var subline: String {
         let total = model.reviewAnswers.count
         var parts: [String] = []
+        let asks = model.openQuestions.count
+        if asks > 0 && !model.isPictureLocked { parts.append(asks == 1 ? "1 question for you" : "\(asks) questions for you") }
         if let d = model.cutDuration(model.reviewCut) { parts.append(Timecode.duration(d)) }
         if total > 0 && model.toReview.isEmpty { parts.append("every answer accepted"); return parts.joined(separator: " \u{00B7} ") }
         if let d = model.cutDuration(model.reviewCut), let prev = model.cutBefore(model.reviewCut), let p = model.cutDuration(prev) {
@@ -86,11 +88,23 @@ struct AnswersPanel: View {
 
     // MARK: List
 
+    /// The editor's open questions, oldest first: answered here, above the answers, so everything waiting on
+    /// you is in the room you're in.
+    private var questions: [EditorQuestion] { model.openQuestions.sorted { $0.createdAt < $1.createdAt } }
+
     private var list: some View {
         let rows = model.answers(for: model.answersTab)
         return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
+                    if !questions.isEmpty && !model.isPictureLocked {
+                        ForEach(questions) { q in
+                            if q.kind == "cant" { CantNotice(model: model, question: q) }
+                            else { QuestionCard(model: model, question: q, primary: false, steel: false).padding(.horizontal, 14).padding(.vertical, 12) }
+                        }
+                        .transition(.noticeArrival)
+                        Hairline()
+                    }
                     ForEach(rows) { c in
                         AnswerRow(model: model, note: c).id(c.id)
                         if state.replyingNoteID == c.id {
@@ -125,7 +139,7 @@ struct AnswersPanel: View {
             .hairlineBorder(.top)
     }
     private var footText: String {
-        if model.isPictureLocked { return "Picture is locked. Unlock it from Film \u{203A} Unlock Picture to change the edit." }
+        if model.isPictureLocked { return "Picture is locked. Click Picture locked at the top to unlock it and change the edit." }
         if !model.reviewAnswers.isEmpty && model.toReview.isEmpty { return "Nothing left to review. Screen it again for more notes, or lock picture to start finishing." }
         return "Accepted answers stay in \(cutName). Anything you reply to goes into your next turnover."
     }
