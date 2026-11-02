@@ -8,8 +8,13 @@ import DirectionCore
 enum StyleFixtures {
     static var frames: [String: () -> SnapshotScene] {
         [
-            "style-edit": { sheet(StyleSamples.styles[0]) },
-            "style-house": { sheet(StyleSamples.house) },
+            "style-edit": { page(StyleSamples.styles[0], height: 1480) },
+            "settings-library-entry": { SettingsKey.register(); LibraryModel.shared.preview = false; LibraryModel.shared.load()
+                let entry = LibraryModel.shared.entries.first { $0.name == "Grid flash" } ?? LibraryModel.shared.entries.first
+                return settingsPage(SettingsPage(id: "library:" + (entry?.id ?? ""), title: entry?.name ?? "") { LibraryEntryPage(id: entry?.id ?? "") }, tab: .library, height: 789) },
+            "style-house": { page(StyleSamples.house, height: 640) },
+            "style-new": { SnapshotScene(size: CGSize(width: 640, height: 560), StyleEditSheet(draft: .new, folder: StyleSamples.folder) {}.frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground)) },
+            "settings-library-page": { SettingsKey.register(); return settingsPage(SettingsPage(id: "library", title: "Library") { LibraryPage(preview: true) }, tab: .library, height: 789) },
             "keep-rule": { keep() },
             "changes-keep-rule": { .film(answered()) },
             "layout-picker-style": { picker() },
@@ -57,7 +62,7 @@ enum StyleFixtures {
                 .object(["name": .string("Ending"), "what": .string("A one-line takeaway, then straight out. No outro.")]),
             ]),
         ]), contents: { var c = StyleContents(); c.stills = stills.map { $0.0 + ".jpg" }; return c }())
-        return SnapshotScene(size: CGSize(width: 620, height: 980), StyleEditSheet(draft: .init(style), folder: StyleSamples.folder) {}.frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground))
+        return page(style, height: 1500)
     }
 
     /// The library as it is on this Mac (DIRECTION_TECHNIQUES_PATH, DIRECTION_SOUNDS_PATH, DIRECTION_IMAGES_PATH
@@ -95,8 +100,15 @@ enum StyleFixtures {
         })
     }
 
-    private static func sheet(_ s: Style) -> SnapshotScene {
-        SnapshotScene(size: CGSize(width: 620, height: 640), StyleEditSheet(draft: .init(s), folder: StyleSamples.folder) {}.frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground))
+    /// Settings › Styles with the style open as its page, drawn whole.
+    private static func page(_ s: Style, height: CGFloat) -> SnapshotScene {
+        SettingsKey.register()
+        return settingsPage(SettingsPage(id: "style:" + s.id, title: s.name) { StylePage(draft: .init(s), folder: StyleSamples.folder) }, tab: .styles, height: height)
+    }
+
+    private static func settingsPage(_ page: SettingsPage, tab: SettingsTab, height: CGFloat) -> SnapshotScene {
+        SnapshotScene(size: CGSize(width: Gate.Size.settingsWidth, height: height),
+                      SettingsView(initialTab: tab, preview: true, page: page).frame(width: Gate.Size.settingsWidth, height: height, alignment: .top).clipped().background(Gate.Surface.ground))
     }
 
     /// Cut 4 in Desk + Screen, answer 1 accepted with a rule the editor read in its note.

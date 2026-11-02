@@ -1,6 +1,6 @@
 # Sounds and images the director keeps
 
-The Library window (Window › Library) holds Direction's own transitions, moves and effects, the techniques the editor learned for the director, and the director's own **sounds** (music beds, stings, sound effects) and **images** (logos, stills, overlays). Sounds and images are kept outside any film, so they're there for every film and can be added without one. None of them is footage: they're never logged as takes, transcribed, synced or indexed.
+The Library window (Window › Library, and the same library as a page in Settings › Library, where an entry opens as its own page) holds Direction's own transitions, moves and effects, the techniques the editor learned for the director, and the director's own **sounds** (music beds, stings, sound effects) and **images** (logos, stills, overlays). Sounds and images are kept outside any film, so they're there for every film and can be added without one. None of them is footage: they're never logged as takes, transcribed, synced or indexed.
 
 ## Where they live
 

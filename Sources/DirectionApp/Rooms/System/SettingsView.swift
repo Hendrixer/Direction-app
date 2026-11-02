@@ -41,18 +41,23 @@ struct SettingsView: View {
     var recording: ShortcutAction? = nil
     @AppStorage(SettingsKey.settingsTab) private var storedTab = SettingsTab.general.rawValue
     @State private var tab: SettingsTab
+    @State private var pages = SettingsPages()
 
-    init(app: AppModel? = nil, initialTab: SettingsTab? = nil, preview: Bool = false, recording: ShortcutAction? = nil) {
+    init(app: AppModel? = nil, initialTab: SettingsTab? = nil, preview: Bool = false, recording: ShortcutAction? = nil, page: SettingsPage? = nil) {
         self.app = app; self.preview = preview; self.recording = recording
         let stored = SettingsTab.stored(UserDefaults.standard.string(forKey: SettingsKey.settingsTab))
-        _tab = State(initialValue: initialTab ?? stored ?? .general)
+        let tab = initialTab ?? stored ?? .general
+        _tab = State(initialValue: tab)
+        let pages = SettingsPages(); pages.root = tab.title
+        if let page { pages.stack = [page] }
+        _pages = State(initialValue: pages)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Snapshots draw the title bar's row; the real window has its own.
             if preview {
-                Text(tab.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.secondary)
+                Text(pages.stack.last?.title ?? tab.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.secondary)
                     .frame(maxWidth: .infinity).frame(height: 28)
                 SystemHairline()
             }
@@ -60,16 +65,20 @@ struct SettingsView: View {
                 SettingsSidebar(tab: select)
                 Rectangle().fill(Gate.Line.subtle).frame(width: 1)
                 Group {
-                    if preview { pane.frame(maxHeight: .infinity, alignment: .top) }
+                    // A page opened from the section (a style, the library) takes the section's place, with a way back.
+                    if let page = pages.stack.last { page.view.id(page.id).modifier(PaneFadeIn()).frame(maxHeight: .infinity, alignment: .top) }
+                    else if preview { pane.frame(maxHeight: .infinity, alignment: .top) }
                     else { ScrollView(.vertical) { pane }.scrollIndicators(.automatic).id(tab) }
                 }
                 .frame(maxWidth: .infinity)
             }
         }
+        .environment(\.settingsPages, pages)
+        .environment(\.settingsPreview, preview)
         .frame(width: Gate.Size.settingsWidth, height: preview ? nil : windowHeight)
         .background(Gate.Surface.ground)
         .overlay { GrainOverlay().allowsHitTesting(false) }
-        .background { if !preview { SettingsWindowConfigurator(title: tab.title) } }
+        .background { if !preview { SettingsWindowConfigurator(title: pages.stack.last?.title ?? tab.title) } }
         .background { tabKeys }
         .preferredColorScheme(.dark)
         .onChange(of: storedTab) { _, new in if let t = SettingsTab.stored(new), t != tab { select(t) } }
@@ -87,7 +96,7 @@ struct SettingsView: View {
     private func select(_ new: SettingsTab) {
         // Nothing moves: the window keeps its size and only the section's content fades in.
         var t = Transaction(); t.disablesAnimations = true
-        withTransaction(t) { tab = new }
+        withTransaction(t) { tab = new; pages.stack = []; pages.root = new.title }
         if storedTab != new.rawValue { storedTab = new.rawValue }
     }
 
@@ -100,7 +109,7 @@ struct SettingsView: View {
         case .engines: EnginesPane(app: app, preview: preview)
         case .cutting: CuttingPane(app: app, preview: preview)
         case .styles: StylesPane(app: app, preview: preview)
-        case .library: LibraryPane(preview: preview)
+        case .library: LibraryPane(app: app, preview: preview)
         case .notifications: NotificationsPane(preview: preview)
         case .shortcuts: ShortcutsPane(recording: recording)
         case .storage: StoragePane(app: app, preview: preview)
@@ -114,9 +123,137 @@ struct SettingsView: View {
             ForEach(Array(SettingsTab.allCases.prefix(9).enumerated()), id: \.offset) { i, t in
                 Button(t.title) { select(t) }.keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
             }
-            Button("Close") { NSApp.keyWindow?.performClose(nil) }.keyboardShortcut(.cancelAction)
+            // esc goes back from a page first, then closes the window.
+            Button("Close") { if pages.stack.isEmpty { NSApp.keyWindow?.performClose(nil) } else { pages.back() } }.keyboardShortcut(.cancelAction)
         }
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+    }
+}
+
+// MARK: Pages
+
+/// A page inside a section: a style, the library. It takes the section's place in the window, with Back
+/// above it, instead of opening a sheet or another window.
+struct SettingsPage: Identifiable {
+    var id: String
+    var title: String
+    var view: AnyView
+    init<V: View>(id: String, title: String, @ViewBuilder _ view: () -> V) { self.id = id; self.title = title; self.view = AnyView(view()) }
+}
+
+/// The pages open in the Settings window, the latest last; switching sections closes them.
+@MainActor @Observable final class SettingsPages {
+    var stack: [SettingsPage] = []
+    /// The section's name, for Back from the first page.
+    var root = ""
+    func open(_ page: SettingsPage) { stack.append(page) }
+    func back() { _ = stack.popLast() }
+    /// What Back returns to; just "Back" when that has the page's own name (Library › Library).
+    var backTitle: String {
+        let title = stack.count > 1 ? stack[stack.count - 2].title : root
+        return title == stack.last?.title ? "Back" : title
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var settingsPages: SettingsPages? = nil
+    /// Snapshots draw a section or page whole, without scrolling.
+    @Entry var settingsPreview = false
+}
+
+/// A page's frame: Back and the page's own buttons on a bar, its title, the page scrolling under it, and
+/// buttons pinned at the foot when it has any (a new style's Make Style).
+struct SettingsPageLayout<Content: View, Actions: View, Foot: View>: View {
+    var title: String
+    var subtitle: String? = nil
+    /// The foot's buttons show only while there's something to confirm.
+    var footShown = true
+    @ViewBuilder var actions: Actions
+    @ViewBuilder var content: Content
+    @ViewBuilder var foot: Foot
+    @Environment(\.settingsPages) private var pages
+    @Environment(\.settingsPreview) private var preview
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SettingsBackBar { actions }
+            Group {
+                if preview { page }
+                else { ScrollView(.vertical) { page }.scrollIndicators(.automatic) }
+            }
+            .frame(maxHeight: preview ? nil : .infinity, alignment: .top)
+            if Foot.self != EmptyView.self && footShown {
+                HStack(spacing: 8) { foot }
+                    .padding(.horizontal, 28).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .overlay(alignment: .top) { SystemHairline() }
+            }
+        }
+    }
+
+    private var page: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(Gate.Font.brandM).foregroundStyle(Gate.Text.primary).accessibilityAddTraits(.isHeader)
+                if let subtitle, !subtitle.isEmpty { Text(subtitle).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).cssLineHeight(1.45, size: 12).fixedSize(horizontal: false, vertical: true) }
+            }
+            .padding(.horizontal, 30).padding(.top, 2).padding(.bottom, 8)
+            SettingsPane { content }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Back to where the page came from, the page's title beside it when the page has no heading of its own,
+/// and the page's buttons at the right.
+struct SettingsBackBar<Actions: View>: View {
+    var title: String? = nil
+    @ViewBuilder var actions: Actions
+    @Environment(\.settingsPages) private var pages
+    var body: some View {
+        HStack(spacing: 8) {
+            Button { pages?.back() } label: {
+                HStack(spacing: 4) { Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold)); Text(pages?.backTitle ?? "Back") }
+            }
+            .buttonStyle(.gate(.ghost, .small))
+            .help("Back to \(pages?.backTitle ?? "the section") (esc)")
+            if let title { Text(title).font(Gate.Font.brandM).foregroundStyle(Gate.Text.primary).lineLimit(1).padding(.leading, 6).accessibilityAddTraits(.isHeader) }
+            Spacer(minLength: 8)
+            actions
+        }
+        .padding(.leading, 20).padding(.trailing, 24).frame(height: 44)
+    }
+}
+
+extension SettingsBackBar where Actions == EmptyView {
+    init(title: String?) { self.init(title: title) { EmptyView() } }
+}
+
+extension SettingsPageLayout where Foot == EmptyView {
+    init(title: String, subtitle: String? = nil, @ViewBuilder actions: () -> Actions, @ViewBuilder content: () -> Content) {
+        self.init(title: title, subtitle: subtitle, footShown: false, actions: actions, content: content, foot: { EmptyView() })
+    }
+}
+
+/// A section row that opens a page: the whole row is the button, with a chevron at its end.
+struct SettingsLinkRow: View {
+    var label: String
+    var detail: String? = nil
+    var first = false
+    var open: () -> Void
+    @State private var hovering = false
+    var body: some View {
+        Button(action: open) {
+            SettingsRow(label: label, detail: detail, first: first, minHeight: 56) {
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Gate.Text.tertiary)
+            }
+            .background(hovering ? Gate.Surface.hover.opacity(0.5) : .clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(label)
+        .accessibilityHint(detail ?? "")
     }
 }
 

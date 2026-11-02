@@ -104,13 +104,16 @@ struct LibraryWindow: View {
     var app: AppModel?
     var preview = false
     var initial: String? = nil
+    /// A page in Settings: the page says Library, and the grid and the detail fit its width.
+    var embedded = false
     @State private var library = LibraryModel.shared
     @State private var query = ""
     @State private var kind: String?
     @State private var chosen: String?
     @State private var dropping = false
-    init(app: AppModel?, preview: Bool = false, initial: String? = nil, kind: String? = nil) {
-        self.app = app; self.preview = preview; self.initial = initial; _kind = State(initialValue: kind)
+    @Environment(\.settingsPages) private var pages
+    init(app: AppModel?, preview: Bool = false, initial: String? = nil, kind: String? = nil, embedded: Bool = false) {
+        self.app = app; self.preview = preview; self.initial = initial; self.embedded = embedded; _kind = State(initialValue: kind)
     }
 
     var body: some View {
@@ -119,18 +122,19 @@ struct LibraryWindow: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    Text("Library").font(Gate.Font.title).foregroundStyle(Gate.Text.primary)
-                    Spacer(minLength: 8)
+                    // In Settings the page's bar says Library, and search leads the row.
+                    if !embedded { Text("Library").font(Gate.Font.title).foregroundStyle(Gate.Text.primary); Spacer(minLength: 8) }
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(Gate.Text.tertiary)
                         TextField("", text: $query).textFieldStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary)
                             .startPlaceholder("Search", shown: query.isEmpty).frame(width: 150)
                     }
                     .padding(.horizontal, 10).frame(height: 28).background(GateFieldBackground())
-                    Button("Add Sounds or Images\u{2026}") { if let id = library.chooseAndAdd() { chosen = id } }.buttonStyle(.gate(.normal, .small))
+                    Button("Add Sounds or Images\u{2026}") { if let id = library.chooseAndAdd() { open(id) } }.buttonStyle(.gate(.normal, .small))
                         .help("Music, sound effects, logos and stills, kept for every film.")
                     Button("Learn a Technique\u{2026}") { app?.film?.sheet = .learnTechnique; NSApp.windows.first { $0.identifier?.rawValue == "main" }?.makeKeyAndOrderFront(nil) }
                         .buttonStyle(.gate(.normal, .small)).disabled(app?.film == nil).help(app?.film == nil ? "Open a film to learn a technique into it." : "Give the editor a video to learn from.")
+                    if embedded { Spacer(minLength: 0) }
                 }
                 .padding(.horizontal, 20).frame(height: 56)
                 // Kinds on a row of their own: Direction's, then the director's.
@@ -151,7 +155,7 @@ struct LibraryWindow: View {
                 }
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 196, maximum: 260), spacing: 14)], spacing: 16) {
-                        ForEach(shown) { e in LibraryCard(entry: e, library: library, chosen: (chosen ?? initial) == e.id) { chosen = e.id } }
+                        ForEach(shown) { e in LibraryCard(entry: e, library: library, chosen: !embedded && (chosen ?? initial) == e.id) { open(e.id) } }
                     }
                     .padding(20)
                     if shown.isEmpty {
@@ -177,18 +181,16 @@ struct LibraryWindow: View {
                 }
                 .dropDestination(for: URL.self) { urls, _ in
                     guard let id = library.add(urls) else { return false }
-                    chosen = id; return true
+                    open(id); return true
                 } isTargeted: { dropping = $0 }
             }
-            if let e = library.entries.first(where: { $0.id == (chosen ?? initial) }).map(library.whole) ?? shown.first {
-                Group {
-                    if let parts = e.parts { LibrarySongDetail(entry: e, song: Song(name: e.name, parts: parts), library: library) { chosen = $0 } }
-                    else if let item = e.item { LibraryItemDetail(entry: e, item: item, library: library) { chosen = $0 } } else { LibraryDetail(entry: e, library: library) }
-                }
-                .frame(width: 340).overlay(alignment: .leading) { Rectangle().fill(Gate.Line.subtle).frame(width: 1) }
+            // In Settings an entry opens as its own page; the window shows it beside the grid.
+            if !embedded, let e = library.entries.first(where: { $0.id == (chosen ?? initial) }).map(library.whole) ?? shown.first {
+                LibraryEntryDetail(entry: e, library: library) { chosen = $0 }
+                    .frame(width: 340).overlay(alignment: .leading) { Rectangle().fill(Gate.Line.subtle).frame(width: 1) }
             }
         }
-        .frame(minWidth: 960, minHeight: 540)
+        .frame(minWidth: embedded ? nil : 960, minHeight: embedded ? nil : 540)
         .background(Gate.Surface.ground)
         .preferredColorScheme(.dark)
         .task {
@@ -203,6 +205,26 @@ struct LibraryWindow: View {
             library.load(); library.measure()
         }
         .onDisappear { library.stop() }
+    }
+}
+
+extension LibraryWindow {
+    /// Shows an entry: beside the grid in the window, as its own page in Settings.
+    fileprivate func open(_ id: String) {
+        guard embedded else { chosen = id; return }
+        let name = library.entries.first { $0.id == id }?.name ?? "Library"
+        pages?.open(SettingsPage(id: "library:" + id, title: name) { LibraryEntryPage(id: id) })
+    }
+}
+
+/// What the library knows about one entry: a song with its parts, a sound or image, or a transition, move or effect.
+struct LibraryEntryDetail: View {
+    var entry: LibraryEntry
+    var library: LibraryModel
+    var chose: (String) -> Void
+    var body: some View {
+        if let parts = entry.parts { LibrarySongDetail(entry: entry, song: Song(name: entry.name, parts: parts), library: library, chose: chose) }
+        else if let item = entry.item { LibraryItemDetail(entry: entry, item: item, library: library, chose: chose) } else { LibraryDetail(entry: entry, library: library) }
     }
 }
 
