@@ -11,8 +11,10 @@ import AppKit
         var pixels = [UInt8](repeating: 0, count: side * side * 4)
         for index in stride(from: 0, to: pixels.count, by: 4) {
             seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17
+            // White at the noise's own alpha (premultiplied): drawn normally, it lands exactly where screen-blended
+            // gray noise would (a + s·(1 − a)), without a blend the window server has to redo on every frame.
             let value = UInt8(truncatingIfNeeded: seed)
-            pixels[index] = value; pixels[index + 1] = value; pixels[index + 2] = value; pixels[index + 3] = 255
+            pixels[index] = value; pixels[index + 1] = value; pixels[index + 2] = value; pixels[index + 3] = value
         }
         let provider = CGDataProvider(data: Data(pixels) as CFData)!
         let image = CGImage(width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
@@ -21,14 +23,15 @@ import AppKit
     }()
 }
 
-/// 3.5% screen-blended noise over window chrome. Never drawn over the picture.
+/// 3.5% noise over window chrome, the look of a screen blend without one: a blend over the whole window has to be
+/// composed again under anything that moves over it, like a popover opening or closing. Never drawn over the picture.
 struct GrainOverlay: View {
     var opacity: Double = Gate.grain.window
     @AppStorage("filmGrain") private var enabled = true
     var body: some View {
         if enabled {
             Image(nsImage: SurfaceTexture.grain).resizable(resizingMode: .tile).interpolation(.none)
-                .blendMode(.screen).opacity(opacity).allowsHitTesting(false).accessibilityHidden(true)
+                .opacity(opacity).allowsHitTesting(false).accessibilityHidden(true)
         }
     }
 }
