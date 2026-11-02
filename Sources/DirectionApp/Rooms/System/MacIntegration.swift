@@ -187,6 +187,8 @@ enum QuitGuard {
         case .finish: return "The editor is finishing \(film.filmName)."
         case .style: return "The editor is making a style."
         case .technique: return "The editor is learning a technique."
+        case .script: return "The editor is writing the picture for \(film.filmName)."
+        case .breakdown: return "The editor is breaking down \(film.filmName)."
         }
     }
 }

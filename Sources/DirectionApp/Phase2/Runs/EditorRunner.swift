@@ -338,11 +338,21 @@ import DirectionTools
             // A technique was written into the Techniques folder since the run began.
             let since = (run.startedAt ?? run.createdAt) - 1
             return TechniqueLibrary.list(in: SharedSettings.techniquesFolder).contains { $0.updatedAt >= since }
+        case .script:
+            // Every row has a picture, every note it was given has a reply, and nothing waits on the director.
+            guard let s = try? store.script(), !s.rows.isEmpty else { return false }
+            return s.rows.allSatisfy { !$0.picture.isEmpty } && s.turnedOver.isEmpty && s.openQuestions.isEmpty
+        case .breakdown:
+            guard let b = try? store.breakdown(), !b.shots.isEmpty else { return false }
+            return b.turnedOver.isEmpty && !b.shots.contains { $0.question?.isOpen == true }
         }
     }
 
     /// The program stopped to wait for the director: a read-back to OK or a question to answer.
     static func waitingForYou(_ run: EditorRun, store: ProjectStore) -> Bool {
+        // A question on a row or a shot (specs/script.md › Questions).
+        if run.job == .script, let s = try? store.script(), !s.openQuestions.isEmpty { return true }
+        if run.job == .breakdown, let b = try? store.breakdown(), b.shots.contains(where: { $0.question?.isOpen == true }) { return true }
         let open = ((try? store.questions()) ?? []).filter { $0.answer == nil }
         if let id = run.turnoverID, let t = try? store.turnover(id) {
             if t.state == .readBack && !t.readBackApproved { return true }
@@ -354,6 +364,8 @@ import DirectionTools
     /// The director already answered what this invocation asked before the program exited: the OK to the
     /// read-back it waited on, or a question it asked. The run goes on as if it had waited.
     static func answered(_ run: EditorRun, store: ProjectStore, since: Double, waitedForOK: Bool) -> Bool {
+        if run.job == .script, let s = try? store.script(), s.rows.contains(where: { ($0.question?.answeredAt ?? 0) >= since }) { return true }
+        if run.job == .breakdown, let b = try? store.breakdown(), b.shots.contains(where: { ($0.question?.answeredAt ?? 0) >= since }) { return true }
         if waitedForOK, let id = run.turnoverID, let t = try? store.turnover(id), t.readBackApproved, t.state == .cutting { return true }
         return ((try? store.questions()) ?? []).contains { $0.turnoverID == run.turnoverID && $0.createdAt >= since && $0.answer != nil }
     }

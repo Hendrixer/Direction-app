@@ -4,7 +4,7 @@
 
 **Primary action.** "Assemble from circles" with the circle count (before the first cut). After a cut exists, the primary becomes "Use circles in next cut" with the count of circles changed since the last turnover; it adds a note "Use my new circles in scenes 2 and 4." to the sheet and opens Notes.
 
-**Entry points.** Room switcher `⌘1`. Open Dailies from 05. "Open in Dailies" from a take anywhere. `⌘⇧1` jumps to Unsorted.
+**Entry points.** Room switcher `⌘3`. Open Dailies from 05. "Open in Dailies" from a take anywhere. `⌘⇧1` jumps to Unsorted.
 
 **Layout shared by 07–09.** Sidebar 240 pt (`.side`): header "SCENES" + add button; scene rows 30 pt (mono scene number 11 pt `--text-4`, title 13 pt, right-aligned count of circles in amber followed by a 7 pt amber ring; zero shows in `--text-4` without ring). Group label "NOT IN A SCENE" with Unsorted and Not usable. Footer (hairline above, 12/16 padding): "214 takes · 3 h 12 m" and "7 circled · 6 suggested" with ring and diamond.
 

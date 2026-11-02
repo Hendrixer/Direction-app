@@ -135,6 +135,8 @@ struct CommandCatalog {
         add("share", "square.and.arrow.up", "Share \(m.watchedCut?.name ?? "cut")\u{2026}", caps(.share), synonyms: ["link", "send", "export"], disabled: m.cuts.isEmpty ? "No cut yet" : nil) { m.sheet = .share }
         add("export", "square.and.arrow.up.on.square", "Export\u{2026}", caps(.export), synonyms: ["deliver", "render"], disabled: m.isPictureLocked ? nil : m.cuts.isEmpty ? "No cut yet" : nil) { if m.isPictureLocked { m.sheet = .deliver } else { m.sheet = .share } }
         add("footage", "square.and.arrow.down", "Bring footage\u{2026}", caps(.bringFootage), synonyms: ["import", "media"]) { m.chooseFootage() }
+        add("bringScript", "doc.text", m.script == nil ? "Bring in a script\u{2026}" : "Bring in a new draft\u{2026}", synonyms: ["script", "screenplay", "fountain", "draft"]) { m.chooseScript() }
+        if m.breakdown?.isOK == true { add("printShootList", "printer", "Print shoot list\u{2026}", synonyms: ["shot list", "call sheet", "setups"]) { m.printShootList() } }
         let missing = m.isPreview ? MissingFootage.previewAssets(m).count : MenuState.shared.missingCount
         add("relink", "externaldrive", "Find missing footage\u{2026}", synonyms: ["relink", "offline", "drive"], disabled: missing == 0 ? "No footage is missing" : nil) { m.sheet = .relink }
         add("reveal", "folder", "Show film in Finder", synonyms: ["library", "reveal"]) { actions.revealInFinder() }
@@ -175,6 +177,7 @@ struct CommandCatalog {
         switch room {
         case .dailies: "square.grid.2x2"
         case .script: "doc.text"
+        case .breakdown: "list.bullet.rectangle"
         case .screening: "play.rectangle"
         case .notes: "text.bubble"
         case .changes: "arrow.triangle.2.circlepath"
@@ -250,7 +253,8 @@ struct CommandCatalog {
         switch model.room {
         case .notes: ["action.turnOver", "action.screening", "action.share"]
         case .dailies: ["action.assemble", "action.footage", "action.screening"]
-        case .script: ["action.screening", "action.newNote", "action.share"]
+        case .script: ["action.bringScript", "action.room.breakdown", "action.brief"]
+        case .breakdown: ["action.footage", "action.printShootList", "action.room.dailies"]
         case .screening: ["action.mark", "action.wholeCut", "action.room.notes"]
         case .changes: ["action.playChanges", "action.accept", "action.share"]
         case .finish: ["action.export", "action.share", "action.unlockPicture"]

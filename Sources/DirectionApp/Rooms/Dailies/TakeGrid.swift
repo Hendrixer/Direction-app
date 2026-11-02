@@ -264,7 +264,6 @@ struct DailiesTakeMenu: View {
         let circled = !takes.isEmpty && takes.allSatisfy(\.circled), unusable = !takes.isEmpty && takes.allSatisfy(\.unusable)
         Button(circled ? "Uncircle" : "Circle") { model.toggleCircles(ids) }.disabled(unusable)
         Button("Play") { onOpen() }.disabled(ids.count != 1)
-        Button("Open in Script") { model.go(.script) }
         Menu("Move to Scene") {
             ForEach(model.scenes) { s in Button(s.label) { model.moveTakes(ids, to: s.id) }.disabled(takes.allSatisfy { $0.sceneID == s.id }) }
             Divider()

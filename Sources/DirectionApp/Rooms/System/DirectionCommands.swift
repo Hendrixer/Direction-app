@@ -58,6 +58,7 @@ private struct FileMenuItems: View {
     var body: some View {
         let film = app.film
         Button("New Film\u{2026}") { app.newFilm() }.shortcut(.newFilm)
+        Button("New Film from a Script\u{2026}") { FilmsView.startFromScript(app) }
         Button("Open\u{2026}") { app.chooseFilm() }.shortcut(.openFilm)
         Menu("Open Recent") {
             let _ = app.films.count
@@ -69,6 +70,8 @@ private struct FileMenuItems: View {
         }
         Divider()
         Button("Bring Footage\u{2026}") { film?.chooseFootage() }.shortcut(.bringFootage).disabled(film == nil)
+        Button(film?.script == nil ? "Bring In a Script\u{2026}" : "Bring In a New Draft\u{2026}") { film?.chooseScript() }.disabled(film == nil)
+        Button("Print Shoot List\u{2026}") { film?.printShootList() }.disabled(film?.breakdown?.isOK != true)
         Button("Find Missing Footage\u{2026}") { film?.sheet = .relink }.disabled(film == nil || MenuState.shared.missingCount == 0)
         Divider()
         Button("Share \(film?.watchedCut?.name ?? "Cut")\u{2026}") { film?.sheet = .share }.shortcut(.share).disabled(film?.cuts.isEmpty ?? true)

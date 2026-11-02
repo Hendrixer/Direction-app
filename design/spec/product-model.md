@@ -173,7 +173,7 @@ building (agent working, shimmer) ─▶ ready (prism sweep once, toast) ─▶ 
 1. Director presses **Turn over** (`⌘↩`) in Notes. A sheet lists the notes and the latitude for this turnover.
 2. Agent returns a **read-back** within seconds: one plain line per note with concrete numbers, flags conflicts, marks which notes it will cut two ways.
 3. If Settings › Editor › "Wait for my OK before cutting" is on (default), the director approves or adjusts lines. Otherwise cutting starts immediately and the read-back stays visible.
-4. Agent cuts. Status pill shows progress per note. The director can keep watching the previous cut or work in Dailies or Script.
+4. Agent cuts. Status pill shows progress per note. The director can keep watching the previous cut or work in Dailies.
 5. Agent may raise a **question** (blocks only the notes it names) or report it **can't** do a note (missing footage, locked scene, contradicts the brief's must-keep).
 6. New cut is ready: one prism sweep across the window top edge (900 ms), toast "Cut 4 is ready", Changes room unlocks.
 7. Director plays changes, picks options, accepts or replies per answer.
@@ -196,13 +196,11 @@ When two notes pull against each other, the agent resolves them in the order Fee
 ### Outside notes
 Viewers of a share link can drop notes. They land in **Notes › Outside**, never in the main sheet. The director accepts (becomes a numbered Note authored by that person), edits then accepts, or declines. The agent never sees an outside note until the director accepts it.
 
-### Script (text-based direction)
-The Script room shows the cut's dialogue as a screenplay-style transcript with a lined-script coverage bar per line. The director does not edit text. Every gesture creates a note with a `line` anchor:
-- Strike a line (select, `⌫` or the Strike button): note "Lose this line." kind Story.
-- Hold (bracket a passage, `H`): note "Let this breathe." kind Pace.
-- Move (drag a paragraph): note "Move this after line N." kind Story.
-- Other readings (click line number or `R`): opens all takes containing that line; circling one creates a note "Use T3's reading." kind Feeling.
-These notes appear in the Notes sheet like any other, with a script icon. They do nothing until turnover.
+### Prep: the A/V script and the breakdown
+A film can start from a script (specs/script.md, specs/breakdown.md). Writing and research happen outside Direction; the script comes in once, as a file, and Direction's copy is the shooting script from then on.
+- **Script** lays it out as an A/V script: one row per beat, the picture (what we see) beside the sound (the script's words, voice-over or on camera). The editor writes the picture from the film's style; the director types in any cell, leaves notes on rows, turns them over for a pass, and OKs it. What the director types is theirs: the editor changes it only when a note on that row asks.
+- **Breakdown** turns the OK'd script into shots grouped by setup (a place and its light), each with a source: shoot, screen recording, make, footage you have, sound only. Once OK'd, shot numbers (2C) are the slates; Dailies gets a scene per setup and a setup per shot, and takes are filed by the slate said at their head or in their file name. After the shoot it shows coverage: what came in, what's missing, and for each gap make it, pick it up, or do without.
+Films that start from footage (a documentary, an interview) skip both and begin with Bring footage.
 
 ## Agent behavior rules (UI must never imply otherwise)
 - Never circles a take. Only suggests.
@@ -219,13 +217,14 @@ These notes appear in the Notes sheet like any other, with a script icon. They d
 - Watches every passage it changed before delivering a cut.
 
 ## Rooms (top-level navigation)
-Titlebar segmented control, `⌘1`–`⌘6`:
-1. **Dailies**: footage, scenes, setups, takes, circles.
-2. **Script**: dialogue as text; strike, hold, move, readings.
-3. **Screening**: full-bleed playback of the current cut, marks only.
-4. **Notes**: the notes sheet for the current cut, questions, outside notes, turnover, read-back.
-5. **Changes**: the latest cut's answers, options, play changes, changelog. Badge shows unreviewed answers.
-6. **Finish**: appears enabled only after picture lock (before: disabled with tooltip "Lock picture first").
+Titlebar segmented control, `⌘1`–`⌘7`, in the order a film is made:
+1. **Script**: the A/V script, picture beside sound; edit cells, notes on rows, OK.
+2. **Breakdown**: shots by setup with their sources and slates; coverage after the shoot. Enabled once the script is OK'd.
+3. **Dailies**: footage, scenes, setups, takes, circles.
+4. **Screening**: full-bleed playback of the current cut, marks only.
+5. **Notes**: the notes sheet for the current cut, questions, outside notes, turnover, read-back.
+6. **Changes**: the latest cut's answers, options, play changes, changelog. Badge shows unreviewed answers.
+7. **Finish**: appears enabled only after picture lock (before: disabled with tooltip "Lock picture first").
 
 The agent status pill in the titlebar is always visible and clickable (opens the Agent popover).
 

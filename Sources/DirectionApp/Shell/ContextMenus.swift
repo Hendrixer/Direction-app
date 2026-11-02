@@ -122,7 +122,6 @@ struct SceneContextMenu: View {
             .separator,
             .item(scene.locked ? "Unlock Scene" : "Lock Scene", icon: scene.locked ? "lock.open" : "lock.fill", key: keys.combo(.lockScene)?.text, shortcut: keys.menuShortcut(.lockScene), disabled: dailiesScene == nil || model.isPictureLocked) { model.lockScene(scene.id, !scene.locked) },
             .item("Open in Dailies", icon: "square.grid.2x2", disabled: dailiesScene == nil) { model.selectedSceneID = scene.id; model.go(.dailies) },
-            .item("Open in Script", icon: "doc.text") { model.pause(); model.seek(scene.start); model.go(.script) },
             .item("History of This Scene", icon: "clock.arrow.circlepath", disabled: !model.isEnabled(.changes)) { model.seek(scene.start); model.go(.changes) },
         ]
     }

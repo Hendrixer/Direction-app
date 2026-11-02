@@ -17,7 +17,7 @@ struct FilmModelTests {
         #expect(asking.onboardingStep == nil && asking.pill == .asks(1))
         let ready = StartFixtures.assemblyReady()
         #expect(ready.pill == .cutReady("Assembly ready"))
-        for room in [Room.dailies, .script, .notes] {
+        for room in [Room.dailies, .breakdown, .notes] {
             ready.room = room
             #expect(ready.primaryAction?.title == "Screen the assembly", "in \(room)")
         }
@@ -224,25 +224,6 @@ struct FilmModelTests {
         m.directing.pictureLocked = true
         #expect(m.isEnabled(.finish))
     }
-}
-
-/// A take in sync with the one in the cut recorded the same performance from another angle: Script
-/// doesn't offer it as another reading of the line.
-@Test func syncedAnglesArentOtherReadingsOfALine() {
-    func take(_ id: String) -> MediaAsset { MediaAsset(id: id, name: id + ".mov", path: "/\(id).mov", duration: .init(seconds: 20), video: [.init(id: 1, width: 1920, height: 1080, frameRate: 30)], audio: [.init(id: 2, index: 0, label: "Mic", channels: 1, sampleRate: 48_000)]) }
-    var p = Project(name: "Readings")
-    p.assets = ["cam", "screen", "retake"].map(take)
-    p.sequences[0].clips = [Clip(id: "c1", assetID: "cam", name: "cam", start: .zero, sourceRange: .init(start: 0, end: 4))]
-    func said(_ id: String, at offset: Double) -> SourceTranscript {
-        SourceTranscript(assetID: id, audioTrackID: 2, provider: "test", words: ["We", "waited", "two", "years."].enumerated().map { i, w in TranscriptWord(text: w, range: .init(start: offset + Double(i) * 0.5, end: offset + Double(i) * 0.5 + 0.4)) })
-    }
-    let transcripts = [said("cam", at: 1), said("screen", at: 2.5), said("retake", at: 1.2)]
-    var d = Dailies(scenes: [DailiesScene(id: "s1", number: 1, title: "Open")], takes: [:])
-    for (id, setup, code) in [("cam", "1A", "T1"), ("screen", "1B", "T1"), ("retake", "1A", "T2")] { var t = TakeInfo(assetID: id); t.sceneID = "s1"; t.setupCode = setup; t.code = code; d.takes[id] = t }
-    func readings() -> [String]? { ScriptDocument.build(project: p, sequence: p.sequences[0], transcripts: transcripts, dailies: d, cutScenes: []).lines.first?.readings.map(\.assetID).sorted() }
-    #expect(readings() == ["cam", "retake", "screen"])
-    d.syncGroups = [SyncGroup(id: "sync-1", soundAssetID: "cam", takes: [SyncedTake(assetID: "cam", offset: 0, match: 1), SyncedTake(assetID: "screen", offset: -1.5, match: 0.97)], method: "sound", createdAt: 0)]
-    #expect(readings() == ["cam", "retake"])
 }
 
 /// The assembly and turnover jobs list the takes in sync with the rules for cutting them, and say

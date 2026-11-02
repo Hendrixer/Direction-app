@@ -177,11 +177,11 @@ struct FootageImportTests {
         #expect(got == urls)
     }
 
-    @Test func aDroppedScriptIsAnsweredInsteadOfImportedAsFootage() {
+    /// A script dropped on its own is the film's script (specs/script.md), never footage.
+    @Test func aDroppedScriptIsntImportedAsFootage() {
         let m = FilmModel(preview: true)
         m.bring(FootageDrop(scripts: [URL(fileURLWithPath: "/tmp/direction-drop/Script.fdx")]))
-        #expect(m.toast?.title == "Direction can\u{2019}t read scripts yet")
-        #expect(m.importingFootage == 0)
+        #expect(m.importingFootage == 0 && m.toast == nil)
         m.bring(FootageDrop())
         #expect(m.toast?.title == "Those aren\u{2019}t video, sound or script files.")
     }

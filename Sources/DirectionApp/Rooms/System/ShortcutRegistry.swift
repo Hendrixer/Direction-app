@@ -109,7 +109,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     // Screening and notes
     case mark, startScreening, endScreening, region, kinds, addNote, dropDraft
     // Script
-    case strike, hold, readings, moveParagraph
+    case editCell, rowNote, moveRow
     // Dailies
     case circle, openTake, nextTake, assemble
     // Changes
@@ -121,7 +121,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .rooms: "Dailies … Finish"
+        case .rooms: "Script … Finish"
         case .commandMenu: "Command menu"
         case .shortcutsList: "This list"
         case .turnOver: "Turn over"
@@ -142,10 +142,9 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .kinds: "Kind: Feeling … Sound"
         case .addNote: "Add note"
         case .dropDraft: "Drop draft"
-        case .strike: "Strike line"
-        case .hold: "Hold passage"
-        case .readings: "Other readings"
-        case .moveParagraph: "Move paragraph"
+        case .editCell: "Edit a cell"
+        case .rowNote: "Note on rows or shots"
+        case .moveRow: "Move a row"
         case .circle: "Circle take"
         case .openTake: "Open take"
         case .nextTake: "Next take"
@@ -183,7 +182,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .rooms, .commandMenu, .shortcutsList, .turnOver, .lockScene, .share, .settings: .everywhere
         case .playPause, .shuttle, .frame, .second, .scene, .rangeInOut, .fullScreen: .playback
         case .mark, .startScreening, .endScreening, .region, .kinds, .addNote, .dropDraft: .screening
-        case .strike, .hold, .readings, .moveParagraph: .script
+        case .editCell, .rowNote, .moveRow: .script
         case .circle, .openTake, .nextTake, .assemble: .dailies
         case .playChanges, .pickOption, .acceptAnswer, .reply, .revert: .changes
         default: nil
@@ -192,11 +191,12 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
 
     /// The rooms where the key works. Keys can repeat across rooms but not within one.
     var rooms: Set<Room> {
-        let pictureRooms: Set<Room> = [.script, .screening, .notes, .changes, .finish]
+        let pictureRooms: Set<Room> = [.screening, .notes, .changes, .finish]
         switch self {
         case .turnOver: return [.notes]
         case .assemble, .circle, .openTake, .nextTake: return [.dailies]
-        case .strike, .hold, .readings, .moveParagraph: return [.script]
+        case .editCell, .moveRow: return [.script]
+        case .rowNote: return [.script, .breakdown]
         case .playChanges, .pickOption, .acceptAnswer, .reply, .revert: return [.changes]
         case .mark, .region, .kinds, .addNote, .dropDraft, .endScreening: return [.screening, .notes]
         case .playPause, .shuttle, .frame, .second, .scene, .rangeInOut: return pictureRooms
@@ -220,9 +220,9 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .endScreening: .init("escape")
         case .region: .init("r")
         case .addNote: .init("return")
-        case .dropDraft, .strike: .init("delete")
-        case .hold: .init("h")
-        case .readings: .init("r")
+        case .dropDraft: .init("delete")
+        case .editCell: .init("return")
+        case .rowNote: .init("n")
         case .circle: .init("c")
         case .openTake: .init("space")
         case .nextTake: .init("right")
@@ -256,14 +256,14 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     /// Caps for rows that show more than one key or a range.
     var fixedCaps: [String]? {
         switch self {
-        case .rooms: ["⌘", "1–6"]
+        case .rooms: ["⌘", "1–7"]
         case .shuttle: ["J", "K", "L"]
         case .frame: ["←", "→"]
         case .second: ["⇧", "← →"]
         case .scene: ["↑", "↓"]
         case .rangeInOut: ["I", "O"]
         case .kinds: ["⌥", "1–5"]
-        case .moveParagraph: ["⌥", "↑"]
+        case .moveRow: ["⌥", "↑ ↓"]
         case .pickOption: ["A", "B"]
         case .fullScreen: ["⌃", "⌘", "F"]
         default: nil

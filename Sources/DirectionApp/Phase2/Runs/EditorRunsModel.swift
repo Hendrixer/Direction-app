@@ -140,6 +140,18 @@ import DirectionTools
         if film.isLogging, let batch = nextLogBatch(film, store: store) {
             create(.logFootage, program: program, assetCount: film.footage.count, assetIDs: batch, store: store)
         }
+        // Prep (specs/script.md, specs/breakdown.md): the picture column when a script comes in, the breakdown
+        // once it's OK'd, and a pass whenever the director turns over notes on either.
+        if let script = film.script {
+            // The first script, or a new draft, since the last pass began.
+            let fresh = script.rows.contains { $0.picture.isEmpty } && latest(.script).map { (script.source?.importedAt ?? 0) > $0.createdAt } ?? true
+            if (fresh || !script.turnedOver.isEmpty), latest(.script)?.state.isOpen != true { startPrep(.script, film: film, program: program, store: store) }
+            if script.isOK {
+                let breakdown = film.breakdown
+                let fresh = latest(.breakdown) == nil && (breakdown?.shots.isEmpty ?? true)
+                if (fresh || breakdown?.turnedOver.isEmpty == false), latest(.breakdown)?.state.isOpen != true { startPrep(.breakdown, film: film, program: program, store: store) }
+            }
+        }
         // Lock picture: finishing, once.
         if film.isPictureLocked, latest(.finish) == nil, !EditorRunner.finished(EditorRun(job: .finish, program: program.rawValue, version: ""), store: store) {
             create(.finish, program: program, store: store)
@@ -212,6 +224,22 @@ import DirectionTools
         return true
     }
 
+    /// A prep pass: what it changes is marked as this pass's.
+    private func startPrep(_ job: EditorJob, film: FilmModel, program: EditorProgram, store: ProjectStore) {
+        if job == .script { _ = try? store.beginScriptPass() } else { _ = try? store.beginBreakdownPass() }
+        create(job, program: program, store: store)
+    }
+
+    /// Update the breakdown after the script changed (the Breakdown room's banner).
+    @discardableResult
+    func updateBreakdown(_ film: FilmModel) -> Bool {
+        guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program, runs.last(where: { $0.job == .breakdown })?.state.isOpen != true else { return false }
+        startPrep(.breakdown, film: film, program: program, store: store)
+        if let r = runs.last { _ = try? store.updateRun(r.id) { $0.held = false } }
+        film.refresh(force: true)
+        return true
+    }
+
     private func create(_ job: EditorJob, program: EditorProgram, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, store: ProjectStore) {
         var run = EditorRun(job: job, program: program.rawValue, version: EditorSetup.version(program), turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
         run.held = EditorSetup.asksFirst
@@ -243,6 +271,7 @@ import DirectionTools
             let choice = a.choiceID.flatMap { id in q.choices.first { $0.id == id }?.label }
             said.append("You asked: \u{201C}\(q.text)\u{201D} " + [choice.map { "I chose \u{201C}\($0)\u{201D}." }, a.text.map { "I said: \u{201C}\($0)\u{201D}" }].compactMap { $0 }.joined(separator: " "))
         }
+        said += EditorJobs.prepAnswers(run.job, script: film.script, breakdown: film.breakdown, since: since)
         return said.isEmpty ? nil : said.joined(separator: "\n")
     }
 
@@ -337,6 +366,8 @@ import DirectionTools
         case .finish: "Finishing isn\u{2019}t done. Picture stays locked, and you can start again."
         case .style: "The style isn\u{2019}t saved. Your film is as it was, and you can ask again."
         case .technique: "The technique isn\u{2019}t saved. Your film is as it was, and you can ask again."
+        case .script: "The picture column isn\u{2019}t finished. What\u{2019}s written stays, and you can start again."
+        case .breakdown: "The breakdown isn\u{2019}t finished. What\u{2019}s there stays, and you can start again."
         }
     }
 

@@ -8,7 +8,7 @@ import DirectionMedia
 import DirectionTools
 
 enum Room: String, CaseIterable, Identifiable {
-    case dailies, script, screening, notes, changes, finish
+    case script, breakdown, dailies, screening, notes, changes, finish
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
     var shortcut: KeyEquivalent { KeyEquivalent(Character(String((Room.allCases.firstIndex(of: self) ?? 0) + 1))) }
@@ -54,6 +54,9 @@ final class FilmModel {
     var project: Project?
     var brief = Brief()
     var dailies = Dailies()
+    /// Prep: the A/V script and its breakdown (specs/script.md, specs/breakdown.md).
+    var script: AVScript?
+    var breakdown: Breakdown?
     var notes: [ReviewComment] = []
     /// Oldest first: Assembly, Cut 2, Cut 3…
     var cuts: [ReviewCut] = []
@@ -113,10 +116,9 @@ final class FilmModel {
     var screeningEnded = false
     var freshMarkID: String?
 
-    // MARK: Dailies and Script
+    // MARK: Dailies
     var selectedSceneID: String?
     var openTakeID: String?
-    var selectedLineID: String?
 
     // MARK: Changes
     var selectedAnswerNoteID: String?
@@ -128,7 +130,6 @@ final class FilmModel {
     let isPreview: Bool
     @ObservationIgnored var runtime: ToolRuntime?
     @ObservationIgnored let player = AVPlayer()
-    @ObservationIgnored let scriptCache = ScriptDocumentCache()
     @ObservationIgnored private var compiled: CompiledSequence?
     @ObservationIgnored private var renderTask: Task<Void, Never>?
     @ObservationIgnored private var renderKey = ""
@@ -239,12 +240,15 @@ final class FilmModel {
                 set(\.brief, try store.brief()); set(\.dailies, try store.dailies()); set(\.directing, try store.directingState())
                 set(\.notes, try store.notes()); set(\.cuts, try store.cuts().sorted { $0.createdAt < $1.createdAt })
                 set(\.turnovers, try store.turnovers()); set(\.questions, try store.questions())
+                set(\.script, try store.script()); set(\.breakdown, try store.breakdown())
             }
             if changed("editor.status") { set(\.editorStatus, try store.editorStatus()) }
             if changed("transcript.updated") { set(\.transcripts, try store.transcripts()) }
             if changed("job.updated") { set(\.jobs, try store.jobs()) }
             if !newEvents.isEmpty { events = Array((events + newEvents).suffix(200)) }
             cursor = latest
+            // Takes whose slate names a shot go to it as soon as their file name or first words say so.
+            if whole, breakdown?.isOK == true, !((try? store.fileBySlate())?.isEmpty ?? true) { set(\.dailies, try store.dailies()) }
             if whole {
                 announceDeliveredCuts()
                 announceQuestions()
@@ -460,6 +464,11 @@ final class FilmModel {
         if isLogging, case let total = footage.count, total > 0, cuts.isEmpty || runs.active?.job == .logFootage {
             return .working("Logging \(loggedCount) of \(total)", Double(loggedCount) / Double(total))
         }
+        // Prep: how far the picture column has come; the breakdown, by name.
+        if runs.active?.job == .script, let s = script, case let done = s.rows.filter({ !$0.picture.isEmpty }).count, done < s.rows.count {
+            return .working("Writing pictures \(done) of \(s.rows.count)", Double(done) / Double(max(1, s.rows.count)))
+        }
+        if runs.active?.job == .breakdown, runs.activityText == nil { return .working("Breaking down", nil) }
         // Any other work: what the editor is doing right now, whether Direction started it or you did.
         if runs.isWorking || runs.ownSession != nil { return .working(runs.activityText ?? "Starting", nil) }
         return .ready
@@ -470,7 +479,8 @@ final class FilmModel {
     /// The director left onboarding early (Open Dailies while the editor is still logging).
     var onboardingDismissed = false
     var onboardingStep: OnboardingStep? {
-        guard !onboardingDismissed, cuts.isEmpty, openTurnover?.kind != "assembly" else { return nil }
+        // A film that starts from a script works in its rooms from the start (specs/script.md).
+        guard !onboardingDismissed, script == nil, cuts.isEmpty, openTurnover?.kind != "assembly" else { return nil }
         if !brief.isComplete { return .brief }
         if !hasFootage { return .footage }
         // Footage is in but the editor hasn't logged every take yet, or more is still coming in: Logging footage.
@@ -510,6 +520,8 @@ final class FilmModel {
         case .finish: isPictureLocked
         // Nothing to watch or note before the first cut.
         case .screening, .notes, .changes: !cuts.isEmpty
+        // There’s nothing to break down until the script is OK’d.
+        case .breakdown: script?.isOK == true || breakdown != nil
         default: true
         }
     }
@@ -904,7 +916,7 @@ final class FilmModel {
         if !drop.footage.isEmpty {
             if onboardingStep != nil { OnboardingSession.of(self).add(drop.footage, places: drop.places, wait: true) } else { importFootage(drop.footage, places: drop.places) }
         }
-        if !drop.scripts.isEmpty { toast = Toast(title: "Direction can\u{2019}t read scripts yet", detail: "The Script room is built from what was said in the takes.") }
+        if drop.footage.isEmpty, let script = drop.scripts.first { bringScript(script) }
         else if drop.footage.isEmpty { toast = Toast(title: "Those aren\u{2019}t video, sound or script files.") }
     }
     func chooseFootage() {

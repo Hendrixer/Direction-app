@@ -105,6 +105,8 @@ struct EditorPopover: View {
         case .logFootage: "Your footage is in"
         case .style: "You asked for a style"
         case .technique: "You gave it a video to learn from"
+        case .script: "Your script is in"
+        case .breakdown: "You OK\u{2019}d the script"
         }
     }
 

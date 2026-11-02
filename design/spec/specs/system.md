@@ -66,7 +66,7 @@ Frame: `screens/50-shortcuts.html` · Render: `renders/50-shortcuts@2x.png`
 
 | Group | Action | Keys |
 |---|---|---|
-| Everywhere | Dailies … Finish | ⌘1–6 |
+| Everywhere | Script … Finish | ⌘1–7 |
 | | Command menu | ⌘K |
 | | This list | ? |
 | | Turn over | ⌘↩ |
@@ -87,10 +87,9 @@ Frame: `screens/50-shortcuts.html` · Render: `renders/50-shortcuts@2x.png`
 | | Kind: Feeling … Sound | ⌥1–5 |
 | | Add note | ↩ (in the composer) |
 | | Drop draft | ⌫ (on a selected draft) |
-| Script | Strike line | ⌫ |
-| | Hold passage | H |
-| | Other readings | R |
-| | Move paragraph | ⌥↑ ⌥↓ |
+| Script | Edit a cell | ↩ |
+| | Note on rows or shots | N (Script and Breakdown) |
+| | Move a row | ⌥↑ ⌥↓ |
 | Dailies | Circle take | C |
 | | Open take | Space |
 | | Next take | → |
@@ -124,7 +123,7 @@ Frame: `screens/51-offline.html` · Render: `renders/51-offline@2x.png`
 - Banner content: the offline icon, "**You're offline.**" in 600 weight, then the body in text-3. On the right, "Last connected 14:02" in 12 text-3 and **Try again** (btn sm).
 - The editor pill becomes `.agent` with the offline icon and "Offline".
 
-**What still works:** playback of cuts already on disk, screening and marks, writing and editing notes, Dailies circles, Script marks, locking scenes, and Settings.
+**What still works:** playback of cuts already on disk, screening and marks, writing and editing notes, Dailies circles, the script and the breakdown, locking scenes, and Settings.
 
 **What waits:**
 - **Turnover:** the steel button stays visible at 40% opacity. Hovering shows the tooltip "Turnover waits until you're online. Your notes are saved." Pressing it anyway queues the turnover: the button becomes "Queued" with a clock icon, and the banner adds "Turnover queued."
@@ -221,7 +220,6 @@ The frame shows three right-click menus over the Notes room at once, only for re
 | — | | |
 | Lock scene / Unlock scene | ⌘L | Toggles. For a locked scene the label is "Unlock scene" with the unlock icon. |
 | Open in Dailies | — | Dailies, scrolled to this scene. |
-| Open in Script | — | Script, scrolled to this scene. |
 | History of this scene | — | History (frame 33) filtered to this scene. |
 
 **Note row** (right-click a note in the sheet):
@@ -238,9 +236,9 @@ The frame shows three right-click menus over the Notes room at once, only for re
 | — | | |
 | Drop note | ⌫ | Alert color. Before turnover only. The number is retired, never reused. |
 
-Other context menus follow the same rules: takes in Dailies, script lines, answers in Changes, cuts in History.
+Other context menus follow the same rules: takes in Dailies, rows of the script, answers in Changes, cuts in History.
 - **Take:** Circle, Open, Play, Show in Finder.
-- **Script line:** Strike, Hold, Other readings, Note on this line, Copy line.
+- **Script row:** Note on This Row, Edit Picture, Edit Words, Move Up, Move Down, Add a Row After, Take Out Row.
 - **Answer:** Accept, Reply, Revert this change, Play this change.
 - **Cut:** Open, Compare with current, Share…, Export….
 
@@ -303,12 +301,13 @@ Every command is listed with its key equivalent. Room-scoped commands are disabl
 ### View
 | Item | Key |
 |---|---|
-| Dailies | ⌘1 |
-| Script | ⌘2 |
-| Screening | ⌘3 |
-| Notes | ⌘4 |
-| Changes | ⌘5 |
-| Finish | ⌘6 (disabled until picture lock) |
+| Script | ⌘1 |
+| Breakdown | ⌘2 (disabled until the script is OK'd) |
+| Dailies | ⌘3 |
+| Screening | ⌘4 |
+| Notes | ⌘5 |
+| Changes | ⌘6 |
+| Finish | ⌘7 (disabled until picture lock) |
 | — | |
 | Show Notes Sheet | ⌥⌘S |
 | Show Transcript Captions | ⌥⌘C |

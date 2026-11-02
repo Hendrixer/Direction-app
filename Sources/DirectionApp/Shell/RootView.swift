@@ -69,6 +69,7 @@ struct FilmWindow: View {
             switch model.room {
             case .dailies: DailiesRoom(model: model)
             case .script: ScriptRoom(model: model)
+            case .breakdown: BreakdownRoom(model: model)
             case .screening: Color.clear
             case .notes: NotesRoom(model: model)
             case .changes: ChangesRoom(model: model)
@@ -146,6 +147,7 @@ extension FilmModel {
         switch room {
         case .dailies: return dailiesPrimary
         case .script: return scriptPrimary
+        case .breakdown: return breakdownPrimary
         case .screening: return nil
         case .notes: return notesPrimary
         case .changes: return changesPrimary

@@ -216,10 +216,25 @@ struct FilmsView: View {
     static func received(_ urls: [URL], app: AppModel) {
         guard app.previewFilms == nil else { return }
         if let film = urls.first(where: { $0.pathExtension == "direction" }) { app.open(film); return }
-        let (footage, _, places) = FootageFiles.expand(urls)
+        let (footage, scripts, places) = FootageFiles.expand(urls)
+        if footage.isEmpty, let script = scripts.first { startFromScript(script, app: app); return }
         guard !footage.isEmpty else { return }
         app.newFilm()
         if let film = app.film { OnboardingSession.of(film).add(footage, places: places, wait: false) }
+    }
+
+    /// Start from a script…: a new film named for the script, which comes in as its A/V script; the editor
+    /// starts on the picture (specs/script.md › Bringing in a script).
+    static func startFromScript(_ app: AppModel) {
+        let panel = NSOpenPanel(); panel.title = "Start from a script"; panel.prompt = "Start"; panel.allowedContentTypes = FilmModel.scriptTypes
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        startFromScript(url, app: app)
+    }
+
+    static func startFromScript(_ url: URL, app: AppModel) {
+        guard app.previewFilms == nil else { return }
+        app.newFilm(named: url.deletingPathExtension().lastPathComponent)
+        app.film?.bringScript(url)
     }
 
     /// Start from a folder…: a new film with the folder's footage attached; logging starts after the brief.
@@ -354,6 +369,8 @@ private struct FilmsWelcome: View {
                     HStack(spacing: 10) {
                         Button { app.newFilm() } label: { Label("New film", systemImage: "plus") }
                             .buttonStyle(.gate(.steel, .large)).keyboardShortcut(.defaultAction)
+                        Button { FilmsView.startFromScript(app) } label: { Label("Start from a script\u{2026}", systemImage: "doc.text") }
+                            .buttonStyle(.gate(.normal, .large))
                         Button { FilmsView.startFromFolder(app) } label: { Label("Start from a folder\u{2026}", systemImage: "folder") }
                             .buttonStyle(.gate(.normal, .large))
                     }

@@ -14,9 +14,6 @@ window.FRAMES = [
   { id: "08-dailies-take", group: "Dailies", title: "Dailies, one take open", spec: "dailies.md" },
   { id: "09-dailies-unsorted", group: "Dailies", title: "Dailies, unsorted footage", spec: "dailies.md" },
 
-  { id: "10-script", group: "Script", title: "Script, reading", spec: "script.md" },
-  { id: "11-script-marked", group: "Script", title: "Script, struck, held and moved lines", spec: "script.md" },
-  { id: "12-script-readings", group: "Script", title: "Script, other readings of a line", spec: "script.md" },
 
   { id: "13-screening", group: "Screening", title: "Screening, playing", spec: "screening.md" },
   { id: "14-screening-quiet", group: "Screening", title: "Screening, controls hidden", spec: "screening.md" },
@@ -82,4 +79,12 @@ window.FRAMES = [
   { id: "64-changes-graphic", group: "Graphics", title: "Changes, a title's words", spec: "graphics.md" },
   { id: "65-settings-styles", group: "Styles", title: "Settings, Styles", spec: "styles.md", size: "940x789" },
   { id: "66-brief-style-list", group: "Styles", title: "The brief's style list, open", spec: "styles.md", size: "460x420" },
+
+  { id: "70-script-empty", group: "Script", title: "Script, no script yet", spec: "script.md" },
+  { id: "71-script-drafting", group: "Script", title: "Script, the editor writing the picture", spec: "script.md" },
+  { id: "72-script-notes", group: "Script", title: "Script, your pass: a cell, notes, a question", spec: "script.md" },
+  { id: "73-script-pass", group: "Script", title: "Script, after the editor's pass", spec: "script.md" },
+  { id: "74-breakdown-draft", group: "Breakdown", title: "Breakdown, the draft", spec: "breakdown.md" },
+  { id: "75-breakdown-ready", group: "Breakdown", title: "Breakdown, before the shoot", spec: "breakdown.md" },
+  { id: "76-breakdown-coverage", group: "Breakdown", title: "Breakdown, after the shoot", spec: "breakdown.md" },
 ];

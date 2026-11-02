@@ -32,7 +32,7 @@ The rendering mode is monochrome and the color is inherited (`.foregroundStyle(.
 | turn | Turn over | `arrow.right` |
 | exit | End screening | `rectangle.portrait.and.arrow.right` |
 | circle | Circled take | **custom** (see above) |
-| script | Script room, line anchor | `doc.text` |
+| script | Script room, a script file | `doc.text` |
 | strike | Strike a line | `strikethrough` |
 | hold | Hold a passage | `curlybraces` |
 | move | Move a paragraph | `arrow.up.and.down` |

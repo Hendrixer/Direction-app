@@ -18,7 +18,7 @@ enum Snapshots {
     /// Frame IDs match design/spec/frames.js. Each room group registers its own frames.
     static var registry: [String: () -> SnapshotScene] {
         var all: [String: () -> SnapshotScene] = ["00-shell": { .film(SampleFilm.make()) }]
-        for group in [StartFixtures.frames, DailiesFixtures.frames, ScriptFixtures.frames, ScreeningFixtures.frames, NotesFixtures.frames, ChangesFixtures.frames, FinishFixtures.frames, SystemFixtures.frames, Phase2Fixtures.frames] {
+        for group in [StartFixtures.frames, DailiesFixtures.frames, PrepFixtures.frames, ScreeningFixtures.frames, NotesFixtures.frames, ChangesFixtures.frames, FinishFixtures.frames, SystemFixtures.frames, Phase2Fixtures.frames] {
             all.merge(group) { a, _ in a }
         }
         return all

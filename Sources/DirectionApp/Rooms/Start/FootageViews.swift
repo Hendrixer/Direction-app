@@ -9,7 +9,7 @@ enum FootageFiles {
     static let video: Set<String> = ["mov", "mp4", "m4v", "mxf", "braw", "r3d"]
     static let sound: Set<String> = ["wav", "aif", "aiff", "m4a", "mp3"]
     static let still: Set<String> = ["jpg", "jpeg", "png"]
-    static let script: Set<String> = ["pdf", "fdx"]
+    static let script: Set<String> = ["pdf", "fdx", "fountain", "md", "markdown", "txt"]
 
     /// Files and folders → the footage and sound inside them, sorted by name, and where the director filed
     /// each in scene and setup folders, by path (FootageFolders).
@@ -25,7 +25,9 @@ enum FootageFiles {
         let ext = { (u: URL) in u.pathExtension.lowercased() }
         let footage = files.filter { video.contains(ext($0)) || sound.contains(ext($0)) }.sorted { $0.lastPathComponent < $1.lastPathComponent }
         let kept = Set(footage.map(\.path))
-        return (footage, files.filter { script.contains(ext($0)) }, FootageFolders.places(found.filter { kept.contains($0.file.path) }))
+        // A script is a file dropped on its own: notes and PDFs inside a footage folder aren't one.
+        let inFolders = Set(found.map(\.file.path))
+        return (footage, files.filter { script.contains(ext($0)) && !inFolders.contains($0.path) }, FootageFolders.places(found.filter { kept.contains($0.file.path) }))
     }
 
     /// What a drop on a film's window brings: a film to open, footage and sound (folders opened), and scripts.
@@ -228,7 +230,7 @@ struct OnboardingFootageDrop: View {
         let (footage, scripts, places) = FootageFiles.expand(urls)
         guard !footage.isEmpty else {
             rejected = scripts.isEmpty
-            if scripts.isEmpty { shakeOnce() } else { model.toast = Toast(title: "Bring footage first", detail: "The editor matches a script to the takes it logs.", editor: true) }
+            if let script = scripts.first { model.bringScript(script) } else { shakeOnce() }
             return
         }
         rejected = false

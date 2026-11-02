@@ -1,4 +1,4 @@
-<!-- direction-job log-footage v7 -->
+<!-- direction-job log-footage v8 -->
 # Log the footage for "{{film}}"
 
 Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
@@ -8,7 +8,7 @@ Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder;
 Direction has already looked at and listened to these takes. Below is everything it found: each take's shots with their descriptions, the text on its screen, its sounds, every word it heard, and the takes it's in sync with. Log from this. Call a tool only when a caption or a flag depends on something it doesn't tell you: `direction_contact_sheet` or `direction_frame` with `assetID` and `time` to see a moment, `direction_transcript` with `assetID` for words past the cut-off. Don't re-read what's here.
 
 1. Takes in sync recorded the same moment, matched by their sound: put them in the same scene, each angle as its own setup. Suggest the angle that should carry the scene; the others come in as cutaways. Dailies shows sync and sound itself, so never mention them in a caption or setup.
-2. Takes the director filed in their own folders ("Filed by the director") stay where the folders put them: keep their scene, setup and take code, and log the rest. Describe a setup the folders only give a letter. If a take looks misfiled, say so in its `suggestion` rather than moving it.
+2. Takes the director filed in their own folders ("Filed by the director") stay where the folders put them: keep their scene, setup and take code, and log the rest. A film with a breakdown (`direction_breakdown`) has a scene for each setup and a setup for each shot (2C): takes Direction filed by their slate are already there, so keep them; put the others in the shot they show. Describe a setup the folders only give a letter. If a take looks misfiled, say so in its `suggestion` rather than moving it.
 3. Log every take listed with `direction_log_dailies`: its scene, setup (a few words: "Talking head, close", "Screen recording"), take code, a caption of 12 words at most (what's said, in quotes, or what's seen; for a screen recording or slides, what's on screen, from "On screen", not "a computer screen"), flags (flubbed line, soft, no audio) and a `suggestion` with a short reason when you'd pick it. Use the scenes below where a take belongs to one; add scenes (number, title, setups) when it doesn't. Put takes you can't place in no scene with a `guessSceneNumber`. You suggest; only the director circles.
 4. Send one `direction_log_dailies` call for the batch, or a few if it's long. You're finished when every take listed is logged.
 

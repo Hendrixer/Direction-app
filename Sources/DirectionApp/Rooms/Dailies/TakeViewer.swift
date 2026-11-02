@@ -327,7 +327,6 @@ struct DailiesTakeViewer: View {
                     HStack(spacing: 6) { Image(systemName: "trash"); Text(unusable ? "Usable again" : "Not usable"); KeyHint("X") }
                 }.buttonStyle(.gate(.ghost, .small))
                 Spacer(minLength: 8)
-                Button { model.go(.script) } label: { Label("Open in Script", systemImage: "doc.text") }.buttonStyle(.gate(.ghost, .small))
             }
         }
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 16)

@@ -168,7 +168,6 @@ struct DailiesSidebar: View {
             Divider()
             Button("Circle Suggestions in This Scene") { model.toggleCircles(model.dailiesTakes(inScene: scene.id).filter { $0.suggestion != nil && !$0.circled }.map(\.assetID)) }
                 .disabled(!model.dailiesTakes(inScene: scene.id).contains { $0.suggestion != nil && !$0.circled })
-            Button("Open in Script") { model.go(.script) }
             Divider()
             Button("Delete Scene\u{2026}", role: .destructive) { deleting = scene }
                 .disabled(scene.locked || model.isPreview)

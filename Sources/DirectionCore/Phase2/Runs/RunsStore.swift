@@ -12,9 +12,13 @@ public enum EditorJob: String, Codable, Sendable, CaseIterable {
     case style
     /// Learning a technique from a video the director gave (techniques.md › Learning one).
     case technique
+    /// Writing the A/V script's picture column, or a pass on the director's notes on it (specs/script.md).
+    case script
+    /// Breaking the OK'd script down into shots by setup, or a pass on notes on it (specs/breakdown.md).
+    case breakdown
     /// The skill each job follows (plugins/direction/skills/<name>/SKILL.md).
     public var skill: String {
-        switch self { case .logFootage: "start-project"; case .assemble: "assemble"; case .turnover: "take-turnover"; case .finish: "finish"; case .style: "make-style"; case .technique: "learn-technique" }
+        switch self { case .logFootage: "start-project"; case .assemble: "assemble"; case .turnover: "take-turnover"; case .finish: "finish"; case .style: "make-style"; case .technique: "learn-technique"; case .script: "write-av-script"; case .breakdown: "break-down" }
     }
 }
 

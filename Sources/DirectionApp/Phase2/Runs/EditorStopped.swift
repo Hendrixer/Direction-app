@@ -27,6 +27,8 @@ extension EditorRunsModel {
             case .finish: body = "It ended before finishing was done."
             case .style: body = "It ended before the style was saved."
             case .technique: body = "It ended before the technique was saved."
+            case .script: body = "It ended before the picture column was written."
+            case .breakdown: body = "It ended before the breakdown was done."
             }
             return body
         case .spendCap: return run.detail ?? "Services can\u{2019}t make anything more this month."
