@@ -243,7 +243,7 @@ private struct FilmsTitlebar: View {
                 Color.clear.frame(width: 62, height: 1)
                 Text("Films").font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).padding(.horizontal, 7).allowsHitTesting(false)
                 Spacer(minLength: 12)
-                EditorPill(state: pill).help("The editor")
+                EditorPill(state: pill, program: EditorSetup.runsOn.program).help("The editor")
                 // On the empty screen the hero's New film is the steel button; this one is plain.
                 Button { app.newFilm() } label: { HStack(spacing: 6) { Image(systemName: "plus"); Text("New film"); KeyHint("\u{2318}N") } }
                     .buttonStyle(.gate(empty || sheetOpen ? .normal : .steel))

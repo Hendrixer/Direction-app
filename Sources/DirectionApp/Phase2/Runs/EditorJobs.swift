@@ -37,8 +37,8 @@ enum EditorJobs {
         switch run.job {
         case .logFootage:
             let footage = p.footage(film: store.url)
-            let logged = footage.filter { dailies.takes[$0.id] != nil }.count
-            let batch = (run.assetIDs ?? footage.filter { dailies.takes[$0.id] == nil }.map(\.id)).compactMap { id in p.assets.first { $0.id == id } }
+            let logged = footage.filter { dailies.isLogged($0.id) }.count
+            let batch = (run.assetIDs ?? footage.filter { !dailies.isLogged($0.id) }.map(\.id)).compactMap { id in p.assets.first { $0.id == id } }
             let others = footage.count - logged - batch.count
             v["footage"] = "This run logs \(batch.count == 1 ? "1 take" : "\(batch.count) takes"), listed below. The film has \(footage.count); \(logged) \(logged == 1 ? "is" : "are") logged already\(others > 0 ? " and \(others) more come in later runs" : ""). Log only the takes listed here."
             v["takes"] = LoggingDigest.takes(batch, store: store, dailies: dailies)

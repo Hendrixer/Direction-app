@@ -132,8 +132,11 @@ extension ProjectStore {
     /// can finish and the director can place it (footage-index.md › Logging in batches).
     public func logUnplaced(assetID: String, caption: String) throws {
         try mutate(DirectingKey.dailies, default: Dailies(), kind: "dailies.updated", summary: "Put a take the editor didn\u{2019}t log in Unsorted") { d in
-            guard d.takes[assetID] == nil else { return }
-            var t = TakeInfo(assetID: assetID); t.caption = caption; t.flags = ["Not logged by the editor"]
+            guard !d.isLogged(assetID) else { return }
+            // A take filed from the folders, or circled before logging, keeps where it is and what the director did.
+            var t = d.take(assetID); t.unlogged = nil
+            if t.caption == nil { t.caption = caption }
+            t.flags.append("Not logged by the editor")
             d.takes[assetID] = t
         }
     }
@@ -304,7 +307,7 @@ extension ProjectStore {
             for (id, var t) in update.takes {
                 guard assets.contains(id) else { throw DirectionError("asset_not_found", "Take \(id) is not footage in this film.") }
                 let old = d.take(id)
-                t.assetID = id; t.circled = old.circled; t.circledAt = old.circledAt
+                t.assetID = id; t.circled = old.circled; t.circledAt = old.circledAt; t.unlogged = nil
                 if old.unusable && !t.unusable { t.unusable = old.unusable }
                 if let s = old.sceneID, d.scenes.first(where: { $0.id == s })?.locked == true { t.sceneID = s }
                 // Filed by the director's folders: the scene, setup and take they say stay.

@@ -84,7 +84,7 @@ struct PlayChangesView: View {
                     crumb("Changes", color: Gate.Text.tertiary, weight: .medium)
                 }
                 Spacer(minLength: 12)
-                EditorPill(state: model.pill)
+                EditorPill(state: model.pill, program: model.editorProgram)
                 Button { model.closeReel() } label: {
                     HStack(spacing: 6) { Image(systemName: "rectangle.portrait.and.arrow.right"); Text("Stop"); KeyHint("esc") }
                 }

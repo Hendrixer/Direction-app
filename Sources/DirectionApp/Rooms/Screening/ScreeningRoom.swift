@@ -437,7 +437,7 @@ struct ScreeningTitlebar: View {
                 .font(.system(size: 13)).lineLimit(1).allowsHitTesting(false)
                 Spacer(minLength: 12)
                 HStack(spacing: 8) {
-                    Button { model.showEditorPopover.toggle() } label: { EditorPill(state: model.pill) }
+                    Button { model.showEditorPopover.toggle() } label: { EditorPill(state: model.pill, program: model.editorProgram) }
                         .buttonStyle(.plain)
                         .popover(isPresented: $model.showEditorPopover, arrowEdge: .bottom) { EditorPopover(model: model) }
                         .help("The editor")

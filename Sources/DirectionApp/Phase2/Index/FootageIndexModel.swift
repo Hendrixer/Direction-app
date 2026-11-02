@@ -37,6 +37,7 @@ import DirectionMedia
     @ObservationIgnored private var shotCache: [String: (stamp: Double, shots: [Shot], sounds: [IndexSound])] = [:]
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var lastAutoStart = Date.distantPast
+    @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var lastGrow = Date.distantPast
     @ObservationIgnored private weak var film: FilmModel?
     @ObservationIgnored private var startingTranscription = false
@@ -82,9 +83,20 @@ import DirectionMedia
     /// so a take that keeps failing doesn't restart the job in a loop. Takes looked at before
     /// Direction read text on screen are read once too.
     private func autoStart(_ film: FilmModel, assets: [MediaAsset]) {
-        guard !film.isPreview, job == nil, SharedSettings.lookAutomatically, Date().timeIntervalSince(lastAutoStart) > 5 else { return }
+        guard !film.isPreview, job == nil, SharedSettings.lookAutomatically else { return }
         let unread = { (a: MediaAsset) in !a.video.isEmpty && self.states[a.id] == .done && self.takes[a.id].map(FootageIndexer.needsScreenText) == true }
         guard assets.contains(where: { states[$0.id] == .waiting || unread($0) }) else { return }
+        // Too soon after the last start: look again once it's allowed, since nothing else may change in between.
+        let wait = 5 - Date().timeIntervalSince(lastAutoStart)
+        guard wait <= 0 else {
+            guard retryTask == nil else { return }
+            retryTask = Task { [weak self, weak film] in
+                try? await Task.sleep(for: .seconds(wait + 0.1))
+                self?.retryTask = nil
+                if let film { self?.refresh(film) }
+            }
+            return
+        }
         lastAutoStart = Date()
         lookAtFootage(film)
     }

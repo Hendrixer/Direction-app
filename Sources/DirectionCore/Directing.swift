@@ -91,6 +91,10 @@ public struct TakeInfo: Codable, Hashable, Sendable, Identifiable {
     /// The director's folders it was filed in ("01 Intro/A Talking head"): its scene, setup and take
     /// code come from them, and the editor's logging keeps them (FootageFolders).
     public var folder: String?
+    /// The editor hasn't logged it yet: filed from the director's folders, or circled, moved or marked before
+    /// logging. Logging clears it. Older takes have nil and were logged.
+    public var unlogged: Bool?
+    public var isLogged: Bool { unlogged != true }
     public init(assetID: String) { self.assetID = assetID }
 }
 
@@ -106,7 +110,10 @@ public struct Dailies: Codable, Hashable, Sendable {
     public var notInSync: [[String]]?
     public init() {}
     public init(scenes: [DailiesScene], takes: [String: TakeInfo]) { self.scenes = scenes; self.takes = takes }
-    public func take(_ assetID: String) -> TakeInfo { takes[assetID] ?? TakeInfo(assetID: assetID) }
+    /// A take nobody has touched yet is one the editor hasn't logged.
+    public func take(_ assetID: String) -> TakeInfo { takes[assetID] ?? { var t = TakeInfo(assetID: assetID); t.unlogged = true; return t }() }
+    /// The editor has logged it (or Direction put it in Unsorted after two runs left it).
+    public func isLogged(_ assetID: String) -> Bool { takes[assetID]?.isLogged ?? false }
     public func syncGroup(for assetID: String?) -> SyncGroup? { assetID.flatMap { id in syncGroups?.first { $0.take(id) != nil } } }
     /// The same moment in another take: `time` in `from`'s source seconds, as `to`'s source seconds.
     /// The same take maps to itself; takes that aren't in sync map to nothing.

@@ -274,6 +274,8 @@ struct LoggingRow: Identifiable {
     var asset: MediaAsset
     var info: TakeInfo?
     var status: Status
+    /// A dropped file not in the film yet: listed from the moment it's dropped, with nothing to do to it.
+    var arriving = false
     var id: String { asset.id }
     var rank: Int { switch status { case .needsYou: 0; case .working: 1; case .done: 2; case .queued: 3 } }
 }
@@ -306,7 +308,7 @@ extension FilmModel {
                 let left = expected - elapsed
                 rows.append(.init(asset: a, info: info, status: .working(left > 1 ? "Transcribing \u{00B7} about \(Self.clock(left)) left" : "Transcribing \u{00B7} almost done", min(0.97, elapsed / expected)))); continue
             }
-            if let info {
+            if let info, info.isLogged {
                 let line = Self.dailiesLines(byAsset[a.id] ?? []).first { !$0.direction }
                 let done = line.map { "\u{201C}\(Self.clip($0.text))\u{201D}" } ?? (["No dialogue"] + info.flags.prefix(1).map { $0.lowercased() }).joined(separator: " \u{00B7} ")
                 rows.append(.init(asset: a, info: info, status: .done(done))); continue
@@ -323,11 +325,23 @@ extension FilmModel {
             if transcribed.contains(a.id) || index.readyToLog(a) { rows.append(.init(asset: a, info: nil, status: .working("Ready to log", nil))); continue }
             rows.append(.init(asset: a, info: nil, status: .queued))
         }
+        // Files still coming in, in the order they come: the first is being brought in (or copied), the rest wait.
+        for (i, url) in arrivingFootage.enumerated() {
+            let file = MediaAsset(id: "arriving:" + url.path, name: url.lastPathComponent, path: url.path, duration: .zero)
+            let status: LoggingRow.Status = i > 0 ? .queued : copyingFootage.map { .working("Copying into the film", $0.current) } ?? .working("Bringing in", nil)
+            rows.append(.init(asset: file, info: nil, status: status, arriving: true))
+        }
         // With the editor active but nothing visibly running, the first queued file is the one it's on.
-        if editorActive, !rows.contains(where: { if case .working = $0.status { true } else { false } }), let i = rows.firstIndex(where: { if case .queued = $0.status { true } else { false } }) {
+        if editorActive, !rows.contains(where: { if case .working = $0.status { true } else { false } }), let i = rows.firstIndex(where: { if case .queued = $0.status { !$0.arriving } else { false } }) {
             rows[i].status = .working("Logging", nil)
         }
         return rows.enumerated().sorted { ($0.element.rank, $0.offset) < ($1.element.rank, $1.offset) }.map(\.element)
+    }
+
+    /// Dropped files that aren't takes in the film yet.
+    var arrivingFootage: [URL] {
+        let paths = Set(project?.assets.map(\.path) ?? [])
+        return incomingFootage.filter { !paths.contains($0.path) }
     }
 
     /// Seconds of audio Whisper gets through per second on this Mac, from this film's finished jobs.
@@ -433,9 +447,9 @@ struct OnboardingLoggingView: View {
 
     private func summary(_ rows: [LoggingRow]) -> some View {
         // Not finished while files are still coming in: a copy can take minutes before its take exists.
-        let total = model.footage.count, logged = model.loggedCount, finished = !model.isLogging && model.importingFootage == 0
+        let total = model.footage.count + model.arrivingFootage.count, logged = model.loggedCount, finished = !model.isLogging && model.importingFootage == 0
         let seconds = model.dailiesTotalSeconds
-        let loggedSeconds = model.footage.filter { model.dailies.takes[$0.id] != nil }.reduce(0) { $0 + $1.duration.seconds }
+        let loggedSeconds = model.footage.filter { model.dailies.isLogged($0.id) }.reduce(0) { $0 + $1.duration.seconds }
         let problems = rows.filter { if case .needsYou = $0.status { true } else { false } }.count
         let fraction = total > 0 ? Double(logged) / Double(total) : 0
         return VStack(alignment: .leading, spacing: 14) {
@@ -505,6 +519,7 @@ struct OnboardingLoggingView: View {
         let sub: String = {
             if let info = r.info, info.code != nil || info.setupCode != nil { return ([model.dailiesLabel(info)] + [setup?.description].compactMap { $0 }).joined(separator: " \u{00B7} ") }
             if case .needsYou(_, false) = r.status { return "Unreadable" }
+            if r.arriving { return queued ? "Coming in" : "Coming in now" }
             return queued ? "Waiting" : "Logging"
         }()
         return HStack(spacing: 14) {
@@ -538,12 +553,17 @@ struct OnboardingLoggingView: View {
         .contentShape(Rectangle())
         .onTapGesture { selection = r.id; focused = true }
         .contextMenu {
-            Button("Show in Finder") { model.revealTakes([r.id]) }
-            Button("Preview") { quickLook = URL(fileURLWithPath: r.asset.path) }
-            Divider()
-            Button("Skip") { model.setUnusable(r.id, true) }
-            Button(r.info?.unusable == true ? "Mark Usable" : "Mark Not Usable") { model.setUnusable(r.id, !(r.info?.unusable ?? false)) }
-            Menu("Assign to Scene") { ForEach(model.scenes) { s in Button(s.label) { model.moveTake(r.id, to: s.id) } } }.disabled(model.scenes.isEmpty)
+            if r.arriving {
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: r.asset.path)]) }
+                Button("Preview") { quickLook = URL(fileURLWithPath: r.asset.path) }
+            } else {
+                Button("Show in Finder") { model.revealTakes([r.id]) }
+                Button("Preview") { quickLook = URL(fileURLWithPath: r.asset.path) }
+                Divider()
+                Button("Skip") { model.setUnusable(r.id, true) }
+                Button(r.info?.unusable == true ? "Mark Usable" : "Mark Not Usable") { model.setUnusable(r.id, !(r.info?.unusable ?? false)) }
+                Menu("Assign to Scene") { ForEach(model.scenes) { s in Button(s.label) { model.moveTake(r.id, to: s.id) } } }.disabled(model.scenes.isEmpty)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selection == r.id ? .isSelected : [])

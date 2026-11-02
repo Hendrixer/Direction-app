@@ -404,6 +404,15 @@ final class FilmModel {
 
     // MARK: Derived: editor and rooms
 
+    /// The program the editor runs on: the running one's, the one chosen in Settings, or your own session's
+    /// when it says which it is.
+    var editorProgram: EditorProgram? {
+        if let p = runs.active.flatMap({ EditorProgram(rawValue: $0.program) }) { return p }
+        if let p = EditorSetup.runsOn.program { return p }
+        let agent = editorStatus?.agent?.lowercased() ?? ""
+        return agent.contains("claude") ? .claudeCode : agent.contains("codex") ? .codex : nil
+    }
+
     var pill: EditorPillState {
         if offline { return .offline }
         if directing.editorPaused || runs.isPaused { return .paused }
@@ -464,8 +473,8 @@ final class FilmModel {
         guard !onboardingDismissed, cuts.isEmpty, openTurnover?.kind != "assembly" else { return nil }
         if !brief.isComplete { return .brief }
         if !hasFootage { return .footage }
-        // Footage is in but the editor hasn't logged every take yet: Logging footage.
-        if isLogging { return .footage }
+        // Footage is in but the editor hasn't logged every take yet, or more is still coming in: Logging footage.
+        if isLogging || importingFootage > 0 { return .footage }
         return nil
     }
     /// The only cut is the assembly, and it hasn't been screened or noted yet.
@@ -477,8 +486,8 @@ final class FilmModel {
     /// Snapshots of the first look once the assembly is in.
     var previewAssemblyReady = false
     /// Takes the editor has logged, out of all footage.
-    var loggedCount: Int { footage.filter { dailies.takes[$0.id] != nil }.count }
-    var isLogging: Bool { hasFootage && footage.contains { dailies.takes[$0.id] == nil } }
+    var loggedCount: Int { footage.filter { dailies.isLogged($0.id) }.count }
+    var isLogging: Bool { hasFootage && footage.contains { !dailies.isLogged($0.id) } }
     var defaultRoom: Room {
         if !unreviewedAnswers.isEmpty { return .changes }
         if cuts.isEmpty { return .dailies }
@@ -809,6 +818,8 @@ final class FilmModel {
     }
     /// Files on their way in. The footage step shows logging from the first one, not the drop zone.
     var importingFootage = 0
+    /// The files themselves, in the order they come in, so logging lists each one from the moment it's dropped.
+    var incomingFootage: [URL] = []
     /// Files being copied into the film (Settings › Storage › Copy into library), while they are.
     var copyingFootage: FootageCopying?
     /// `places`: where the director filed each file in scene and setup folders, by its path; those takes
@@ -819,6 +830,7 @@ final class FilmModel {
         // Settings › Storage: link to the originals, or copy them into the film's Footage folder first.
         let copies = UserDefaults.standard.string(forKey: SettingsKey.footageImport) == "copy" ? MediaAsset.copies(in: store.url) : nil
         importingFootage += urls.count
+        incomingFootage += urls
         if copies != nil { var c = copyingFootage ?? FootageCopying(); c.total += urls.count; copyingFootage = c }
         Task {
             var toldHDR = false, toldSeekable = false, music: [(url: URL, name: String)] = []
@@ -829,7 +841,7 @@ final class FilmModel {
                     if !musicAsFootage, MediaLibrary.shelf(for: url) == .sounds, await LibraryMeasuring.isMusic(url) {
                         music.append((url, try MediaLibrary.sounds.add(url).name))
                         if copies != nil, var c = copyingFootage { c.done += 1; copyingFootage = c.done >= c.total ? nil : c }
-                        importingFootage = max(0, importingFootage - 1)
+                        importingFootage = max(0, importingFootage - 1); incomingFootage.removeAll { $0 == url }
                         continue
                     }
                     // HDR comes in as an SDR copy Direction makes in the Footage folder, and a file with open
@@ -857,7 +869,7 @@ final class FilmModel {
                     // A copy no take uses isn't kept.
                     if file != url { refresh(force: true); if project?.assets.contains(where: { $0.path == file.path }) == false { try? FileManager.default.removeItem(at: file) } }
                 }
-                importingFootage = max(0, importingFootage - 1)
+                importingFootage = max(0, importingFootage - 1); incomingFootage.removeAll { $0 == url }
                 refresh(force: true)
             }
             if let first = music.first {

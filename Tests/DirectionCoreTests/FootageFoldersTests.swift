@@ -64,6 +64,8 @@ private func place(_ path: String, _ all: [String: FootagePlace]) -> FootagePlac
     let scene = try #require(filed.scenes.first)
     #expect(scene.number == 2 && scene.title == "Pricing" && scene.folder == "02 Pricing" && scene.setups == [DailiesSetup(code: "2A", description: "")])
     #expect(filed.takes[id]?.sceneID == scene.id && filed.takes[id]?.setupCode == "2A" && filed.takes[id]?.code == "T3" && filed.takes[id]?.folder == "02 Pricing/A")
+    // Filed isn't logged: the editor still logs it.
+    #expect(!filed.isLogged(id))
 
     // The editor puts it elsewhere and renames the scene: the folders win; its caption, its description of the setup and its new scene go in.
     var t = filed.takes[id]!; t.sceneID = "scene-9"; t.setupCode = "9A"; t.code = "T1"; t.caption = "\u{201C}It costs less than lunch.\u{201D}"
@@ -74,9 +76,25 @@ private func place(_ path: String, _ all: [String: FootagePlace]) -> FootagePlac
     #expect(kept.setups == [DailiesSetup(code: "2A", description: "Talking head, close"), DailiesSetup(code: "2B", description: "Slides")])
     #expect(logged.takes[id]?.sceneID == scene.id && logged.takes[id]?.setupCode == "2A" && logged.takes[id]?.code == "T3")
     #expect(logged.takes[id]?.caption == "\u{201C}It costs less than lunch.\u{201D}")
+    #expect(logged.isLogged(id))
 
     // The director can still move it, and filing again leaves a take that's in a scene where it is.
     try store.setTakeScene(assetID: id, sceneID: "scene-9")
     let again = try store.fileTakes([id: p])
     #expect(again.takes[id]?.sceneID == "scene-9")
+}
+
+/// Circling, moving or marking a take before the editor logs it doesn't log it; two runs that leave it put it in
+/// Unsorted, or keep it where the director put it, with what Direction knows.
+@Test func aTakeIsLoggedOnlyWhenTheEditorLogsIt() throws {
+    let store = try seededStore(), id = "asset-fixture"
+    try store.setCircle(assetID: id, circled: true)
+    #expect(try !store.dailies().isLogged(id))
+    try store.logUnplaced(assetID: id, caption: "A wide of the desk")
+    let unplaced = try store.dailies()
+    #expect(unplaced.isLogged(id) && unplaced.takes[id]?.circled == true && unplaced.takes[id]?.caption == "A wide of the desk")
+    #expect(unplaced.takes[id]?.flags == ["Not logged by the editor"])
+    // Older films, logged before the marker: every take in them is logged.
+    let old = try JSONDecoder().decode(TakeInfo.self, from: Data(#"{"assetID":"a","circled":false,"flags":[],"unusable":false}"#.utf8))
+    #expect(old.isLogged)
 }

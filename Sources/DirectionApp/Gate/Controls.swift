@@ -212,12 +212,18 @@ struct GateTextArea: View {
 struct GateSegmented<Value: Hashable>: View {
     let options: [(Value, String)]
     @Binding var selection: Value
+    /// An image before an option's title, such as a program's icon.
+    var images: [Value: NSImage] = [:]
     var body: some View {
         HStack(spacing: 0) {
             ForEach(options.indices, id: \.self) { i in
                 let (value, title) = options[i]
                 Button { selection = value } label: {
-                    Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(selection == value ? Gate.Text.primary : Gate.Text.tertiary)
+                    HStack(spacing: 6) {
+                        if let image = images[value] { Image(nsImage: image).resizable().interpolation(.high).frame(width: 14, height: 14).opacity(selection == value ? 1 : 0.7) }
+                        Text(title)
+                    }
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(selection == value ? Gate.Text.primary : Gate.Text.tertiary)
                         .padding(.horizontal, 11).frame(height: 24)
                         .background { if selection == value { RoundedRectangle(cornerRadius: 7).fill(Gate.Surface.raised).overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Gate.Line.subtle, lineWidth: 1)).shadow(color: .black.opacity(0.5), radius: 1, y: 1) } }
                         .contentShape(Rectangle())

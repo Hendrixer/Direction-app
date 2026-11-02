@@ -38,3 +38,19 @@ import DirectionCore
     let line = EditorJobs.noteLine(note, footage: .init(names: FootageNames.all(d, assets: assets), dailies: d, assets: assets, cut: nil))
     #expect(line.hasSuffix("Use @2A Take 3 here.\n  (@2A Take 3 is the take T3.mov (assetID t3) in scene 2 Pricing, setup 2A Talking head: circled. Not in the cut.)"))
 }
+
+/// Takes filed from folders are still the editor's to log, so logging stays on screen; files still coming in are
+/// listed from the moment they're dropped, the first one being brought in.
+@Test @MainActor func loggingWaitsForTheEditorAndListsFilesStillComingIn() throws {
+    let m = SampleFilm.make()
+    let id = try #require(m.footage.first?.id)
+    #expect(!m.isLogging)
+    m.dailies.takes[id]?.unlogged = true
+    #expect(m.isLogging && m.loggedCount == m.footage.count - 1)
+    #expect(m.loggingRows.first { $0.id == id }.map { if case .done = $0.status { false } else { true } } == true)
+
+    m.incomingFootage = [URL(fileURLWithPath: "/Shoot/02 Pricing/A/T4.mov"), URL(fileURLWithPath: "/Shoot/02 Pricing/A/T5.mov")]
+    let arriving = m.loggingRows.filter(\.arriving)
+    #expect(arriving.map(\.asset.name) == ["T4.mov", "T5.mov"])
+    #expect(arriving.map { if case .working("Bringing in", _) = $0.status { "in" } else if case .queued = $0.status { "queued" } else { "?" } } == ["in", "queued"])
+}

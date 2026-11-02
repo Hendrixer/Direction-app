@@ -323,8 +323,8 @@ import DirectionTools
         case .logFootage:
             guard let p = try? store.read(), let d = try? store.dailies(), !p.assets.isEmpty else { return false }
             // A batch is finished when its takes are logged; an older run logged everything.
-            if let ids = run.assetIDs { return ids.allSatisfy { d.takes[$0] != nil } }
-            return p.assets.allSatisfy { d.takes[$0.id] != nil }
+            if let ids = run.assetIDs { return ids.allSatisfy { d.isLogged($0) } }
+            return p.assets.allSatisfy { d.isLogged($0.id) }
         case .assemble, .turnover:
             return (try? run.turnoverID.map { try store.turnover($0) })??.state == .delivered
         case .finish:

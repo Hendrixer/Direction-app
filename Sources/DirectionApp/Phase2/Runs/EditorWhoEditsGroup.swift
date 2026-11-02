@@ -41,7 +41,8 @@ struct EditorWhoEditsGroup: View {
                 found(runsOn)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            GateSegmented(options: EditorRunsOn.allCases.map { ($0, $0.label) }, selection: Binding(get: { runsOn }, set: { choose($0) }))
+            GateSegmented(options: EditorRunsOn.allCases.map { ($0, $0.label) }, selection: Binding(get: { runsOn }, set: { choose($0) }),
+                          images: Dictionary(uniqueKeysWithValues: EditorRunsOn.allCases.compactMap { c in c.program?.icon.map { (c, $0) } }))
                 .fixedSize()
                 .accessibilityLabel("Editor runs on")
         }

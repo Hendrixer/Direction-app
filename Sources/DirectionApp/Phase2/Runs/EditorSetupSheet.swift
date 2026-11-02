@@ -77,7 +77,10 @@ struct EditorSetupSheet: View {
         // A program that isn't installed shows how to install it; it can't be chosen here.
         return Button { guard install != nil else { return }; choice = p; version = EditorSetup.version(p) } label: {
             VStack(alignment: .leading, spacing: 7) {
-                Text(p.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary)
+                HStack(spacing: 8) {
+                    AgentIcon(program: p, size: 20)
+                    Text(p.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary)
+                }
                 if let install {
                     HStack(spacing: 7) {
                         Circle().fill(signedIn == false ? Gate.State.alert : Gate.State.approve).frame(width: 6, height: 6)

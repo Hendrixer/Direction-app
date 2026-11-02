@@ -14,7 +14,7 @@ struct Titlebar: View {
                 crumb
                 Spacer(minLength: 12)
                 HStack(spacing: 8) {
-                    Button { model.showEditorPopover.toggle() } label: { EditorPill(state: model.pill, open: model.showEditorPopover || model.runs.previewPillOpen) }
+                    Button { model.showEditorPopover.toggle() } label: { EditorPill(state: model.pill, open: model.showEditorPopover || model.runs.previewPillOpen, program: model.editorProgram) }
                         .buttonStyle(.plain)
                         .popover(isPresented: $model.showEditorPopover, arrowEdge: .bottom) { EditorPopover(model: model) }
                         .help("The editor")

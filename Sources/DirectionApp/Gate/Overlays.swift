@@ -169,16 +169,21 @@ struct EditorPill: View {
     var state: EditorPillState
     /// The popover is open: hover fill, prism edge kept (frame 57).
     var open = false
+    /// The program the editor runs on: its icon sits with the diamond, so you can see which one it is.
+    var program: EditorProgram?
     var body: some View {
         HStack(spacing: 8) {
-            switch state {
-            case .offline: Image(systemName: "wifi.slash").font(.system(size: 10, weight: .semibold))
-            case .paused: Image(systemName: "pause.fill").font(.system(size: 9, weight: .semibold))
-            case .stopped, .cant, .needsFootage: GemMark(size: 7, color: Gate.State.alert)
-            // Open over its popover, Ready reads as `.agent.ready`: prism gem, text-1, line-2 ring (frame 41).
-            case .ready where open: GemMark(size: 7)
-            case .ready, .waiting, .notSetUp, .readyToCut: GemMark(size: 7, color: Gate.Text.disabled)
-            default: GemMark(size: 7)
+            HStack(spacing: 5) {
+                switch state {
+                case .offline: Image(systemName: "wifi.slash").font(.system(size: 10, weight: .semibold))
+                case .paused: Image(systemName: "pause.fill").font(.system(size: 9, weight: .semibold))
+                case .stopped, .cant, .needsFootage: GemMark(size: 7, color: Gate.State.alert)
+                // Open over its popover, Ready reads as `.agent.ready`: prism gem, text-1, line-2 ring (frame 41).
+                case .ready where open: GemMark(size: 7)
+                case .ready, .waiting, .notSetUp, .readyToCut: GemMark(size: 7, color: Gate.Text.disabled)
+                default: GemMark(size: 7)
+                }
+                AgentIcon(program: program, size: 14)
             }
             Text(state.text)
             if case .working(_, let p) = state { meter(p) }
@@ -190,7 +195,7 @@ struct EditorPill: View {
         .padding(.leading, 10).padding(.trailing, 11).frame(height: Gate.Size.pill)
         .background { background }
         .contentShape(Capsule())
-        .accessibilityLabel("Editor: \(state.text)")
+        .accessibilityLabel("Editor\(program.map { " on \($0.name)" } ?? ""): \(state.text)")
     }
     private func meter(_ p: Double?) -> some View {
         GateProgress(value: p, agent: true).frame(width: 40, height: 3)
