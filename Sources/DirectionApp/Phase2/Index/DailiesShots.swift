@@ -6,7 +6,8 @@ import DirectionMedia
 // Frame 59: a take's index under the take viewer. The shots row, the shot ticks and sounds lane
 // on the take's scrubber, and the contact sheet (specs/footage-index.md › 59).
 
-/// "SHOTS · LOGGED BY THE EDITOR", the Contact sheet button, then one card per shot.
+/// "SHOTS · LOGGED BY THE EDITOR" with what every shot has in common ("11 shots, all close, all
+/// underexposed"), the Contact sheet button, then one card per shot saying only what's its own.
 /// Clicking a shot seeks the take to its start; ← → with the row focused move between shots.
 struct DailiesShotsRow: View {
     var model: FilmModel
@@ -19,6 +20,23 @@ struct DailiesShotsRow: View {
 
     private var shots: [Shot] { model.index.shots(takeID) }
 
+    /// What every described shot shares: its size, and flags on all of them. Said once above the row, not on each card.
+    struct Common: Equatable {
+        var size: String?
+        var flags: Set<String> = []
+        /// "11 shots, all close, all underexposed".
+        func line(count: Int) -> String {
+            ([DailiesFormat.count(count, "shot")] + [size.map { "all \($0)" }].compactMap { $0 } + flags.sorted().map { "all \($0)" }).joined(separator: ", ")
+        }
+    }
+    static func common(_ shots: [Shot]) -> Common {
+        let looks = shots.compactMap(\.look)
+        guard looks.count > 1, looks.count == shots.count else { return Common() }
+        let sizes = Set(looks.map { $0.size?.lowercased() ?? "" })
+        let flags = looks.dropFirst().reduce(Set(looks[0].flags.map { $0.lowercased() })) { $0.intersection($1.flags.map { $0.lowercased() }) }
+        return Common(size: sizes.count == 1 && sizes.first?.isEmpty == false ? sizes.first : nil, flags: flags)
+    }
+
     /// The shot the playhead is in, with half a frame of give: the player reports a frame's own time, which can
     /// sit a hair before the start the index wrote for the shot.
     static func under(_ position: Double, in shots: [Shot], fps: Double) -> Shot? {
@@ -28,11 +46,13 @@ struct DailiesShotsRow: View {
 
     var body: some View {
         let shots = shots, current = Self.under(position, in: shots, fps: fps)?.id
+        let common = Self.common(shots)
         let width = CGFloat(shots.count) * DailiesShotCard.width + CGFloat(max(0, shots.count - 1)) * 10
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 GemMark(size: 7)
                 SectionLabel("Shots \u{00B7} logged by the editor")
+                Text(common.line(count: shots.count)).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
                 Spacer(minLength: 8)
                 Button { showSheet = true } label: { HStack(spacing: 6) { Image(systemName: "square.grid.2x2"); Text("Contact sheet") } }
                     .buttonStyle(.gate(.normal))
@@ -44,13 +64,16 @@ struct DailiesShotsRow: View {
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(shots) { shot in
-                            DailiesShotCard(shot: shot, on: shot.id == current, art: preview.art[takeID] ?? model.dailiesArt(takeID), fps: fps) { focused = true; seek(shot.start) }
+                            DailiesShotCard(shot: shot, on: shot.id == current, art: preview.art[takeID] ?? model.dailiesArt(takeID), fps: fps, common: common) { focused = true; seek(shot.start) }
                                 .id(shot.id)
                         }
                     }
-                    .padding(.bottom, width > 700 ? 10 : 0)
+                    // Room for the ring around the chosen shot, so the row's edge never cuts it.
+                    .padding(2)
+                    .padding(.bottom, width > 700 ? 8 : 0)
                 }
                 .scrollIndicators(.automatic)
+                .padding(.horizontal, -2)
                 // The shot under the playhead is always in view: a click, ← →, or playing into the next one.
                 .onChange(of: current) { _, id in
                     guard let id else { return }
@@ -71,42 +94,46 @@ struct DailiesShotsRow: View {
     }
 }
 
-/// One shot: keyframe (16:9, radius 6), source range, the description (2 lines), a size chip and
-/// flags as neutral chips. The shot under the playhead has a 1 pt text-1 ring.
+/// One shot: keyframe (16:9, radius 6), its description on one line (all of it on hover), and one quiet line
+/// with where it starts, how long it runs and what only it has ("close", "shaky"). What every shot has is in the
+/// row's header. The shot under the playhead has a text-1 ring inside its frame.
 struct DailiesShotCard: View {
     static let width: CGFloat = 168
     var shot: Shot
     var on: Bool
     var art: FootageArt
     var fps: Double
+    var common = DailiesShotsRow.Common()
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
                 ShotKeyframe(path: shot.keyframes.dropFirst().first ?? shot.keyframes.first, art: art)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Gate.Line.subtle, lineWidth: 1))
-                    .overlay { if on { RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Gate.Text.primary, lineWidth: 1).padding(-1) } }
-                Text(SourceTimecode.range(shot.start, shot.end, fps: fps)).font(.system(size: 11, design: .monospaced)).monospacedDigit().foregroundStyle(Gate.Text.tertiary).lineLimit(1).padding(.top, 2)
-                Text(shot.look?.description ?? "Not described yet.").font(.system(size: 12)).foregroundStyle(shot.look == nil ? Gate.Text.disabled : Gate.Text.secondary)
-                    .lineLimit(2).lineSpacing(1.6).frame(height: 32.4, alignment: .topLeading)
-                    .help(shot.look?.description ?? "")
-                // Chips wrap inside the card instead of running into the next one.
-                FlowLayout(spacing: 4, lineSpacing: 4) {
-                    if let size = shot.look?.size { Chip(size.capitalized, mono: false) }
-                    ForEach(shot.look?.flags ?? [], id: \.self) { flag in Chip("\(flag.capitalized) at \(Timecode.duration(shot.middle))", mono: false) }
-                }
-                .frame(width: Self.width, alignment: .leading).padding(.top, 2)
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(on ? Gate.Text.primary : Gate.Line.subtle, lineWidth: on ? 1.5 : 1))
+                Text(shot.look?.description ?? "Not described yet.").font(.system(size: 12)).foregroundStyle(shot.look == nil ? Gate.Text.disabled : on ? Gate.Text.primary : Gate.Text.secondary)
+                    .lineLimit(1).padding(.top, 2)
+                meta.foregroundStyle(Gate.Text.tertiary).lineLimit(1)
             }
             .frame(width: Self.width, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Play from \(SourceTimecode.format(shot.start, fps: fps))")
+        .help([shot.look?.description, "\(SourceTimecode.range(shot.start, shot.end, fps: fps)). Click to play from its start."].compactMap { $0 }.joined(separator: "\n"))
         .accessibilityLabel("Shot \(shot.number), \(SourceTimecode.range(shot.start, shot.end, fps: fps)). \(shot.look?.description ?? "")")
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// "0:21 · 1.5 s · close · shaky": where it starts and how long it runs in SF Mono, then its own size and
+    /// flags only. The frame-exact range is in its help and the scrubber.
+    private var meta: Text {
+        let size = shot.look?.size.map { $0.lowercased() }.flatMap { $0 == common.size ? nil : $0 }
+        let words = ([size].compactMap { $0 } + (shot.look?.flags ?? []).map { $0.lowercased() }.filter { !common.flags.contains($0) })
+        let length = shot.end - shot.start
+        let time = Text(Timecode.duration(shot.start) + " \u{00B7} " + (length < 10 ? String(format: "%.1f s", length) : "\(Int(length.rounded())) s")).font(.system(size: 11, design: .monospaced))
+        return words.isEmpty ? time : time + Text(" \u{00B7} " + words.joined(separator: " \u{00B7} ")).font(.system(size: 11.5))
     }
 }
 
