@@ -13,6 +13,7 @@ struct PrepPreview {
     var tab: PrepSheetTab = .notes
     var shot: String? = nil
     var noteText = ""
+    var find = ""
 }
 
 enum PrepSheetTab: String { case notes, questions }
@@ -48,25 +49,30 @@ private struct ScriptPage: View {
     var script: AVScript
     @State private var selected: Set<String> = []
     @State private var anchor: String?
-    @State private var editing: String?
-    @State private var editingSound = false
-    @State private var draft = ""
+    @State private var hovered: String?
     @State private var filter: ScriptFilter = .all
     @State private var tab: PrepSheetTab = .notes
     @State private var noteText = ""
     @State private var noteKind: NoteKind?
     @State private var find = ""
+    @State private var hit = 0
     @State private var jump: String?
-    @FocusState private var cellFocus: Bool
+    @State private var center: String?
+    @FocusState private var focus: ScriptCell?
+    @FocusState private var findFocus: Bool
+    /// Snapshots: a cell drawn as if you were typing in it.
+    private var previewFocus: ScriptCell?
+    private var previewText: String?
 
     init(model: FilmModel, script: AVScript, preview: PrepPreview?) {
         self.model = model; self.script = script
         if let p = preview {
             _selected = State(initialValue: Set(p.selected.compactMap { script.rows.indices.contains($0 - 1) ? script.rows[$0 - 1].id : nil }))
-            _editing = State(initialValue: p.editing.flatMap { script.rows.indices.contains($0 - 1) ? script.rows[$0 - 1].id : nil })
-            _draft = State(initialValue: p.editingText)
+            previewFocus = p.editing.flatMap { script.rows.indices.contains($0 - 1) ? .picture(script.rows[$0 - 1].id) : nil }
+            previewText = p.editingText.isEmpty ? nil : p.editingText
             _tab = State(initialValue: p.tab)
             _noteText = State(initialValue: p.noteText)
+            _find = State(initialValue: p.find)
         }
     }
 
@@ -79,7 +85,7 @@ private struct ScriptPage: View {
                     ScrollView { page.padding(.bottom, 48) }
                         .focusable().focusEffectDisabled()
                         .onKeyPress(phases: .down) { press in keys(press) }
-                        .onChange(of: find) { _, f in if let r = firstMatch(f) { withAnimation(gateAnimation(Gate.Motion.glide)) { proxy.scrollTo(r, anchor: .center) } } }
+                        .onChange(of: center) { _, id in if let id { withAnimation(gateAnimation(Gate.Motion.glide)) { proxy.scrollTo(id, anchor: .center) } } }
                         .onChange(of: jump) { _, id in if let id { withAnimation(gateAnimation(Gate.Motion.glide)) { proxy.scrollTo(id, anchor: .top) }; jump = nil } }
                 }
             }
@@ -89,6 +95,12 @@ private struct ScriptPage: View {
                 .frame(width: 360)
         }
         .background { shortcuts }
+        .onChange(of: focus) { _, cell in
+            // Typing in a row makes it the row a note goes on, unless it's already among the selected.
+            guard let id = cell?.rowID, !selected.contains(id) else { return }
+            selected = [id]; anchor = id
+        }
+        .onChange(of: find) { _, _ in hit = 0; center = hits.first }
     }
 
     private var orderedSelection: [String] { script.rows.map(\.id).filter(selected.contains) }
@@ -138,25 +150,55 @@ private struct ScriptPage: View {
         }
     }
 
+    // MARK: Find
+
+    private var query: String { find.trimmingCharacters(in: .whitespaces).lowercased() }
+    private func matches(_ text: String) -> Bool { !query.isEmpty && text.lowercased().contains(query) }
+    /// Rows with a match, in the order they're shown.
+    private var hits: [String] { query.isEmpty ? [] : script.rows.filter { shows($0, filter) && (matches($0.picture.text) || matches($0.sound.text)) }.map(\.id) }
+    private var current: String? { let h = hits; return h.isEmpty ? nil : h[min(hit, h.count - 1)] }
+    private func step(_ by: Int) {
+        let h = hits
+        guard !h.isEmpty else { return }
+        hit = (min(hit, h.count - 1) + by + h.count) % h.count
+        center = nil; center = h[hit]
+    }
+
     // MARK: Toolbar
 
     private var toolbar: some View {
-        HStack(spacing: 10) {
+        let h = hits
+        return HStack(spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Gate.Text.disabled)
                 TextField("Find a line", text: $find).textFieldStyle(.plain).font(.system(size: 12.5))
+                    .focused($findFocus)
+                    .onSubmit { step(1) }
+                    .onKeyPress(.return, phases: .down) { press in press.modifiers.contains(.shift) ? { step(-1); return .handled }() : .ignored }
+                    .onExitCommand { find = ""; findFocus = false }
+                if !query.isEmpty {
+                    Text(h.isEmpty ? "No matches" : "\(min(hit, h.count - 1) + 1) of \(h.count)")
+                        .font(Gate.Font.timecodeSmall).foregroundStyle(h.isEmpty ? Gate.State.alert : Gate.Text.tertiary).fixedSize()
+                }
             }
-            .padding(.horizontal, 9).frame(width: 220, height: 26).background(GateFieldBackground())
-            if !selected.isEmpty {
-                Text(selected.count == 1 ? "Row \(script.number(of: orderedSelection[0]) ?? 0) selected" : "\(selected.count) rows selected").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
-            } else {
-                Text("Click a cell to type in it. Notes wait for Turn over.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+            .padding(.horizontal, 9).frame(width: 300, height: 26).background(GateFieldBackground(focused: findFocus))
+            if !query.isEmpty {
+                HStack(spacing: 2) {
+                    Button { step(-1) } label: { Image(systemName: "chevron.up") }.buttonStyle(.gate(.ghost, .small)).disabled(h.isEmpty).help("Previous match (\u{21E7}\u{2318}G)").accessibilityLabel("Previous match")
+                    Button { step(1) } label: { Image(systemName: "chevron.down") }.buttonStyle(.gate(.ghost, .small)).disabled(h.isEmpty).help("Next match (\u{2318}G)").accessibilityLabel("Next match")
+                }
             }
+            Group {
+                if focus != nil { Text("\u{21A9} saves \u{00B7} esc puts it back") }
+                else if !selected.isEmpty { Text(selected.count == 1 ? "Row \(script.number(of: orderedSelection[0]) ?? 0) selected" : "\(selected.count) rows selected") }
+                else if query.isEmpty { Text("Click a row to select it, or its words to type in them.") }
+            }
+            .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
             Spacer()
             HStack(spacing: 0) {
                 Text("\(script.rows.count) rows ").foregroundStyle(Gate.Text.secondary)
                 Text("\u{00B7} reads in about \(Timecode.duration(script.seconds))").foregroundStyle(Gate.Text.disabled)
-            }.font(Gate.Font.timecodeSmall)
+            }.font(Gate.Font.timecodeSmall).fixedSize()
         }
         .padding(.horizontal, 20).frame(height: 44)
         .background(Gate.Surface.ground)
@@ -166,7 +208,7 @@ private struct ScriptPage: View {
     // MARK: The page
 
     private var page: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             if let source = script.source {
                 HStack(spacing: 8) {
                     Image(systemName: "doc.text").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary)
@@ -177,9 +219,10 @@ private struct ScriptPage: View {
             }
             if model.writingPicture, script.rows.contains(where: { $0.picture.isEmpty }) { drafting.padding(.leading, 46).padding(.bottom, 14) }
             header
+            let found = Set(hits), now = current
             ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
                 if let s = group.section { sectionHeading(s, rows: group.rows) }
-                ForEach(group.rows, id: \.id) { r in row(r) }
+                ForEach(group.rows, id: \.id) { r in row(r, found: found.contains(r.id), current: now == r.id) }
             }
             if filter == .all {
                 Button { model.addRow(after: script.rows.last?.id) } label: { Label("Add a row", systemImage: "plus") }
@@ -232,7 +275,7 @@ private struct ScriptPage: View {
         .id(s.id)
     }
 
-    @ViewBuilder private func row(_ r: AVRow) -> some View {
+    @ViewBuilder private func row(_ r: AVRow, found: Bool, current: Bool) -> some View {
         let n = script.number(of: r.id) ?? 0
         let isSel = selected.contains(r.id)
         let notes = script.notes.filter { ($0.state == .written || $0.state == .turnedOver) && ($0.rowIDs ?? []).contains(r.id) }
@@ -240,27 +283,33 @@ private struct ScriptPage: View {
             HStack(alignment: .top, spacing: 16) {
                 HStack(spacing: 5) {
                     if changedThisPass(r) { GemMark(size: 7, solid: true) }
-                    Text("\(n)").font(Gate.Font.timecodeSmall).foregroundStyle(Gate.Text.disabled)
+                    if found && !current { Circle().fill(Gate.Text.secondary).frame(width: 4, height: 4) }
+                    Text("\(n)").font(Gate.Font.timecodeSmall).foregroundStyle(current ? Gate.Text.primary : Gate.Text.disabled)
                 }
                 .frame(width: 30, height: 18, alignment: .trailing)
-                .contentShape(Rectangle())
-                .onTapGesture { select(r.id, extend: NSEvent.modifierFlags.contains(.shift)) }
-                picture(r, notes: notes).frame(width: 330, alignment: .leading)
-                sound(r).frame(maxWidth: .infinity, alignment: .leading)
+                picture(r, notes: notes, found: found && matches(r.picture.text)).frame(width: 330, alignment: .leading)
+                sound(r, found: found && matches(r.sound.text)).frame(maxWidth: .infinity, alignment: .leading)
                 Text(Timecode.duration(r.seconds)).font(Gate.Font.timecodeSmall).foregroundStyle(Gate.Text.disabled).frame(width: 40, height: 18, alignment: .trailing)
             }
             .padding(.vertical, 9)
             if let q = r.question, q.isOpen { RowQuestion(question: q) { choice in model.answerRow(r.id, choice: choice) }.padding(.leading, 46).padding(.trailing, 56).padding(.bottom, 10) }
         }
-        .background(isSel ? Gate.Surface.panel.padding(.horizontal, -14) : nil)
+        .background {
+            if isSel { Gate.Surface.panel.padding(.horizontal, -14) }
+            else if hovered == r.id { Gate.Surface.panel.opacity(0.45).padding(.horizontal, -14) }
+        }
+        .overlay { if current { RoundedRectangle(cornerRadius: 8).strokeBorder(Gate.Text.primary, lineWidth: 1.5).padding(.horizontal, -14).padding(.vertical, 1) } }
         .overlay(alignment: .leading) { if !notes.isEmpty { RoundedRectangle(cornerRadius: 1).fill(Gate.Voice.director).frame(width: 2).padding(.vertical, 9).offset(x: -14) } }
         .overlay(alignment: .bottom) { Rectangle().fill(Gate.Line.subtle).frame(height: 1) }
+        // Anywhere on a row selects it; its words are for typing.
         .contentShape(Rectangle())
+        .onTapGesture { select(r.id, flags: NSEvent.modifierFlags) }
+        .onHover { hovered = $0 ? r.id : (hovered == r.id ? nil : hovered) }
         .contextMenu { rowMenu(r) }
         .id(r.id)
     }
 
-    @ViewBuilder private func picture(_ r: AVRow, notes: [PrepNote]) -> some View {
+    @ViewBuilder private func picture(_ r: AVRow, notes: [PrepNote], found: Bool) -> some View {
         HStack(alignment: .top, spacing: 10) {
             if r.picture.isEmpty {
                 if r.question != nil { BoardView(kind: .empty).frame(width: 80) }
@@ -269,63 +318,42 @@ private struct ScriptPage: View {
                 BoardView(kind: r.picture.board ?? .medium, move: r.picture.move).frame(width: 80)
             }
             VStack(alignment: .leading, spacing: 4) {
-                if editing == r.id, !editingSound {
-                    cellField(r)
-                } else if r.picture.isEmpty {
-                    let writing = model.writingPicture && script.rows.first(where: { $0.picture.isEmpty })?.id == r.id
-                    if writing { HStack(spacing: 8) { GateSpinner(); Text("Writing\u{2026}").foregroundStyle(Gate.Voice.agent) }.font(.system(size: 13)) }
-                    else { Text(r.question != nil ? "Nothing yet." : (r.hint.map { "Writer\u{2019}s idea: \($0)" } ?? "\u{2026}")).font(.system(size: 13)).foregroundStyle(Gate.Text.disabled).lineLimit(3) }
-                } else {
-                    Text(r.picture.text).font(.system(size: 13)).lineSpacing(2).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
-                        .contentShape(Rectangle()).onTapGesture { startEditing(r, sound: false) }
+                let writing = model.writingPicture && script.rows.first(where: { $0.picture.isEmpty })?.id == r.id
+                if writing { HStack(spacing: 8) { GateSpinner(); Text("Writing\u{2026}").foregroundStyle(Gate.Voice.agent) }.font(.system(size: 13)) }
+                else {
+                    ScriptCellText(text: r.picture.text, placeholder: r.question != nil ? "Nothing yet." : (r.hint.map { "Writer\u{2019}s idea: \($0)" } ?? "What do we see?"),
+                                   size: 13, found: found, cell: .picture(r.id), focus: $focus, preview: previewFocus == .picture(r.id) ? (previewText ?? r.picture.text) : nil) { model.editPicture(r.id, $0) }
                 }
-                HStack(spacing: 6) {
-                    ForEach(notes, id: \.id) { n in Chip("Note \(n.number)", style: .director) }
-                    if changedThisPass(r) { Chip("Changed", style: .agent, mono: false) }
-                    if r.picture.yours == true { Chip("Your words", style: .plain, icon: "character.cursor.ibeam", mono: false) }
-                    if r.question?.isOpen == true { Chip("Question", style: .agent, mono: false) }
-                    let how = [r.picture.size?.label, r.picture.move?.label].compactMap { $0 }.joined(separator: " \u{00B7} ")
-                    if !how.isEmpty { Text(how).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary) }
-                    if editing == r.id, !editingSound { Text("\u{21A9} saves \u{00B7} esc cancels").font(Gate.Font.caption).foregroundStyle(Gate.Text.disabled) }
+                let how = [r.picture.size?.label, r.picture.move?.label].compactMap { $0 }.joined(separator: " \u{00B7} ")
+                if !notes.isEmpty || changedThisPass(r) || r.picture.yours == true || r.question?.isOpen == true || !how.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(notes, id: \.id) { n in Chip("Note \(n.number)", style: .director) }
+                        if changedThisPass(r) { Chip("Changed", style: .agent, mono: false) }
+                        if r.picture.yours == true { Chip("Your words", style: .plain, icon: "character.cursor.ibeam", mono: false) }
+                        if r.question?.isOpen == true { Chip("Question", style: .agent, mono: false) }
+                        if !how.isEmpty { Text(how).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary) }
+                    }
                 }
             }
         }
-        .onTapGesture { if r.picture.isEmpty, r.question == nil { startEditing(r, sound: false) } }
     }
 
-    @ViewBuilder private func sound(_ r: AVRow) -> some View {
+    @ViewBuilder private func sound(_ r: AVRow, found: Bool) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             if [.voice, .onCamera].contains(r.sound.kind) {
                 Text((r.sound.speaker.map { r.sound.kind == .onCamera ? $0 : "\($0) (VO)" } ?? r.sound.kind.label).uppercased())
                     .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6).foregroundStyle(Gate.Text.tertiary)
             }
-            if editing == r.id, editingSound { cellField(r) }
-            else {
-                let cue = ![.voice, .onCamera].contains(r.sound.kind)
-                Text(r.sound.text.isEmpty ? (cue ? r.sound.kind.label + "." : "\u{2026}") : r.sound.text)
-                    .font(.system(size: cue ? 13 : 14)).italic(cue).lineSpacing(2)
-                    .foregroundStyle(cue ? Gate.Text.secondary : Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
-                    .contentShape(Rectangle()).onTapGesture { startEditing(r, sound: true) }
-            }
+            let cue = ![.voice, .onCamera].contains(r.sound.kind)
+            ScriptCellText(text: r.sound.text, placeholder: cue ? r.sound.kind.label + "." : "What\u{2019}s said?", size: cue ? 13 : 14, italic: cue, secondary: cue,
+                           found: found, cell: .sound(r.id), focus: $focus, preview: nil) { model.editSound(r.id, $0) }
         }
-    }
-
-    private func cellField(_ r: AVRow) -> some View {
-        TextField("", text: $draft, axis: .vertical)
-            .textFieldStyle(.plain).font(.system(size: 13)).lineLimit(1...6)
-            .padding(.horizontal, 8).padding(.vertical, 6)
-            .background(GateFieldBackground(focused: true))
-            .focused($cellFocus)
-            .onSubmit { commit() }
-            .onExitCommand { editing = nil }
-            .onAppear { cellFocus = true }
-            .onChange(of: cellFocus) { _, on in if !on, editing == r.id { commit() } }
     }
 
     @ViewBuilder private func rowMenu(_ r: AVRow) -> some View {
         Button("Note on This Row") { selected = [r.id]; anchor = r.id; tab = .notes }
-        Button("Edit Picture") { startEditing(r, sound: false) }
-        Button("Edit Words") { startEditing(r, sound: true) }
+        Button("Edit Picture") { focus = .picture(r.id) }
+        Button("Edit Words") { focus = .sound(r.id) }
         Divider()
         Button("Move Up") { model.moveRow(r.id, by: -1) }.disabled(script.rows.first?.id == r.id)
         Button("Move Down") { model.moveRow(r.id, by: 1) }.disabled(script.rows.last?.id == r.id)
@@ -336,37 +364,22 @@ private struct ScriptPage: View {
 
     // MARK: Actions
 
-    private func select(_ id: String, extend: Bool) {
+    /// Click selects the row, ⇧-click selects through it, ⌘-click adds or takes it out.
+    private func select(_ id: String, flags: NSEvent.ModifierFlags) {
+        // Typing in another row ends there; a click in this row's own words keeps the caret.
+        if let f = focus, f.rowID != id { focus = nil }
         let ids = script.rows.map(\.id)
-        if extend, let a = anchor, let i = ids.firstIndex(of: a), let j = ids.firstIndex(of: id) { selected = Set(ids[min(i, j)...max(i, j)]); return }
-        if selected == [id] { selected = []; anchor = nil } else { selected = [id]; anchor = id }
-    }
-
-    private func startEditing(_ r: AVRow, sound: Bool) {
-        editing = r.id; editingSound = sound
-        draft = sound ? r.sound.text : r.picture.text
-    }
-
-    private func commit() {
-        guard let id = editing, let r = script.row(id) else { editing = nil; return }
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if editingSound { if text != r.sound.text { model.editSound(id, text) } }
-        else if text != r.picture.text { model.editPicture(id, text) }
-        editing = nil
+        if flags.contains(.shift), let a = anchor, let i = ids.firstIndex(of: a), let j = ids.firstIndex(of: id) { selected = Set(ids[min(i, j)...max(i, j)]); return }
+        if flags.contains(.command) { if selected.contains(id) { selected.remove(id) } else { selected.insert(id); anchor = id }; return }
+        selected = [id]; anchor = id
     }
 
     private func scroll(_ id: String?) { filter = .all; jump = id }
 
-    private func firstMatch(_ f: String) -> String? {
-        let q = f.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return nil }
-        return script.rows.first { $0.sound.text.lowercased().contains(q) || $0.picture.text.lowercased().contains(q) }?.id
-    }
-
-    /// ↩ edits the selected row's picture; N starts a note on it (the composer is in the sheet).
+    /// ↩ types in the selected row's picture; N starts a note on it (the composer is in the sheet).
     private func keys(_ press: KeyPress) -> KeyPress.Result {
-        guard !TextInput.hasFocus, editing == nil, press.modifiers.isEmpty else { return .ignored }
-        if press.key == .return, let id = orderedSelection.first, let r = script.row(id) { startEditing(r, sound: false); return .handled }
+        guard !TextInput.hasFocus, focus == nil, press.modifiers.isEmpty else { return .ignored }
+        if press.key == .return, let id = orderedSelection.first { focus = .picture(id); return .handled }
         if press.characters.lowercased() == "n", let id = orderedSelection.first ?? script.rows.first?.id { if selected.isEmpty { selected = [id] }; tab = .notes; return .handled }
         if press.key == .escape, !selected.isEmpty { selected = []; return .handled }
         return .ignored
@@ -374,10 +387,65 @@ private struct ScriptPage: View {
 
     private var shortcuts: some View {
         Group {
-            Button("") { if let id = orderedSelection.first { model.moveRow(id, by: -1) } }.keyboardShortcut(.upArrow, modifiers: .option)
-            Button("") { if let id = orderedSelection.first { model.moveRow(id, by: 1) } }.keyboardShortcut(.downArrow, modifiers: .option)
+            Button("") { if let id = orderedSelection.first { model.moveRow(id, by: -1) } }.keyboardShortcut(.upArrow, modifiers: .option).disabled(focus != nil)
+            Button("") { if let id = orderedSelection.first { model.moveRow(id, by: 1) } }.keyboardShortcut(.downArrow, modifiers: .option).disabled(focus != nil)
+            Button("") { findFocus = true }.keyboardShortcut("f", modifiers: .command)
+            Button("") { step(1) }.keyboardShortcut("g", modifiers: .command)
+            Button("") { step(-1) }.keyboardShortcut("g", modifiers: [.command, .shift])
         }
-        .opacity(0).frame(width: 0, height: 0).disabled(editing != nil)
+        .opacity(0).frame(width: 0, height: 0)
+    }
+}
+
+/// Which cell has the caret.
+enum ScriptCell: Hashable {
+    case picture(String), sound(String)
+    var rowID: String { switch self { case .picture(let id), .sound(let id): id } }
+}
+
+/// A cell's words, typed in where they are: the same font, size and place as the page, so nothing moves when
+/// the caret goes in. ↩ saves, esc puts it back, and leaving the cell saves too.
+struct ScriptCellText: View {
+    var text: String
+    var placeholder: String
+    var size: CGFloat
+    var italic = false
+    var secondary = false
+    /// Find has a match in these words.
+    var found = false
+    var cell: ScriptCell
+    var focus: FocusState<ScriptCell?>.Binding
+    /// Snapshots: drawn as if focused, with these words.
+    var preview: String?
+    var commit: (String) -> Void
+    @State private var draft = ""
+    @State private var loaded = false
+
+    private var focused: Bool { focus.wrappedValue == cell || preview != nil }
+
+    var body: some View {
+        let font = Font.system(size: size).italic(italic)
+        TextField("", text: $draft, prompt: Text(placeholder).font(font).foregroundStyle(Gate.Text.disabled), axis: .vertical)
+            .textFieldStyle(.plain).font(font)
+            .foregroundStyle(secondary ? Gate.Text.secondary : Gate.Text.primary)
+            .fixedSize(horizontal: false, vertical: true)
+            .focused(focus, equals: cell)
+            .onSubmit { save(); focus.wrappedValue = nil }
+            .onExitCommand { draft = text; focus.wrappedValue = nil }
+            .onChange(of: focus.wrappedValue) { old, new in if old == cell, new != cell { save() } }
+            .onChange(of: text) { _, t in if focus.wrappedValue != cell { draft = t } }
+            .onAppear { if !loaded { draft = preview ?? text; loaded = true } }
+            // Drawn outside the words, so they don't move.
+            .background {
+                if focused { RoundedRectangle(cornerRadius: 6).fill(Gate.Surface.sunken).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Gate.Line.strong)).padding(.horizontal, -6).padding(.vertical, -4) }
+                else if found { RoundedRectangle(cornerRadius: 5).fill(Gate.Surface.hover).padding(.horizontal, -5).padding(.vertical, -3) }
+            }
+            .accessibilityLabel(placeholder)
+    }
+
+    private func save() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t != text { commit(t) }
     }
 }
 

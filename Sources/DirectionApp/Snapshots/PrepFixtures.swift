@@ -10,6 +10,7 @@ enum PrepFixtures {
             "71-script-drafting": { drafting() },
             "72-script-notes": { notes() },
             "73-script-pass": { pass() },
+            "77-script-find": { SnapshotScene(FilmWindow(app: nil, model: film(room: .script, script: script())).environment(\.prepPreview, PrepPreview(find: "chat"))) },
             "74-breakdown-draft": { breakdownScene(draft(), shot: "2C") },
             "75-breakdown-ready": { breakdownScene(ready(), shot: "6B") },
             "76-breakdown-coverage": { breakdownScene(coverage(), shot: "2D") },

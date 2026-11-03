@@ -74,7 +74,7 @@ struct ScriptSheet: View {
                 }
                 Text("Leave notes while I write. I\u{2019}ll read them when you turn them over.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).padding(.top, 4)
             } else {
-                Text("Click a row\u{2019}s number to select it (\u{21E7}-click for more), then write a note below. Notes wait here until you turn them over. What you type in a cell applies now, and the editor keeps it.")
+                Text("Click a row to select it (\u{21E7}-click for a run of rows, \u{2318}-click for more), then write a note below. Notes wait here until you turn them over. What you type in a cell applies now, and the editor keeps it.")
                     .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineSpacing(2)
             }
         }

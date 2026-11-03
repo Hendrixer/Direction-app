@@ -41,7 +41,9 @@ Three columns under the titlebar, like the other rooms.
 
 ## Interactions
 
-- Click a picture or the words to edit them; context menu on a row: Note on This Row, Edit Picture, Edit Words, Move Up, Move Down, Add a Row After, Take Out Row. ⌥↑ ⌥↓ move the selected row, N starts a note on it, ↩ edits its picture.
+- Click anywhere on a row to select it (⇧-click for a run of rows, ⌘-click to add or take one out); rows show a faint hover. The words in each cell are typed in where they are: the same font, size and place as the page, so nothing moves; a quiet box is drawn outside the words while the caret is in them. ↩ saves, esc puts the words back, and leaving the cell saves. Typing in a row selects it.
+- Context menu on a row: Note on This Row, Edit Picture, Edit Words, Move Up, Move Down, Add a Row After, Take Out Row. ⌥↑ ⌥↓ move the selected row, N starts a note on it, ↩ puts the caret in its picture.
+- Find (⌘F): the field says "3 of 12" (or "No matches" in alert), with previous and next beside it (↩ and ⇧↩ in the field, ⌘G and ⇧⌘G anywhere). The current match's row has a 1.5 pt `--text-1` ring and is scrolled to the middle; the words that match are shaded in every matching row, and other matching rows carry a dot by their number (frame 77).
 - Turn over sends every written note; the editor runs a pass. A note can be dropped (×) until it's turned over.
 - OK script starts the breakdown. The script can still change after; the Breakdown room offers to bring itself up to date.
 
