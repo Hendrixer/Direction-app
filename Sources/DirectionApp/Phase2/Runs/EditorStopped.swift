@@ -96,7 +96,7 @@ struct EditorStopActions: View {
         Button("Take the turnover back") { model.runs.takeTurnoverBack(model) }.buttonStyle(.gate(.ghost, size))
     }
     private var details: String {
-        ["\(EditorStopCopy.title(run.reason ?? .programQuit, run: run))", run.detail, "Run \(run.id) · \(run.program) \(run.version) · session \(run.session ?? "–")"].compactMap { $0 }.joined(separator: "\n")
+        ["\(EditorStopCopy.title(run.reason ?? .programQuit, run: run))", run.detail, "Run \(run.id) · \([run.program, run.version, run.effort ?? ""].filter { !$0.isEmpty }.joined(separator: " ")) · session \(run.session ?? "–")"].compactMap { $0 }.joined(separator: "\n")
     }
     private func flashCopied() { copied = true; Task { try? await Task.sleep(for: .seconds(1.6)); copied = false } }
 }

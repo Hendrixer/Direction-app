@@ -76,9 +76,12 @@ import DirectionTools
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
-        // A run that never started takes the editor chosen now (Choose another editor…, a new Version).
-        if run.invocations == 0, let p = EditorSetup.runsOn.program, programOverride.isEmpty, p.rawValue != run.program || EditorSetup.version(p) != run.version {
-            run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = EditorSetup.version(p) }) ?? run
+        // A run that never started takes the editor chosen now for its job (Choose another editor…, Change per job…).
+        if run.invocations == 0, let p = EditorSetup.runsOn.program, programOverride.isEmpty {
+            let version = EditorSetup.version(p, for: run.job), effort = EditorSetup.effort(p, for: run.job)
+            if p.rawValue != run.program || version != run.version || effort != run.effort {
+                run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = version; $0.effort = effort }) ?? run
+            }
         }
         guard live[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
         offlineRetries[run.id]?.cancel(); offlineRetries[run.id] = nil
@@ -97,7 +100,8 @@ import DirectionTools
             let session = continuation == nil ? nil : run.session
             var job = try (session == nil ? EditorJobs.text(for: run, store: store) : continuation!)
             if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
-            let effort = EditorSetup.effort(program)
+            // The run's own, once it has started; an older run without one reads its job's.
+            let effort = run.effort ?? EditorSetup.effort(program, for: run.job)
             let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts)
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)

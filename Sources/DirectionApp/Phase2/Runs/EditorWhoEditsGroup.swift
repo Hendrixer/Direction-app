@@ -13,14 +13,8 @@ struct EditorWhoEditsGroup: View {
         let runsOn = EditorSetup.runsOn, own = runsOn == .yourOwn, program = runsOn.program ?? .claudeCode
         SettingsGroup(label: "Who edits") {
             runsOnRow(runsOn)
-            SettingsRow(label: "Version") {
-                VersionSelect(program: program, version: Binding(get: { EditorSetup.version(program) }, set: { EditorSetup.setVersion($0, for: program) }))
-            }
-            .disabled(own)
-            SettingsRow(label: "Effort", detail: "How long the editor thinks before each step. More is slower and uses more of your plan.") {
-                GateSelect(options: program.efforts(EditorSetup.version(program)).map { ($0.id, $0.name) }, selection: Binding(get: { EditorSetup.effort(program) }, set: { EditorSetup.setEffort($0, for: program) }))
-            }
-            .disabled(own)
+            EditorPicksRow(program: program)
+                .disabled(own)
             SettingsRow(label: "Start work", detail: "When notes are turned over or footage arrives.") {
                 GateSelect(options: [(false, "Right away"), (true, "Ask me first")], selection: Binding(get: { EditorSetup.asksFirst }, set: { EditorSetup.setAsksFirst($0) }))
             }
@@ -78,6 +72,80 @@ struct EditorWhoEditsGroup: View {
         EditorSetup.choose(c)
         if let p = c.program { programs.checkSignIn(p) }
         app?.film?.refresh(force: true)
+    }
+}
+
+/// Who edits › Version and effort: Direction picks for each job; Change per job… opens the list
+/// (specs/editor.md › Version and effort).
+struct EditorPicksRow: View {
+    var program: EditorProgram
+    @State private var open = false
+    private var programs: EditorPrograms { EditorPrograms.shared }
+    var body: some View {
+        let _ = programs.changes
+        let changed = EditorSetup.changed(program).count
+        SettingsRow(label: "Version and effort", detail: "How long the editor thinks before each step. Direction gives more to judgement (cutting, notes, a style) and less where the editor writes at length. More is slower and uses more of your plan.") {
+            Text("Chosen for each job" + (changed > 0 ? " \u{00B7} \(changed) set by you" : "")).font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary)
+            Button("Change per job\u{2026}") { open = true }.buttonStyle(.gate)
+                .gatePopover(isPresented: $open, arrowEdge: .bottom) { EditorPicksPanel(program: program) }
+        }
+    }
+}
+
+/// The popover: every job's version and effort, and Restore Direction’s picks.
+struct EditorPicksPanel: View {
+    var program: EditorProgram
+    private var programs: EditorPrograms { EditorPrograms.shared }
+    var body: some View {
+        let _ = programs.changes
+        VStack(alignment: .leading, spacing: 10) {
+            EditorPicksList(program: program)
+                .background(SystemCardBackground())
+                .clipShape(RoundedRectangle(cornerRadius: Gate.Radius.card, style: .continuous))
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                SettingsNote("A run keeps what it started with; a change applies to the next one.")
+                Button("Restore Direction\u{2019}s picks") { EditorSetup.restorePicks(program) }
+                    .buttonStyle(.gate(.ghost, .small)).disabled(EditorSetup.changed(program).isEmpty)
+            }
+        }
+        .padding(12).frame(width: 500).background(Gate.Surface.panel)
+    }
+}
+
+/// Each job with its version and effort. A job the director changed says what Direction would pick.
+struct EditorPicksList: View {
+    var program: EditorProgram
+    private var programs: EditorPrograms { EditorPrograms.shared }
+    var body: some View {
+        let _ = programs.changes
+        let changed = Set(EditorSetup.changed(program))
+        VStack(spacing: 0) {
+            ForEach(Array(EditorJob.byFilm.enumerated()), id: \.element) { i, job in
+                let version = EditorSetup.version(program, for: job)
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(job.workName).font(Gate.Font.body).foregroundStyle(Gate.Text.primary)
+                        if changed.contains(job) {
+                            Text("Direction\u{2019}s pick: " + pickLine(job)).font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    VersionSelect(program: program, version: Binding(get: { version }, set: { EditorSetup.setVersion($0, for: program, job: job) }), minWidth: 156)
+                    GateSelect(options: program.efforts(version).map { ($0.id, $0.name) }, selection: Binding(get: { EditorSetup.effort(program, for: job) }, set: { EditorSetup.setEffort($0, for: program, job: job) }), minWidth: 104)
+                }
+                .padding(.leading, 12).padding(.trailing, 8).frame(minHeight: 42)
+                .overlay(alignment: .top) { if i > 0 { SystemHairline() } }
+                .accessibilityElement(children: .contain).accessibilityLabel(job.workName)
+            }
+        }
+    }
+
+    /// What the job would run on with nothing changed, where it differs: "High", "Claude Opus 5.5", or both.
+    private func pickLine(_ job: EditorJob) -> String {
+        let v = program.defaultVersion, effort = EditorSetup.pickedEffort(program, for: job, on: v)
+        let version = EditorSetup.version(program, for: job) == v ? nil : program.versionName(v)
+        let level = EditorSetup.effort(program, for: job) == effort ? nil : program.efforts(v).first { $0.id == effort }?.name ?? effort
+        return [version, level].compactMap { $0 }.joined(separator: " \u{00B7} ")
     }
 }
 

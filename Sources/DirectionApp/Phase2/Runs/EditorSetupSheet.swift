@@ -8,7 +8,6 @@ import DirectionCore
 struct EditorSetupSheet: View {
     @Bindable var model: FilmModel
     @State private var choice: EditorProgram = .claudeCode
-    @State private var version = EditorProgram.claudeCode.defaultVersion
     @State private var asksFirst = false
     @State private var ownSession = false
     private var programs: EditorPrograms { EditorPrograms.shared }
@@ -45,15 +44,14 @@ struct EditorSetupSheet: View {
             .accessibilityElement(children: .contain).accessibilityLabel("Who edits")
             if let step = signInStep { step }
             VStack(spacing: 0) {
-                SettingsRow(label: "Version", first: true, minHeight: 48) {
-                    VersionSelect(program: choice, version: $version, minWidth: 176)
-                }
-                SettingsRow(label: "Start work", minHeight: 48) {
+                SettingsRow(label: "Start work", first: true, minHeight: 48) {
                     GateSegmented(options: [(false, "Right away"), (true, "Ask me first")], selection: $asksFirst)
                 }
             }
             .background(SystemCardBackground())
             .clipShape(RoundedRectangle(cornerRadius: Gate.Radius.card, style: .continuous))
+            SettingsNote("Direction picks the version and effort for each job. Change them in Settings \u{203A} Engines.")
+                .padding(.horizontal, 2)
         }
         .padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 20)
         SheetFooter {
@@ -75,7 +73,7 @@ struct EditorSetupSheet: View {
         let on = choice == p && programs.install(p) != nil
         let install = programs.install(p), signedIn = EditorSetup.signedIn(p)
         // A program that isn't installed shows how to install it; it can't be chosen here.
-        return Button { guard install != nil else { return }; choice = p; version = EditorSetup.version(p) } label: {
+        return Button { guard install != nil else { return }; choice = p } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 8) {
                     AgentIcon(program: p, size: 20)
@@ -142,7 +140,6 @@ struct EditorSetupSheet: View {
         programs.refreshIfNeeded()
         if let p = EditorSetup.runsOn.program, programs.install(p) != nil { choice = p }
         else { choice = EditorProgram.allCases.first { programs.install($0) != nil } ?? .claudeCode }
-        version = EditorSetup.version(choice)
         asksFirst = EditorSetup.asksFirst
         if programs.install(choice) != nil { programs.checkSignIn(choice) }
     }
@@ -150,7 +147,6 @@ struct EditorSetupSheet: View {
     private func confirm() {
         guard foundAny, programs.install(choice) != nil else { programs.refresh(); return }
         EditorSetup.choose(EditorRunsOn(rawValue: choice.rawValue) ?? .claudeCode)
-        EditorSetup.setVersion(version, for: choice)
         EditorSetup.setAsksFirst(asksFirst)
         programs.checkSignIn(choice)
         // Right away: logging starts now (findWork runs on refresh).

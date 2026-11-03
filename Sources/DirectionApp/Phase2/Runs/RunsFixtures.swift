@@ -8,6 +8,7 @@ enum RunsFixtures {
     static var frames: [String: () -> SnapshotScene] {
         [
             "43-settings-editor": { settings() },
+            "43-editor-per-job": { perJob() },
             "56-editor-setup": { setup() },
             "57-editor-working": { working() },
             "58-editor-stopped": { stopped() },
@@ -30,6 +31,13 @@ enum RunsFixtures {
                              SettingsView(initialTab: .editor, preview: true).frame(width: Gate.Size.settingsWidth, height: 789, alignment: .top).clipped().background(Gate.Surface.ground))
     }
 
+    /// Change per job…: the breakdown set to Extra high by the director, the rest Direction's picks.
+    private static func perJob() -> SnapshotScene {
+        previewPrograms(chosen: true)
+        EditorSetup.setEffort("xhigh", for: .claudeCode, job: .breakdown)
+        return SnapshotScene(size: CGSize(width: 524, height: 410), EditorPicksPanel(program: .claudeCode).frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground).preferredColorScheme(.dark))
+    }
+
     // MARK: 56
 
     /// Over the Footage step (frame 04's state): nothing set up yet, so the pill says so.
@@ -49,7 +57,7 @@ enum RunsFixtures {
 
     static func run(_ state: EditorRunState, reason: EditorRunReason? = nil) -> EditorRun {
         var r = EditorRun(id: "run-cut-4", job: .turnover, state: state, program: EditorProgram.claudeCode.rawValue, version: "claude-opus-5-5", turnoverID: "turnover-3", createdAt: now.timeIntervalSince1970 - 245)
-        r.startedAt = now.timeIntervalSince1970 - 240; r.session = "8a1f0c2e-preview"; r.spend = 0.84; r.invocations = 1; r.reason = reason
+        r.effort = "xhigh"; r.startedAt = now.timeIntervalSince1970 - 240; r.session = "8a1f0c2e-preview"; r.spend = 0.84; r.invocations = 1; r.reason = reason
         if state == .failed { r.endedAt = SampleFilm.date(10, 28, 14, 6) }
         return r
     }

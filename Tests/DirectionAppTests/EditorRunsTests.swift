@@ -642,6 +642,22 @@ struct EditorRunnerTests {
         #expect(r.state == .paused && r.pausedByQuit)
     }
 
+    /// The program starts at the run's own effort; a run from before efforts were kept starts at its job's.
+    @Test func theProgramStartsAtTheRunsEffort() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("done", dir)
+        var run = EditorRun(job: .logFootage, program: "claudeCode", version: "claude-opus-5-5")
+        run.effort = "max"
+        try store.saveRun(run)
+        EditorRunner.shared.launch(run, store: store)
+        _ = try await ended(store, run.id)
+        func effort() -> String? { let a = args(dir); return a.firstIndex(of: "--effort").map { a[$0 + 1] } }
+        #expect(effort() == "max")
+        let older = try start(.logFootage, store: store)
+        _ = try await ended(store, older.id)
+        #expect(effort() == "high")
+    }
+
     @Test func stopEndsTheRun() async throws {
         let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
         try scenario("slow", dir)
@@ -674,6 +690,64 @@ struct EditorRunnerTests {
     // A version the cache doesn't list, and every Claude version, take all five.
     #expect(EditorProgram.codex.efforts("gpt-someday", codexCache: file).count == 6)
     #expect(EditorProgram.claudeCode.efforts("claude-fable-5-1").map(\.name) == ["The program\u{2019}s default", "Low", "Medium", "High", "Extra high", "Max"])
+}
+
+// MARK: Version and effort per job (editor.md › Version and effort)
+
+@Suite("Version and effort per job")
+@MainActor
+struct EditorPicksTests {
+    /// Direction's picks: Opus for every job, Extra high where the work is judgement, High elsewhere.
+    @Test func eachJobHasDirectionsPick() {
+        EditorPrograms.shared.setPreview([:]); defer { EditorPrograms.shared.setPreview([:]) }
+        for job in EditorJob.allCases { #expect(EditorSetup.version(.claudeCode, for: job) == "claude-opus-5-5") }
+        #expect(EditorJob.byFilm.map { EditorSetup.effort(.claudeCode, for: $0) } == ["high", "high", "high", "xhigh", "xhigh", "high", "xhigh", "high"])
+        #expect(Set(EditorJob.byFilm) == Set(EditorJob.allCases) && EditorJob.byFilm.count == EditorJob.allCases.count)
+        #expect(EditorSetup.changed(.claudeCode).isEmpty)
+        // Codex runs on its own default version, at the same efforts.
+        #expect(EditorSetup.version(.codex, for: .assemble) == "" && EditorSetup.effort(.codex, for: .assemble) == "xhigh")
+    }
+
+    /// A change is the director's until they choose Direction's pick again or restore them all.
+    @Test func aChangeHoldsUntilRestored() {
+        EditorPrograms.shared.setPreview([:]); defer { EditorPrograms.shared.setPreview([:]) }
+        EditorSetup.setEffort("medium", for: .claudeCode, job: .script)
+        EditorSetup.setVersion("claude-sonnet-5-5", for: .claudeCode, job: .logFootage)
+        #expect(EditorSetup.effort(.claudeCode, for: .script) == "medium")
+        #expect(EditorSetup.version(.claudeCode, for: .logFootage) == "claude-sonnet-5-5" && EditorSetup.effort(.claudeCode, for: .logFootage) == "high")
+        #expect(EditorSetup.changed(.claudeCode) == [.script, .logFootage])
+        // Other jobs and the other program are untouched.
+        #expect(EditorSetup.effort(.claudeCode, for: .breakdown) == "high" && EditorSetup.changed(.codex).isEmpty)
+        // Choosing the pick again forgets the change.
+        EditorSetup.setEffort("high", for: .claudeCode, job: .script)
+        #expect(EditorSetup.changed(.claudeCode) == [.logFootage])
+        EditorSetup.restorePicks(.claudeCode)
+        #expect(EditorSetup.changed(.claudeCode).isEmpty && EditorSetup.version(.claudeCode, for: .logFootage) == "claude-opus-5-5")
+    }
+
+    /// A version that doesn't take an effort gets the nearest it does below it, or the program's default.
+    @Test func anEffortAVersionDoesntTakeFallsToTheNearestBelow() {
+        let luna = ["", "low", "medium", "high"]
+        #expect(EditorSetup.fitted("xhigh", luna) == "high")
+        #expect(EditorSetup.fitted("max", luna) == "high")
+        #expect(EditorSetup.fitted("medium", luna) == "medium")
+        #expect(EditorSetup.fitted("high", ["", "low"]) == "low")
+        #expect(EditorSetup.fitted("xhigh", [""]) == "")
+        #expect(EditorSetup.fitted("ultra", luna) == "")
+    }
+
+    /// A new run carries its job's version and effort; the activity popover names both.
+    @Test func aNewRunCarriesItsJobsVersionAndEffort() {
+        EditorPrograms.shared.setPreview([:]); defer { EditorPrograms.shared.setPreview([:]) }
+        let assembly = EditorSetup.newRun(.assemble, on: .claudeCode)
+        #expect(assembly.version == "claude-opus-5-5" && assembly.effort == "xhigh" && assembly.program == "claudeCode")
+        EditorSetup.setEffort("low", for: .claudeCode, job: .technique)
+        #expect(EditorSetup.newRun(.technique, on: .claudeCode).effort == "low")
+        let m = FilmModel(preview: true)
+        #expect(m.runs.programLine(RunsFixtures.run(.working), now: RunsFixtures.now) == "Claude Opus 5.5 \u{00B7} Extra high effort \u{00B7} 4 min")
+        var codex = RunsFixtures.run(.working); codex.program = "codex"; codex.version = ""; codex.effort = "high"
+        #expect(m.runs.programLine(codex, now: RunsFixtures.now) == "Codex \u{00B7} High effort \u{00B7} 4 min")
+    }
 }
 
 // MARK: Logging in batches (footage-index.md › Logging in batches)

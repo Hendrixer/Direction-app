@@ -51,6 +51,9 @@ public struct EditorRun: Codable, Hashable, Sendable, Identifiable {
     public var program: String
     /// `--model`; empty for the program's default.
     public var version: String
+    /// `--effort`, chosen for this run's job (Settings › Engines › Change per job…); empty for the
+    /// program's default. Older runs have none and read it from Settings when they start.
+    public var effort: String?
     /// The program's own session id, kept so the run can resume with its context.
     public var session: String?
     public var turnoverID: String?

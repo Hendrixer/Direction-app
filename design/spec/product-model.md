@@ -115,12 +115,13 @@ ShareLink  cut, url, canNote: Bool, expires: Date?, password: Bool, viewers: [Pe
 // The editor's working life (specs/editor.md)
 EditorSetup   // app-wide, Settings › Editor
   program: .claudeCode | .codex           // the program that runs the editor on this Mac
-  version: String                         // "claude-opus-5-5" → "Claude Opus 5.5"
+  picks: [Job: (version, effort)]         // per job; Direction's unless the director changed one ("claude-opus-5-5" → "Claude Opus 5.5", "xhigh" → "Extra high")
   start: .rightAway | .askFirst           // when work is waiting for the editor
   connection: .direction | .yourOwn       // Direction starts the editor, or you run your own session that connects over MCP
 Run           // one stretch of the editor's work. Internal word; the UI says what the editor is doing.
   job: .logFootage | .assemble | .turnover(Turnover) | .question(Question) | .look(Note) | .graphic(Note) | .finish
   state: .starting | .working | .waitingForYou | .paused | .stopped(reason) | .failed(reason) | .done
+  version, effort                         // its job's, from when it was made; kept once it starts
   activity: [Activity], startedAt, endedAt?, spend: Money?, session: String   // to resume
 Activity  at: Date, verb: "Watching" | "Listening to" | "Trimming" | "Moving" | "Making" | "Reading" …, object: "scene 2" | "note 4" | "01:12:08–01:14:00",
           time: Timecode?    // where in the cut or take; drives the editor's playhead on the strip

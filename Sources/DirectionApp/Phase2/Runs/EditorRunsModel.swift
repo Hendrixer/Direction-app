@@ -119,12 +119,14 @@ import DirectionTools
         return "\(a.verb) \(object.count > 18 ? String(object.prefix(17)) + "\u{2026}" : object)"
     }
 
-    /// "Claude Code · Claude Opus 5.5 · 4 min" under the activity popover's title.
+    /// "Claude Opus 5.5 · Extra high effort · 4 min" under the activity popover's title. The version names
+    /// the program; with the program's default version, the program does ("Codex · High effort").
     func programLine(_ run: EditorRun, now: Date = Date()) -> String {
         let program = EditorProgram(rawValue: run.program)
         let version = program.map { p in run.version.isEmpty ? nil : p.versionName(run.version) } ?? nil
+        let effort = run.effort.flatMap { $0.isEmpty ? nil : EditorProgram.effortName($0) + " effort" }
         let minutes = run.startedAt.map { max(1, Int(((run.endedAt ?? now.timeIntervalSince1970) - $0) / 60)) }
-        return [program?.name, version, minutes.map { "\($0) min" }].compactMap { $0 }.joined(separator: " \u{00B7} ")
+        return [version ?? program?.name, effort, minutes.map { "\($0) min" }].compactMap { $0 }.joined(separator: " \u{00B7} ")
     }
 
     // MARK: Finding work
@@ -204,7 +206,7 @@ import DirectionTools
     @discardableResult
     func makeStyle(_ film: FilmModel, request: String, fromFilm: Bool, studies: [URL] = []) -> Bool {
         guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program else { return false }
-        var run = EditorRun(job: .style, program: program.rawValue, version: EditorSetup.version(program))
+        var run = EditorSetup.newRun(.style, on: program)
         run.request = request; run.fromFilm = fromFilm; run.studies = studies.isEmpty ? nil : studies.map(\.path)
         try? store.saveRun(run)
         runs.append(run)
@@ -216,7 +218,7 @@ import DirectionTools
     @discardableResult
     func learnTechnique(_ film: FilmModel, request: String, folder: URL, video: URL) -> Bool {
         guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program else { return false }
-        var run = EditorRun(job: .technique, program: program.rawValue, version: EditorSetup.version(program))
+        var run = EditorSetup.newRun(.technique, on: program)
         run.request = request; run.learnFolder = folder.path; run.learnVideo = video.path
         try? store.saveRun(run)
         runs.append(run)
@@ -247,7 +249,7 @@ import DirectionTools
     }
 
     private func create(_ job: EditorJob, program: EditorProgram, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, store: ProjectStore) {
-        var run = EditorRun(job: job, program: program.rawValue, version: EditorSetup.version(program), turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
+        var run = EditorSetup.newRun(job, on: program, turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
         run.held = EditorSetup.asksFirst
         try? store.saveRun(run)
         runs.append(run)

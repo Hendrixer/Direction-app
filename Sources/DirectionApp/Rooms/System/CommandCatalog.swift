@@ -63,7 +63,7 @@ enum SettingsIndex {
         (.general, "Hide controls in Screening after"), (.general, "Audio output"), (.general, "Film grain"), (.general, "Reduce motion"),
         (.editor, "Wait for my OK before cutting"), (.editor, "Cut Feeling notes two ways"), (.editor, "Ask before guessing"), (.editor, "Follow the brief"),
         (.cutting, "Handles in Play changes"), (.cutting, "Frame rate for new films"), (.cutting, "Loudness target"),
-        (.engines, "Recommended"), (.engines, "Editor runs on"), (.engines, "Version"), (.engines, "Start work"), (.engines, "Let the editor run scripts"),
+        (.engines, "Recommended"), (.engines, "Editor runs on"), (.engines, "Version and effort"), (.engines, "Start work"), (.engines, "Let the editor run scripts"),
         (.engines, "Transcribe with"), (.engines, "Whisper version"), (.engines, "Look with"), (.engines, "Detail"), (.engines, "Look at new footage automatically"),
         (.engines, "OpenRouter"), (.engines, "Ask before spending more than"), (.engines, "Stop for the month at"),
         (.cutting, "Music under dialogue"), (.cutting, "Transitions"),

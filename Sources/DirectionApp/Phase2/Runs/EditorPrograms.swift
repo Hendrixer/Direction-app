@@ -49,15 +49,18 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     /// GPT-6.1 Sol and Terra default to low). Every Claude version takes all five; each Codex version lists its
     /// own in Codex's cache.
     func efforts(_ version: String, codexCache: URL = Self.codexCache) -> [(id: String, name: String)] {
-        let names = ["low": "Low", "medium": "Medium", "high": "High", "xhigh": "Extra high", "max": "Max"]
         var levels = Self.efforts
         if self == .codex, !version.isEmpty, let model = CodexCache.read(codexCache)?.models.first(where: { $0.slug == version }), let listed = model.supported_reasoning_levels {
             // "ultra" hands work to agents of its own; Direction runs one editor at a time and follows what it does.
             levels = listed.map(\.effort).filter { $0 != "ultra" }
         }
-        return [("", "The program\u{2019}s default")] + levels.map { ($0, names[$0] ?? $0.capitalized) }
+        return [("", "The program\u{2019}s default")] + levels.map { ($0, Self.effortName($0)) }
     }
     static let efforts = ["low", "medium", "high", "xhigh", "max"]
+    /// "Extra high"; a Codex level Direction doesn't know is capitalized.
+    static func effortName(_ id: String) -> String {
+        ["low": "Low", "medium": "Medium", "high": "High", "xhigh": "Extra high", "max": "Max"][id] ?? id.capitalized
+    }
 
     /// Folders searched before asking a login shell.
     static var searchFolders: [String] {
