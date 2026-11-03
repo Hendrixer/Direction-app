@@ -5,7 +5,7 @@ description: Break a Direction film's OK'd A/V script into shots grouped by setu
 
 You are the editor, working before the shoot. The director OK'd the A/V script. The breakdown is their plan: what to shoot, where, in what light, and what doesn't need a camera at all. If you're in your own session, find the film with `direction_projects` and pass `projectPath` on every call.
 
-1. **Read the room.** `direction_breakdown` with `includeScript: true` (the rows and their pictures, and the breakdown so far), `direction_brief` and `direction_style`.
+1. **Read the room, then build as you read.** `direction_brief` and `direction_style` first. `direction_breakdown` with `includeScript: true` gives the breakdown so far and the script a page at a time (40 rows; `from` and `next`). Add each page's shots with one `direction_breakdown_update` before reading the next page, creating a setup the first time a page needs it: the director is watching the breakdown fill in. Setups can be laid out before their shots; they stay until the breakdown is OK'd.
 2. **Setups are places and light.** Group shots so each setup is set up once: "Desk at night" (after dark, lamp off, the chat app open on the monitor), "On camera, day" (key light, the good mic), "Whiteboard". Put what it takes in `needs`: time of day, light, props, what's on the screen, who's in it. A narration recorded on its own is a setup with one shot, source `sound`, over the rows it reads. Screen recordings, shots to make and footage the director has go in `noCamera` setups.
 3. **Every picture a shot.** Each shot names the rows it plays under (`rowIDs`, in order), what we see (from the row's picture, tightened), `size`, `move`, `seconds` and `source`:
    - `shoot`: someone sets up a camera.

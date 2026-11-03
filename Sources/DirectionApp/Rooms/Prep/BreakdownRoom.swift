@@ -15,7 +15,7 @@ struct BreakdownRoom: View {
         if let b = model.breakdown, !b.shots.isEmpty { BreakdownPage(model: model, breakdown: b, preview: preview) }
         else {
             EmptyStateView(art: nil, title: model.breakingDown ? "Breaking down the script" : "No breakdown yet",
-                           message: model.breakingDown ? "The editor is turning every row into shots, grouped by where and in what light you\u{2019}ll shoot them." : "OK the script and the editor breaks it down into shots by setup.") {
+                           message: model.breakingDown ? "The editor is turning every row into shots, grouped by where and in what light you\u{2019}ll shoot them. They show here as each page of the script is done." : "OK the script and the editor breaks it down into shots by setup.") {
                 if model.breakingDown { GateProgress(value: nil, agent: true).frame(width: 160) }
                 else { Button("Open Script") { model.go(.script) }.buttonStyle(.gate(.normal, .large)) }
             }
@@ -119,7 +119,10 @@ private struct BreakdownPage: View {
 
     /// What the editor said when it last finished the breakdown, or how the shoot stands.
     private var editorSays: String? {
-        if model.breakingDown { return "Breaking down the script\u{2026}" }
+        if model.breakingDown {
+            let covered = Set(breakdown.shots.flatMap(\.rowIDs)).count
+            return "Breaking down the script: shots for \(covered) of \(script.rows.count) rows so far."
+        }
         let missing = breakdown.shots.filter { coverage[$0.id] == .missing }
         if breakdown.isOK, model.hasFootage, !missing.isEmpty {
             return "\(missing.count == 1 ? "\(missing[0].code) didn\u{2019}t come in" : "\(missing.map(\.code).joined(separator: ", ")) didn\u{2019}t come in"). Choose what to do with each: make it, pick it up on the next shoot, or do without."

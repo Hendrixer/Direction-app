@@ -468,7 +468,10 @@ final class FilmModel {
         if runs.active?.job == .script, let s = script, case let done = s.rows.filter({ !$0.picture.isEmpty }).count, done < s.rows.count {
             return .working("Writing pictures \(done) of \(s.rows.count)", Double(done) / Double(max(1, s.rows.count)))
         }
-        if runs.active?.job == .breakdown, runs.activityText == nil { return .working("Breaking down", nil) }
+        if runs.active?.job == .breakdown, let s = script, !s.rows.isEmpty {
+            let covered = Set(breakdown?.shots.flatMap(\.rowIDs) ?? []).count
+            return .working("Breaking down \(covered) of \(s.rows.count)", Double(covered) / Double(s.rows.count))
+        }
         // Any other work: what the editor is doing right now, whether Direction started it or you did.
         if runs.isWorking || runs.ownSession != nil { return .working(runs.activityText ?? "Starting", nil) }
         return .ready

@@ -314,7 +314,7 @@ extension ProjectStore {
                 if b.isOK, shot.isYours("source") || shot.haveAssetID != nil { refused.append("\(shot.code): the director set this one up; ask before taking it out"); continue }
                 b.shots.removeAll { $0.id == id }
             }
-            b.setups.removeAll { s in !b.shots.contains { $0.setupID == s.id } }
+            // Setups stay while they're empty: the editor lays them out first and fills them a page at a time.
             for (id, reply) in replies {
                 guard let i = b.notes.firstIndex(where: { $0.id == id || "\($0.number)" == id }) else { refused.append("\(id): no such note"); continue }
                 guard b.notes[i].state == .turnedOver else { refused.append("Note \(b.notes[i].number) isn\u{2019}t turned over"); continue }
@@ -436,6 +436,7 @@ extension ProjectStore {
     public func okBreakdown() throws -> Breakdown {
         try changeBreakdown("OK\u{2019}d the breakdown") { b in
             guard !b.shots.isEmpty else { throw DirectionError("breakdown_empty", "There are no shots to OK.") }
+            b.setups.removeAll { s in !b.shots.contains { $0.setupID == s.id } }
             b.okAt = Date().timeIntervalSince1970
         }
     }

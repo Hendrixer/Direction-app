@@ -156,6 +156,18 @@ struct PrepTests {
         return (s, b)
     }
 
+    /// The editor can lay out every setup first and fill them a page at a time; empty ones go at the OK.
+    @Test func setupsWaitForTheirShotsUntilTheOK() throws {
+        let store = try seededStore()
+        let s = try store.importScript(essay, fileName: "The Chat Box.md")
+        var b = try store.updateBreakdown(setups: [SetupInput(name: "Desk at night"), SetupInput(name: "Kitchen"), SetupInput(name: "Screen recordings", noCamera: true)]).0
+        #expect(b.setups.count == 3 && b.shots.isEmpty)
+        b = try store.updateBreakdown(shots: [ShotInput(setup: "Desk at night", rowIDs: [s.rows[0].id], what: "Wide from behind.", source: .shoot)]).0
+        #expect(b.setups.count == 3 && b.shots.map(\.code) == ["1A"])
+        b = try store.okBreakdown()
+        #expect(b.setups.map(\.name) == ["Desk at night"])
+    }
+
     @Test func setupsAreNumberedInTheOrderTheyreNeededAndShotsLetteredByRow() throws {
         let store = try seededStore()
         let (_, b) = try brokenDown(store)
