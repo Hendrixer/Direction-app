@@ -64,8 +64,16 @@ private struct ScriptPage: View {
     private var previewFocus: ScriptCell?
     private var previewText: String?
 
+    /// Worked out once a draw: every row reads them.
+    private let rowNumber: [String: Int]
+    private let noted: Set<String>
+    private let firstEmpty: String?
+
     init(model: FilmModel, script: AVScript, preview: PrepPreview?) {
         self.model = model; self.script = script
+        rowNumber = Dictionary(script.rows.enumerated().map { ($0.element.id, $0.offset + 1) }, uniquingKeysWith: { a, _ in a })
+        firstEmpty = script.rows.first { $0.picture.isEmpty }?.id
+        noted = Set(script.notes.filter { $0.state == .written || $0.state == .turnedOver }.flatMap { $0.rowIDs ?? [] })
         if let p = preview {
             _selected = State(initialValue: Set(p.selected.compactMap { script.rows.indices.contains($0 - 1) ? script.rows[$0 - 1].id : nil }))
             previewFocus = p.editing.flatMap { script.rows.indices.contains($0 - 1) ? .picture(script.rows[$0 - 1].id) : nil }
@@ -138,7 +146,6 @@ private struct ScriptPage: View {
         switch f { case .all: nil; case .notes: "text.bubble"; case .empty: "questionmark.circle"; case .changed: "diamond"; case .yours: "character.cursor.ibeam" }
     }
     private func count(_ f: ScriptFilter) -> Int { script.rows.filter { shows($0, f) }.count }
-    private var noted: Set<String> { Set(script.notes.filter { $0.state == .written || $0.state == .turnedOver }.flatMap { $0.rowIDs ?? [] }) }
     private func changedThisPass(_ r: AVRow) -> Bool { script.pass > 1 && r.picture.pass == script.pass }
     private func shows(_ r: AVRow, _ f: ScriptFilter) -> Bool {
         switch f {
@@ -190,7 +197,7 @@ private struct ScriptPage: View {
             }
             Group {
                 if focus != nil { Text("\u{21A9} saves \u{00B7} esc puts it back") }
-                else if !selected.isEmpty { Text(selected.count == 1 ? "Row \(script.number(of: orderedSelection[0]) ?? 0) selected" : "\(selected.count) rows selected") }
+                else if !selected.isEmpty { Text(selected.count == 1 ? "Row \(rowNumber[orderedSelection[0]] ?? 0) selected" : "\(selected.count) rows selected") }
                 else if query.isEmpty { Text("Click a row to select it, or its words to type in them.") }
             }
             .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
@@ -276,9 +283,9 @@ private struct ScriptPage: View {
     }
 
     @ViewBuilder private func row(_ r: AVRow, found: Bool, current: Bool) -> some View {
-        let n = script.number(of: r.id) ?? 0
+        let n = rowNumber[r.id] ?? 0
         let isSel = selected.contains(r.id)
-        let notes = script.notes.filter { ($0.state == .written || $0.state == .turnedOver) && ($0.rowIDs ?? []).contains(r.id) }
+        let notes = noted.contains(r.id) ? script.notes.filter { ($0.state == .written || $0.state == .turnedOver) && ($0.rowIDs ?? []).contains(r.id) } : []
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 16) {
                 HStack(spacing: 5) {
@@ -318,7 +325,7 @@ private struct ScriptPage: View {
                 BoardView(kind: r.picture.board ?? .medium, move: r.picture.move).frame(width: 80)
             }
             VStack(alignment: .leading, spacing: 4) {
-                let writing = model.writingPicture && script.rows.first(where: { $0.picture.isEmpty })?.id == r.id
+                let writing = model.writingPicture && firstEmpty == r.id
                 if writing { HStack(spacing: 8) { GateSpinner(); Text("Writing\u{2026}").foregroundStyle(Gate.Voice.agent) }.font(.system(size: 13)) }
                 else {
                     ScriptCellText(text: r.picture.text, placeholder: r.question != nil ? "Nothing yet." : (r.hint.map { "Writer\u{2019}s idea: \($0)" } ?? "What do we see?"),

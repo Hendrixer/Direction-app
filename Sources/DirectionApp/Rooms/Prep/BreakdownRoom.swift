@@ -31,13 +31,21 @@ private struct BreakdownPage: View {
     @State private var order: BreakdownOrder = .setup
     @State private var jump: String?
 
+    /// Worked out once a draw: every row and shot reads them.
+    private let coverage: [String: ShotCoverage]
+    private let script: AVScript
+    private let rowNumber: [String: Int]
+    private let shotsIn: [String: [BreakdownShot]]
+
     init(model: FilmModel, breakdown: Breakdown, preview: PrepPreview?) {
         self.model = model; self.breakdown = breakdown
+        coverage = ProjectStore.coverage(breakdown, dailies: model.dailies)
+        script = model.script ?? AVScript()
+        rowNumber = Dictionary(script.rows.enumerated().map { ($0.element.id, $0.offset + 1) }, uniquingKeysWith: { a, _ in a })
+        shotsIn = Dictionary(grouping: breakdown.shots, by: \.setupID).mapValues { $0.sorted { $0.code.localizedStandardCompare($1.code) == .orderedAscending } }
         _selected = State(initialValue: preview?.shot.flatMap { code in breakdown.shot(code: code)?.id } ?? breakdown.shots.first?.id)
     }
 
-    private var coverage: [String: ShotCoverage] { model.shotCoverage }
-    private var script: AVScript { model.script ?? AVScript() }
     private var setups: [BreakdownSetup] { breakdown.setups.sorted { $0.number < $1.number } }
 
     var body: some View {
@@ -49,7 +57,7 @@ private struct BreakdownPage: View {
             }
             .frame(maxWidth: .infinity).background(Gate.Surface.ground)
             if let shot = selected.flatMap({ breakdown.shot($0) }) {
-                ShotInspector(model: model, breakdown: breakdown, shot: shot, coverage: coverage[shot.id] ?? .planned).frame(width: 360).id(shot.id)
+                ShotInspector(model: model, breakdown: breakdown, shot: shot, coverage: coverage[shot.id] ?? .planned, rowNumber: rowNumber).frame(width: 360).id(shot.id)
             }
         }
     }
@@ -82,7 +90,7 @@ private struct BreakdownPage: View {
     }
 
     private func setupRow(_ s: BreakdownSetup) -> some View {
-        let shots = breakdown.shots(in: s.id)
+        let shots = shotsIn[s.id] ?? []
         let shotIn = shots.filter { coverage[$0.id]?.isIn == true }.count
         let shotCount = model.hasFootage && breakdown.isOK ? "\(shotIn) of \(shots.count)" : "\(shots.count)"
         return OutlineRow(title: "\(s.number)  \(s.name)", count: shotCount, on: breakdown.shot(selected ?? "")?.setupID == s.id) {
@@ -92,29 +100,35 @@ private struct BreakdownPage: View {
 
     // MARK: Shots
 
+    /// Lazy: a breakdown runs to hundreds of shots, and only the ones on screen are built.
     private var main: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            head
-            if script.revision > (breakdown.scriptRevision ?? 0), !model.breakingDown {
-                Banner(icon: "doc.text", title: "The script changed after this breakdown was made.", detail: breakdown.isOK ? "Shot numbers and your edits stay." : "The editor brings the shots up to date.") {
-                    Button("Update the breakdown") { model.updateBreakdownFromScript() }.buttonStyle(.gate(.normal, .small))
+        LazyVStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 20) {
+                head
+                if script.revision > (breakdown.scriptRevision ?? 0), !model.breakingDown {
+                    Banner(icon: "doc.text", title: "The script changed after this breakdown was made.", detail: breakdown.isOK ? "Shot numbers and your edits stay." : "The editor brings the shots up to date.") {
+                        Button("Update the breakdown") { model.updateBreakdownFromScript() }.buttonStyle(.gate(.normal, .small))
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Gate.Line.subtle))
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Gate.Line.subtle))
+                if let say = editorSays {
+                    HStack(alignment: .top, spacing: 9) { GemMark().padding(.top, 5); Text(say).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true) }
+                }
             }
-            if let say = editorSays {
-                HStack(alignment: .top, spacing: 9) { GemMark().padding(.top, 5); Text(say).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true) }
-            }
+            .padding(.bottom, 20)
             switch order {
             case .setup:
-                ForEach(setups) { s in group(s) }
+                ForEach(setups) { s in
+                    Section { ForEach(shotsIn[s.id] ?? []) { shot in shotRow(shot) } } header: { groupHead(s).padding(.top, s.id == setups.first?.id ? 0 : 20) }
+                }
             case .script:
-                VStack(spacing: 0) { ForEach(inScriptOrder) { shot in shotRow(shot) } }
+                ForEach(inScriptOrder) { shot in shotRow(shot) }
             }
         }
     }
 
     private var inScriptOrder: [BreakdownShot] {
-        breakdown.shots.sorted { a, b in (a.rowIDs.compactMap { script.number(of: $0) }.min() ?? .max, a.code) < (b.rowIDs.compactMap { script.number(of: $0) }.min() ?? .max, b.code) }
+        breakdown.shots.map { ($0.rowIDs.compactMap { rowNumber[$0] }.min() ?? .max, $0) }.sorted { ($0.0, $0.1.code) < ($1.0, $1.1.code) }.map(\.1)
     }
 
     /// What the editor said when it last finished the breakdown, or how the shoot stands.
@@ -162,21 +176,18 @@ private struct BreakdownPage: View {
         return "\(n) shots from the script you OK\u{2019}d \u{00B7} OK it and the numbers become slates"
     }
 
-    private func group(_ s: BreakdownSetup) -> some View {
-        let shots = breakdown.shots(in: s.id)
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Text("\(s.number)").font(.system(size: 11.5, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
-                    .frame(minWidth: 22, minHeight: 22).background(RoundedRectangle(cornerRadius: 6).fill(Gate.Surface.raised)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Gate.Line.subtle))
-                Text(s.name).font(.system(size: 13, weight: .semibold))
-                if let needs = s.needs { Text(needs).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
-                Spacer()
-                Text(model.hasFootage && breakdown.isOK ? "\(shots.filter { coverage[$0.id]?.isIn == true }.count) of \(shots.count)" : shots.count == 1 ? "1 shot" : "\(shots.count) shots").font(Gate.Font.mono).foregroundStyle(Gate.Text.disabled)
-            }
-            .padding(.horizontal, 8).padding(.bottom, 9)
-            .overlay(alignment: .bottom) { Rectangle().fill(Gate.Line.strong).frame(height: 1) }
-            ForEach(shots) { shot in shotRow(shot) }
+    private func groupHead(_ s: BreakdownSetup) -> some View {
+        let shots = shotsIn[s.id] ?? []
+        return HStack(spacing: 10) {
+            Text("\(s.number)").font(.system(size: 11.5, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
+                .frame(minWidth: 22, minHeight: 22).background(RoundedRectangle(cornerRadius: 6).fill(Gate.Surface.raised)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Gate.Line.subtle))
+            Text(s.name).font(.system(size: 13, weight: .semibold))
+            if let needs = s.needs { Text(needs).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
+            Spacer()
+            Text(model.hasFootage && breakdown.isOK ? "\(shots.filter { coverage[$0.id]?.isIn == true }.count) of \(shots.count)" : shots.count == 1 ? "1 shot" : "\(shots.count) shots").font(Gate.Font.mono).foregroundStyle(Gate.Text.disabled)
         }
+        .padding(.horizontal, 8).padding(.bottom, 9)
+        .overlay(alignment: .bottom) { Rectangle().fill(Gate.Line.strong).frame(height: 1) }
         .id(s.id)
     }
 
@@ -221,8 +232,8 @@ private struct BreakdownPage: View {
     }
 
     private func playsUnder(_ shot: BreakdownShot) -> some View {
-        let numbers = shot.rowIDs.compactMap { script.number(of: $0) }
-        let first = shot.rowIDs.first.flatMap { script.row($0) }?.sound.text ?? ""
+        let numbers = shot.rowIDs.compactMap { rowNumber[$0] }
+        let first = shot.rowIDs.first.flatMap { rowNumber[$0] }.map { script.rows[$0 - 1].sound.text } ?? ""
         return (Text(numbers.count == 1 ? "Row \(numbers[0])" : "Rows \(EditorJobs.rowList(numbers))").font(.system(size: 10.5, weight: .medium, design: .monospaced)).foregroundColor(Gate.Text.secondary)
             + Text(first.isEmpty ? "" : " \u{00B7} \u{201C}\(first)\u{201D}").font(.system(size: 11.5)).foregroundColor(Gate.Text.tertiary))
             .lineLimit(2)

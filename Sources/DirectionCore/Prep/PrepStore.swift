@@ -498,6 +498,7 @@ extension ProjectStore {
     /// How each shot stands (specs/breakdown.md › Coverage). A shot is missing once its setup has been shot.
     public static func coverage(_ b: Breakdown, dailies: Dailies) -> [String: ShotCoverage] {
         let takes = Dictionary(grouping: dailies.takes.values.filter { !$0.unusable && $0.setupCode != nil }) { $0.setupCode!.uppercased() }
+        let setupsShot = Set(b.shots.filter { takes[$0.code.uppercased()]?.isEmpty == false }.map(\.setupID))
         var out: [String: ShotCoverage] = [:]
         for shot in b.shots {
             if let t = takes[shot.code.uppercased()], !t.isEmpty {
@@ -508,8 +509,7 @@ extension ProjectStore {
             case .have: out[shot.id] = .needsFootage
             case .make: out[shot.id] = .toMake
             default:
-                let shotInSetup = b.shots(in: shot.setupID).contains { takes[$0.code.uppercased()]?.isEmpty == false }
-                out[shot.id] = shotInSetup ? .missing : .planned
+                out[shot.id] = setupsShot.contains(shot.setupID) ? .missing : .planned
             }
         }
         return out

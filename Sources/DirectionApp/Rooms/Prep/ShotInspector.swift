@@ -16,8 +16,10 @@ struct ShotInspector: View {
     @State private var dropping = false
     @FocusState private var whatFocus: Bool
 
-    init(model: FilmModel, breakdown: Breakdown, shot: BreakdownShot, coverage: ShotCoverage) {
-        self.model = model; self.breakdown = breakdown; self.shot = shot; self.coverage = coverage
+    private let rowNumber: [String: Int]
+
+    init(model: FilmModel, breakdown: Breakdown, shot: BreakdownShot, coverage: ShotCoverage, rowNumber: [String: Int]) {
+        self.model = model; self.breakdown = breakdown; self.shot = shot; self.coverage = coverage; self.rowNumber = rowNumber
         _what = State(initialValue: shot.what)
     }
 
@@ -76,7 +78,7 @@ struct ShotInspector: View {
     }
 
     private var rowsLabel: String {
-        let n = shot.rowIDs.compactMap { script.number(of: $0) }
+        let n = shot.rowIDs.compactMap { rowNumber[$0] }
         return n.count == 1 ? "row \(n[0])" : "rows \(EditorJobs.rowList(n))"
     }
 
@@ -170,9 +172,9 @@ struct ShotInspector: View {
     private var playsUnder: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel("Plays under")
-            ForEach(shot.rowIDs.compactMap { id in script.row(id).map { (id, $0) } }.prefix(4), id: \.0) { id, r in
+            ForEach(shot.rowIDs.prefix(4).compactMap { id in rowNumber[id].map { (id, script.rows[$0 - 1]) } }, id: \.0) { id, r in
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("ROW \(script.number(of: id) ?? 0) \u{00B7} \(r.sound.kind == .onCamera ? (r.sound.speaker ?? "ON CAMERA").uppercased() : r.sound.kind.label.uppercased())").font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6).foregroundStyle(Gate.Text.tertiary)
+                    Text("ROW \(rowNumber[id] ?? 0) \u{00B7} \(r.sound.kind == .onCamera ? (r.sound.speaker ?? "ON CAMERA").uppercased() : r.sound.kind.label.uppercased())").font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6).foregroundStyle(Gate.Text.tertiary)
                     Text(r.sound.text.isEmpty ? r.sound.kind.label : r.sound.text).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 10)

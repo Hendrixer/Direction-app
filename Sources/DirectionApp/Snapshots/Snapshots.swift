@@ -38,6 +38,7 @@ enum Snapshots {
             exit(ok ? 0 : 1)
         }
         if args.contains("--popover-probe") { PopoverProbe.run() }
+        if args.contains("--room-probe") { RoomProbe.run() }
     }
 
     @discardableResult
