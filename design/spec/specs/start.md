@@ -124,31 +124,39 @@ Frame: `screens/03-brief.html` · Render: `renders/03-brief@2x.png`
 
 ---
 
-## 04 · Bring footage
-Frame: `screens/04-footage-drop.html` · Render: `renders/04-footage-drop@2x.png`
+## 04 · Script or footage
+Frame: `screens/04-footage-drop.html` · Render: `renders/04-footage-drop@2x.png` (the app's own snapshot shows the two zones)
 
-**Arrives from / leads to:** Continue from 03, or Film › Bring Footage. Choose a folder or drop → files listed → Start logging → 05. When files are dropped, logging starts automatically after 1 s unless the director drops more; the primary is a fallback.
+**Arrives from / leads to:** Continue from 03, or Film › Bring Footage. The film starts from one or the other:
+- **A script**: choose or drop it → the Script room (specs/script.md), where the editor writes the picture. Footage comes after the shoot, in the Breakdown.
+- **Footage**: choose a folder or drop → files listed → Start logging → 05. When files are dropped, logging starts automatically after 1 s unless the director drops more; the primary is a fallback.
+
+The stepper reads Brief · Script or footage.
 
 **Layout**
-- 28 pt padding all round. Drop zone fills the space (radius 20, sunken radial fill, 1.5 pt dashed border at white 18%).
-- Centered stack: three fanned 150 pt 16:9 cards (−8°, 0°, +7°), then the title (Archivo 800 34 at 125%), body 13.5/1.5 `--text-3` max 50ch, buttons (36 pt), and a 12 pt `--text-4` line of supported formats with icons.
-- Footer row 18 pt below the zone: brief reminder with an Edit link (left), storage note (right).
+- 28 pt padding all round. "What are you starting from?" (Archivo 800 24 at 120%) above two drop zones side by side, 18 pt apart, each filling half the space (radius 20, sunken radial fill, 1.5 pt dashed border at white 18%).
+- Each zone, centered: three fanned 150 pt 16:9 cards (−8°, 0°, +7°): drawn boards for the script, footage frames for footage. Then the title (Archivo 800 34 at 125%), body 13.5/1.5 `--text-3` max 50ch, buttons (36 pt), and a 12 pt `--text-4` line of formats with icons.
+- Footer row 18 pt below the zones: brief reminder with an Edit link (left), storage note (right).
 
-**Content:** Title "Bring footage". Body: "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes, or keeps yours: a folder named for its scene (“02 Pricing”) holds setups in folders of their own. Your files stay where they are." Buttons: "Choose folder… ⌘O", ghost "From a camera card". Formats: "MOV, MP4, MXF, BRAW, R3D" · "WAV, separate sound synced by timecode" · "A script, if you have one (PDF, FDX)". Footer: "Brief saved. "Tired, then proud. Quiet, not triumphant."" and "Nothing is moved or copied." ("Copies go in the film. Your originals stay where they are." when Settings › Storage copies footage. Direction makes no proxies, so the footer doesn't name a proxy folder.)
+**Content**
+- Script zone: title "A script". Body: "Bring in the script and the editor writes what we see under every line, in the film's style. You plan the shoot from it, and footage comes after." Button "Choose a script…". Formats: "Markdown, text, Fountain, Final Draft, PDF".
+- Footage zone: title "Footage". Body: "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes, or keeps the scene folders you made. Your files stay where they are." Buttons: "Choose folder… ⇧⌘I", ghost "From a camera card". Formats: "MOV, MP4, MXF, BRAW, R3D" · "WAV, synced by its sound".
+- Footer: "Brief saved. "Tired, then proud. Quiet, not triumphant."" and "Nothing is moved or copied." ("Copies go in the film. Your originals stay where they are." when Settings › Storage copies footage.)
 
 **States and variants**
-- Drag over: border becomes 1.5 pt solid `--text-1`, the fill lifts to steel-3, and the title changes to "Drop to add 214 files" (count from the drag pasteboard).
-- Unsupported drop: the zone shakes once (Snap ×2, 4 pt) and the body line becomes `--alert`: "Those aren't video, sound or script files."
+- Drag over a zone: its border becomes 1.5 pt solid `--text-1`, the fill lifts to steel-3, and its title changes ("Drop to add 214 files", "Drop to bring in the script"). Either zone takes either kind of file: a script dropped on Footage still comes in as the script.
+- Unsupported drop: the footage zone shakes once (Snap ×2, 4 pt) and its body becomes `--alert`: "Those aren't video, sound or script files."
 - Camera card button lists mounted volumes in a menu; with none mounted it's disabled with a tooltip "No camera card connected".
 
-**Interactions:** `⌘O` folder picker (multi-select). Drop anywhere in the window. `esc` returns to 03.
+**Interactions:** `⇧⌘I` folder picker (multi-select). Drop anywhere in the window. `esc` returns to 03.
 
 **Motion:** Fanned cards spread 6 pt on drag over (Settle).
 
-**Accessibility:** Drop zone is a group "Drop footage here" with the two buttons as actions. Formats line is read once as a hint.
+**Accessibility:** Two groups, "Drop a script here" and "Drop footage here", with their buttons as actions. Formats lines are read once as hints.
 
 **Acceptance**
-- [ ] Nothing is copied on import; the spec storage note text matches Settings › Storage path.
+- [ ] Nothing is copied on import; the storage note text matches Settings › Storage.
+- [ ] A script chosen or dropped here opens the Script room; the stepper is gone.
 - [ ] Drag-over state is visibly different without color alone (solid vs dashed border).
 
 ---

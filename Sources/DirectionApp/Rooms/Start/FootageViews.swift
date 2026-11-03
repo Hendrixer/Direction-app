@@ -108,9 +108,16 @@ struct OnboardingFootageDrop: View {
 
     private var session: OnboardingSession { .of(model) }
 
+    @State private var scriptTargeted = false
+
     var body: some View {
         VStack(spacing: 18) {
-            zone.frame(maxHeight: .infinity)
+            Text("What are you starting from?").font(Gate.Font.brandL).foregroundStyle(Gate.Text.primary).padding(.top, 6)
+            HStack(spacing: 18) {
+                scriptZone
+                zone
+            }
+            .frame(maxHeight: .infinity)
             footer
         }
         .padding(28)
@@ -118,17 +125,62 @@ struct OnboardingFootageDrop: View {
         .onExitCommand { model.sheet = .brief }
     }
 
-    private var zone: some View {
+    /// A dashed zone that takes a drop, like the rest of the start flow.
+    private func dropZone<Content: View>(targeted: Bool, @ViewBuilder _ content: () -> Content) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(targeted ? AnyShapeStyle(Gate.Steel.ramp[3]) : AnyShapeStyle(EllipticalGradient(colors: [Gate.Steel.ramp[3], Gate.Surface.sunken], center: UnitPoint(x: 0.5, y: 0.45), startRadiusFraction: 0, endRadiusFraction: 0.6)))
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(targeted ? Gate.Text.primary : Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 1.5, dash: targeted ? [] : [4, 4]))
+            content().padding(32)
+        }
+    }
+
+    /// A script: the A/V script comes first, footage after the shoot (specs/script.md).
+    private var scriptZone: some View {
+        dropZone(targeted: scriptTargeted) {
+            VStack(spacing: 18) {
+                boards
+                Text(scriptTargeted ? "Drop to bring in the script" : "A script").font(Gate.Font.brandXL).foregroundStyle(Gate.Text.primary)
+                Text("Bring in the script and the editor writes what we see under every line, in the film\u{2019}s style. You plan the shoot from it, and footage comes after.")
+                    .font(.system(size: 13.5)).foregroundStyle(Gate.Text.tertiary)
+                    .multilineTextAlignment(.center).lineSpacing(3.5).frame(maxWidth: 380).fixedSize(horizontal: false, vertical: true)
+                Button { model.chooseScript() } label: { HStack(spacing: 6) { Image(systemName: "doc.text"); Text("Choose a script\u{2026}") } }
+                    .buttonStyle(.gate(.normal, .large))
+                format("doc.text", "Markdown, text, Fountain, Final Draft, PDF")
+            }
+        }
+        .onDrop(of: [.fileURL], delegate: FootageDropDelegate(targeted: $scriptTargeted, count: .constant(nil), drop: received))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Drop a script here")
+    }
+
+    /// Three drawn boards, fanned like the footage frames: drawings, so the grain stays on them.
+    private var boards: some View {
+        let spread: CGFloat = scriptTargeted ? 6 : 0
+        return ZStack(alignment: .topLeading) {
+            board(.wide).rotationEffect(.degrees(-8)).offset(x: -spread, y: 22)
+            board(.detail).rotationEffect(.degrees(7)).offset(x: 118 + spread, y: 26)
+            board(.close).offset(x: 60, y: 0)
+        }
+        .frame(width: 210, height: 120, alignment: .topLeading)
+        .transformPreference(GrainHolesKey.self) { $0 = [] }
+        .animation(gateAnimation(Gate.Motion.settle), value: scriptTargeted)
+        .accessibilityHidden(true)
+    }
+    private func board(_ kind: BoardKind) -> some View {
+        BoardView(kind: kind).frame(width: 150, height: 84.375)
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Gate.Line.strong, lineWidth: 1))
+            .shadow(color: .black.opacity(0.9), radius: 20, y: 10)
+    }
+
+    private var zone: some View {
+        dropZone(targeted: targeted) {
             VStack(spacing: 18) {
                 fan
                 Text(title).font(Gate.Font.brandXL).foregroundStyle(Gate.Text.primary)
                 Text(message).font(.system(size: 13.5)).foregroundStyle(rejected ? Gate.State.alert : Gate.Text.tertiary)
-                    .multilineTextAlignment(.center).lineSpacing(3.5).frame(maxWidth: 404).fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.center).lineSpacing(3.5).frame(maxWidth: 380).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
                     Button(action: choose) { HStack(spacing: 6) { Image(systemName: "folder"); Text("Choose folder\u{2026}"); KeyHint("\u{21E7}\u{2318}I") } }
                         .buttonStyle(.gate(.normal, .large)).keyboardShortcut("i", modifiers: [.command, .shift])
@@ -136,8 +188,7 @@ struct OnboardingFootageDrop: View {
                 }
                 HStack(spacing: 18) {
                     format("film", "MOV, MP4, MXF, BRAW, R3D")
-                    format("waveform", "WAV, separate sound synced by timecode")
-                    format("doc.text", "A script, if you have one (PDF, FDX)")
+                    format("waveform", "WAV, synced by its sound")
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -151,7 +202,7 @@ struct OnboardingFootageDrop: View {
     private var title: String {
         if targeted { return dragCount.map { "Drop to add \(DailiesFormat.count($0, "file"))" } ?? "Drop to add footage" }
         if !session.pending.isEmpty { return "Adding \(DailiesFormat.count(session.pending.count, "file"))" }
-        return "Bring footage"
+        return "Footage"
     }
     private var message: String {
         if rejected { return "Those aren't video, sound or script files." }
@@ -159,7 +210,7 @@ struct OnboardingFootageDrop: View {
             let scenes = Set(session.pendingPlaces.values.map(\.scene)).count
             return "Logging starts in a moment.\(scenes > 0 ? " Your folders give \(DailiesFormat.count(scenes, "scene"))." : "") Drop more to add them too."
         }
-        return "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes, or keeps yours: a folder named for its scene (\u{201C}02 Pricing\u{201D}) holds setups in folders of their own. Your files stay where they are."
+        return "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes, or keeps the scene folders you made. Your files stay where they are."
     }
 
     /// Three fanned frames: they spread a little while something is dragged over.
@@ -171,6 +222,8 @@ struct OnboardingFootageDrop: View {
             card(.dusk).offset(x: 60, y: 0)
         }
         .frame(width: 210, height: 120, alignment: .topLeading)
+        // Pictures cut themselves out of the grain as straight boxes; these tilt, and they're only art.
+        .transformPreference(GrainHolesKey.self) { $0 = [] }
         .animation(gateAnimation(Gate.Motion.settle), value: targeted)
         .accessibilityHidden(true)
     }

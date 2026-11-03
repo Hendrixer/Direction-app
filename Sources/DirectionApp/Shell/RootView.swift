@@ -33,6 +33,8 @@ struct FilmWindow: View {
                 EditorRunBanner(model: model)
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            // Under a sheet or an overlay, pictures don't cut through the grain on top of it.
+            .transformPreference(GrainHolesKey.self) { if model.sheet != nil || model.showCommandMenu || model.showShortcuts { $0 = [] } }
             if screeningFullBleed { ScreeningRoom(model: model, app: app).environment(\.editorPlayhead, nil) }
             sweepEdge
             if let sheet = model.sheet { sheetView(sheet).zIndex(10) }

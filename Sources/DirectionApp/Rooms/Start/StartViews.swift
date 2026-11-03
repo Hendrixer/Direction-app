@@ -15,7 +15,7 @@ struct OnboardingStepper: View {
         HStack(spacing: 6) {
             item(.brief, "Brief")
             bar
-            item(.footage, "Footage")
+            item(.footage, "Script or footage")
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Steps")
@@ -164,10 +164,10 @@ extension FilmModel {
         let session = OnboardingSession.of(self)
         switch step {
         case .brief:
-            return PrimaryAction(title: "Continue", enabled: session.canContinue, help: session.canContinue ? "Save the brief and bring footage (\u{2318}\u{21A9})" : "Give the film a title, one sentence and how it should feel first") { session.continueBrief() }
+            return PrimaryAction(title: "Continue", enabled: session.canContinue, help: session.canContinue ? "Save the brief, then bring in a script or footage (\u{2318}\u{21A9})" : "Give the film a title, one sentence and how it should feel first") { session.continueBrief() }
         case .footage:
             if hasFootage { return PrimaryAction(title: "Open Dailies", icon: "square.grid.2x2", enabled: !dailies.scenes.isEmpty, help: dailies.scenes.isEmpty ? "Opens once the editor has found a scene" : "Start circling takes; logging carries on (\u{2318}\u{21A9})") { self.openDailiesFromLogging() } }
-            return PrimaryAction(title: "Start logging", enabled: !session.pending.isEmpty, help: session.pending.isEmpty ? "Drop footage or choose a folder first" : "Start logging now (\u{2318}\u{21A9})") { session.importPending() }
+            return PrimaryAction(title: "Start logging", enabled: !session.pending.isEmpty, help: session.pending.isEmpty ? "Bring in a script, or drop footage, first" : "Start logging now (\u{2318}\u{21A9})") { session.importPending() }
         }
     }
 }
