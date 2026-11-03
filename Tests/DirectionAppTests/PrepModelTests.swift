@@ -16,6 +16,11 @@ struct PrepModelTests {
         #expect(!m.isEnabled(.breakdown))
         m.script?.okAt = 1
         #expect(m.isEnabled(.breakdown))
+        // A film from a script opens where its work is: the script, then the breakdown until footage is in.
+        m.script?.okAt = nil
+        #expect(m.defaultRoom == .script)
+        m.script?.okAt = 1
+        #expect(m.defaultRoom == .breakdown)
     }
 
     @Test func scriptsOneButtonFollowsWhereItIs() {

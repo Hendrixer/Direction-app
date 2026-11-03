@@ -500,6 +500,8 @@ final class FilmModel {
     var isLogging: Bool { hasFootage && footage.contains { !dailies.isLogged($0.id) } }
     var defaultRoom: Room {
         if !unreviewedAnswers.isEmpty { return .changes }
+        // A film from a script works in prep until its footage is in.
+        if cuts.isEmpty, let script { return !script.isOK ? .script : hasFootage ? .dailies : .breakdown }
         if cuts.isEmpty { return .dailies }
         if isPictureLocked { return .finish }
         return .notes

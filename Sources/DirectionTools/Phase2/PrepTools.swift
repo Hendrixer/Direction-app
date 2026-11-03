@@ -9,7 +9,7 @@ extension ToolCatalog {
         let choice = record(["id": string, "label": string, "detail": string, "recommended": bool], required: ["label"])
         let reply = record(["noteID": string, "reply": string], required: ["noteID", "reply"])
         return [
-            definition("direction_script", "Read the film's A/V script: every row in order, its picture (what we see: text, size wide|medium|close|detail, move, board, yours: true when the director wrote it) and its sound (kind voice|onCamera|effect|music|silence, speaker, the words), its seconds, the writer's picture idea (hint) and any question you asked. notes are the director's notes on rows; the turned-over ones are yours to answer this pass. okAt is set once the director OKs it."),
+            definition("direction_script", "Read the film's A/V script a page at a time (from: the first row number, default 1; count: rows, default 40; next is where the following page starts, null at the end): each row in order, its picture (what we see: text, size wide|medium|close|detail, move, board, yours: true when the director wrote it) and its sound (kind voice|onCamera|effect|music|silence, speaker, the words), its seconds, the writer's picture idea (hint) and any question you asked. notes are the director's notes on rows; the turned-over ones are yours to answer this pass. okAt is set once the director OKs it.", ["from": integer, "count": integer]),
             definition("direction_script_update", "Write the A/V script's picture column and answer notes on it. pictures: [{rowID, text (what the viewer sees, one or two sentences, never how to shoot it), size?, move?, board? (the drawn board: title, screen, wide, medium, close, detail, onCamera, action, made, empty)}]. Follow the film's style (direction_style) for what each kind of line reaches for. A picture the director wrote (yours) and the words of the script change only where a turned-over note on that row asks; anything else comes back in refused. sounds: [{rowID, kind?, speaker?, text?}] fixes what a row's sound is. replies: [{noteID, reply}] answers a turned-over note, first person and concrete (\"Row 4 is your hands now.\"). questions: [{rowID, text, choices: [{id?, label, detail?, recommended?}]}] when only the director can say what a row should show: 2–3 concrete choices.", [
                 "pictures": list(record(["rowID": string, "text": string, "size": sizes, "move": moves, "board": boards], required: ["rowID", "text"])),
                 "sounds": list(record(["rowID": string, "kind": strings(HeardKind.allCases.map(\.rawValue)), "speaker": string, "text": string], required: ["rowID"])),
@@ -33,7 +33,7 @@ extension ToolRuntime {
         switch name {
         case "direction_script":
             guard let s = try store.script() else { return ToolResponse(.object(["script": .null, "note": .string("This film has no script. The director brings one in from the Script room.")])) }
-            return ToolResponse(try Self.scriptJSON(s))
+            return ToolResponse(try Self.scriptJSON(s, from: a["from"].int ?? 1, count: a["count"].int ?? 40))
 
         case "direction_script_update":
             let pictures = try a["pictures"].array.map { try JSONValue.array($0).decode([PictureInput].self) } ?? []
@@ -53,7 +53,7 @@ extension ToolRuntime {
                 return ToolResponse(.object(["breakdown": .null, "note": .string(try store.script()?.isOK == true ? "Not broken down yet." : "The script isn't OK'd yet.")]))
             }
             var value = try Self.breakdownJSON(b, script: try store.script(), coverage: ProjectStore.coverage(b, dailies: try store.dailies()))
-            if a["includeScript"].bool == true, let s = try store.script(), case .object(var o) = value { o["script"] = try Self.scriptJSON(s); value = .object(o) }
+            if a["includeScript"].bool == true, let s = try store.script(), case .object(var o) = value { o["script"] = try Self.scriptJSON(s, from: 1, count: s.rows.count, compact: true); value = .object(o) }
             return ToolResponse(value)
 
         case "direction_breakdown_update":
@@ -88,10 +88,16 @@ extension ToolRuntime {
         return (replies, questions)
     }
 
-    static func scriptJSON(_ s: AVScript) throws -> JSONValue {
+    /// A page of rows, compact: a picture only when it has one, the sound as kind, speaker and words.
+    static func scriptJSON(_ s: AVScript, from: Int, count: Int, compact: Bool = false) throws -> JSONValue {
         let sections = Dictionary(s.sections.map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
-        let rows: [JSONValue] = try s.rows.enumerated().map { i, r in
-            var o: [String: JSONValue] = ["id": .string(r.id), "number": .number(Double(i + 1)), "picture": try .wrapping(r.picture), "sound": try .wrapping(r.sound), "seconds": .number(r.seconds)]
+        let first = max(1, from), last = min(s.rows.count, first + max(1, count) - 1)
+        let page = first <= last ? Array(Array(s.rows.enumerated())[(first - 1)...(last - 1)]) : []
+        let rows: [JSONValue] = try page.map { i, r in
+            var sound: [String: JSONValue] = ["kind": .string(r.sound.kind.rawValue), "text": .string(r.sound.text)]
+            if let sp = r.sound.speaker { sound["speaker"] = .string(sp) }
+            var o: [String: JSONValue] = ["id": .string(r.id), "number": .number(Double(i + 1)), "sound": .object(sound), "seconds": .number(r.seconds)]
+            if !r.picture.isEmpty { o["picture"] = compact ? .string(r.picture.text) : try .wrapping(r.picture) }
             if let sec = r.section.flatMap({ sections[$0] }) { o["section"] = .string(sec) }
             if let h = r.hint { o["hint"] = .string(h) }
             if let q = r.question { o["question"] = try .wrapping(q) }
@@ -104,7 +110,9 @@ extension ToolRuntime {
         return .object([
             "source": s.source.map { .string("\($0.fileName), \($0.words) words") } ?? .null,
             "sections": .array(s.sections.map { .string($0.title) }),
-            "rows": .array(rows), "notes": .array(notes), "pass": .number(Double(s.pass)), "revision": .number(Double(s.revision)),
+            "rows": .array(rows), "total": .number(Double(s.rows.count)), "next": last < s.rows.count ? .number(Double(last + 1)) : .null,
+            "withoutPicture": .number(Double(s.rows.filter { $0.picture.isEmpty }.count)),
+            "notes": .array(notes), "pass": .number(Double(s.pass)), "revision": .number(Double(s.revision)),
             "seconds": .number(s.seconds), "okAt": s.okAt.map(JSONValue.number) ?? .null,
         ])
     }

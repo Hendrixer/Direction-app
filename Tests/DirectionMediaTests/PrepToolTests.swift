@@ -63,3 +63,18 @@ import DirectionCore
     let setups = breakdown.value["setups"].array ?? []
     #expect(setups.count == 2 && setups[0]["shots"].array?.first?["coverage"].string == "planned" && breakdown.value["scriptChanged"] == .bool(false))
 }
+
+/// A long script is read a page at a time, so the editor writes as it reads and the director sees the
+/// picture column fill in.
+@Test func aLongScriptIsReadAPageAtATime() async throws {
+    let path = FileManager.default.temporaryDirectory.appendingPathComponent("direction-prep-pages-" + UUID().uuidString + ".direction")
+    defer { try? FileManager.default.removeItem(at: path) }
+    let store = try ProjectStore.create(at: path, name: "Long")
+    let runtime = try ToolRuntime(store: store)
+    _ = try store.importScript((1...100).map { "Line number \($0) of the essay is here." }.joined(separator: "\n\n"), fileName: "long.txt")
+    let first = try await runtime.invoke("direction_script")
+    #expect(first.value["rows"].array?.count == 40 && first.value["total"].int == 100 && first.value["next"].int == 41 && first.value["withoutPicture"].int == 100)
+    #expect(first.value["rows"].array?.first?["picture"] == .null)
+    let last = try await runtime.invoke("direction_script", arguments: .object(["from": .number(81), "count": .number(40)]))
+    #expect(last.value["rows"].array?.count == 20 && last.value["rows"].array?.first?["number"].int == 81 && last.value["next"] == .null)
+}
