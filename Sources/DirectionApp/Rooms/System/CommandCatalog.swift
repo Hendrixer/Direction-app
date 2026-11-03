@@ -137,6 +137,7 @@ struct CommandCatalog {
         add("footage", "square.and.arrow.down", "Bring footage\u{2026}", caps(.bringFootage), synonyms: ["import", "media"]) { m.chooseFootage() }
         add("bringScript", "doc.text", m.script == nil ? "Bring in a script\u{2026}" : "Bring in a new draft\u{2026}", synonyms: ["script", "screenplay", "fountain", "draft"]) { m.chooseScript() }
         if m.script == nil { add("bringStory", "text.book.closed", "Bring in a story\u{2026}", synonyms: ["story", "treatment", "outline", "beats"]) { m.chooseScript(.story) } }
+        else { add("readAgain", m.scriptKind == .story ? "doc.text" : "text.book.closed", m.scriptKind == .story ? "Read as a script\u{2026}" : "Read as a story\u{2026}", synonyms: ["story", "script", "treatment", "wrong", "kind"]) { m.readAgain(as: m.scriptKind == .story ? .script : .story) } }
         if m.breakdown?.isOK == true { add("printShootList", "printer", "Print shoot list\u{2026}", synonyms: ["shot list", "call sheet", "setups"]) { m.printShootList() } }
         let missing = m.isPreview ? MissingFootage.previewAssets(m).count : MenuState.shared.missingCount
         add("relink", "externaldrive", "Find missing footage\u{2026}", synonyms: ["relink", "offline", "drive"], disabled: missing == 0 ? "No footage is missing" : nil) { m.sheet = .relink }

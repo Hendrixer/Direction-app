@@ -222,8 +222,20 @@ private struct ScriptPage: View {
                     Image(systemName: script.isStory ? "text.book.closed" : "doc.text").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary)
                     Text("\(script.isStory ? "The story, from" : "From") \(source.fileName) \u{00B7} \(source.words) words").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
                     Spacer()
+                    // Came in as the wrong one: the same file, laid out the other way.
+                    Button(script.isStory ? "Read as a script\u{2026}" : "Read as a story\u{2026}") { model.readAgain(as: script.isStory ? .script : .story) }
+                        .buttonStyle(.gate(.ghost, .small))
+                        .help(script.isStory ? "Lay it out as a script, its words said as written" : "Lay it out as a story: the editor writes what we see and hear")
                     Button("Bring in a new draft\u{2026}") { model.chooseScript() }.buttonStyle(.gate(.ghost, .small))
-                }.padding(.leading, 46).padding(.bottom, 12)
+                }.padding(.leading, 46).padding(.bottom, script.storyNotes == nil ? 12 : 4)
+                if let notes = script.storyNotes {
+                    HStack(spacing: 8) {
+                        Image(systemName: "note.text").font(.system(size: 11)).foregroundStyle(Gate.Text.disabled)
+                        Text(Self.notesLine(notes)).font(Gate.Font.small).foregroundStyle(Gate.Text.disabled).lineLimit(1)
+                    }
+                    .padding(.leading, 46).padding(.bottom, 12)
+                    .help(notes)
+                }
             }
             if model.writingPicture, script.rows.contains(where: { $0.picture.isEmpty }) { drafting.padding(.leading, 46).padding(.bottom, 14) }
             header
@@ -390,6 +402,13 @@ private struct ScriptPage: View {
         Button("Add a Row After") { model.addRow(after: r.id) }
         Divider()
         Button("Take Out Row", role: .destructive) { model.removeRow(r.id) }
+    }
+
+    /// "The editor reads the writer\u{2019}s notes with it: The idea, The rules of the world and 3 more."
+    static func notesLine(_ notes: String) -> String {
+        let titles = notes.components(separatedBy: "\n").filter { $0.hasPrefix("#") }.map { $0.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let named = titles.count > 3 ? titles.prefix(2).joined(separator: ", ") + " and \(titles.count - 2) more" : titles.count > 1 ? titles.dropLast().joined(separator: ", ") + " and " + titles.last! : titles.first
+        return "The editor reads the writer\u{2019}s notes with it" + (named.map { ": \($0)." } ?? ".")
     }
 
     static func menuLabel(_ k: HeardKind) -> String {

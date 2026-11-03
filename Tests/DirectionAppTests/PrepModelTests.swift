@@ -108,6 +108,12 @@ struct PrepModelTests {
         let script = EditorJobs.fill(EditorJobs.template("script") ?? "", try EditorJobs.prepValues(.script, store: essay))
         #expect(!mine.contains(where: script.contains) && script.contains("The sound is the script\u{2019}s own words") && !script.contains("ownWords"))
 
+        #expect(!job.contains("The writer\u{2019}s notes"))
+        // A treatment's notes come with the job, below the steps.
+        _ = try essay.importScript("## Rules\n\nNo dialogue.\n\n## Story\n\n**1 · Dark · 0:00–0:06.** He climbs the ladder.", fileName: "porch.md", as: .story)
+        let treatment = EditorJobs.fill(EditorJobs.template("script") ?? "", try EditorJobs.prepValues(.script, store: essay))
+        #expect(treatment.contains("## The writer\u{2019}s notes\n## Rules\n\nNo dialogue.") && treatment.contains("1 beats") == false)
+
         let run = EditorRun(job: .script, program: "claudeCode", version: "")
         _ = try store.updateScript(pictures: s.rows.map { PictureInput(rowID: $0.id, text: "Something we see.") })
         #expect(!EditorRunner.finished(run, store: store))

@@ -76,6 +76,7 @@ private struct FileMenuItems: View {
             Button("Bring In a Story\u{2026}") { film?.chooseScript(.story) }.disabled(film == nil)
         } else {
             Button("Bring In a New Draft\u{2026}") { film?.chooseScript() }
+            Button(film?.script?.isStory == true ? "Read as a Script\u{2026}" : "Read as a Story\u{2026}") { if let f = film { f.readAgain(as: f.scriptKind == .story ? .script : .story) } }
         }
         Button("Print Shoot List\u{2026}") { film?.printShootList() }.disabled(film?.breakdown?.isOK != true)
         Button("Find Missing Footage\u{2026}") { film?.sheet = .relink }.disabled(film == nil || MenuState.shared.missingCount == 0)

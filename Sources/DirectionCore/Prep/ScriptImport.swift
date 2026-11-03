@@ -8,7 +8,11 @@ import Foundation
 /// - A two-column table (Picture | Sound, Video | Audio) keeps both columns.
 /// - Fountain: scene headings are sections, dialogue is on camera (V.O. is voice-over), action is picture.
 public enum ScriptImport {
-    public struct Result: Sendable { public var sections: [AVSection]; public var rows: [AVRow]; public var words: Int }
+    public struct Result: Sendable {
+        public var sections: [AVSection]; public var rows: [AVRow]; public var words: Int
+        /// A story's writer's notes: everything around the beats they numbered.
+        public var notes: String? = nil
+    }
 
     public static func read(_ text: String, fileName: String) -> Result {
         let lines = clean(text)
@@ -22,22 +26,44 @@ public enum ScriptImport {
     /// A story in beats (specs/script.md › From a story): headings are sections, each sentence or two of a
     /// paragraph a beat with that part of the story on it; the sound is left for the editor, since nobody's
     /// words are written. A "[…]" picture idea is the beat's hint, as in a script.
+    ///
+    /// A treatment numbers its beats ("**1 · Assembly · 0:00–0:05.**", "Beat 3:"): then each numbered paragraph
+    /// is one beat as the writer wrote it, timed from its times, and the rest (the idea, the rules, questions
+    /// for the director) is the writer's notes, kept as written for the editor rather than laid out.
     public static func story(_ text: String, fileName: String) -> Result {
         let lines = clean(text)
+        let numbered = lines.contains(where: isNumberedBeat)
         var sections: [AVSection] = [], rows: [AVRow] = [], section: String?, paragraph: [String] = [], pendingHint: String?, words = 0
+        var notes: [String] = [], heading: String?, pendingSection: String?
         let headings = lines.filter { $0.hasPrefix("#") }.count
         var sawContent = false
+        func note(_ lines: [String]) {
+            if let h = heading { notes.append(h); heading = nil }
+            notes.append(lines.joined(separator: "\n"))
+        }
+        func add(_ told: String, hint: String?, seconds: Double) {
+            if let title = pendingSection { let s = AVSection(title: title); sections.append(s); section = s.id; pendingSection = nil }
+            words += AVScript.wordCount(told)
+            rows.append(AVRow(section: section, sound: AVSound(), seconds: seconds, hint: [pendingHint, hint].compactMap { $0 }.joined(separator: " ").nilIfEmpty, story: told))
+            pendingHint = nil
+        }
         func flush() {
             guard !paragraph.isEmpty else { return }
+            defer { paragraph = [] }
+            if numbered {
+                guard let first = paragraph.first, isNumberedBeat(first) else { note(paragraph); return }
+                let (told, hint) = takeHints(paragraph.map(plain).joined(separator: " "))
+                guard !told.isEmpty else { return }
+                let n = Double(AVScript.wordCount(told))
+                add(told, hint: hint, seconds: writersTime(first) ?? max(2, min(20, (n / 2.5 * 2).rounded() / 2)))
+                return
+            }
             for beat in storyBeats(paragraph.joined(separator: " ")) {
                 let (told, hint) = takeHints(beat)
                 guard !told.isEmpty else { if let hint { pendingHint = [pendingHint, hint].compactMap { $0 }.joined(separator: " ") }; continue }
-                let n = AVScript.wordCount(told)
-                words += n
-                rows.append(AVRow(section: section, sound: AVSound(), seconds: max(2, min(8, (Double(n) / 2.5 * 2).rounded() / 2)), hint: [pendingHint, hint].compactMap { $0 }.joined(separator: " ").nilIfEmpty, story: told))
-                pendingHint = nil
+                let n = Double(AVScript.wordCount(told))
+                add(told, hint: hint, seconds: max(2, min(8, (n / 2.5 * 2).rounded() / 2)))
             }
-            paragraph = []
         }
         for raw in lines {
             if raw.isEmpty { flush(); continue }
@@ -46,18 +72,35 @@ public enum ScriptImport {
                 let title = plain(raw.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces))
                 if !sawContent, raw.hasPrefix("# "), headings > 1, sections.isEmpty { sawContent = true; continue }
                 sawContent = true
-                if !title.isEmpty { let s = AVSection(title: title); sections.append(s); section = s.id }
+                heading = raw
+                // With numbered beats, a section is kept only once a beat comes in it.
+                if !title.isEmpty { if numbered { pendingSection = title } else { let s = AVSection(title: title); sections.append(s); section = s.id } }
                 continue
             }
             if raw.range(of: #"^([-*_]\s*){3,}$"#, options: .regularExpression) != nil { flush(); continue }
             sawContent = true
-            let line = plain(raw)
-            if let hint = pictureLine(line) { flush(); pendingHint = [pendingHint, hint].compactMap { $0 }.joined(separator: " "); continue }
-            paragraph.append(line)
+            if let hint = pictureLine(plain(raw)) { flush(); pendingHint = [pendingHint, hint].compactMap { $0 }.joined(separator: " "); continue }
+            paragraph.append(numbered ? raw : plain(raw))
         }
         flush()
         if let h = pendingHint, !rows.isEmpty { rows[rows.count - 1].hint = [rows[rows.count - 1].hint, h].compactMap { $0 }.joined(separator: " ") }
-        return Result(sections: sections, rows: rows, words: words)
+        let kept = notes.joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return Result(sections: sections, rows: rows, words: words, notes: kept.isEmpty ? nil : kept)
+    }
+
+    /// A paragraph the writer numbered as a beat: "**1 · Assembly · 0:00–0:05.**", "Beat 3: …", "Scene 2 —".
+    static func isNumberedBeat(_ raw: String) -> Bool {
+        raw.range(of: #"^(\*\*|__)?\s*((beat|scene)\s+)?\d{1,3}\s*(·|—|–|:|\.|\))"#, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// How long the writer gave a beat, from the times in its lead: "0:05–0:13" is 8 seconds.
+    static func writersTime(_ raw: String) -> Double? {
+        let lead = String(raw.prefix(80))
+        guard let r = lead.range(of: #"(\d{1,2}):(\d{2})(?:\.\d+)?\s*[–—-]\s*(\d{1,2}):(\d{2})"#, options: .regularExpression) else { return nil }
+        let parts = lead[r].split(whereSeparator: { !$0.isNumber && $0 != "." }).compactMap { Double($0) }
+        guard parts.count >= 4 else { return nil }
+        let seconds = (parts[parts.count - 2] * 60 + parts[parts.count - 1]) - (parts[0] * 60 + parts[1])
+        return seconds > 0 ? min(600, max(0.5, seconds)) : nil
     }
 
     /// A paragraph of story in beats: a sentence each, a short one ("She erases it.") kept with the one

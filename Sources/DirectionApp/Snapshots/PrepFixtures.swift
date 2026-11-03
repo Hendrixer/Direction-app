@@ -166,6 +166,7 @@ enum PrepFixtures {
         s.sections = read.sections
         s.rows = read.rows.enumerated().map { i, r in var r = r; r.id = "row-\(i + 1)"; return r }
         s.source = ScriptSource(fileName: "Night walk.md", path: nil, words: read.words, importedAt: SampleFilm.date(11, 2, 21, 5))
+        s.storyNotes = "## The idea\n\nA walk home that turns into a call.\n\n## The rules\n\nOne night, one take of the bridge.\n\n## Questions\n\n* Which bridge?"
         let beats: [(String, ShotSize?, ShotMove?, BoardKind, HeardKind, String?, String, Bool, Double)] = [
             ("Maya locks the studio door from outside and checks it twice.", .medium, .still, .medium, .effect, nil, "Keys in the lock. A car somewhere far off.", false, 4),
             ("The street, wide and wet, empty both ways.", .wide, .still, .wide, .effect, nil, "Rain ticking on parked cars.", false, 3),

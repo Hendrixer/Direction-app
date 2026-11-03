@@ -916,12 +916,15 @@ final class FilmModel {
         return try await Task.detached(priority: .userInitiated) { try FootageFiles.copy(url, into: folder, via: temp) }.value
     }
     /// Dropped on the film: footage and sound come in, folders opened, held for the brief while it's being
-    /// written. Direction can't read a script yet, so a dropped one says so instead of failing as footage.
+    /// written. A script or a story becomes the A/V script.
     func bring(_ drop: FootageDrop) {
         if !drop.footage.isEmpty {
             if onboardingStep != nil { OnboardingSession.of(self).add(drop.footage, places: drop.places, wait: true) } else { importFootage(drop.footage, places: drop.places) }
         }
-        if drop.footage.isEmpty, let script = drop.scripts.first { bringScript(script) }
+        // A new draft is the film's kind; the first file could be a script or a story, so Direction asks.
+        if drop.footage.isEmpty, let script = drop.scripts.first {
+            if self.script != nil { bringScript(script) } else if !isPreview, let kind = Self.askKind(script) { bringScript(script, as: kind) }
+        }
         else if drop.footage.isEmpty { toast = Toast(title: "Those aren\u{2019}t video, sound or script files.") }
     }
     func chooseFootage() {

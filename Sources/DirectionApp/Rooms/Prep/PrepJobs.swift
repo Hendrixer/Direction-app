@@ -15,7 +15,7 @@ extension EditorJobs {
                 let from = script.source.map { "\u{201C}\($0.fileName)\u{201D}, \($0.words) words" } ?? (story ? "a story" : "a script")
                 task.append(empty.count == script.rows.count
                     ? story
-                        ? "The director brought in a story, \(from). Direction laid it out as \(script.rows.count) beats. Write what we see and what we hear under every one."
+                        ? "The director brought in a story, \(from). Direction laid it out as \(count(script.rows.count, "beat")). Write what we see and what we hear under every one."
                         : "The director brought in \(from): \(script.rows.count) rows, about \(Timecode.duration(script.seconds)) read aloud. Write what we see under every row."
                     : story ? "Write what we see and what we hear under the rows that don\u{2019}t have them yet: \(rowList(empty))." : "Write what we see under the rows that have no picture yet: \(rowList(empty)).")
             }
@@ -27,10 +27,20 @@ extension EditorJobs {
                 v["write"] = "pictures and sounds"; v["whole"] = "story"; v["done"] = "a picture and a sound"
                 v["theirs"] = "So is a sound they wrote. The story is the writer\u{2019}s: tell it as it is, in order."
                 v["story"] = """
-                5. What we hear, on every row, in the same `direction_script_update`: `sounds: [{rowID, kind, speaker?, text, ownWords?, seconds}]`. Someone talking in shot is `onCamera` with the speaker; talk recorded on its own (an interview, a narration) is `voice`. Never write words for anyone to say: the text says who talks and what about ("Maya, on why she nearly quit") with `ownWords: true`, and they find the words on the day. Words the story quotes are the writer\u{2019}s: use them as written, without `ownWords`. Otherwise it\u{2019}s `effect` with what we hear ("The lights clunk on, one by one."), `music` or `silence`. Give every row `seconds`: how long the beat plays on screen.
+                5. What we hear, on every row, in the same `direction_script_update`: `sounds: [{rowID, kind, speaker?, text, ownWords?, seconds}]`. Someone talking in shot is `onCamera` with the speaker; talk recorded on its own (an interview, a narration) is `voice`. Never write words for anyone to say: the text says who talks and what about ("Maya, on why she nearly quit") with `ownWords: true`, and they find the words on the day. Words the story quotes are the writer\u{2019}s: use them as written, without `ownWords`. Otherwise it\u{2019}s `effect` with what we hear ("The lights clunk on, one by one."), `music` or `silence`. Give every row `seconds`: how long the beat plays on screen; where the story gives a beat its times, keep them.
                 6. One row is one beat. When a beat needs two pictures, write both in order ("Her hand on the switch. Then the room, lit."); the breakdown makes them two shots.
 
                 """
+                if let notes = script.storyNotes {
+                    v["story"]! += """
+                    7. The writer\u{2019}s notes are below: what they wrote around the beats (the idea, the rules of the film, questions for the director). They aren\u{2019}t rows. Follow them in every picture and sound, and ask on a row when a question there is the director\u{2019}s to answer.
+
+                    ## The writer\u{2019}s notes
+                    \(notes)
+
+
+                    """
+                }
             } else {
                 v["columns"] = "The A/V script has two columns. The sound is the script\u{2019}s own words; the picture is yours to write: what the viewer sees under each line, never how to shoot it. Later the breakdown turns your pictures into shots, so write pictures someone could film, record on a screen, or make."
                 v["write"] = "pictures"; v["whole"] = "script"; v["done"] = "a picture"

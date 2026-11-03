@@ -156,6 +156,44 @@ struct PrepTests {
         #expect(script.rows.allSatisfy { $0.story == nil && !$0.sound.text.isEmpty })
     }
 
+    /// A treatment numbers its beats: each is one row as the writer wrote it, timed from its times, and the
+    /// rest (the idea, the rules, questions) is the writer's notes, never rows.
+    @Test func aTreatmentKeepsItsBeatsAndItsNotes() throws {
+        let treatment = """
+        *Working title: Porch · 30 seconds · no dialogue*
+
+        ## The idea
+
+        A man fixes a porch light, and the street comes out to watch.
+
+        ## The story
+
+        **1 · Dark · 0:00–0:06.** Night. He climbs the ladder. The bulb is dead.
+
+        **2 · Light · 0:06–0:18.** He screws in a new one. It flickers, then holds. Neighbours' doors open one by one.
+
+        Beat 3: He waves, and they wave back.
+
+        **What it leaves you with:** small fixes are public.
+
+        ## Questions
+
+        * **Whose porch?** Ours, or a friend's?
+        * **Music:** none until the light holds?
+        """
+        let store = try seededStore()
+        let s = try store.importScript(treatment, fileName: "Porch.md", as: .story)
+        #expect(s.sections.map(\.title) == ["The story"])
+        #expect(s.rows.count == 3 && s.rows.allSatisfy { $0.section == s.sections[0].id })
+        #expect(s.rows[0].story == "1 · Dark · 0:00–0:06. Night. He climbs the ladder. The bulb is dead.")
+        #expect(s.rows[0].seconds == 6 && s.rows[1].seconds == 12 && s.rows[2].seconds >= 2)
+        let notes = try #require(s.storyNotes)
+        #expect(notes.contains("Working title: Porch") && notes.contains("## The idea") && notes.contains("small fixes are public") && notes.contains("**Whose porch?**"))
+        #expect(!notes.contains("He climbs the ladder"))
+        // A story without numbered beats is laid out sentence by sentence, as before, with no notes.
+        #expect(ScriptImport.story(story, fileName: "Night walk.md").notes == nil)
+    }
+
     /// The editor writes what we hear on a story's beats, never words for anyone; what the director wrote stays.
     @Test func theEditorWritesWhatWeHearInAStory() throws {
         let store = try seededStore()

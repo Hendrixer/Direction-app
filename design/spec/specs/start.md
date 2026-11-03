@@ -145,7 +145,7 @@ The stepper reads Brief · Script, story or footage.
 - Footer: "Brief saved. "Tired, then proud. Quiet, not triumphant."" and "Nothing is moved or copied." ("Copies go in the film. Your originals stay where they are." when Settings › Storage copies footage.)
 
 **States and variants**
-- Drag over a zone: its border becomes 1.5 pt solid `--text-1`, the fill lifts to steel-3, and its title changes ("Drop to add 214 files", "Drop to bring in the script"). Over the script zone its two buttons become drop pads, "As the script" and "As the story" (36 pt, radius 10, 1.5 pt dashed white 18%); the zone's left half takes the script and its right half the story, and the pad under the pointer goes solid `--text-1` on steel-4 while the title says which ("Drop to bring in the story"). Either zone takes either kind of file: a script dropped on Footage still comes in as the script.
+- Drag over a zone: its border becomes 1.5 pt solid `--text-1`, the fill lifts to steel-3, and its title changes ("Drop to add 214 files", "Drop to bring it in"). Over the script zone the title reads "Drop to bring it in". A script or a story dropped on either zone, or anywhere on the window, could be either, so Direction asks before bringing it in: "Is “story.txt” a script or a story?" with Script, Story and Cancel (a system alert). Choose a script… and Choose a story… say which already.
 - Unsupported drop: the footage zone shakes once (Snap ×2, 4 pt) and its body becomes `--alert`: "Those aren't video, sound or script files."
 - Camera card button lists mounted volumes in a menu; with none mounted it's disabled with a tooltip "No camera card connected".
 

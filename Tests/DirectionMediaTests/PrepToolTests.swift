@@ -103,3 +103,16 @@ import DirectionCore
     let again = try await runtime.invoke("direction_script")
     #expect(again.value["rows"].array?[1]["sound"]["ownWords"] == .bool(true) && again.value["rows"].array?[1]["seconds"].int == 6)
 }
+
+/// A treatment's writer's notes come with the first page of the script, never as rows.
+@Test func theEditorReadsTheWritersNotes() async throws {
+    let path = FileManager.default.temporaryDirectory.appendingPathComponent("direction-prep-notes-" + UUID().uuidString + ".direction")
+    defer { try? FileManager.default.removeItem(at: path) }
+    let store = try ProjectStore.create(at: path, name: "Porch")
+    let runtime = try ToolRuntime(store: store)
+    _ = try store.importScript("## Rules\n\nNo dialogue.\n\n## Story\n\n**1 · Dark · 0:00–0:06.** He climbs the ladder.\n\n**2 · Light · 0:06–0:10.** The bulb holds.", fileName: "porch.md", as: .story)
+    let first = try await runtime.invoke("direction_script", arguments: .object(["count": .number(1)]))
+    #expect(first.value["total"].int == 2 && first.value["storyNotes"].string == "## Rules\n\nNo dialogue.")
+    let second = try await runtime.invoke("direction_script", arguments: .object(["from": .number(2)]))
+    #expect(second.value["storyNotes"] == .null)
+}

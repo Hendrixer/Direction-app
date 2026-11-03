@@ -19,17 +19,51 @@ extension FilmModel {
         bringScript(url, as: kind)
     }
 
-    /// A script or a story: the first one starts the A/V script, a later one is a new draft of it.
+    /// A script or a story: the first one starts the A/V script, a later one of the same kind is a new draft of it.
     func bringScript(_ url: URL, as kind: ScriptKind? = nil) {
         guard let store else { return }
-        let draft = script != nil, kind = kind ?? scriptKind
+        let kind = kind ?? scriptKind, draft = script != nil && kind == scriptKind
         do { _ = try store.importScript(try ScriptFile.text(url), fileName: url.lastPathComponent, path: url.path, as: kind) }
         catch { self.error = error.localizedDescription; return }
-        refresh(force: true)
+        // The room first: the start screen goes once the script is read, and the titlebar has to find Script
+        // already chosen, or its room bar stays on the one before.
         go(.script)
+        refresh(force: true)
         toast = draft ? Toast(title: "New draft brought in", detail: kind == .story ? "Beats whose part of the story didn\u{2019}t change keep their picture." : "Rows whose words didn\u{2019}t change keep their picture.")
             : kind == .story ? Toast(title: "Story brought in", detail: "The editor lays out what we see and hear, beat by beat.", editor: true)
             : Toast(title: "Script brought in", detail: "The editor writes what we see under every line.", editor: true)
+    }
+
+    /// A file dropped where it could be either: Direction asks which it is before bringing it in, never
+    /// guesses (a narrated essay is prose too). nil: the director cancelled.
+    static func askKind(_ url: URL) -> ScriptKind? {
+        let alert = NSAlert()
+        alert.messageText = "Is \u{201C}\(url.lastPathComponent)\u{201D} a script or a story?"
+        alert.informativeText = "A script is said as written: its words are what we hear. A story is what happens: the editor lays out what we see and hear, beat by beat, and any talking is found on the day."
+        alert.addButton(withTitle: "Script"); alert.addButton(withTitle: "Story"); alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: return .script
+        case .alertSecondButtonReturn: return .story
+        default: return nil
+        }
+    }
+
+    /// Read as a Story… / Read as a Script…: the same file laid out the other way, when it came in as the
+    /// wrong one. Its rows start again, and a pass on the old ones stops.
+    func readAgain(as kind: ScriptKind) {
+        guard let s = script, let source = s.source, kind != scriptKind else { return }
+        guard let path = source.path, FileManager.default.fileExists(atPath: path) else { chooseScript(kind); return }
+        let pictures = s.rows.filter { !$0.picture.isEmpty }.count
+        if pictures > 0 {
+            let alert = NSAlert()
+            alert.messageText = "Read \u{201C}\(source.fileName)\u{201D} as a \(kind == .story ? "story" : "script")?"
+            alert.informativeText = (kind == .story ? "Its rows start again as the story\u{2019}s beats, and the editor lays out what we see and hear." : "Its rows start again as the script\u{2019}s lines, and the editor writes what we see under them.")
+                + " The \(pictures == 1 ? "picture" : "\(pictures) pictures") written so far and the notes on them go."
+            alert.addButton(withTitle: kind == .story ? "Read as a Story" : "Read as a Script"); alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        runs.stopPrep(.script, film: self)
+        bringScript(URL(fileURLWithPath: path), as: kind)
     }
 
     // MARK: Script

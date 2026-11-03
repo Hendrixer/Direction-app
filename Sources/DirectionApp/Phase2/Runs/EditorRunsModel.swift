@@ -230,6 +230,12 @@ import DirectionTools
         create(job, program: program, store: store)
     }
 
+    /// A prep pass on rows that are going: stopped, so the next one starts on the new rows.
+    func stopPrep(_ job: EditorJob, film: FilmModel) {
+        guard let store = film.store, let r = runs.last(where: { $0.job == job && $0.state.isOpen }) else { return }
+        EditorRunner.shared.stop(r.id, store: store)
+    }
+
     /// Update the breakdown after the script changed (the Breakdown room's banner).
     @discardableResult
     func updateBreakdown(_ film: FilmModel) -> Bool {

@@ -96,6 +96,7 @@ extension ProjectStore {
             var unused = Dictionary(grouping: old.filter { !key($0).isEmpty }, by: key)
             s.sections = read.sections
             s.kind = kind == .story ? .story : nil
+            s.storyNotes = read.notes
             s.rows = read.rows.map { new in
                 guard var kept = unused[key(new)]?.first else { return new }
                 unused[key(new)]?.removeFirst()

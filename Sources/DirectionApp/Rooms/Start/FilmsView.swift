@@ -217,7 +217,7 @@ struct FilmsView: View {
         guard app.previewFilms == nil else { return }
         if let film = urls.first(where: { $0.pathExtension == "direction" }) { app.open(film); return }
         let (footage, scripts, places) = FootageFiles.expand(urls)
-        if footage.isEmpty, let script = scripts.first { startFromScript(script, app: app); return }
+        if footage.isEmpty, let script = scripts.first { if let kind = FilmModel.askKind(script) { startFromScript(script, app: app, as: kind) }; return }
         guard !footage.isEmpty else { return }
         app.newFilm()
         if let film = app.film { OnboardingSession.of(film).add(footage, places: places, wait: false) }

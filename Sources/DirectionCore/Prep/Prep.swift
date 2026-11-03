@@ -147,6 +147,9 @@ public struct AVScript: Codable, Hashable, Sendable {
     public var source: ScriptSource?
     /// Laid out from a story (nil: a script).
     public var kind: ScriptKind?
+    /// What a story says around the beats the writer numbered (the idea, its rules, questions for the
+    /// director), as written: the editor reads it with the beats, and it never becomes rows.
+    public var storyNotes: String?
     /// Every change counts up, so the breakdown knows when the script moved on after it.
     public var revision = 0
     /// Editor passes so far: 1 is the first picture column.

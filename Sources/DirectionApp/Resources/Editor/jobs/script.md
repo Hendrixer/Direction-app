@@ -1,4 +1,4 @@
-<!-- direction-job script v3 -->
+<!-- direction-job script v4 -->
 # Write the picture for "{{film}}"
 
 Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
