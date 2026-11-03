@@ -194,6 +194,17 @@ struct PrepTests {
         #expect(ScriptImport.story(story, fileName: "Night walk.md").notes == nil)
     }
 
+    /// The Script room shows a beat by its writer's title, without the number and times the row already gives.
+    @Test func aBeatIsShownByItsTitle() {
+        let lead = ScriptImport.beatLead("1 · Dark · 0:00–0:06. Night. He climbs the ladder.")
+        #expect(lead.title == "Dark" && lead.body == "Night. He climbs the ladder.")
+        // Only times: no title. One plain phrase is the beat's first sentence, kept.
+        #expect(ScriptImport.beatLead("2 · 0:06–0:18. He screws in a new one.") == (nil, "He screws in a new one."))
+        #expect(ScriptImport.beatLead("Beat 3: He waves. They wave back.") == (nil, "He waves. They wave back."))
+        #expect(ScriptImport.beatLead("Scene 4 — He leaves.") == (nil, "He leaves."))
+        #expect(ScriptImport.beatLead("Maya locks the door. 2 · not a lead.") == (nil, "Maya locks the door. 2 · not a lead."))
+    }
+
     /// The editor writes what we hear on a story's beats, never words for anyone; what the director wrote stays.
     @Test func theEditorWritesWhatWeHearInAStory() throws {
         let store = try seededStore()

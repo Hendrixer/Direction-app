@@ -11,6 +11,8 @@ enum PrepFixtures {
             "72-script-notes": { notes() },
             "73-script-pass": { pass() },
             "78-script-story": { SnapshotScene(FilmWindow(app: nil, model: storyFilm()).environment(\.prepPreview, PrepPreview(selected: [6]))) },
+            "79-script-treatment": { SnapshotScene(FilmWindow(app: nil, model: storyFilm(treatmentScript())).environment(\.prepPreview, PrepPreview(openBeats: [3]))) },
+            "79b-script-treatment-answer": { SnapshotScene(FilmWindow(app: nil, model: storyFilm(treatmentScript())).environment(\.prepPreview, PrepPreview(selected: [4], tab: .questions))) },
             "77-script-find": { SnapshotScene(FilmWindow(app: nil, model: film(room: .script, script: script())).environment(\.prepPreview, PrepPreview(find: "chat"))) },
             "74-breakdown-draft": { breakdownScene(draft(), shot: "2C") },
             "75-breakdown-ready": { breakdownScene(ready(), shot: "6B") },
@@ -190,8 +192,69 @@ enum PrepFixtures {
         return s
     }
 
-    static func storyFilm() -> FilmModel {
-        let m = film(room: .script, script: storyScript())
+    /// A treatment: numbered beats with the writer's titles and times, and notes around them.
+    static let treatment = """
+    # Night walk
+
+    ## The idea
+    A walk home after a long week turns into the call that makes it better.
+
+    ## The story
+
+    **1 · Lock up · 0:00–0:06.** Maya locks the studio door from outside and checks it twice. The street behind her is wet and empty both ways.
+
+    **2 · Earbud · 0:06–0:12.** She puts one earbud in, listens a beat, and takes it out again. The street comes back.
+
+    **3 · The river · 0:12–0:24.** The river path, lamp to lamp. Between the lamps there's only her outline against the water, and the city a long way off.
+
+    **4 · The call · 0:24–0:40.** On the bridge she calls her dad. He picks up on the first ring. They talk about nothing much, and she laughs for the first time all week.
+
+    **5 · Home · 0:40–0:48.** Her flat in the dark. She sits on the floor by the window with her coat still on.
+
+    ## The rules
+    One night, one take of the bridge. No music until the river.
+
+    ## Questions for the director
+    * Which bridge?
+    * Do we hear her dad, or only her?
+    """
+
+    /// The treatment after the editor's first pass, with two questions open.
+    static func treatmentScript() -> AVScript {
+        let read = ScriptImport.story(treatment, fileName: "Night walk.md")
+        var s = AVScript()
+        s.kind = .story
+        s.sections = read.sections
+        s.rows = read.rows.enumerated().map { i, r in var r = r; r.id = "row-\(i + 1)"; return r }
+        s.source = ScriptSource(fileName: "Night walk.md", path: nil, words: read.words, importedAt: SampleFilm.date(11, 2, 21, 5))
+        s.storyNotes = read.notes
+        let beats: [(String, ShotSize?, ShotMove?, BoardKind, HeardKind, String?, String, Bool)] = [
+            ("Black, then the studio door from the street: Maya locks it, tries the handle, tries it again.", .medium, .still, .medium, .effect, nil, "Keys in the lock. Rain on parked cars.", false),
+            ("Her hand at her ear, close: the earbud in, a beat, out.", .detail, .still, .detail, .effect, nil, "Music from the earbud, cut off as it comes out.", false),
+            ("The river path from behind her, lamp to lamp; between them only her outline against the water.", .wide, .track, .wide, .music, nil, "A slow piano starts.", false),
+            ("Maya on the bridge, phone to her ear, the city behind her. She leans on the rail and talks.", .wide, .still, .onCamera, .onCamera, "Maya", "Her and her dad, about nothing much", true),
+            ("Her flat in the dark, from the door: she sits by the window, coat still on.", .medium, .push, .medium, .music, nil, "The piano comes back, quieter.", false),
+        ]
+        for (i, b) in beats.enumerated() where i < s.rows.count {
+            s.rows[i].picture = AVPicture(text: b.0, size: b.1, move: b.2, board: b.3); s.rows[i].picture.pass = 1
+            s.rows[i].sound = AVSound(kind: b.4, speaker: b.5, text: b.6); s.rows[i].sound.ownWords = b.7 ? true : nil
+        }
+        s.rows[0].question = PrepQuestion(id: "ask-title", text: "Is \u{201C}Night walk\u{201D} the film\u{2019}s name? It isn\u{2019}t on screen in the story yet.", choices: [
+            .init(id: "open", label: "Yes, on black before the door", recommended: true),
+            .init(id: "end", label: "Yes, at the end"),
+            .init(id: "later", label: "No, I\u{2019}ll name it later"),
+        ], createdAt: SampleFilm.date(11, 2, 21, 9))
+        s.rows[3].question = PrepQuestion(id: "ask-dad", text: "Do we hear her dad on the call, or only her side?", choices: [
+            .init(id: "both", label: "Both: record his side on the phone", recommended: true),
+            .init(id: "her", label: "Only her: his side is in her face"),
+        ], createdAt: SampleFilm.date(11, 2, 21, 10))
+        s.pass = 1
+        s.revision = 3
+        return s
+    }
+
+    static func storyFilm(_ script: AVScript = storyScript()) -> FilmModel {
+        let m = film(room: .script, script: script)
         var p = Project(name: "Night walk"); p.id = "project-nightwalk"
         m.project = p; m.displayed = p
         m.brief.style = nil; m.brief.logline = "A walk home after a long week, and the call that makes it better."; m.brief.feeling = "Lonely, then held. Quiet the whole way."

@@ -90,6 +90,13 @@ struct PrepModelTests {
 
     /// A film from a story: the job says both columns are the editor's, and it isn't finished until every
     /// beat has a picture and a sound.
+    /// Writer's notes open as headings and what's under them, bullets as bullets, markdown marks gone.
+    @Test func theWritersNotesReadAsTheyWereWritten() {
+        let blocks = WritersNotes.blocks("## The idea\n\nA walk home.\n\n## Questions\n* **Which** bridge?\n- Do we hear `him`?")
+        #expect(blocks.map(\.heading) == [true, false, true, false])
+        #expect(blocks.map(\.text) == ["The idea", "A walk home.", "Questions", "\u{2022} Which bridge?\n\u{2022} Do we hear him?"])
+    }
+
     @Test func theEditorIsToldHowToLayOutAStory() throws {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("direction-prep-story-job-" + UUID().uuidString + ".direction")
         defer { try? FileManager.default.removeItem(at: path) }

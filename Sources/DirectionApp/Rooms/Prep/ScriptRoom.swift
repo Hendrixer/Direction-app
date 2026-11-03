@@ -14,6 +14,8 @@ struct PrepPreview {
     var shot: String? = nil
     var noteText = ""
     var find = ""
+    /// Rows whose beat is shown whole.
+    var openBeats: [Int] = []
 }
 
 enum PrepSheetTab: String { case notes, questions }
@@ -59,6 +61,11 @@ private struct ScriptPage: View {
     @State private var hit = 0
     @State private var jump: String?
     @State private var center: String?
+    /// Beats shown whole: a beat reads one line until it's clicked.
+    @State private var openStory: Set<String> = []
+    /// The row whose question the sheet shows.
+    @State private var asking: String?
+    @State private var showNotes = false
     @FocusState private var focus: ScriptCell?
     @FocusState private var findFocus: Bool
     /// Snapshots: a cell drawn as if you were typing in it.
@@ -80,6 +87,7 @@ private struct ScriptPage: View {
             previewFocus = p.editing.flatMap { script.rows.indices.contains($0 - 1) ? .picture(script.rows[$0 - 1].id) : nil }
             previewText = p.editingText.isEmpty ? nil : p.editingText
             _tab = State(initialValue: p.tab)
+            _openStory = State(initialValue: Set(p.openBeats.compactMap { script.rows.indices.contains($0 - 1) ? script.rows[$0 - 1].id : nil }))
             _noteText = State(initialValue: p.noteText)
             _find = State(initialValue: p.find)
         }
@@ -100,7 +108,7 @@ private struct ScriptPage: View {
             }
             .frame(maxWidth: .infinity)
             .background(Gate.Surface.sunken)
-            ScriptSheet(model: model, script: script, selected: orderedSelection, tab: $tab, noteText: $noteText, noteKind: $noteKind)
+            ScriptSheet(model: model, script: script, selected: orderedSelection, tab: $tab, noteText: $noteText, noteKind: $noteKind, asking: $asking)
                 .frame(width: 360)
         }
         .background { shortcuts }
@@ -132,7 +140,7 @@ private struct ScriptPage: View {
             Button { model.sheet = .brief } label: {
                 HStack { Text(model.styleName ?? "No style").lineLimit(1); Spacer(); Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Gate.Text.tertiary) }
             }.buttonStyle(.gate(.normal, .regular)).padding(.horizontal, 9)
-            Text("The style decides what the picture column reaches for. Change it in the brief.").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).padding(.horizontal, 9).padding(.top, 6)
+            .help("The style decides what the picture column reaches for. Change it in the brief.")
             Spacer()
         }
         .padding(.vertical, 14).padding(.horizontal, 8)
@@ -199,7 +207,6 @@ private struct ScriptPage: View {
             Group {
                 if focus != nil { Text("\u{21A9} saves \u{00B7} esc puts it back") }
                 else if !selected.isEmpty { Text(selected.count == 1 ? "Row \(rowNumber[orderedSelection[0]] ?? 0) selected" : "\(selected.count) rows selected") }
-                else if query.isEmpty { Text("Click a row to select it, or its words to type in them.") }
             }
             .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
             Spacer()
@@ -217,31 +224,13 @@ private struct ScriptPage: View {
 
     private var page: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
-            if let source = script.source {
-                HStack(spacing: 8) {
-                    Image(systemName: script.isStory ? "text.book.closed" : "doc.text").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary)
-                    Text("\(script.isStory ? "The story, from" : "From") \(source.fileName) \u{00B7} \(source.words) words").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
-                    Spacer()
-                    // Came in as the wrong one: the same file, laid out the other way.
-                    Button(script.isStory ? "Read as a script\u{2026}" : "Read as a story\u{2026}") { model.readAgain(as: script.isStory ? .script : .story) }
-                        .buttonStyle(.gate(.ghost, .small))
-                        .help(script.isStory ? "Lay it out as a script, its words said as written" : "Lay it out as a story: the editor writes what we see and hear")
-                    Button("Bring in a new draft\u{2026}") { model.chooseScript() }.buttonStyle(.gate(.ghost, .small))
-                }.padding(.leading, 46).padding(.bottom, script.storyNotes == nil ? 12 : 4)
-                if let notes = script.storyNotes {
-                    HStack(spacing: 8) {
-                        Image(systemName: "note.text").font(.system(size: 11)).foregroundStyle(Gate.Text.disabled)
-                        Text(Self.notesLine(notes)).font(Gate.Font.small).foregroundStyle(Gate.Text.disabled).lineLimit(1)
-                    }
-                    .padding(.leading, 46).padding(.bottom, 12)
-                    .help(notes)
-                }
-            }
+            if let source = script.source { sourceLine(source) }
             if model.writingPicture, script.rows.contains(where: { $0.picture.isEmpty }) { drafting.padding(.leading, 46).padding(.bottom, 14) }
             header
             let found = Set(hits), now = current
             ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
-                if let s = group.section { sectionHeading(s, rows: group.rows) }
+                // One section is the whole script: the toolbar already gives its time.
+                if let s = group.section, script.sections.count > 1 { sectionHeading(s, rows: group.rows) }
                 ForEach(group.rows, id: \.id) { r in row(r, found: found.contains(r.id), current: now == r.id) }
             }
             if filter == .all {
@@ -251,6 +240,32 @@ private struct ScriptPage: View {
         }
         .frame(width: 820).padding(.top, 18)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Where the words came from, on one line: the writer's notes open from it, and the rest is in More.
+    private func sourceLine(_ source: ScriptSource) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: script.isStory ? "text.book.closed" : "doc.text").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary)
+            Text("\(script.isStory ? "The story, from" : "From") \(source.fileName) \u{00B7} \(source.words) words").foregroundStyle(Gate.Text.tertiary)
+            if let notes = script.storyNotes {
+                Text("\u{00B7}").foregroundStyle(Gate.Text.disabled)
+                Button { showNotes = true } label: { Text("Writer\u{2019}s notes").foregroundStyle(Gate.Text.secondary).underline(color: Gate.Line.strong) }
+                    .buttonStyle(.plain)
+                    .help("What the writer wrote around the beats. The editor reads it with them.")
+                    .gatePopover(isPresented: $showNotes, arrowEdge: .bottom) { WritersNotes(notes: notes) }
+            }
+            Spacer()
+            Menu {
+                Button("Bring In a New Draft\u{2026}") { model.chooseScript() }
+                // Came in as the wrong one: the same file, laid out the other way.
+                Button(script.isStory ? "Read as a Script\u{2026}" : "Read as a Story\u{2026}") { model.readAgain(as: script.isStory ? .script : .story) }
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(Gate.Text.secondary).frame(width: 22, height: 22).contentShape(Rectangle())
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().help("More")
+        }
+        .font(Gate.Font.small)
+        .padding(.leading, 46).padding(.bottom, 12)
     }
 
     private var drafting: some View {
@@ -308,12 +323,8 @@ private struct ScriptPage: View {
                 }
                 .frame(width: 30, height: 18, alignment: .trailing)
                 VStack(alignment: .leading, spacing: 8) {
-                    // A film from a story: the part of the story the beat came from, above what we see and hear.
-                    if let story = r.story {
-                        Text(story).font(.system(size: 12.5)).foregroundStyle(Gate.Text.tertiary).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background { if found && matches(story) { RoundedRectangle(cornerRadius: 5).fill(Gate.Surface.hover).padding(.horizontal, -5).padding(.vertical, -3) } }
-                    }
+                    // A film from a story: the beat it came from, above what we see and hear.
+                    if let story = r.story { beat(r, story: story, found: found && matches(story)) }
                     HStack(alignment: .top, spacing: 16) {
                         picture(r, notes: notes, found: found && matches(r.picture.text)).frame(width: 330, alignment: .leading)
                         sound(r, found: found && matches(r.sound.text)).frame(maxWidth: .infinity, alignment: .leading)
@@ -322,7 +333,7 @@ private struct ScriptPage: View {
                 Text(Timecode.duration(r.seconds)).font(Gate.Font.timecodeSmall).foregroundStyle(Gate.Text.disabled).frame(width: 40, height: 18, alignment: .trailing)
             }
             .padding(.vertical, 9)
-            if let q = r.question, q.isOpen { RowQuestion(question: q) { choice in model.answerRow(r.id, choice: choice) }.padding(.leading, 46).padding(.trailing, 56).padding(.bottom, 10) }
+            if let q = r.question, q.isOpen { questionLine(r, q).padding(.leading, 46).padding(.trailing, 56).padding(.bottom, 10) }
         }
         .background {
             if isSel { Gate.Surface.panel.padding(.horizontal, -14) }
@@ -337,6 +348,39 @@ private struct ScriptPage: View {
         .onHover { hovered = $0 ? r.id : (hovered == r.id ? nil : hovered) }
         .contextMenu { rowMenu(r) }
         .id(r.id)
+    }
+
+    /// The beat in one quiet line, its title first; whole once clicked, before there's a picture under it, or
+    /// when Find is in its words. Its number and times are the row's.
+    private func beat(_ r: AVRow, story: String, found: Bool) -> some View {
+        let lead = ScriptImport.beatLead(story)
+        let whole = openStory.contains(r.id) || r.picture.isEmpty || found
+        let title = lead.title.map { Text($0 + "  ").fontWeight(.medium).foregroundColor(Gate.Text.secondary) } ?? Text("")
+        return (title + Text(lead.body).foregroundColor(Gate.Text.tertiary))
+            .font(.system(size: 12.5)).lineSpacing(2).lineLimit(whole ? nil : 1).truncationMode(.tail)
+            .fixedSize(horizontal: false, vertical: whole)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background { if found { RoundedRectangle(cornerRadius: 5).fill(Gate.Surface.hover).padding(.horizontal, -5).padding(.vertical, -3) } }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if openStory.contains(r.id) { openStory.remove(r.id) } else { openStory.insert(r.id) }
+                select(r.id, flags: NSEvent.modifierFlags)
+            }
+            .help(whole ? "" : "Show the whole beat")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(whole ? "" : "Shows the whole beat")
+    }
+
+    /// The editor's question in one line; its choices are in the sheet, with the notes.
+    private func questionLine(_ r: AVRow, _ q: PrepQuestion) -> some View {
+        HStack(spacing: 9) {
+            GemMark()
+            Text(q.text).font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 8)
+            Button("Answer\u{2026}") { ask(r.id) }.buttonStyle(.gate(.ghost, .small))
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { ask(r.id) }
     }
 
     @ViewBuilder private func picture(_ r: AVRow, notes: [PrepNote], found: Bool) -> some View {
@@ -355,12 +399,11 @@ private struct ScriptPage: View {
                                    size: 13, found: found, cell: .picture(r.id), focus: $focus, preview: previewFocus == .picture(r.id) ? (previewText ?? r.picture.text) : nil) { model.editPicture(r.id, $0) }
                 }
                 let how = [r.picture.size?.label, r.picture.move?.label].compactMap { $0 }.joined(separator: " \u{00B7} ")
-                if !notes.isEmpty || changedThisPass(r) || r.picture.yours == true || r.question?.isOpen == true || !how.isEmpty {
+                if !notes.isEmpty || changedThisPass(r) || r.picture.yours == true || !how.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(notes, id: \.id) { n in Chip("Note \(n.number)", style: .director) }
                         if changedThisPass(r) { Chip("Changed", style: .agent, mono: false) }
                         if r.picture.yours == true { Chip("Your words", style: .plain, icon: "character.cursor.ibeam", mono: false) }
-                        if r.question?.isOpen == true { Chip("Question", style: .agent, mono: false) }
                         if !how.isEmpty { Text(how).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary) }
                     }
                 }
@@ -404,13 +447,6 @@ private struct ScriptPage: View {
         Button("Take Out Row", role: .destructive) { model.removeRow(r.id) }
     }
 
-    /// "The editor reads the writer\u{2019}s notes with it: The idea, The rules of the world and 3 more."
-    static func notesLine(_ notes: String) -> String {
-        let titles = notes.components(separatedBy: "\n").filter { $0.hasPrefix("#") }.map { $0.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        let named = titles.count > 3 ? titles.prefix(2).joined(separator: ", ") + " and \(titles.count - 2) more" : titles.count > 1 ? titles.dropLast().joined(separator: ", ") + " and " + titles.last! : titles.first
-        return "The editor reads the writer\u{2019}s notes with it" + (named.map { ": \($0)." } ?? ".")
-    }
-
     static func menuLabel(_ k: HeardKind) -> String {
         switch k { case .voice: "Voice-Over"; case .onCamera: "On Camera"; case .effect: "Sound Effect"; case .music: "Music"; case .silence: "Silence" }
     }
@@ -428,6 +464,9 @@ private struct ScriptPage: View {
     }
 
     private func scroll(_ id: String?) { filter = .all; jump = id }
+
+    /// Answer…: the row is selected, and the sheet opens on its question.
+    private func ask(_ id: String) { selected = [id]; anchor = id; tab = .questions; asking = id }
 
     /// ↩ types in the selected row's picture; N starts a note on it (the composer is in the sheet).
     private func keys(_ press: KeyPress) -> KeyPress.Result {
@@ -525,6 +564,40 @@ struct OutlineRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// The writer's notes from a story, as they wrote them: headings, then what's under them.
+struct WritersNotes: View {
+    var notes: String
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(Self.blocks(notes).enumerated()), id: \.offset) { _, b in
+                    if b.heading { SectionLabel(b.text).padding(.top, 8) }
+                    else { Text(b.text).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).lineSpacing(2).fixedSize(horizontal: false, vertical: true) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+        }
+        .frame(width: 420).frame(maxHeight: 460)
+        .background(Gate.Surface.panel)
+    }
+
+    /// "## The idea\n\nA walk home…" as a heading and its paragraph; markdown marks taken out.
+    static func blocks(_ notes: String) -> [(heading: Bool, text: String)] {
+        notes.components(separatedBy: "\n\n").flatMap { p -> [(heading: Bool, text: String)] in
+            var lines = p.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            var out: [(heading: Bool, text: String)] = []
+            if let first = lines.first, first.hasPrefix("#") { out.append((true, first.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces))); lines.removeFirst() }
+            let text = lines.map { line in
+                let bullet = ["* ", "- ", "+ "].contains { line.hasPrefix($0) }
+                return (bullet ? "\u{2022} " + line.dropFirst(2) : line).replacingOccurrences(of: #"\*\*|__|`"#, with: "", options: .regularExpression)
+            }.joined(separator: "\n")
+            if !text.isEmpty { out.append((false, text)) }
+            return out
+        }
     }
 }
 

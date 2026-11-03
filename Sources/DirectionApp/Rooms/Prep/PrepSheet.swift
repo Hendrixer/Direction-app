@@ -9,6 +9,8 @@ struct ScriptSheet: View {
     @Binding var tab: PrepSheetTab
     @Binding var noteText: String
     @Binding var noteKind: NoteKind?
+    /// The row whose question Answer… opened.
+    @Binding var asking: String?
     @State private var rules: [String] = []
 
     private var notes: [PrepNote] { script.notes.filter { $0.state != .dropped }.sorted { $0.number < $1.number } }
@@ -18,27 +20,34 @@ struct ScriptSheet: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Notes on the script").font(Gate.Font.brandM).foregroundStyle(Gate.Text.primary)
-                Text(subtitle).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                if let subtitle { Text(subtitle).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary) }
             }
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
             PrepTabs(tab: $tab, notes: notes.count, questions: script.openQuestions.count)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    switch tab {
-                    case .notes:
-                        if notes.isEmpty { guidance.padding(16) }
-                        ForEach(notes) { n in PrepNoteRow(note: n, anchor: anchor(n)) { model.dropScriptNote(n.id) } }
-                    case .questions:
-                        if questions.isEmpty { Text("The editor asks here when only you can say what a row should show.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).padding(16) }
-                        ForEach(questions, id: \.id) { r in
-                            VStack(alignment: .leading, spacing: 8) {
-                                SectionLabel("Row \(script.number(of: r.id) ?? 0)")
-                                if let q = r.question, q.isOpen { RowQuestion(question: q) { model.answerRow(r.id, choice: $0) } }
-                                else if let q = r.question { AnsweredQuestion(question: q) }
-                            }.padding(16).hairlineBorder(.bottom)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        switch tab {
+                        case .notes:
+                            if notes.isEmpty { guidance.padding(16) }
+                            ForEach(notes) { n in PrepNoteRow(note: n, anchor: anchor(n)) { model.dropScriptNote(n.id) } }
+                        case .questions:
+                            if questions.isEmpty { Text("The editor asks here when only you can say what a row should show.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).padding(16) }
+                            ForEach(questions, id: \.id) { r in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    SectionLabel("Row \(script.number(of: r.id) ?? 0)")
+                                    if let q = r.question, q.isOpen { RowQuestion(question: q) { model.answerRow(r.id, choice: $0) } }
+                                    else if let q = r.question { AnsweredQuestion(question: q) }
+                                }
+                                .padding(16).hairlineBorder(.bottom)
+                                .id(r.id)
+                            }
+                            // Answer… on a row: its question, wherever it is in the list.
+                            Color.clear.frame(height: 0).onAppear { if let id = asking { proxy.scrollTo(id, anchor: .top) } }
                         }
                     }
                 }
+                .onChange(of: asking) { _, id in if let id, tab == .questions { withAnimation(gateAnimation(Gate.Motion.glide)) { proxy.scrollTo(id, anchor: .top) } } }
             }
             .frame(maxHeight: .infinity)
             composer
@@ -48,9 +57,10 @@ struct ScriptSheet: View {
         .task(id: model.brief.style) { rules = ((try? model.store?.appliedStyle())?.style?.rules ?? []).prefix(5).map(\.text) }
     }
 
-    private var subtitle: String {
+    /// What's waiting, with the editor and done; nothing before the first note.
+    private var subtitle: String? {
         let written = script.openNotes.count, out = script.turnedOver.count, done = script.notes.filter { $0.state == .done }.count
-        if written == 0 && out == 0 && done == 0 { return "None yet" }
+        if written == 0 && out == 0 && done == 0 { return nil }
         return [written > 0 ? "\(written) waiting for Turn over" : nil, out > 0 ? "\(out) with the editor" : nil, done > 0 ? "\(done) done" : nil].compactMap { $0 }.joined(separator: " \u{00B7} ")
     }
 
@@ -74,7 +84,8 @@ struct ScriptSheet: View {
                 }
                 Text("Leave notes while I write. I\u{2019}ll read them when you turn them over.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).padding(.top, 4)
             } else {
-                Text("Click a row to select it (\u{21E7}-click for a run of rows, \u{2318}-click for more), then write a note below. Notes wait here until you turn them over. What you type in a cell applies now, and the editor keeps it.")
+                // How to select is the composer's to say; this is what happens to a note, and to typing.
+                Text("Notes wait here until you turn them over. What you type in a cell is yours, and the editor keeps it.")
                     .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineSpacing(2)
             }
         }

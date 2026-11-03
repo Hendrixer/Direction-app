@@ -93,6 +93,22 @@ public enum ScriptImport {
         raw.range(of: #"^(\*\*|__)?\s*((beat|scene)\s+)?\d{1,3}\s*(·|—|–|:|\.|\))"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
+    /// A numbered beat as the Script room shows it: the writer's title, and the beat without its number
+    /// and times, which the row's number and time already say. "1 · Assembly · 0:00–0:05. Black, then…" is
+    /// ("Assembly", "Black, then…"); "Beat 3: The walk home." keeps its words, without the number.
+    public static func beatLead(_ story: String) -> (title: String?, body: String) {
+        guard let n = story.range(of: #"^((beat|scene)\s+)?\d{1,3}\s*(·|—|–|:|\.|\))\s*"#, options: [.regularExpression, .caseInsensitive]) else { return (nil, story) }
+        let rest = String(story[n.upperBound...])
+        // The lead runs to its first full stop or colon: "Assembly · 0:00–0:05."
+        guard let end = rest.prefix(80).range(of: #"[.:](\s|$)"#, options: .regularExpression) else { return (nil, rest) }
+        let parts = rest[..<end.lowerBound].components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespaces) }
+        let body = rest[end.upperBound...].trimmingCharacters(in: .whitespaces)
+        let named = parts.filter { !$0.isEmpty && $0.range(of: #"^\d{1,2}:\d{2}(\.\d+)?\s*[–—-]\s*\d{1,2}:\d{2}"#, options: .regularExpression) == nil }
+        // A lead of one plain phrase is the beat's first sentence, not a title.
+        guard parts.count > 1 || named.count < parts.count, !body.isEmpty else { return (nil, rest) }
+        return (named.isEmpty ? nil : named.joined(separator: " \u{00B7} "), body)
+    }
+
     /// How long the writer gave a beat, from the times in its lead: "0:05–0:13" is 8 seconds.
     static func writersTime(_ raw: String) -> Double? {
         let lead = String(raw.prefix(80))
