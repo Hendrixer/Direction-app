@@ -46,7 +46,7 @@ struct FilmIndexCard: Sendable {
             if !s.editorBusy { s.status += " \u{00B7} " + FilmDates.short(e.lastOpened) }
             return s
         }
-        return FilmSummary(id: e.path, name: e.name, path: e.path, duration: nil, status: e.available ? FilmDates.short(e.lastOpened) : "Can't find this film", art: [.dusk, .night, .day, .hands, .room][abs(e.path.hashValue) % 5])
+        return FilmSummary(id: e.path, name: e.name, path: e.path, duration: nil, status: e.available ? FilmDates.short(e.lastOpened) : "Can't find this film")
     }
 
     nonisolated static func load(_ e: ProjectEntry, index: Int, known: Double?) throws -> FilmIndexCard? {
@@ -90,7 +90,7 @@ struct FilmIndexCard: Sendable {
         let thumbnail = (p.assets.first { $0.id == posterAsset } ?? p.assets.first { $0.thumbnailPath != nil })?.thumbnailPath
         let summary = FilmSummary(id: e.path, name: p.name, path: e.path, duration: duration, status: status, editorBusy: busy,
                                   waiting: drafts > 0 ? "\(drafts) \(drafts == 1 ? "note" : "notes") waiting" : nil, locked: state.pictureLocked,
-                                  art: [.dusk, .night, .day, .hands, .room][index % 5], thumbnail: thumbnail)
+                                  thumbnail: thumbnail)
         return FilmIndexCard(summary: summary, needsYou: drafts > 0 || unreviewed > 0 || asks > 0 || readBack, progress: progress, footage: Array(p.assets.prefix(50).map(\.path)), brief: brief, stamp: modified(e.path))
     }
 

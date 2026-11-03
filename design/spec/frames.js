@@ -3,6 +3,7 @@
 window.FRAMES = [
   { id: "01-films-empty", group: "Start", title: "Films, first launch", spec: "start.md" },
   { id: "02-films", group: "Start", title: "Films, list", spec: "start.md" },
+  { id: "02-films-no-picture", group: "Start", title: "Films, no picture yet", spec: "start.md" },
   { id: "03-brief", group: "Start", title: "The brief", spec: "start.md" },
   { id: "04-footage-drop", group: "Start", title: "Script or footage", spec: "start.md" },
   { id: "05-footage-logging", group: "Start", title: "Logging footage", spec: "start.md" },

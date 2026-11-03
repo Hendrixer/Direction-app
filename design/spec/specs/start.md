@@ -57,6 +57,7 @@ Frame: `screens/02-films.html` · Render: `renders/02-films@2x.png`
 - Header: 32 pt top, 40 pt sides. "Films" Archivo 800 34 at 125%, subtitle 12 pt `--text-3` 8 pt below. Right: search field 240 × 28, sort segmented control (Recent · Name).
 - Grid: 4 columns, 22 pt column gap, 28 pt row gap, 40 pt side padding, 28 pt top. Card = 16:9 poster (radius 10, inner 1 pt `--line`, shadow 0 18 40 −18 black) + 10 pt gap + title (Archivo 700 15 at 112%) + status line (12 pt `--text-3`, single line, ellipsis).
 - Poster overlays: top-left badge chip 8 pt inset, bottom-left duration in a glass HUD tag.
+- Poster: the latest cut's first shot, else the first take with a thumbnail. A film with no picture yet (frame 02-films-no-picture) shows the chrome mark, 46% of the poster's height, in a pool of light (`--steel-4` at the middle through `--steel-2` to `--canvas` at the edges), with the first launch's shadow. Its light is still and comes from across the top, from a direction worked out from the film's path, so the same film always looks the same and no two cards look alike. The poster stays under the window's grain: it isn't footage.
 
 **Content (sample)**
 | Film | Poster | Badge | Status line |

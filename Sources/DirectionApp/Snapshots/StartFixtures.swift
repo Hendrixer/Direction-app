@@ -21,6 +21,14 @@ enum StartFixtures {
                 let app = AppModel(); app.previewFilms = films
                 return SnapshotScene(FilmsView(app: app))
             },
+            // Films with nothing to show yet: each mark lit from its own direction, beside one with footage.
+            "02-films-no-picture": {
+                let app = AppModel()
+                app.previewFilms = [films[0]] + [("The last human discovery, ever", "Script \u{00B7} 279 rows"), ("Coded love", "New film \u{00B7} Write the brief"), ("Night walk", "Brief \u{00B7} No footage yet")].map { name, status in
+                    FilmSummary(id: name, name: name, path: "/Users/you/Movies/Direction/\(name).direction", duration: nil, status: status + " \u{00B7} Today 19:21")
+                }
+                return SnapshotScene(FilmsView(app: app))
+            },
             "03-brief": {
                 let m = newFilm()
                 m.brief = Brief()

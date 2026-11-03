@@ -137,6 +137,7 @@ struct FilmSummary: Identifiable {
     var editorBusy = false
     var waiting: String?
     var locked = false
-    var art: FootageArt = .dusk
+    /// A painted stand-in, for sample films. A real film shows its own picture, or the mark until it has one.
+    var art: FootageArt?
     var thumbnail: String?
 }

@@ -44,6 +44,17 @@ struct FilmModelTests {
         #expect(!FilmLibraryIndex.trashed.contains(path))
     }
 
+    @Test func aFilmWithNoPictureShowsTheMarkLitItsOwnWay() throws {
+        let a = "/Users/you/Movies/Direction/Coded love.direction", b = "/Users/you/Movies/Direction/Night walk.direction"
+        let entry = try JSONDecoder().decode(ProjectEntry.self, from: JSONSerialization.data(withJSONObject: ["id": a, "name": "Coded love", "path": a, "lastOpened": 1.0, "available": true]))
+        // A real film never gets a painted stand-in: it shows its own picture, or the mark.
+        #expect(FilmLibraryIndex.shared.summary(for: entry).art == nil)
+        // The same film is lit the same way every launch, always from above, and two films differently.
+        #expect(FilmMarkPoster.light(a) == FilmMarkPoster.light(a))
+        #expect(FilmMarkPoster.light(a) != FilmMarkPoster.light(b))
+        for path in [a, b, "", "/x"] { #expect((1.1 * Double.pi...1.9 * Double.pi).contains(FilmMarkPoster.light(path))) }
+    }
+
     @Test func openingTheFilmThatIsAlreadyOpenKeepsIt() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-open-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

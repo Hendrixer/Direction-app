@@ -12,6 +12,8 @@ struct ChromeMark: View {
     var size: CGFloat = 168
     /// Pins the moment, in seconds, for snapshots. Nil follows the clock.
     var at: Double? = nil
+    /// Holds the light still, coming from this direction (radians, image coordinates, y down): a film's poster.
+    var light: Double? = nil
     @Environment(\.displayScale) private var displayScale
 
     static let pass = 5.6, rest = 2.4
@@ -29,8 +31,9 @@ struct ChromeMark: View {
     var body: some View {
         if let mark = BrandAssets.mark {
             Group {
-                if let renderer = ChromeLightRenderer.shared, !(at == nil && SettingsKey.reducesMotion) {
+                if let renderer = ChromeLightRenderer.shared, !(at == nil && light == nil && SettingsKey.reducesMotion) {
                     if let at { lit(renderer, Self.angle(at), scale: 2) }
+                    else if let light { lit(renderer, light, scale: max(2, displayScale)) }
                     else { TimelineView(.animation(minimumInterval: 1 / 60)) { lit(renderer, Self.angle($0.date.timeIntervalSinceReferenceDate), scale: displayScale) } }
                 } else {
                     Image(nsImage: mark).resizable().interpolation(.high).scaledToFit()
@@ -56,7 +59,8 @@ struct ChromeMark: View {
     private let device: MTLDevice, queue: MTLCommandQueue, pipeline: MTLComputePipelineState
     private let art: MTLTexture, height: MTLTexture
     private var output: MTLTexture?
-    private var last: (angle: Double, pixels: Int, image: CGImage)?
+    /// The last few drawn, so posters lit from their own directions aren't drawn again on every hover.
+    private var recent: [(angle: Double, pixels: Int, image: CGImage)] = []
 
     /// How the light behaves. Tuned against the art; see design/spec/specs/start.md.
     struct Params {
@@ -85,8 +89,8 @@ struct ChromeMark: View {
     }
 
     func image(angle: Double, pixels: Int) -> CGImage? {
-        if let last, last.angle == angle, last.pixels == pixels { return last.image }
         let pixels = max(32, min(pixels, 1024))
+        if let hit = recent.first(where: { $0.angle == angle && $0.pixels == pixels }) { return hit.image }
         if output?.width != pixels {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: pixels, height: pixels, mipmapped: false)
             d.usage = [.shaderWrite]; d.storageMode = .shared
@@ -109,7 +113,7 @@ struct ChromeMark: View {
         guard let provider = CGDataProvider(data: Data(bytes) as CFData),
               let image = CGImage(width: pixels, height: pixels, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: pixels * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue), provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
-        last = (angle, pixels, image)
+        recent = [(angle, pixels, image)] + recent.prefix(11)
         return image
     }
 

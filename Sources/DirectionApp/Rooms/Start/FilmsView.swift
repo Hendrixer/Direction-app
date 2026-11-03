@@ -315,7 +315,7 @@ private struct FilmCardView: View {
     private var poster: some View {
         Color.clear.aspectRatio(16 / 9, contentMode: .fit)
             .overlay {
-                Thumbnail(path: film.thumbnail, art: film.art).opacity(0.9)
+                picture.opacity(0.9)
                     .grayscale(film.locked ? 0.6 : 0).colorMultiply(film.locked ? Color(white: 0.8) : .white)
             }
             .overlay { if hovered { Color.white.opacity(0.04) } }
@@ -327,6 +327,12 @@ private struct FilmCardView: View {
             .shadow(color: .black.opacity(0.55), radius: 14, y: 14)
             .overlay { if selected { RoundedRectangle(cornerRadius: Gate.Radius.card + 2, style: .continuous).strokeBorder(Gate.Text.primary, lineWidth: 2).padding(-2) } }
             .animation(gateAnimation(Gate.Motion.snap), value: selected)
+    }
+
+    @ViewBuilder private var picture: some View {
+        if let path = film.thumbnail, ThumbnailCache.image(path) != nil { Thumbnail(path: path) }
+        else if let art = film.art { FootageArtView(art: art) }
+        else { FilmMarkPoster(seed: film.path) }
     }
 
     @ViewBuilder private var badge: some View {
@@ -341,6 +347,31 @@ private struct FilmCardView: View {
                 .padding(.horizontal, 7).frame(height: Gate.Size.chip)
                 .background(RoundedRectangle(cornerRadius: Gate.Radius.chip).fill(Color.black.opacity(0.6)))
         }
+    }
+}
+
+/// A film with no picture yet: the mark in a pool of light, as on first launch, lit from a direction of
+/// the film's own so no two cards look alike.
+struct FilmMarkPoster: View {
+    var seed: String
+    var body: some View {
+        GeometryReader { g in
+            let size = g.size.height * 0.46
+            ZStack {
+                Gate.Surface.canvas
+                EllipticalGradient(stops: [.init(color: Gate.Steel.ramp[4], location: 0), .init(color: Gate.Steel.ramp[2], location: 0.45), .init(color: Gate.Surface.canvas, location: 1)], center: UnitPoint(x: 0.5, y: 0.42), startRadiusFraction: 0, endRadiusFraction: 0.62)
+                ChromeMark(size: size, light: Self.light(seed)).shadow(color: .black.opacity(0.85), radius: size * 0.13, y: size * 0.2)
+            }
+            .frame(width: g.size.width, height: g.size.height)
+        }
+    }
+
+    /// From across the top, never below: π is the left, 1.5π straight above, 2π the right. The same film
+    /// is always lit the same way.
+    static func light(_ seed: String) -> Double {
+        var h: UInt64 = 0xcbf2_9ce4_8422_2325
+        for b in seed.utf8 { h = (h ^ UInt64(b)) &* 0x100_0000_01b3 }
+        return .pi * (1.1 + 0.8 * Double(h % 1000) / 999)
     }
 }
 
