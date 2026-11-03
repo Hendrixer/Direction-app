@@ -15,7 +15,7 @@ struct OnboardingStepper: View {
         HStack(spacing: 6) {
             item(.brief, "Brief")
             bar
-            item(.footage, "Script or footage")
+            item(.footage, "Script, story or footage")
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Steps")

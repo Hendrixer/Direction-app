@@ -8,17 +8,36 @@ extension EditorJobs {
         let script = try store.script() ?? AVScript()
         switch job {
         case .script:
-            let empty = script.rows.enumerated().filter { $0.element.picture.isEmpty }.map { $0.offset + 1 }
+            let story = script.isStory
+            let empty = script.rows.enumerated().filter { $0.element.picture.isEmpty || (story && $0.element.soundUndecided) }.map { $0.offset + 1 }
             var task: [String] = []
             if !empty.isEmpty {
-                let from = script.source.map { "\u{201C}\($0.fileName)\u{201D}, \($0.words) words" } ?? "a script"
+                let from = script.source.map { "\u{201C}\($0.fileName)\u{201D}, \($0.words) words" } ?? (story ? "a story" : "a script")
                 task.append(empty.count == script.rows.count
-                    ? "The director brought in \(from): \(script.rows.count) rows, about \(Timecode.duration(script.seconds)) read aloud. Write what we see under every row."
-                    : "Write what we see under the rows that have no picture yet: \(rowList(empty)).")
+                    ? story
+                        ? "The director brought in a story, \(from). Direction laid it out as \(script.rows.count) beats. Write what we see and what we hear under every one."
+                        : "The director brought in \(from): \(script.rows.count) rows, about \(Timecode.duration(script.seconds)) read aloud. Write what we see under every row."
+                    : story ? "Write what we see and what we hear under the rows that don\u{2019}t have them yet: \(rowList(empty))." : "Write what we see under the rows that have no picture yet: \(rowList(empty)).")
             }
             if !script.turnedOver.isEmpty { task.append("The director turned over \(count(script.turnedOver.count, "note")) on the script. Answer each one: change the rows it names, then reply.") }
-            return ["task": task.isEmpty ? "Read the script and check every row has a picture that fits its words and the style." : task.joined(separator: " "),
-                    "notes": notes(script.turnedOver) { n in (n.rowIDs ?? []).compactMap { script.number(of: $0) }.isEmpty ? "" : "Rows \(rowList((n.rowIDs ?? []).compactMap { script.number(of: $0) }))" }]
+            var v = ["task": task.isEmpty ? (story ? "Read the A/V script and check every beat has a picture and a sound that fit the story and the style." : "Read the script and check every row has a picture that fits its words and the style.") : task.joined(separator: " "),
+                     "notes": notes(script.turnedOver) { n in (n.rowIDs ?? []).compactMap { script.number(of: $0) }.isEmpty ? "" : "Rows \(rowList((n.rowIDs ?? []).compactMap { script.number(of: $0) }))" }]
+            if story {
+                v["columns"] = "This film starts from a story, not a script: nobody\u{2019}s words are written. Direction laid the story out as beats, a row each, with the part of the story it came from (`story`). Both columns are yours to write: the picture, what the viewer sees, never how to shoot it; and the sound, what we hear. Later the breakdown turns them into shots, so write what someone could film, record on a screen, or make."
+                v["write"] = "pictures and sounds"; v["whole"] = "story"; v["done"] = "a picture and a sound"
+                v["theirs"] = "So is a sound they wrote. The story is the writer\u{2019}s: tell it as it is, in order."
+                v["story"] = """
+                5. What we hear, on every row, in the same `direction_script_update`: `sounds: [{rowID, kind, speaker?, text, ownWords?, seconds}]`. Someone talking in shot is `onCamera` with the speaker; talk recorded on its own (an interview, a narration) is `voice`. Never write words for anyone to say: the text says who talks and what about ("Maya, on why she nearly quit") with `ownWords: true`, and they find the words on the day. Words the story quotes are the writer\u{2019}s: use them as written, without `ownWords`. Otherwise it\u{2019}s `effect` with what we hear ("The lights clunk on, one by one."), `music` or `silence`. Give every row `seconds`: how long the beat plays on screen.
+                6. One row is one beat. When a beat needs two pictures, write both in order ("Her hand on the switch. Then the room, lit."); the breakdown makes them two shots.
+
+                """
+            } else {
+                v["columns"] = "The A/V script has two columns. The sound is the script\u{2019}s own words; the picture is yours to write: what the viewer sees under each line, never how to shoot it. Later the breakdown turns your pictures into shots, so write pictures someone could film, record on a screen, or make."
+                v["write"] = "pictures"; v["whole"] = "script"; v["done"] = "a picture"
+                v["theirs"] = "The words are the script\u{2019}s: change them only where a note asks."
+                v["story"] = ""
+            }
+            return v
         case .breakdown:
             let b = try store.breakdown()
             var task: [String] = []

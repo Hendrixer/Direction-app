@@ -18,6 +18,13 @@ public struct SoundInput: Codable, Sendable {
     public var kind: HeardKind?
     public var speaker: String?
     public var text: String?
+    /// A film from a story: the speaker finds the words on the day, and the text says what about.
+    public var ownWords: Bool?
+    /// How long the row plays, where no written words decide it (a story's beats, cues).
+    public var seconds: Double?
+    public init(rowID: String, kind: HeardKind? = nil, speaker: String? = nil, text: String? = nil, ownWords: Bool? = nil, seconds: Double? = nil) {
+        self.rowID = rowID; self.kind = kind; self.speaker = speaker; self.text = text; self.ownWords = ownWords; self.seconds = seconds
+    }
 }
 
 public struct SetupInput: Codable, Sendable {
@@ -67,29 +74,34 @@ extension ProjectStore {
 
     // MARK: Bringing in a script
 
-    /// Brings in a script file. A second time it's a new draft: rows whose words are unchanged keep their
-    /// picture and notes, new words get new rows, and rows whose words are gone go.
+    /// Brings in a script file, or a story (specs/script.md › From a story). A second time it's a new draft:
+    /// rows whose words (or part of the story) are unchanged keep their picture and notes, new ones get new
+    /// rows, and rows whose words are gone go.
     @discardableResult
-    public func importScript(from url: URL) throws -> AVScript {
+    public func importScript(from url: URL, as kind: ScriptKind = .script) throws -> AVScript {
         guard let text = (try? String(contentsOf: url, encoding: .utf8)) ?? (try? String(contentsOf: url, encoding: .isoLatin1)) else {
             throw DirectionError("script_unreadable", "Direction can\u{2019}t read \(url.lastPathComponent). Bring in a text, Markdown or Fountain file.")
         }
-        return try importScript(text, fileName: url.lastPathComponent, path: url.path)
+        return try importScript(text, fileName: url.lastPathComponent, path: url.path, as: kind)
     }
 
     @discardableResult
-    public func importScript(_ text: String, fileName: String, path: String? = nil) throws -> AVScript {
-        let read = ScriptImport.read(text, fileName: fileName)
-        guard !read.rows.isEmpty else { throw DirectionError("script_empty", "\(fileName) has no words Direction can use.") }
+    public func importScript(_ text: String, fileName: String, path: String? = nil, as kind: ScriptKind = .script) throws -> AVScript {
+        let read = kind == .story ? ScriptImport.story(text, fileName: fileName) : ScriptImport.read(text, fileName: fileName)
+        guard !read.rows.isEmpty else { throw DirectionError("script_empty", "\(fileName) has no \(kind == .story ? "story" : "words") Direction can use.") }
         return try changeScript("Brought in \(fileName)") { s in
             let old = s.rows
-            func key(_ r: AVRow) -> String { r.sound.text.lowercased().filter { $0.isLetter || $0.isNumber } }
+            // A beat of a story is known by its part of the story; a script's row by its words.
+            func key(_ r: AVRow) -> String { r.story.map { "story " + $0 }?.lowercased().filter { $0.isLetter || $0.isNumber } ?? r.sound.text.lowercased().filter { $0.isLetter || $0.isNumber } }
             var unused = Dictionary(grouping: old.filter { !key($0).isEmpty }, by: key)
             s.sections = read.sections
+            s.kind = kind == .story ? .story : nil
             s.rows = read.rows.map { new in
                 guard var kept = unused[key(new)]?.first else { return new }
                 unused[key(new)]?.removeFirst()
-                kept.section = new.section; kept.sound.kind = new.sound.kind; kept.sound.speaker = new.sound.speaker
+                kept.section = new.section
+                // A story's beats keep what the editor and the director said we hear.
+                if new.story == nil { kept.sound.kind = new.sound.kind; kept.sound.speaker = new.sound.speaker }
                 if kept.picture.isEmpty { kept.picture = new.picture }
                 if kept.hint == nil { kept.hint = new.hint }
                 return kept
@@ -106,19 +118,26 @@ extension ProjectStore {
 
     /// The director types in a cell. What they type is theirs: the editor keeps it.
     @discardableResult
-    public func editRow(_ id: String, picture: String? = nil, size: ShotSize?? = nil, move: ShotMove?? = nil, sound: String? = nil, soundKind: HeardKind? = nil, speaker: String?? = nil) throws -> AVScript {
+    public func editRow(_ id: String, picture: String? = nil, size: ShotSize?? = nil, move: ShotMove?? = nil, sound: String? = nil, soundKind: HeardKind? = nil, speaker: String?? = nil, ownWords: Bool? = nil) throws -> AVScript {
         try changeScript("Changed row") { s in
             guard let i = s.rows.firstIndex(where: { $0.id == id }) else { throw DirectionError("row_not_found", "There\u{2019}s no row \(id).") }
             if let picture { s.rows[i].picture.text = picture; s.rows[i].picture.yours = true; s.rows[i].picture.pass = nil }
             if let size { s.rows[i].picture.size = size; s.rows[i].picture.yours = true }
             if let move { s.rows[i].picture.move = move; s.rows[i].picture.yours = true }
-            if let sound {
-                s.rows[i].sound.text = sound; s.rows[i].sound.yours = true
-                s.rows[i].seconds = AVScript.seconds(for: s.rows[i].sound)
-            }
-            if let soundKind { s.rows[i].sound.kind = soundKind; s.rows[i].sound.yours = true; s.rows[i].seconds = AVScript.seconds(for: s.rows[i].sound) }
+            if let sound { s.rows[i].sound.text = sound; s.rows[i].sound.yours = true }
+            if let soundKind { s.rows[i].sound.kind = soundKind; s.rows[i].sound.yours = true }
+            if let ownWords { s.rows[i].sound.ownWords = ownWords ? true : nil; s.rows[i].sound.yours = true }
             if let speaker { s.rows[i].sound.speaker = speaker }
+            if sound != nil || soundKind != nil || ownWords != nil { Self.retime(&s.rows[i]) }
         }
+    }
+
+    /// A row's time after its sound changed: from its words when it has written ones; a beat of a story
+    /// without them keeps the time it was given.
+    static func retime(_ row: inout AVRow, seconds given: Double? = nil) {
+        if row.hasWrittenWords { row.seconds = AVScript.seconds(for: row.sound) }
+        else if let given { row.seconds = min(600, max(0.5, given)) }
+        else if row.story == nil { row.seconds = AVScript.seconds(for: row.sound) }
     }
 
     /// A new, empty row after another (or at the top). Returns its id.
@@ -229,11 +248,16 @@ extension ProjectStore {
             }
             for w in sounds {
                 guard let i = s.rows.firstIndex(where: { $0.id == w.rowID }) else { refused.append("\(w.rowID): no such row"); continue }
-                if w.text != nil, !noted.contains(w.rowID) { refused.append("Row \(i + 1): the words are the script\u{2019}s; change them only when a note on the row asks"); continue }
+                // A script's words are its own. A story has none: what we hear is the editor's to write,
+                // unless the director wrote it.
+                let fromStory = s.rows[i].story != nil, asked = noted.contains(w.rowID)
+                if !fromStory, w.text != nil || w.ownWords != nil, !asked { refused.append("Row \(i + 1): the words are the script\u{2019}s; change them only when a note on the row asks"); continue }
+                if fromStory, s.rows[i].sound.yours == true, !asked { refused.append("Row \(i + 1): the director wrote what we hear; change it only when a note on the row asks"); continue }
                 if let k = w.kind { s.rows[i].sound.kind = k }
                 if let sp = w.speaker { s.rows[i].sound.speaker = sp.nilIfEmpty }
                 if let t = w.text { s.rows[i].sound.text = t }
-                s.rows[i].seconds = AVScript.seconds(for: s.rows[i].sound)
+                if let o = w.ownWords { s.rows[i].sound.ownWords = o ? true : nil }
+                Self.retime(&s.rows[i], seconds: w.seconds)
             }
             for (id, reply) in replies {
                 guard let i = s.notes.firstIndex(where: { $0.id == id || "\($0.number)" == id }) else { refused.append("\(id): no such note"); continue }

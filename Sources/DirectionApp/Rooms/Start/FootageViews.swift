@@ -109,6 +109,9 @@ struct OnboardingFootageDrop: View {
     private var session: OnboardingSession { .of(model) }
 
     @State private var scriptTargeted = false
+    /// Which half of the script zone a drag is over: the script's side or the story's.
+    @State private var dropAs: ScriptKind = .script
+    @State private var scriptWidth: CGFloat = 1
 
     var body: some View {
         VStack(spacing: 18) {
@@ -136,23 +139,43 @@ struct OnboardingFootageDrop: View {
         }
     }
 
-    /// A script: the A/V script comes first, footage after the shoot (specs/script.md).
+    /// Before the shoot: a script or a story becomes the A/V script, and footage comes after (specs/script.md).
+    /// A drag over the zone shows where each goes: its left half takes the script, its right half the story.
     private var scriptZone: some View {
         dropZone(targeted: scriptTargeted) {
             VStack(spacing: 18) {
                 boards
-                Text(scriptTargeted ? "Drop to bring in the script" : "A script").font(Gate.Font.brandXL).foregroundStyle(Gate.Text.primary)
-                Text("Bring in the script and the editor writes what we see under every line, in the film\u{2019}s style. You plan the shoot from it, and footage comes after.")
+                Text(scriptTargeted ? (dropAs == .story ? "Drop to bring in the story" : "Drop to bring in the script") : "A script or a story").font(Gate.Font.brandXL).foregroundStyle(Gate.Text.primary)
+                Text("A script is said as written; a story is what happens, with the talking found on the day. The editor lays out what we see and hear, beat by beat, and you plan the shoot from it.")
                     .font(.system(size: 13.5)).foregroundStyle(Gate.Text.tertiary)
                     .multilineTextAlignment(.center).lineSpacing(3.5).frame(maxWidth: 380).fixedSize(horizontal: false, vertical: true)
-                Button { model.chooseScript() } label: { HStack(spacing: 6) { Image(systemName: "doc.text"); Text("Choose a script\u{2026}") } }
-                    .buttonStyle(.gate(.normal, .large))
+                HStack(spacing: 10) {
+                    if scriptTargeted { dropPad(.script); dropPad(.story) }
+                    else {
+                        Button { model.chooseScript(.script) } label: { HStack(spacing: 6) { Image(systemName: "doc.text"); Text("Choose a script\u{2026}") } }
+                            .buttonStyle(.gate(.normal, .large))
+                        Button { model.chooseScript(.story) } label: { HStack(spacing: 6) { Image(systemName: "text.book.closed"); Text("Choose a story\u{2026}") } }
+                            .buttonStyle(.gate(.normal, .large))
+                    }
+                }
                 format("doc.text", "Markdown, text, Fountain, Final Draft, PDF")
             }
         }
-        .onDrop(of: [.fileURL], delegate: FootageDropDelegate(targeted: $scriptTargeted, count: .constant(nil), drop: received))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { scriptWidth = max(1, $0) }
+        .onDrop(of: [.fileURL], delegate: ScriptDropDelegate(targeted: $scriptTargeted, kind: $dropAs, width: scriptWidth) { urls, kind in bring(urls, wait: true, as: kind) })
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Drop a script here")
+        .accessibilityLabel("Drop a script or a story here")
+    }
+
+    /// Where a dragged file will go, in place of the buttons while it's over the zone: dashed, and solid
+    /// under the pointer, like the zone itself.
+    private func dropPad(_ kind: ScriptKind) -> some View {
+        let on = dropAs == kind, shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return HStack(spacing: 6) { Image(systemName: kind == .story ? "text.book.closed" : "doc.text"); Text(kind == .story ? "As the story" : "As the script") }
+            .font(.system(size: 13, weight: .medium)).foregroundStyle(on ? Gate.Text.primary : Gate.Text.tertiary)
+            .frame(width: 164, height: Gate.Size.controlLarge)
+            .background(shape.fill(on ? AnyShapeStyle(Gate.Steel.ramp[4]) : AnyShapeStyle(Color.clear)))
+            .overlay(shape.strokeBorder(on ? Gate.Text.primary : Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 1.5, dash: on ? [] : [4, 4])))
     }
 
     /// Three drawn boards, fanned like the footage frames: drawings, so the grain stays on them.
@@ -279,11 +302,12 @@ struct OnboardingFootageDrop: View {
 
     private func received(_ urls: [URL]) { bring(urls, wait: true) }
 
-    private func bring(_ urls: [URL], wait: Bool) {
+    /// A script dropped on Footage still comes in as the script; footage dropped on the script zone is footage.
+    private func bring(_ urls: [URL], wait: Bool, as kind: ScriptKind = .script) {
         let (footage, scripts, places) = FootageFiles.expand(urls)
         guard !footage.isEmpty else {
             rejected = scripts.isEmpty
-            if let script = scripts.first { model.bringScript(script) } else { shakeOnce() }
+            if let script = scripts.first { model.bringScript(script, as: kind) } else { shakeOnce() }
             return
         }
         rejected = false
@@ -319,6 +343,25 @@ private struct FootageDropDelegate: DropDelegate {
         Task { @MainActor in drop(await FootageFiles.urls(from: providers)) }
         return true
     }
+}
+
+/// A drop on the script zone: the left half brings in a script, the right half a story.
+private struct ScriptDropDelegate: DropDelegate {
+    @Binding var targeted: Bool
+    @Binding var kind: ScriptKind
+    var width: CGFloat
+    var drop: ([URL], ScriptKind) -> Void
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.fileURL]) }
+    func dropEntered(info: DropInfo) { targeted = true; kind = side(info) }
+    func dropUpdated(info: DropInfo) -> DropProposal? { let k = side(info); if k != kind { kind = k }; return DropProposal(operation: .copy) }
+    func dropExited(info: DropInfo) { targeted = false }
+    func performDrop(info: DropInfo) -> Bool {
+        targeted = false
+        let providers = info.itemProviders(for: [.fileURL]), k = side(info)
+        Task { @MainActor in drop(await FootageFiles.urls(from: providers), k) }
+        return true
+    }
+    private func side(_ info: DropInfo) -> ScriptKind { info.location.x < width / 2 ? .script : .story }
 }
 
 // MARK: 05 · Logging footage

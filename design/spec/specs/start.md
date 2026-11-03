@@ -13,7 +13,7 @@
 ## 01 · Films, first launch
 Frame: `screens/01-films-empty.html` · Render: `renders/01-films-empty@2x.png`
 
-**Arrives from / leads to:** first launch, or the last film deleted. New film (button, `⌘N`) → 03. Start from a folder… → system folder picker → 03 with footage pre-attached (04 is skipped later, logging starts after Continue).
+**Arrives from / leads to:** first launch, or the last film deleted. New film (button, `⌘N`) → 03. Start from › A Script… or A Story… → file picker → a new film named for the file, in the Script room (specs/script.md). Start from › A Folder of Footage… → system folder picker → 03 with footage pre-attached (04 is skipped later, logging starts after Continue).
 
 **Layout**
 - Window background `--canvas` with a radial glow (ellipse 50%×45% at 50% 42%, steel-1.9 to black). Titlebar transparent, no border.
@@ -22,7 +22,7 @@ Frame: `screens/01-films-empty.html` · Render: `renders/01-films-empty@2x.png`
 
 **Content**
 - Title "Start a film". Body: "Tell the editor what you're making, bring your footage, and it will build a first cut for you to watch. You direct. It cuts."
-- Buttons: steel "New film", default "Start from a folder…". Titlebar primary "New film ⌘N".
+- Buttons: steel "New film", and "Start from ⌄", a menu of what a film can start from: A Script…, A Story…, A Folder of Footage… (the same three as 04). Titlebar primary "New film ⌘N".
 - Strip: 1 Brief "A few sentences on how it should feel." · 2 Footage "The editor logs and transcribes every take." · 3 First look "It assembles a cut. You see it before anyone." · 4 Notes "Watch, mark, give notes. It recuts."
 
 **States and variants:** Only state. If the editor is unavailable (signed out or offline), the pill reads "Offline" and the body adds a 12 pt line under the buttons: "You can write the brief and bring footage now. The editor starts when you're back online." Buttons stay enabled.
@@ -125,14 +125,14 @@ Frame: `screens/03-brief.html` · Render: `renders/03-brief@2x.png`
 
 ---
 
-## 04 · Script or footage
+## 04 · Script, story or footage
 Frame: `screens/04-footage-drop.html` · Render: `renders/04-footage-drop@2x.png` (the app's own snapshot shows the two zones)
 
-**Arrives from / leads to:** Continue from 03, or Film › Bring Footage. The film starts from one or the other:
-- **A script**: choose or drop it → the Script room (specs/script.md), where the editor writes the picture. Footage comes after the shoot, in the Breakdown.
+**Arrives from / leads to:** Continue from 03, or Film › Bring Footage. The film starts from one of three, in two zones: before the shoot and after it.
+- **A script or a story**: choose or drop it → the Script room (specs/script.md), where the editor lays out what we see and hear. A script's words are said as written; a story is what happens, and the talking is found on the day (script.md › From a story). Footage comes after the shoot, in the Breakdown.
 - **Footage**: choose a folder or drop → files listed → Start logging → 05. When files are dropped, logging starts automatically after 1 s unless the director drops more; the primary is a fallback.
 
-The stepper reads Brief · Script or footage.
+The stepper reads Brief · Script, story or footage.
 
 **Layout**
 - 28 pt padding all round. "What are you starting from?" (Archivo 800 24 at 120%) above two drop zones side by side, 18 pt apart, each filling half the space (radius 20, sunken radial fill, 1.5 pt dashed border at white 18%).
@@ -140,12 +140,12 @@ The stepper reads Brief · Script or footage.
 - Footer row 18 pt below the zones: brief reminder with an Edit link (left), storage note (right).
 
 **Content**
-- Script zone: title "A script". Body: "Bring in the script and the editor writes what we see under every line, in the film's style. You plan the shoot from it, and footage comes after." Button "Choose a script…". Formats: "Markdown, text, Fountain, Final Draft, PDF".
+- Script zone: title "A script or a story". Body: "A script is said as written; a story is what happens, with the talking found on the day. The editor lays out what we see and hear, beat by beat, and you plan the shoot from it." Buttons "Choose a script…" and "Choose a story…" side by side. Formats: "Markdown, text, Fountain, Final Draft, PDF".
 - Footage zone: title "Footage". Body: "Drop a folder, a camera card or loose files. The editor logs every take, transcribes the dialogue and sorts it into scenes, or keeps the scene folders you made. Your files stay where they are." Buttons: "Choose folder… ⇧⌘I", ghost "From a camera card". Formats: "MOV, MP4, MXF, BRAW, R3D" · "WAV, synced by its sound".
 - Footer: "Brief saved. "Tired, then proud. Quiet, not triumphant."" and "Nothing is moved or copied." ("Copies go in the film. Your originals stay where they are." when Settings › Storage copies footage.)
 
 **States and variants**
-- Drag over a zone: its border becomes 1.5 pt solid `--text-1`, the fill lifts to steel-3, and its title changes ("Drop to add 214 files", "Drop to bring in the script"). Either zone takes either kind of file: a script dropped on Footage still comes in as the script.
+- Drag over a zone: its border becomes 1.5 pt solid `--text-1`, the fill lifts to steel-3, and its title changes ("Drop to add 214 files", "Drop to bring in the script"). Over the script zone its two buttons become drop pads, "As the script" and "As the story" (36 pt, radius 10, 1.5 pt dashed white 18%); the zone's left half takes the script and its right half the story, and the pad under the pointer goes solid `--text-1` on steel-4 while the title says which ("Drop to bring in the story"). Either zone takes either kind of file: a script dropped on Footage still comes in as the script.
 - Unsupported drop: the footage zone shakes once (Snap ×2, 4 pt) and its body becomes `--alert`: "Those aren't video, sound or script files."
 - Camera card button lists mounted volumes in a menu; with none mounted it's disabled with a tooltip "No camera card connected".
 
@@ -153,11 +153,11 @@ The stepper reads Brief · Script or footage.
 
 **Motion:** Fanned cards spread 6 pt on drag over (Settle).
 
-**Accessibility:** Two groups, "Drop a script here" and "Drop footage here", with their buttons as actions. Formats lines are read once as hints.
+**Accessibility:** Two groups, "Drop a script or a story here" and "Drop footage here", with their buttons as actions. Formats lines are read once as hints.
 
 **Acceptance**
 - [ ] Nothing is copied on import; the storage note text matches Settings › Storage.
-- [ ] A script chosen or dropped here opens the Script room; the stepper is gone.
+- [ ] A script or a story chosen or dropped here opens the Script room; the stepper is gone.
 - [ ] Drag-over state is visibly different without color alone (solid vs dashed border).
 
 ---

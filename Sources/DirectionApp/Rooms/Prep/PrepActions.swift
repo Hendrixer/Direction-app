@@ -8,27 +8,38 @@ import DirectionCore
 extension FilmModel {
     static let scriptTypes: [UTType] = ["md", "markdown", "txt", "fountain", "fdx", "pdf"].compactMap { UTType(filenameExtension: $0) } + [.plainText, .pdf]
 
-    func chooseScript() {
-        let panel = NSOpenPanel(); panel.title = script == nil ? "Bring in a script" : "Bring in a new draft"; panel.allowedContentTypes = Self.scriptTypes; panel.allowsMultipleSelection = false
+    /// What the film's A/V script was laid out from; a new draft comes in the same way.
+    var scriptKind: ScriptKind { script?.kind ?? .script }
+
+    /// Choose a script or a story; with one already in, a new draft of it (nil: the same kind as the film's).
+    func chooseScript(_ kind: ScriptKind? = nil) {
+        let kind = kind ?? scriptKind
+        let panel = NSOpenPanel(); panel.title = script == nil ? (kind == .story ? "Bring in a story" : "Bring in a script") : "Bring in a new draft"; panel.allowedContentTypes = Self.scriptTypes; panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        bringScript(url)
+        bringScript(url, as: kind)
     }
 
-    /// A script file: the first one starts the A/V script, a later one is a new draft of it.
-    func bringScript(_ url: URL) {
+    /// A script or a story: the first one starts the A/V script, a later one is a new draft of it.
+    func bringScript(_ url: URL, as kind: ScriptKind? = nil) {
         guard let store else { return }
-        let draft = script != nil
-        do { _ = try store.importScript(try ScriptFile.text(url), fileName: url.lastPathComponent, path: url.path) }
+        let draft = script != nil, kind = kind ?? scriptKind
+        do { _ = try store.importScript(try ScriptFile.text(url), fileName: url.lastPathComponent, path: url.path, as: kind) }
         catch { self.error = error.localizedDescription; return }
         refresh(force: true)
         go(.script)
-        toast = Toast(title: draft ? "New draft brought in" : "Script brought in", detail: draft ? "Rows whose words didn\u{2019}t change keep their picture." : "The editor writes what we see under every line.", editor: !draft)
+        toast = draft ? Toast(title: "New draft brought in", detail: kind == .story ? "Beats whose part of the story didn\u{2019}t change keep their picture." : "Rows whose words didn\u{2019}t change keep their picture.")
+            : kind == .story ? Toast(title: "Story brought in", detail: "The editor lays out what we see and hear, beat by beat.", editor: true)
+            : Toast(title: "Script brought in", detail: "The editor writes what we see under every line.", editor: true)
     }
 
     // MARK: Script
 
     func editPicture(_ rowID: String, _ text: String) { perform { _ = try $0.editRow(rowID, picture: text) } }
     func editSound(_ rowID: String, _ text: String) { perform { _ = try $0.editRow(rowID, sound: text) } }
+    /// What a row's sound is (the row's context menu): voice-over, on camera, a sound, music or silence.
+    func setSoundKind(_ rowID: String, _ kind: HeardKind) { perform { _ = try $0.editRow(rowID, soundKind: kind) } }
+    /// Their own words: the speaker finds the words on the day, and the cell says what about.
+    func setOwnWords(_ rowID: String, _ on: Bool) { perform { _ = try $0.editRow(rowID, ownWords: on) } }
     func setPictureSize(_ rowID: String, _ size: ShotSize?) { perform { _ = try $0.editRow(rowID, size: .some(size)) } }
     func addRow(after rowID: String?) { perform { _ = try $0.addRow(after: rowID) } }
     func removeRow(_ rowID: String) { perform { _ = try $0.removeRow(rowID) } }

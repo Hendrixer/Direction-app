@@ -223,18 +223,18 @@ struct FilmsView: View {
         if let film = app.film { OnboardingSession.of(film).add(footage, places: places, wait: false) }
     }
 
-    /// Start from a script…: a new film named for the script, which comes in as its A/V script; the editor
-    /// starts on the picture (specs/script.md › Bringing in a script).
-    static func startFromScript(_ app: AppModel) {
-        let panel = NSOpenPanel(); panel.title = "Start from a script"; panel.prompt = "Start"; panel.allowedContentTypes = FilmModel.scriptTypes
+    /// Start from a script… or a story…: a new film named for the file, which comes in as its A/V script; the
+    /// editor starts on the picture (specs/script.md › Bringing in a script, From a story).
+    static func startFromScript(_ app: AppModel, as kind: ScriptKind = .script) {
+        let panel = NSOpenPanel(); panel.title = kind == .story ? "Start from a story" : "Start from a script"; panel.prompt = "Start"; panel.allowedContentTypes = FilmModel.scriptTypes
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        startFromScript(url, app: app)
+        startFromScript(url, app: app, as: kind)
     }
 
-    static func startFromScript(_ url: URL, app: AppModel) {
+    static func startFromScript(_ url: URL, app: AppModel, as kind: ScriptKind = .script) {
         guard app.previewFilms == nil else { return }
         app.newFilm(named: url.deletingPathExtension().lastPathComponent)
-        app.film?.bringScript(url)
+        app.film?.bringScript(url, as: kind)
     }
 
     /// Start from a folder…: a new film with the folder's footage attached; logging starts after the brief.
@@ -400,10 +400,15 @@ private struct FilmsWelcome: View {
                     HStack(spacing: 10) {
                         Button { app.newFilm() } label: { Label("New film", systemImage: "plus") }
                             .buttonStyle(.gate(.steel, .large)).keyboardShortcut(.defaultAction)
-                        Button { FilmsView.startFromScript(app) } label: { Label("Start from a script\u{2026}", systemImage: "doc.text") }
-                            .buttonStyle(.gate(.normal, .large))
-                        Button { FilmsView.startFromFolder(app) } label: { Label("Start from a folder\u{2026}", systemImage: "folder") }
-                            .buttonStyle(.gate(.normal, .large))
+                        // What a film can start from, in one place: the same three as the brief's next step.
+                        Menu {
+                            Button { FilmsView.startFromScript(app, as: .script) } label: { Label("A Script\u{2026}", systemImage: "doc.text") }
+                            Button { FilmsView.startFromScript(app, as: .story) } label: { Label("A Story\u{2026}", systemImage: "text.book.closed") }
+                            Button { FilmsView.startFromFolder(app) } label: { Label("A Folder of Footage\u{2026}", systemImage: "folder") }
+                        } label: {
+                            HStack(spacing: 6) { Text("Start from"); Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)) }
+                        }
+                        .menuStyle(.button).buttonStyle(.gate(.normal, .large)).menuIndicator(.hidden).fixedSize()
                     }
                     .padding(.top, 6)
                 }

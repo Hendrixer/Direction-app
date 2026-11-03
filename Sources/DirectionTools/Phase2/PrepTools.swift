@@ -9,14 +9,14 @@ extension ToolCatalog {
         let choice = record(["id": string, "label": string, "detail": string, "recommended": bool], required: ["label"])
         let reply = record(["noteID": string, "reply": string], required: ["noteID", "reply"])
         return [
-            definition("direction_script", "Read the film's A/V script a page at a time (from: the first row number, default 1; count: rows, default 40; next is where the following page starts, null at the end): each row in order, its picture (what we see: text, size wide|medium|close|detail, move, board, yours: true when the director wrote it) and its sound (kind voice|onCamera|effect|music|silence, speaker, the words), its seconds, the writer's picture idea (hint) and any question you asked. notes are the director's notes on rows; the turned-over ones are yours to answer this pass. okAt is set once the director OKs it.", ["from": integer, "count": integer]),
-            definition("direction_script_update", "Write the A/V script's picture column and answer notes on it. pictures: [{rowID, text (what the viewer sees, one or two sentences, never how to shoot it), size?, move?, board? (the drawn board: title, screen, wide, medium, close, detail, onCamera, action, made, empty)}]. Follow the film's style (direction_style) for what each kind of line reaches for. A picture the director wrote (yours) and the words of the script change only where a turned-over note on that row asks; anything else comes back in refused. sounds: [{rowID, kind?, speaker?, text?}] fixes what a row's sound is. replies: [{noteID, reply}] answers a turned-over note, first person and concrete (\"Row 4 is your hands now.\"). questions: [{rowID, text, choices: [{id?, label, detail?, recommended?}]}] when only the director can say what a row should show: 2–3 concrete choices.", [
+            definition("direction_script", "Read the film's A/V script a page at a time (from: the first row number, default 1; count: rows, default 40; next is where the following page starts, null at the end): each row in order, its picture (what we see: text, size wide|medium|close|detail, move, board, yours: true when the director wrote it) and its sound (kind voice|onCamera|effect|music|silence, speaker, the words, ownWords: true when the speaker finds the words on the day and the text says what about), its seconds, the writer's picture idea (hint) and any question you asked. kind is script (the sound is the script's words) or story (Direction laid out a story as beats: each row has its part of the story, and what we hear is yours to write too). notes are the director's notes on rows; the turned-over ones are yours to answer this pass. okAt is set once the director OKs it.", ["from": integer, "count": integer]),
+            definition("direction_script_update", "Write the A/V script's picture column and answer notes on it. pictures: [{rowID, text (what the viewer sees, one or two sentences, never how to shoot it), size?, move?, board? (the drawn board: title, screen, wide, medium, close, detail, onCamera, action, made, empty)}]. Follow the film's style (direction_style) for what each kind of line reaches for. A picture the director wrote (yours) and the words of the script change only where a turned-over note on that row asks; anything else comes back in refused. sounds: [{rowID, kind?, speaker?, text?, ownWords?, seconds?}] fixes what a row's sound is; in a film from a story it's what we hear, yours to write on every row: never words for anyone to say (the text says who talks and what about, with ownWords: true), except words the story quotes, and seconds for how long the beat plays. replies: [{noteID, reply}] answers a turned-over note, first person and concrete (\"Row 4 is your hands now.\"). questions: [{rowID, text, choices: [{id?, label, detail?, recommended?}]}] when only the director can say what a row should show: 2–3 concrete choices.", [
                 "pictures": list(record(["rowID": string, "text": string, "size": sizes, "move": moves, "board": boards], required: ["rowID", "text"])),
-                "sounds": list(record(["rowID": string, "kind": strings(HeardKind.allCases.map(\.rawValue)), "speaker": string, "text": string], required: ["rowID"])),
+                "sounds": list(record(["rowID": string, "kind": strings(HeardKind.allCases.map(\.rawValue)), "speaker": string, "text": string, "ownWords": bool, "seconds": number], required: ["rowID"])),
                 "replies": list(reply),
                 "questions": list(record(["rowID": string, "text": string, "choices": list(choice)], required: ["rowID", "text", "choices"])),
             ], readOnly: false),
-            definition("direction_breakdown", "Read the breakdown: setups (number, name, needs, noCamera) and their shots (code: the slate, like 2C; the rows it plays under; what we see; size; move; seconds; source shoot|screen|make|have|sound; makePlan and estimate for made shots; coverage: planned, got with its takes, missing, needsFootage or toMake; the director's choice for a missing shot). scriptChanged says the script moved on since the breakdown was last made. notes are the director's notes on shots. includeScript adds a page of the A/V script (from: the first row, default 1; count: rows, default 40; its next is where the following page starts) with each row's picture as words: add that page's shots before reading the next.", ["includeScript": bool, "from": integer, "count": integer]),
+            definition("direction_breakdown", "Read the breakdown: setups (number, name, needs, noCamera) and their shots (code: the slate, like 2C; the rows it plays under; what we see; size; move; seconds; source shoot|screen|make|have|sound; makePlan and estimate for made shots; coverage: planned, got with its takes, missing, needsFootage or toMake; the director's choice for a missing shot). scriptChanged says the script moved on since the breakdown was last made. notes are the director's notes on shots. includeScript adds a page of the A/V script (from: the first row, default 1; count: rows, default 40; its next is where the following page starts) with each row's picture as words (and, in a film from a story, its kind story and each beat's part of the story; talk with ownWords is found on the day, so it's shot with sound): add that page's shots before reading the next.", ["includeScript": bool, "from": integer, "count": integer]),
             definition("direction_breakdown_update", "Lay out the breakdown, or change it. setups: [{id?, name, needs? (what it takes: time of day, light, props, what's on the screen), noCamera? (screen recordings, made shots, footage the director has)}]: group shots by place and light, so each setup is set up once. shots: [{id? (to change one), setupID or setup (a setup's name), rowIDs (the rows it plays under, in order), what (what we see), size?, move?, seconds?, source (shoot, screen for a screen recording, make, have when the director said they have it, sound for sound only like a narration), board?, makePlan? and estimate? (dollars, nil when it's free like a graphic) for source make}]. Direction numbers setups in the order they're needed and letters shots by row; once the director OKs the breakdown the numbers are slates and never change, and a new shot takes the next letter. remove: shot ids. Fields the director set, and footage they added, change only where a turned-over note asks. replies: [{noteID, reply}]; questions: [{shotID, text, choices}].", [
                 "setups": list(record(["id": string, "name": string, "needs": string, "noCamera": bool], required: ["name"])),
                 "shots": list(record(["id": string, "setupID": string, "setup": string, "rowIDs": list(string), "what": string, "size": sizes, "move": moves, "seconds": number, "source": strings(ShotSource.allCases.map(\.rawValue)), "board": boards, "makePlan": string, "estimate": number])),
@@ -41,12 +41,14 @@ extension ToolRuntime {
             let (replies, questions) = try Self.repliesAndQuestions(a, key: "rowID")
             guard try store.script() != nil else { throw DirectionError("script_not_found", "This film has no script yet.") }
             let (s, refused) = try store.updateScript(pictures: pictures, sounds: sounds, replies: replies, questions: questions)
-            return ToolResponse(.object([
+            var out: [String: JSONValue] = [
                 "revision": .number(Double(s.revision)), "pass": .number(Double(s.pass)),
                 "rowsWithoutPicture": .array(s.rows.enumerated().filter { $0.element.picture.isEmpty }.map { .number(Double($0.offset + 1)) }),
                 "notesWaiting": .array(s.turnedOver.map { .number(Double($0.number)) }),
                 "refused": .array(refused.map(JSONValue.string)),
-            ]))
+            ]
+            if s.isStory { out["rowsWithoutSound"] = .array(s.rows.enumerated().filter { $0.element.soundUndecided }.map { .number(Double($0.offset + 1)) }) }
+            return ToolResponse(.object(out))
 
         case "direction_breakdown":
             guard let b = try store.breakdown() else {
@@ -96,7 +98,10 @@ extension ToolRuntime {
         let rows: [JSONValue] = try page.map { i, r in
             var sound: [String: JSONValue] = ["kind": .string(r.sound.kind.rawValue), "text": .string(r.sound.text)]
             if let sp = r.sound.speaker { sound["speaker"] = .string(sp) }
+            if r.sound.ownWords == true { sound["ownWords"] = .bool(true) }
+            if r.sound.yours == true { sound["yours"] = .bool(true) }
             var o: [String: JSONValue] = ["id": .string(r.id), "number": .number(Double(i + 1)), "sound": .object(sound), "seconds": .number(r.seconds)]
+            if let st = r.story { o["story"] = .string(st) }
             if !r.picture.isEmpty { o["picture"] = compact ? .string(r.picture.text) : try .wrapping(r.picture) }
             if let sec = r.section.flatMap({ sections[$0] }) { o["section"] = .string(sec) }
             if let h = r.hint { o["hint"] = .string(h) }
@@ -108,10 +113,12 @@ extension ToolRuntime {
                      "kind": n.kind.map { .string($0.rawValue) } ?? .null, "text": .string(n.text), "state": .string(n.state.rawValue), "reply": n.reply.map(JSONValue.string) ?? .null])
         }
         return .object([
+            "kind": .string((s.kind ?? .script).rawValue),
             "source": s.source.map { .string("\($0.fileName), \($0.words) words") } ?? .null,
             "sections": .array(s.sections.map { .string($0.title) }),
             "rows": .array(rows), "total": .number(Double(s.rows.count)), "next": last < s.rows.count ? .number(Double(last + 1)) : .null,
             "withoutPicture": .number(Double(s.rows.filter { $0.picture.isEmpty }.count)),
+            "withoutSound": s.isStory ? .number(Double(s.rows.filter(\.soundUndecided).count)) : .null,
             "notes": .array(notes), "pass": .number(Double(s.pass)), "revision": .number(Double(s.revision)),
             "seconds": .number(s.seconds), "okAt": s.okAt.map(JSONValue.number) ?? .null,
         ])

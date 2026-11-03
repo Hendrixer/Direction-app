@@ -175,7 +175,7 @@ struct ShotInspector: View {
             ForEach(shot.rowIDs.prefix(4).compactMap { id in rowNumber[id].map { (id, script.rows[$0 - 1]) } }, id: \.0) { id, r in
                 VStack(alignment: .leading, spacing: 3) {
                     Text("ROW \(rowNumber[id] ?? 0) \u{00B7} \(r.sound.kind == .onCamera ? (r.sound.speaker ?? "ON CAMERA").uppercased() : r.sound.kind.label.uppercased())").font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6).foregroundStyle(Gate.Text.tertiary)
-                    Text(r.sound.text.isEmpty ? r.sound.kind.label : r.sound.text).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
+                    Text(r.story ?? (r.sound.text.isEmpty ? r.sound.kind.label : r.sound.text)).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Gate.Surface.sunken)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Gate.Line.subtle))

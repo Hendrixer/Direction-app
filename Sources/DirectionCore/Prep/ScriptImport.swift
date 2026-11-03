@@ -19,6 +19,60 @@ public enum ScriptImport {
         return Result(sections: rows.sections, rows: rows.rows, words: rows.rows.reduce(0) { $0 + AVScript.wordCount($1.sound.text) })
     }
 
+    /// A story in beats (specs/script.md › From a story): headings are sections, each sentence or two of a
+    /// paragraph a beat with that part of the story on it; the sound is left for the editor, since nobody's
+    /// words are written. A "[…]" picture idea is the beat's hint, as in a script.
+    public static func story(_ text: String, fileName: String) -> Result {
+        let lines = clean(text)
+        var sections: [AVSection] = [], rows: [AVRow] = [], section: String?, paragraph: [String] = [], pendingHint: String?, words = 0
+        let headings = lines.filter { $0.hasPrefix("#") }.count
+        var sawContent = false
+        func flush() {
+            guard !paragraph.isEmpty else { return }
+            for beat in storyBeats(paragraph.joined(separator: " ")) {
+                let (told, hint) = takeHints(beat)
+                guard !told.isEmpty else { if let hint { pendingHint = [pendingHint, hint].compactMap { $0 }.joined(separator: " ") }; continue }
+                let n = AVScript.wordCount(told)
+                words += n
+                rows.append(AVRow(section: section, sound: AVSound(), seconds: max(2, min(8, (Double(n) / 2.5 * 2).rounded() / 2)), hint: [pendingHint, hint].compactMap { $0 }.joined(separator: " ").nilIfEmpty, story: told))
+                pendingHint = nil
+            }
+            paragraph = []
+        }
+        for raw in lines {
+            if raw.isEmpty { flush(); continue }
+            if raw.hasPrefix("#") {
+                flush()
+                let title = plain(raw.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces))
+                if !sawContent, raw.hasPrefix("# "), headings > 1, sections.isEmpty { sawContent = true; continue }
+                sawContent = true
+                if !title.isEmpty { let s = AVSection(title: title); sections.append(s); section = s.id }
+                continue
+            }
+            if raw.range(of: #"^([-*_]\s*){3,}$"#, options: .regularExpression) != nil { flush(); continue }
+            sawContent = true
+            let line = plain(raw)
+            if let hint = pictureLine(line) { flush(); pendingHint = [pendingHint, hint].compactMap { $0 }.joined(separator: " "); continue }
+            paragraph.append(line)
+        }
+        flush()
+        if let h = pendingHint, !rows.isEmpty { rows[rows.count - 1].hint = [rows[rows.count - 1].hint, h].compactMap { $0 }.joined(separator: " ") }
+        return Result(sections: sections, rows: rows, words: words)
+    }
+
+    /// A paragraph of story in beats: a sentence each, a short one ("She erases it.") kept with the one
+    /// before, never more than about 24 words.
+    static func storyBeats(_ text: String) -> [String] {
+        var out: [String] = [], current: [String] = []
+        func count(_ s: [String]) -> Int { s.reduce(0) { $0 + AVScript.wordCount($1) } }
+        for s in sentences(text) {
+            if !current.isEmpty, AVScript.wordCount(s) >= 5 || count(current) + AVScript.wordCount(s) > 24 { out.append(current.joined(separator: " ")); current = [] }
+            current.append(s)
+        }
+        if !current.isEmpty { out.append(current.joined(separator: " ")) }
+        return out
+    }
+
     // MARK: Cleaning
 
     /// Lines without front matter, comments or Fountain's boneyard.

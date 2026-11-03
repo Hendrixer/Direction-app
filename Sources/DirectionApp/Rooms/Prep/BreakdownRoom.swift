@@ -233,7 +233,8 @@ private struct BreakdownPage: View {
 
     private func playsUnder(_ shot: BreakdownShot) -> some View {
         let numbers = shot.rowIDs.compactMap { rowNumber[$0] }
-        let first = shot.rowIDs.first.flatMap { rowNumber[$0] }.map { script.rows[$0 - 1].sound.text } ?? ""
+        // A beat of a story is quoted from the story: what we hear there isn't words to quote.
+        let first = shot.rowIDs.first.flatMap { rowNumber[$0] }.map { script.rows[$0 - 1].story ?? script.rows[$0 - 1].sound.text } ?? ""
         return (Text(numbers.count == 1 ? "Row \(numbers[0])" : "Rows \(EditorJobs.rowList(numbers))").font(.system(size: 10.5, weight: .medium, design: .monospaced)).foregroundColor(Gate.Text.secondary)
             + Text(first.isEmpty ? "" : " \u{00B7} \u{201C}\(first)\u{201D}").font(.system(size: 11.5)).foregroundColor(Gate.Text.tertiary))
             .lineLimit(2)

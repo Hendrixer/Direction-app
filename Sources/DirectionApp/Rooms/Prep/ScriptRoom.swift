@@ -32,12 +32,13 @@ struct ScriptRoom: View {
     }
 }
 
-/// No script yet: bring one in (start.md › New film from a script).
+/// No script yet: bring one in, or a story (start.md › 04, specs/script.md › From a story).
 private struct ScriptEmpty: View {
     @Bindable var model: FilmModel
     var body: some View {
-        EmptyStateView(art: nil, title: "Start from a script", message: "Bring in the script and the editor writes what we see under every line, in the film\u{2019}s style. You edit it or leave notes, then OK it for the breakdown. Markdown, plain text, Fountain, Final Draft or PDF.") {
-            Button("Choose a script\u{2026}") { model.chooseScript() }.buttonStyle(.gate(.normal, .large))
+        EmptyStateView(art: nil, title: "Start from a script or a story", message: "The editor lays out what we see and hear, beat by beat, in the film\u{2019}s style. You edit it or leave notes, then OK it for the breakdown. Markdown, plain text, Fountain, Final Draft or PDF.") {
+            Button("Choose a script\u{2026}") { model.chooseScript(.script) }.buttonStyle(.gate(.normal, .large))
+            Button("Choose a story\u{2026}") { model.chooseScript(.story) }.buttonStyle(.gate(.normal, .large))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Gate.Surface.ground)
@@ -162,7 +163,7 @@ private struct ScriptPage: View {
     private var query: String { find.trimmingCharacters(in: .whitespaces).lowercased() }
     private func matches(_ text: String) -> Bool { !query.isEmpty && text.lowercased().contains(query) }
     /// Rows with a match, in the order they're shown.
-    private var hits: [String] { query.isEmpty ? [] : script.rows.filter { shows($0, filter) && (matches($0.picture.text) || matches($0.sound.text)) }.map(\.id) }
+    private var hits: [String] { query.isEmpty ? [] : script.rows.filter { shows($0, filter) && (matches($0.picture.text) || matches($0.sound.text) || matches($0.story ?? "")) }.map(\.id) }
     private var current: String? { let h = hits; return h.isEmpty ? nil : h[min(hit, h.count - 1)] }
     private func step(_ by: Int) {
         let h = hits
@@ -204,7 +205,7 @@ private struct ScriptPage: View {
             Spacer()
             HStack(spacing: 0) {
                 Text("\(script.rows.count) rows ").foregroundStyle(Gate.Text.secondary)
-                Text("\u{00B7} reads in about \(Timecode.duration(script.seconds))").foregroundStyle(Gate.Text.disabled)
+                Text("\u{00B7} \(script.isStory ? "runs" : "reads in") about \(Timecode.duration(script.seconds))").foregroundStyle(Gate.Text.disabled)
             }.font(Gate.Font.timecodeSmall).fixedSize()
         }
         .padding(.horizontal, 20).frame(height: 44)
@@ -218,8 +219,8 @@ private struct ScriptPage: View {
         LazyVStack(alignment: .leading, spacing: 0) {
             if let source = script.source {
                 HStack(spacing: 8) {
-                    Image(systemName: "doc.text").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary)
-                    Text("From \(source.fileName) \u{00B7} \(source.words) words").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                    Image(systemName: script.isStory ? "text.book.closed" : "doc.text").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary)
+                    Text("\(script.isStory ? "The story, from" : "From") \(source.fileName) \u{00B7} \(source.words) words").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
                     Spacer()
                     Button("Bring in a new draft\u{2026}") { model.chooseScript() }.buttonStyle(.gate(.ghost, .small))
                 }.padding(.leading, 46).padding(.bottom, 12)
@@ -244,7 +245,7 @@ private struct ScriptPage: View {
         let done = script.rows.filter { !$0.picture.isEmpty }.count
         return HStack(spacing: 10) {
             GemMark()
-            Text("Writing what we see under each line, from the style. \(done) of \(script.rows.count).").font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary)
+            Text(script.isStory ? "Laying out what we see and hear, beat by beat, from the style. \(done) of \(script.rows.count)." : "Writing what we see under each line, from the style. \(done) of \(script.rows.count).").font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary)
             GateProgress(value: Double(done) / Double(max(1, script.rows.count)), agent: true).frame(width: 120)
         }
     }
@@ -294,8 +295,18 @@ private struct ScriptPage: View {
                     Text("\(n)").font(Gate.Font.timecodeSmall).foregroundStyle(current ? Gate.Text.primary : Gate.Text.disabled)
                 }
                 .frame(width: 30, height: 18, alignment: .trailing)
-                picture(r, notes: notes, found: found && matches(r.picture.text)).frame(width: 330, alignment: .leading)
-                sound(r, found: found && matches(r.sound.text)).frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 8) {
+                    // A film from a story: the part of the story the beat came from, above what we see and hear.
+                    if let story = r.story {
+                        Text(story).font(.system(size: 12.5)).foregroundStyle(Gate.Text.tertiary).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background { if found && matches(story) { RoundedRectangle(cornerRadius: 5).fill(Gate.Surface.hover).padding(.horizontal, -5).padding(.vertical, -3) } }
+                    }
+                    HStack(alignment: .top, spacing: 16) {
+                        picture(r, notes: notes, found: found && matches(r.picture.text)).frame(width: 330, alignment: .leading)
+                        sound(r, found: found && matches(r.sound.text)).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
                 Text(Timecode.duration(r.seconds)).font(Gate.Font.timecodeSmall).foregroundStyle(Gate.Text.disabled).frame(width: 40, height: 18, alignment: .trailing)
             }
             .padding(.vertical, 9)
@@ -346,13 +357,17 @@ private struct ScriptPage: View {
     }
 
     @ViewBuilder private func sound(_ r: AVRow, found: Bool) -> some View {
+        // A story's beat before anyone says what we hear has no kind yet.
+        let undecided = script.isStory && r.soundUndecided
         VStack(alignment: .leading, spacing: 1) {
-            if [.voice, .onCamera].contains(r.sound.kind) {
-                Text((r.sound.speaker.map { r.sound.kind == .onCamera ? $0 : "\($0) (VO)" } ?? r.sound.kind.label).uppercased())
+            if [.voice, .onCamera].contains(r.sound.kind), !undecided {
+                let who = (r.sound.speaker.map { r.sound.kind == .onCamera ? $0 : "\($0) (VO)" } ?? r.sound.kind.label).uppercased()
+                Text(r.sound.ownWords == true ? "\(who) \u{00B7} OWN WORDS" : who)
                     .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6).foregroundStyle(Gate.Text.tertiary)
             }
-            let cue = ![.voice, .onCamera].contains(r.sound.kind)
-            ScriptCellText(text: r.sound.text, placeholder: cue ? r.sound.kind.label + "." : "What\u{2019}s said?", size: cue ? 13 : 14, italic: cue, secondary: cue,
+            // Cues, and talk found on the day, read as what we hear rather than words to say.
+            let cue = ![.voice, .onCamera].contains(r.sound.kind) || r.sound.ownWords == true
+            ScriptCellText(text: r.sound.text, placeholder: undecided ? "What do we hear?" : r.sound.ownWords == true ? "What about?" : cue ? r.sound.kind.label + "." : "What\u{2019}s said?", size: cue || undecided ? 13 : 14, italic: cue, secondary: cue,
                            found: found, cell: .sound(r.id), focus: $focus, preview: nil) { model.editSound(r.id, $0) }
         }
     }
@@ -360,13 +375,25 @@ private struct ScriptPage: View {
     @ViewBuilder private func rowMenu(_ r: AVRow) -> some View {
         Button("Note on This Row") { selected = [r.id]; anchor = r.id; tab = .notes }
         Button("Edit Picture") { focus = .picture(r.id) }
-        Button("Edit Words") { focus = .sound(r.id) }
+        Button(script.isStory ? "Edit Sound" : "Edit Words") { focus = .sound(r.id) }
+        Menu("Sound") {
+            ForEach(HeardKind.allCases, id: \.self) { k in
+                Toggle(Self.menuLabel(k), isOn: Binding(get: { r.sound.kind == k && !(script.isStory && r.soundUndecided) }, set: { if $0 { model.setSoundKind(r.id, k) } }))
+            }
+            Divider()
+            Toggle("Their Own Words", isOn: Binding(get: { r.sound.ownWords == true }, set: { model.setOwnWords(r.id, $0) }))
+                .disabled(![.voice, .onCamera].contains(r.sound.kind))
+        }
         Divider()
         Button("Move Up") { model.moveRow(r.id, by: -1) }.disabled(script.rows.first?.id == r.id)
         Button("Move Down") { model.moveRow(r.id, by: 1) }.disabled(script.rows.last?.id == r.id)
         Button("Add a Row After") { model.addRow(after: r.id) }
         Divider()
         Button("Take Out Row", role: .destructive) { model.removeRow(r.id) }
+    }
+
+    static func menuLabel(_ k: HeardKind) -> String {
+        switch k { case .voice: "Voice-Over"; case .onCamera: "On Camera"; case .effect: "Sound Effect"; case .music: "Music"; case .silence: "Silence" }
     }
 
     // MARK: Actions

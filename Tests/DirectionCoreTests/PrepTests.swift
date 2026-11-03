@@ -129,6 +129,62 @@ struct PrepTests {
         #expect(second.revision > first.revision)
     }
 
+    private let story = """
+    # Night walk
+
+    ## Leaving
+    Maya locks the studio at midnight. The street is empty and wet. Nobody's out.
+
+    [her breath in the cold]
+    She stops on the bridge and calls her dad. He says, "You're up late."
+
+    ## Home
+    Her flat is cold.
+    """
+
+    /// A story comes in as beats: its part of the story on each, and nothing heard until someone says what.
+    @Test func aStoryComesInAsBeatsWithNothingWrittenToSay() throws {
+        let store = try seededStore()
+        let s = try store.importScript(story, fileName: "Night walk.md", as: .story)
+        #expect(s.isStory && s.sections.map(\.title) == ["Leaving", "Home"])
+        #expect(s.rows.compactMap(\.story) == ["Maya locks the studio at midnight.", "The street is empty and wet. Nobody's out.", "She stops on the bridge and calls her dad.", "He says, \"You're up late.\"", "Her flat is cold."])
+        #expect(s.rows.allSatisfy { $0.sound.text.isEmpty && $0.soundUndecided && $0.picture.isEmpty })
+        #expect(s.rows[2].hint == "her breath in the cold" && s.rows[4].section == s.sections[1].id)
+        #expect(s.source?.words == 32 && s.rows.allSatisfy { $0.seconds >= 2 })
+        // The same file as a script is narration, as before.
+        let script = ScriptImport.read(story, fileName: "Night walk.md")
+        #expect(script.rows.allSatisfy { $0.story == nil && !$0.sound.text.isEmpty })
+    }
+
+    /// The editor writes what we hear on a story's beats, never words for anyone; what the director wrote stays.
+    @Test func theEditorWritesWhatWeHearInAStory() throws {
+        let store = try seededStore()
+        let s = try store.importScript(story, fileName: "Night walk.md", as: .story)
+        let r = s.rows.map(\.id)
+        let (after, refused) = try store.updateScript(pictures: [PictureInput(rowID: r[2], text: "Maya on the bridge, phone to her ear.", size: .medium)], sounds: [
+            SoundInput(rowID: r[0], kind: .effect, text: "Keys in the lock.", seconds: 4),
+            SoundInput(rowID: r[2], kind: .onCamera, speaker: "Maya", text: "Calling her dad: the hello", ownWords: true, seconds: 5),
+            SoundInput(rowID: r[3], kind: .voice, speaker: "Her dad", text: "You're up late.", seconds: 9),
+        ])
+        #expect(refused.isEmpty)
+        #expect(after.rows[0].sound.kind == .effect && after.rows[0].seconds == 4)
+        #expect(after.rows[2].sound.ownWords == true && after.rows[2].seconds == 5 && !after.rows[2].hasWrittenWords)
+        // Words the story quotes are said as written: their time comes from them.
+        #expect(after.rows[3].hasWrittenWords && after.rows[3].seconds == 1.5)
+        #expect(after.rows[1].soundUndecided && after.rows[2].line == "Calling her dad: the hello" && after.rows[1].line == "The street is empty and wet. Nobody's out.")
+
+        _ = try store.editRow(r[1], sound: "Rain on parked cars.", soundKind: .effect)
+        let (kept, no) = try store.updateScript(sounds: [SoundInput(rowID: r[1], kind: .music, text: "Piano.")])
+        #expect(kept.rows[1].sound.text == "Rain on parked cars." && no.count == 1)
+        _ = try store.editRow(r[2], ownWords: false)
+        #expect(try store.script()?.rows[2].sound.ownWords == nil)
+
+        // A new draft of the story keeps the beats whose part of the story didn't change, and what we hear on them.
+        let draft = try store.importScript(story.replacingOccurrences(of: "Her flat is cold.", with: "Her flat is cold and dark."), fileName: "Night walk.md", as: .story)
+        #expect(draft.rows[2].id == r[2] && draft.rows[2].picture.text == "Maya on the bridge, phone to her ear." && draft.rows[2].sound.ownWords == nil && draft.rows[2].sound.speaker == "Maya")
+        #expect(draft.rows[4].id != r[4] && draft.rows[4].story == "Her flat is cold and dark.")
+    }
+
     @Test func okTheScriptAndItKnowsWhenItMovesOn() throws {
         let store = try seededStore()
         let s = try store.importScript(essay, fileName: "The Chat Box.md")

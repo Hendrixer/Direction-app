@@ -87,4 +87,31 @@ struct PrepModelTests {
         #expect(v["task"]?.contains("Break it down into shots, grouped by setup") == true)
         #expect(EditorJobs.rowList([1, 2, 3, 7, 9]) == "1\u{2013}3, 7 and 9")
     }
+
+    /// A film from a story: the job says both columns are the editor's, and it isn't finished until every
+    /// beat has a picture and a sound.
+    @Test func theEditorIsToldHowToLayOutAStory() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("direction-prep-story-job-" + UUID().uuidString + ".direction")
+        defer { try? FileManager.default.removeItem(at: path) }
+        let store = try ProjectStore.create(at: path, name: "Night walk")
+        let s = try store.importScript(PrepFixtures.story, fileName: "Night walk.md", as: .story)
+        let v = try EditorJobs.prepValues(.script, store: store)
+        #expect(v["task"]?.contains("brought in a story") == true && v["task"]?.contains("\(s.rows.count) beats") == true)
+        #expect(v["columns"]?.contains("nobody\u{2019}s words are written") == true && v["story"]?.contains("ownWords: true") == true && v["done"] == "a picture and a sound")
+        let job = EditorJobs.fill(EditorJobs.template("script") ?? "", v)
+        let mine = ["{{columns}}", "{{write}}", "{{whole}}", "{{theirs}}", "{{story}}", "{{done}}"]
+        #expect(!mine.contains(where: job.contains) && job.contains("pictures and sounds"))
+        let essayPath = FileManager.default.temporaryDirectory.appendingPathComponent("direction-prep-script-job-" + UUID().uuidString + ".direction")
+        defer { try? FileManager.default.removeItem(at: essayPath) }
+        let essay = try ProjectStore.create(at: essayPath, name: "The Chat Box")
+        _ = try essay.importScript(PrepFixtures.essay, fileName: "The Chat Box.md")
+        let script = EditorJobs.fill(EditorJobs.template("script") ?? "", try EditorJobs.prepValues(.script, store: essay))
+        #expect(!mine.contains(where: script.contains) && script.contains("The sound is the script\u{2019}s own words") && !script.contains("ownWords"))
+
+        let run = EditorRun(job: .script, program: "claudeCode", version: "")
+        _ = try store.updateScript(pictures: s.rows.map { PictureInput(rowID: $0.id, text: "Something we see.") })
+        #expect(!EditorRunner.finished(run, store: store))
+        _ = try store.updateScript(sounds: s.rows.map { SoundInput(rowID: $0.id, kind: .silence, text: "", seconds: 3) })
+        #expect(EditorRunner.finished(run, store: store))
+    }
 }

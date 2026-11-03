@@ -78,3 +78,28 @@ import DirectionCore
     let last = try await runtime.invoke("direction_script", arguments: .object(["from": .number(81), "count": .number(40)]))
     #expect(last.value["rows"].array?.count == 20 && last.value["rows"].array?.first?["number"].int == 81 && last.value["next"] == .null)
 }
+
+/// A film from a story: the editor reads each beat's part of the story and writes what we hear as well as
+/// what we see, with talk left to the speaker's own words.
+@Test func theEditorLaysOutAStory() async throws {
+    let path = FileManager.default.temporaryDirectory.appendingPathComponent("direction-prep-story-" + UUID().uuidString + ".direction")
+    defer { try? FileManager.default.removeItem(at: path) }
+    let store = try ProjectStore.create(at: path, name: "Night walk")
+    let runtime = try ToolRuntime(store: store)
+    _ = try store.importScript("Maya locks the studio at midnight.\n\nShe stops on the bridge and calls her dad.", fileName: "walk.md", as: .story)
+    let read = try await runtime.invoke("direction_script")
+    let rows = read.value["rows"].array ?? []
+    #expect(read.value["kind"].string == "story" && read.value["withoutSound"].int == 2)
+    #expect(rows.count == 2 && rows[1]["story"].string == "She stops on the bridge and calls her dad.")
+    let ids = rows.compactMap { $0["id"].string }
+    let wrote = try await runtime.invoke("direction_script_update", arguments: .object([
+        "pictures": .array([.object(["rowID": .string(ids[0]), "text": .string("Maya locks the door from outside.")]), .object(["rowID": .string(ids[1]), "text": .string("Maya on the bridge, phone to her ear.")])]),
+        "sounds": .array([
+            .object(["rowID": .string(ids[0]), "kind": .string("effect"), "text": .string("Keys in the lock."), "seconds": .number(4)]),
+            .object(["rowID": .string(ids[1]), "kind": .string("onCamera"), "speaker": .string("Maya"), "text": .string("Calling her dad: the hello"), "ownWords": .bool(true), "seconds": .number(6)]),
+        ]),
+    ]))
+    #expect(wrote.value["refused"].array?.isEmpty == true && wrote.value["rowsWithoutSound"].array?.isEmpty == true)
+    let again = try await runtime.invoke("direction_script")
+    #expect(again.value["rows"].array?[1]["sound"]["ownWords"] == .bool(true) && again.value["rows"].array?[1]["seconds"].int == 6)
+}

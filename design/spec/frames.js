@@ -86,6 +86,7 @@ window.FRAMES = [
   { id: "72-script-notes", group: "Script", title: "Script, your pass: a cell, notes, a question", spec: "script.md" },
   { id: "73-script-pass", group: "Script", title: "Script, after the editor's pass", spec: "script.md" },
   { id: "77-script-find", group: "Script", title: "Script, finding a word", spec: "script.md" },
+  { id: "78-script-story", group: "Script", title: "Script, from a story", spec: "script.md" },
   { id: "74-breakdown-draft", group: "Breakdown", title: "Breakdown, the draft", spec: "breakdown.md" },
   { id: "75-breakdown-ready", group: "Breakdown", title: "Breakdown, before the shoot", spec: "breakdown.md" },
   { id: "76-breakdown-coverage", group: "Breakdown", title: "Breakdown, after the shoot", spec: "breakdown.md" },

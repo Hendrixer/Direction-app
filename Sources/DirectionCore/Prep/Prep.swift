@@ -51,6 +51,8 @@ public struct AVSound: Codable, Hashable, Sendable {
     public var speaker: String?
     public var text: String = ""
     public var yours: Bool?
+    /// Said in the speaker's own words, found on the day: the text says what about, not the words.
+    public var ownWords: Bool?
     public init(kind: HeardKind = .voice, speaker: String? = nil, text: String = "") { self.kind = kind; self.speaker = speaker; self.text = text }
 }
 
@@ -83,11 +85,25 @@ public struct AVRow: Codable, Hashable, Sendable, Identifiable {
     public var seconds: Double
     /// A picture the writer had in mind ("[me at the desk]"), for the editor to start from.
     public var hint: String?
+    /// A film from a story: the part of the story this beat came from.
+    public var story: String?
     public var question: PrepQuestion?
-    public init(id: String = newID("row"), section: String? = nil, picture: AVPicture = .init(), sound: AVSound, seconds: Double? = nil, hint: String? = nil) {
-        self.id = id; self.section = section; self.picture = picture; self.sound = sound; self.hint = hint
+    public init(id: String = newID("row"), section: String? = nil, picture: AVPicture = .init(), sound: AVSound, seconds: Double? = nil, hint: String? = nil, story: String? = nil) {
+        self.id = id; self.section = section; self.picture = picture; self.sound = sound; self.hint = hint; self.story = story
         self.seconds = seconds ?? AVScript.seconds(for: sound)
     }
+    /// Words someone says as written: the row's time comes from them.
+    public var hasWrittenWords: Bool { [.voice, .onCamera].contains(sound.kind) && sound.ownWords != true && !sound.text.isEmpty }
+    /// Nobody has said yet what we hear (a beat of a story, before the editor's pass).
+    public var soundUndecided: Bool { sound.text.isEmpty && sound.kind == .voice && sound.speaker == nil && sound.yours != true }
+    /// What plays under it, in words: what's said or heard, or the part of the story.
+    public var line: String { sound.text.isEmpty ? story ?? "" : sound.text }
+}
+
+/// What a film's A/V script was laid out from: a script, whose words are said as written, or a story, where
+/// the editor writes what we hear as well as what we see and nobody's words are written for them.
+public enum ScriptKind: String, Codable, Sendable {
+    case script, story
 }
 
 public struct AVSection: Codable, Hashable, Sendable, Identifiable {
@@ -129,6 +145,8 @@ public struct AVScript: Codable, Hashable, Sendable {
     public var rows: [AVRow] = []
     public var notes: [PrepNote] = []
     public var source: ScriptSource?
+    /// Laid out from a story (nil: a script).
+    public var kind: ScriptKind?
     /// Every change counts up, so the breakdown knows when the script moved on after it.
     public var revision = 0
     /// Editor passes so far: 1 is the first picture column.
@@ -139,6 +157,7 @@ public struct AVScript: Codable, Hashable, Sendable {
     public init() {}
 
     public var isOK: Bool { okAt != nil }
+    public var isStory: Bool { kind == .story }
     /// Changed since the director OK'd it.
     public var changedSinceOK: Bool { okRevision.map { revision > $0 } ?? false }
     public var openNotes: [PrepNote] { notes.filter { $0.state == .written } }
@@ -152,10 +171,10 @@ public struct AVScript: Codable, Hashable, Sendable {
     public var nextNoteNumber: Int { (notes.map(\.number).max() ?? 0) + 1 }
 
     static func wordCount(_ s: String) -> Int { s.split { $0.isWhitespace }.count }
-    /// Spoken words at 2.5 a second; a cue with no words holds two seconds.
+    /// Spoken words at 2.5 a second; a cue with no words, or talk in someone's own words, holds two seconds.
     public static func seconds(for sound: AVSound) -> Double {
         let n = wordCount(sound.text)
-        guard [.voice, .onCamera].contains(sound.kind), n > 0 else { return 2 }
+        guard [.voice, .onCamera].contains(sound.kind), sound.ownWords != true, n > 0 else { return 2 }
         return max(1.5, (Double(n) / 2.5 * 2).rounded() / 2)
     }
 }

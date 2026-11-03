@@ -340,8 +340,9 @@ import DirectionTools
             return TechniqueLibrary.list(in: SharedSettings.techniquesFolder).contains { $0.updatedAt >= since }
         case .script:
             // Every row has a picture, every note it was given has a reply, and nothing waits on the director.
+            // A film from a story needs what we hear on every row too.
             guard let s = try? store.script(), !s.rows.isEmpty else { return false }
-            return s.rows.allSatisfy { !$0.picture.isEmpty } && s.turnedOver.isEmpty && s.openQuestions.isEmpty
+            return s.rows.allSatisfy { !$0.picture.isEmpty && !(s.isStory && $0.soundUndecided) } && s.turnedOver.isEmpty && s.openQuestions.isEmpty
         case .breakdown:
             guard let b = try? store.breakdown(), !b.shots.isEmpty else { return false }
             return b.turnedOver.isEmpty && !b.shots.contains { $0.question?.isOpen == true }
