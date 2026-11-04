@@ -270,6 +270,9 @@ public struct Sequence: Codable, Hashable, Sendable, Identifiable {
     }
     public var duration: MediaTime { clips.map(\.end).max() ?? .zero }
     public func track(_ name: String) -> TrackSettings { tracks?[name] ?? TrackSettings() }
+    /// The layer the story's picture is on: V1 (layer 0), or the lowest layer with picture when a cut leaves
+    /// V1 empty and builds on V2. The strip's scenes, the take under the playhead and a look's stills read it.
+    public var storyLayer: Int { clips.lazy.filter { $0.kind == .video && $0.assetID != nil }.map(\.layer).min() ?? 0 }
 }
 
 public struct Project: Codable, Hashable, Sendable, Identifiable {

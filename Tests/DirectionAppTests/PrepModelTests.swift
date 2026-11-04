@@ -51,9 +51,10 @@ struct PrepModelTests {
         #expect(m.primaryAction?.title == "Bring footage")
         var t = TakeInfo(assetID: "take-1"); t.setupCode = "2A"; t.code = "T1"
         m.dailies.takes["take-1"] = t
-        #expect(m.primaryAction?.title == "Assemble from circles" && m.primaryAction?.enabled == false)
+        // Nothing circled: the editor picks each shot's take. A circle makes the assembly the director's.
+        #expect(m.primaryAction?.title == "Assemble" && m.primaryAction?.enabled == !m.isLogging)
         m.dailies.takes["take-1"]?.circled = true
-        #expect(m.primaryAction?.enabled == true)
+        #expect(m.primaryAction?.title == "Assemble from circles" && m.primaryAction?.enabled == true)
     }
 
     @Test func theShootListGoesSetupBySetupWithWhatsIn() {
@@ -90,6 +91,56 @@ struct PrepModelTests {
 
     /// A film from a story: the job says both columns are the editor's, and it isn't finished until every
     /// beat has a picture and a sound.
+    /// A cut built on V2 with V1 left empty, titles above, still has its scenes on the strip.
+    @Test func aCutBuiltOnV2StillShowsItsScenes() {
+        let m = FilmModel(preview: true)
+        var p = Project(name: "Coded love")
+        let take = MediaAsset(name: "Take 1.mov", path: "/tmp/direction-v2/Take 1.mov", duration: MediaTime(seconds: 30))
+        p.assets = [take]
+        p.sequences[0].clips = [
+            Clip(assetID: take.id, name: take.name, layer: 1, start: .zero, sourceRange: MediaRange(start: 0, end: 8)),
+            Clip(assetID: take.id, name: take.name, layer: 1, start: MediaTime(seconds: 8), sourceRange: MediaRange(start: 12, end: 18)),
+            Clip(assetID: "asset-captions", name: "captions-1", layer: 2, start: .zero, sourceRange: MediaRange(start: 0, end: 4)),
+        ]
+        m.project = p; m.displayed = p
+        #expect(p.sequences[0].storyLayer == 1)
+        #expect(m.stripScenes.map(\.start) == [0, 8])
+        // With picture on V1, V1 is the story, whatever is above it.
+        p.sequences[0].clips.append(Clip(assetID: take.id, name: take.name, layer: 0, start: MediaTime(seconds: 14), sourceRange: MediaRange(start: 20, end: 22)))
+        #expect(p.sequences[0].storyLayer == 0)
+    }
+
+    /// A film started from its footage has no prep rooms; a script brought in brings them back.
+    @Test func roomsFollowTheFilm() {
+        let m = FilmModel(preview: true)
+        #expect(m.isShown(.script) && m.isShown(.breakdown))
+        var p = Project(name: "Short"); p.assets = [MediaAsset(name: "Take 1.mov", path: "/tmp/direction-short/Take 1.mov", duration: MediaTime(seconds: 30))]
+        m.project = p; m.displayed = p
+        #expect(!m.isShown(.script) && !m.isShown(.breakdown) && !m.isEnabled(.script))
+        #expect(m.isShown(.dailies) && m.isShown(.notes) && m.isShown(.finish))
+        m.script = PrepFixtures.script()
+        #expect(m.isShown(.script) && m.isEnabled(.script) && m.isShown(.breakdown))
+    }
+
+    /// Every answer the director gave on the script or the breakdown goes to every job after as settled.
+    @Test func answeredQuestionsAreAlreadyDecided() {
+        var s = PrepFixtures.script()
+        var q = PrepQuestion(id: "ask-name", text: "Is \u{201C}Notes\u{201D} the film\u{2019}s name?", choices: [.init(id: "yes", label: "Yes, kept off screen"), .init(id: "later", label: "Later")])
+        s.rows[0].question = q
+        // Still open: nothing is decided yet.
+        #expect(EditorJobs.decisions(script: s, breakdown: nil).isEmpty)
+        q.answer = "yes"; q.answeredAt = 1; s.rows[0].question = q
+        var b = Breakdown()
+        var shot = BreakdownShot(id: "shot-2C", code: "2C", setupID: "setup-2", rowIDs: [s.rows[1].id], what: "A sticky note.", seconds: 2, source: .shoot)
+        var asked = PrepQuestion(id: "ask-note", text: "Handwriting or printed?", choices: [.init(id: "hand", label: "My handwriting")])
+        asked.answerText = "Mine, in pencil"; asked.answeredAt = 2; shot.question = asked
+        b.shots = [shot]
+        #expect(EditorJobs.decisions(script: s, breakdown: b) == [
+            "Row 1, \u{201C}Is \u{201C}Notes\u{201D} the film\u{2019}s name?\u{201D}: Yes, kept off screen",
+            "Shot 2C, \u{201C}Handwriting or printed?\u{201D}: Mine, in pencil",
+        ])
+    }
+
     /// Writer's notes open as headings and what's under them, bullets as bullets, markdown marks gone.
     @Test func theWritersNotesReadAsTheyWereWritten() {
         let blocks = WritersNotes.blocks("## The idea\n\nA walk home.\n\n## Questions\n* **Which** bridge?\n- Do we hear `him`?")

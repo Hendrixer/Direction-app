@@ -26,8 +26,9 @@ extension FilmModel {
         do { _ = try store.importScript(try ScriptFile.text(url), fileName: url.lastPathComponent, path: url.path, as: kind) }
         catch { self.error = error.localizedDescription; return }
         // The room first: the start screen goes once the script is read, and the titlebar has to find Script
-        // already chosen, or its room bar stays on the one before.
-        go(.script)
+        // already chosen, or its room bar stays on the one before. Forced: a film started from its footage
+        // shows no Script room until this refresh reads the script.
+        go(.script, force: true)
         refresh(force: true)
         toast = draft ? Toast(title: "New draft brought in", detail: kind == .story ? "Beats whose part of the story didn\u{2019}t change keep their picture." : "Rows whose words didn\u{2019}t change keep their picture.")
             : kind == .story ? Toast(title: "Story brought in", detail: "The editor lays out what we see and hear, beat by beat.", editor: true)
@@ -158,7 +159,11 @@ extension FilmModel {
         if !b.isOK { return PrimaryAction(title: "OK breakdown", icon: "checkmark", enabled: !b.shots.isEmpty && !breakingDown, help: "Shot numbers become slates (\u{2318}\u{21A9})") { self.okBreakdown() } }
         let coverage = shotCoverage
         guard coverage.values.contains(where: \.isIn) else { return PrimaryAction(title: "Bring footage", icon: "square.and.arrow.down", help: "Bring footage after each day of shooting (\u{2318}\u{21A9})") { self.chooseFootage() } }
-        if cuts.isEmpty { return PrimaryAction(title: "Assemble from circles", icon: "square.grid.2x2", enabled: circledCount > 0 && openTurnover == nil, help: circledCount == 0 ? "Circle takes in Dailies first" : "Build the assembly from your circled takes (\u{2318}\u{21A9})") { self.assembleFromCircles() } }
+        if cuts.isEmpty {
+            // Nothing circled: the editor picks each shot's take, as in Dailies.
+            let picks = circledCount == 0
+            return PrimaryAction(title: picks ? "Assemble" : "Assemble from circles", icon: "square.grid.2x2", enabled: openTurnover == nil && !(picks && isLogging), help: picks ? (isLogging ? "The editor is still logging the takes" : "The editor picks each shot\u{2019}s take. Circle any you want in Dailies first") : "Build the assembly from your circled takes (\u{2318}\u{21A9})") { self.assembleFromCircles() }
+        }
         return PrimaryAction(title: "Open Dailies", icon: "square.grid.2x2", help: "Your takes (\u{2318}\u{21A9})") { self.go(.dailies) }
     }
 

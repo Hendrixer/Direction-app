@@ -238,7 +238,8 @@ private struct ScriptPage: View {
                     .buttonStyle(.gate(.ghost, .small)).padding(.leading, 40).padding(.top, 10)
             }
         }
-        .frame(width: 820).padding(.top, 18)
+        // As wide as the window gives, to a page you can still read across: picture and sound get room.
+        .frame(maxWidth: 1180).padding(.horizontal, 32).padding(.top, 18)
         .frame(maxWidth: .infinity)
     }
 
@@ -290,8 +291,10 @@ private struct ScriptPage: View {
     private var header: some View {
         HStack(alignment: .bottom, spacing: 16) {
             Color.clear.frame(width: 30, height: 1)
-            SectionLabel("Picture").frame(width: 330, alignment: .leading)
-            SectionLabel("Sound").frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 28) {
+                SectionLabel("Picture").frame(maxWidth: .infinity, alignment: .leading)
+                SectionLabel("Sound").frame(maxWidth: .infinity, alignment: .leading)
+            }
             SectionLabel("Time").frame(width: 40, alignment: .trailing)
         }
         .padding(.bottom, 8)
@@ -322,17 +325,18 @@ private struct ScriptPage: View {
                     Text("\(n)").font(Gate.Font.timecodeSmall).foregroundStyle(current ? Gate.Text.primary : Gate.Text.disabled)
                 }
                 .frame(width: 30, height: 18, alignment: .trailing)
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     // A film from a story: the beat it came from, above what we see and hear.
                     if let story = r.story { beat(r, story: story, found: found && matches(story)) }
-                    HStack(alignment: .top, spacing: 16) {
-                        picture(r, notes: notes, found: found && matches(r.picture.text)).frame(width: 330, alignment: .leading)
+                    // Picture and sound share the row evenly, the way an A/V script is laid out.
+                    HStack(alignment: .top, spacing: 28) {
+                        picture(r, notes: notes, found: found && matches(r.picture.text)).frame(maxWidth: .infinity, alignment: .leading)
                         sound(r, found: found && matches(r.sound.text)).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 Text(Timecode.duration(r.seconds)).font(Gate.Font.timecodeSmall).foregroundStyle(Gate.Text.disabled).frame(width: 40, height: 18, alignment: .trailing)
             }
-            .padding(.vertical, 9)
+            .padding(.vertical, 13)
             if let q = r.question, q.isOpen { questionLine(r, q).padding(.leading, 46).padding(.trailing, 56).padding(.bottom, 10) }
         }
         .background {
@@ -384,7 +388,7 @@ private struct ScriptPage: View {
     }
 
     @ViewBuilder private func picture(_ r: AVRow, notes: [PrepNote], found: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 14) {
             if r.picture.isEmpty {
                 if r.question != nil { BoardView(kind: .empty).frame(width: 80) }
                 else { RoundedRectangle(cornerRadius: 4).fill(Gate.Surface.sunken).overlay(Hatching().clipShape(RoundedRectangle(cornerRadius: 4))).overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Gate.Line.subtle)).frame(width: 80, height: 45) }

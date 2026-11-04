@@ -281,8 +281,11 @@ extension FilmModel {
     var dailiesPrimary: PrimaryAction? {
         if cuts.isEmpty {
             let building = openTurnover?.kind == "assembly"
-            let help = building ? "The editor is building the assembly" : openTurnover != nil ? "The editor is still working" : circledCount == 0 ? "Circle at least one take first (C)" : "Build the first cut from your circles (\u{2318}\u{21A9})"
-            return PrimaryAction(title: building ? "Assembling\u{2026}" : "Assemble from circles", count: String(circledCount), enabled: circledCount > 0 && openTurnover == nil, help: help) {
+            // Nothing circled: the editor picks the takes, the ones it suggested while logging. Circles are the
+            // director's say, never a gate.
+            let picks = circledCount == 0
+            let help = building ? "The editor is building the assembly" : openTurnover != nil ? "The editor is still working" : picks && isLogging ? "The editor is still logging the takes" : picks ? "The editor picks the takes. Circle any you want first (C) (\u{2318}\u{21A9})" : "Build the first cut from your circles (\u{2318}\u{21A9})"
+            return PrimaryAction(title: building ? "Assembling\u{2026}" : picks ? "Assemble" : "Assemble from circles", count: picks ? nil : String(circledCount), enabled: openTurnover == nil && !(picks && isLogging), help: help) {
                 self.assembleFromCircles()
             }
         }

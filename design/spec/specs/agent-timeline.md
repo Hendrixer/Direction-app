@@ -29,7 +29,7 @@ Where data isn't enough, the editor still writes code, but code that **makes thi
 | OTIO | Direction meaning |
 |---|---|
 | `Timeline` | One cut. `metadata.direction`: `cut`, `editRevision`, `width`, `height`, `rate`, `look` (the director's) |
-| `Stack` → `Track` (kind `Video`) | Video layers, bottom first: V1 is the story track (footage), V2+ are overlays (graphics, cutaways, made shots). |
+| `Stack` → `Track` (kind `Video`) | Video layers, bottom first: V1 is the story track (footage), V2+ are overlays (graphics, cutaways, made shots). A cut that leaves V1 empty and builds on V2 has its story on the lowest layer with picture: the strip's scenes, the take under the playhead, a look's stills and layouts read that layer. |
 | `Track` (kind `Audio`) | A1 dialogue, A2 music, A3 sound effects, A4+ more. |
 | `Clip` + `ExternalReference` | A take or a made clip. `metadata.direction.assetID` names the footage; `source_range` is the trim. |
 | `Clip` + `GeneratorReference` | Something Direction draws: `direction.graphic` (`parameters.graphicID`) or `direction.solid` (`parameters.color`) |

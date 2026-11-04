@@ -7,7 +7,7 @@ import DirectionCore
 extension FilmModel {
     /// Maps a moment in one cut to the same picture in another, through the source footage.
     func mapTime(_ t: Double, from a: DirectionCore.Sequence, to b: DirectionCore.Sequence) -> Double? {
-        let base = { (s: DirectionCore.Sequence) in s.clips.filter { $0.kind == .video && $0.layer == 0 } }
+        let base = { (s: DirectionCore.Sequence) in s.clips.filter { $0.kind == .video && $0.layer == s.storyLayer } }
         guard let clip = base(a).first(where: { t >= $0.start.seconds - 0.001 && t <= $0.end.seconds + 0.001 }), let asset = clip.assetID else { return nil }
         let source = clip.sourceRange.start.seconds + (t - clip.start.seconds) * clip.speed
         guard let match = base(b).first(where: { $0.assetID == asset && source >= $0.sourceRange.start.seconds - 0.001 && source <= $0.sourceRange.end.seconds + 0.001 }) else { return nil }

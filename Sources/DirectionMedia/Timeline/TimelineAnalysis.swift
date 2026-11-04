@@ -169,7 +169,9 @@ public enum TimelineAnalysis {
     /// a laugh or a door stays because it isn't quiet.
     public static func quietRanges(project: Project, sequence: Sequence, range: MediaRange, cacheDirectory: URL) async throws -> [MediaRange] {
         var quiet: [MediaRange] = []
-        for clip in sequence.clips where clip.layer == 0 && clip.hold == nil && clip.range.intersection(range) != nil {
+        // The story's own picture (its sound comes with it) and what's on A1.
+        let story = sequence.storyLayer
+        for clip in sequence.clips where clip.layer == (clip.kind == .audio ? 0 : story) && clip.hold == nil && clip.range.intersection(range) != nil {
             guard let asset = clip.assetID.flatMap({ id in project.assets.first { $0.id == id } }), let stream = asset.audio.first(where: { !(clip.audioOverrides[String($0.id)] ?? $0.settings).muted }) else { continue }
             let file = try AVAudioFile(forReading: try await AudioProcessor.extract(asset: asset, trackID: stream.id, directory: cacheDirectory.appendingPathComponent("Audio")))
             let overlap = clip.range.intersection(range)!

@@ -107,7 +107,7 @@ struct RoomSwitcher: View {
     @Bindable var model: FilmModel
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(Room.allCases) { room in
+            ForEach(Room.allCases.filter(model.isShown)) { room in
                 let on = model.room == room, enabled = model.isEnabled(room)
                 Button { model.go(room) } label: {
                     HStack(spacing: 6) {

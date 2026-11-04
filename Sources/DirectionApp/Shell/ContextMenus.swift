@@ -200,9 +200,10 @@ struct PictureContextMenu: View {
         ]
     }
 
-    /// The take on the bottom video layer under the playhead.
+    /// The take on the story's layer under the playhead.
     @MainActor static func takeUnderPlayhead(_ model: FilmModel) -> String? {
-        model.sequence?.clips.first { $0.kind == .video && $0.layer == 0 && $0.start.seconds <= model.position && model.position < $0.end.seconds }?.assetID
+        guard let sequence = model.sequence else { return nil }
+        return sequence.clips.first { $0.kind == .video && $0.layer == sequence.storyLayer && $0.start.seconds <= model.position && model.position < $0.end.seconds }?.assetID
     }
 
     /// Renders the frame at the playhead and puts it on the pasteboard as an image.

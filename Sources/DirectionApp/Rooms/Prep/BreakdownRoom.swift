@@ -52,7 +52,8 @@ private struct BreakdownPage: View {
         HStack(spacing: 0) {
             nav.frame(width: 240)
             ScrollViewReader { proxy in
-                ScrollView { main.padding(.horizontal, 28).padding(.vertical, 22) }
+                // Centered and kept to a width you can read across; the rows get their air from the space.
+                ScrollView { main.frame(maxWidth: 1120).padding(.horizontal, 32).padding(.vertical, 22).frame(maxWidth: .infinity) }
                     .onChange(of: jump) { _, id in if let id { withAnimation(gateAnimation(Gate.Motion.glide)) { proxy.scrollTo(id, anchor: .top) }; jump = nil } }
             }
             .frame(maxWidth: .infinity).background(Gate.Surface.ground)
@@ -153,6 +154,12 @@ private struct BreakdownPage: View {
                 Text(subtitle).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
             }
             Spacer()
+            // The editor's open questions, counted up here (a click goes to the first); each shows on its shot.
+            let asking = breakdown.shots.filter { $0.question?.isOpen == true }
+            if let first = asking.first {
+                Button { selected = first.id; jump = first.id } label: { Chip(asking.count == 1 ? "1 question" : "\(asking.count) questions", style: .agent, icon: "diamond", mono: false) }
+                    .buttonStyle(.plain).help("Go to the first shot the editor is asking about")
+            }
             if breakdown.isOK && model.hasFootage {
                 VStack(alignment: .trailing, spacing: 7) {
                     Text("\(shotIn) of \(breakdown.shots.count) in").font(Gate.Font.timecode).foregroundStyle(Gate.Text.primary)
@@ -196,22 +203,34 @@ private struct BreakdownPage: View {
         let isSel = selected == shot.id
         let covering = breakdown.isOK && model.hasFootage
         return Button { selected = shot.id } label: {
-            HStack(spacing: 14) {
-                HStack(spacing: 5) {
-                    if shot.addedAfterOK == true || (breakdown.pass > 1 && shot.pass == breakdown.pass) { GemMark(size: 7, solid: true) }
-                    Text(shot.code).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
-                }.frame(width: 34, alignment: .leading)
-                ShotPicture(model: model, shot: shot, coverage: c).frame(width: 96, height: 54)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(shot.what).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).lineLimit(2)
-                    Text(caption(shot, c)).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                if covering { takes(c).frame(width: 164, alignment: .leading) }
-                else { playsUnder(shot).frame(width: 176, alignment: .leading) }
-                if !covering { Text(Timecode.duration(shot.seconds)).font(Gate.Font.mono).foregroundStyle(Gate.Text.secondary).frame(width: 40, alignment: .trailing) }
-                status(shot, c).frame(width: covering ? 110 : 86, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 14) {
+                    HStack(spacing: 5) {
+                        if shot.addedAfterOK == true || (breakdown.pass > 1 && shot.pass == breakdown.pass) { GemMark(size: 7, solid: true) }
+                        Text(shot.code).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
+                    }.frame(width: 34, alignment: .leading)
+                    ShotPicture(model: model, shot: shot, coverage: c).frame(width: 96, height: 54)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(shot.what).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).lineLimit(2)
+                        Text(caption(shot, c)).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    if covering { takes(c).frame(width: 164, alignment: .leading) }
+                    else { playsUnder(shot).frame(width: 210, alignment: .leading) }
+                    if !covering { Text(Timecode.duration(shot.seconds)).font(Gate.Font.mono).foregroundStyle(Gate.Text.secondary).frame(width: 40, alignment: .trailing) }
+                    status(shot, c).frame(width: covering ? 110 : 86, alignment: .trailing)
+                }
+                // The editor's question on the shot, one line; its choices are in the inspector.
+                if let q = shot.question, q.isOpen {
+                    HStack(spacing: 9) {
+                        GemMark()
+                        Text(q.text).font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
+                        Spacer(minLength: 8)
+                        Text("Answer\u{2026}").font(.system(size: 12, weight: .medium)).foregroundStyle(Gate.Text.secondary)
+                    }
+                    .padding(.leading, 158)
+                }
             }
-            .padding(.horizontal, 8).padding(.vertical, 9)
+            .padding(.horizontal, 8).padding(.vertical, 13)
             .background(isSel ? RoundedRectangle(cornerRadius: 8).fill(Gate.Surface.panel) : nil)
             .overlay(isSel ? RoundedRectangle(cornerRadius: 8).strokeBorder(Gate.Line.subtle) : nil)
             .overlay(alignment: .bottom) { if !isSel { Rectangle().fill(Gate.Line.subtle).frame(height: 1) } }
@@ -233,8 +252,11 @@ private struct BreakdownPage: View {
 
     private func playsUnder(_ shot: BreakdownShot) -> some View {
         let numbers = shot.rowIDs.compactMap { rowNumber[$0] }
-        // A beat of a story is quoted from the story: what we hear there isn't words to quote.
-        let first = shot.rowIDs.first.flatMap { rowNumber[$0] }.map { script.rows[$0 - 1].story ?? script.rows[$0 - 1].sound.text } ?? ""
+        // A beat of a story is named by its title, or quoted from the story: what we hear there isn't words to quote.
+        let first = shot.rowIDs.first.flatMap { rowNumber[$0] }.map { n in
+            let row = script.rows[n - 1]
+            return row.story.map { let lead = ScriptImport.beatLead($0); return lead.title ?? lead.body } ?? row.sound.text
+        } ?? ""
         return (Text(numbers.count == 1 ? "Row \(numbers[0])" : "Rows \(EditorJobs.rowList(numbers))").font(.system(size: 10.5, weight: .medium, design: .monospaced)).foregroundColor(Gate.Text.secondary)
             + Text(first.isEmpty ? "" : " \u{00B7} \u{201C}\(first)\u{201D}").font(.system(size: 11.5)).foregroundColor(Gate.Text.tertiary))
             .lineLimit(2)

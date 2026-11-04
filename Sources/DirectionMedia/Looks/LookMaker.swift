@@ -52,7 +52,8 @@ public enum LookMaker {
     /// over the cut when there are more scenes than stills. Each is the middle of the scene's first shot.
     public struct StillPick: Sendable, Hashable { public var time: Double; public var assetID: String?; public var sceneID: String? }
     public static func picks(_ sequence: DirectionCore.Sequence, sceneForAsset: [String: String], count: Int) -> [StillPick] {
-        let clips = sequence.clips.filter { $0.kind == .video && $0.layer == 0 }.sorted { $0.start < $1.start }
+        let story = sequence.storyLayer
+        let clips = sequence.clips.filter { $0.kind == .video && $0.layer == story }.sorted { $0.start < $1.start }
         var firsts: [StillPick] = [], seen = Set<String>()
         for c in clips {
             let key = c.assetID.flatMap { sceneForAsset[$0] } ?? c.id

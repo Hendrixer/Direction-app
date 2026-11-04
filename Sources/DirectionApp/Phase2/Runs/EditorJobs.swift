@@ -27,6 +27,19 @@ enum EditorJobs {
     static var role: String { fill(template("editor-role") ?? "", [:]) }
     static func skillPath(_ job: EditorJob) -> String { ".claude/skills/\(job.skill)/SKILL.md" }
 
+    /// What the director answered, one line each: Row 1, “Is ‘Notes’ the film’s name?”: Yes, kept off screen.
+    static func decisions(script: AVScript?, breakdown: Breakdown?) -> [String] {
+        func answer(_ q: PrepQuestion) -> String? {
+            guard q.answeredAt != nil else { return nil }
+            let said = [q.answer.flatMap { id in q.choices.first { $0.id == id }?.label }, q.answerText].compactMap { $0 }.filter { !$0.isEmpty }
+            return said.isEmpty ? nil : said.joined(separator: ": ")
+        }
+        var out: [String] = []
+        for (i, r) in (script?.rows ?? []).enumerated() { if let q = r.question, let a = answer(q) { out.append("Row \(i + 1), \u{201C}\(q.text)\u{201D}: \(a)") } }
+        for s in breakdown?.shots ?? [] { if let q = s.question, let a = answer(q) { out.append("Shot \(s.code), \u{201C}\(q.text)\u{201D}: \(a)") } }
+        return out
+    }
+
     // MARK: Filling
 
     /// The first invocation's text for a run.
@@ -34,6 +47,9 @@ enum EditorJobs {
         let p = try store.read(), brief = try store.brief(), state = try store.directingState(), dailies = try store.dailies()
         let applied = try store.appliedStyle()
         var v = common(run.job, film: p.name, brief: brief, state: state, applied: applied, studied: { ReferenceVideo.study($0, film: store.url) })
+        // Every question the director answered, on the script or the breakdown, is settled for every job after.
+        let decided = decisions(script: try store.script(), breakdown: try store.breakdown())
+        if !decided.isEmpty { v["brief", default: ""] += "\n- Already decided (the director answered these; never ask them again):\n" + decided.map { "  - " + $0 }.joined(separator: "\n") }
         switch run.job {
         case .logFootage:
             let footage = p.footage(film: store.url)
@@ -51,7 +67,9 @@ enum EditorJobs {
             v["cutName"] = t.kind == "assembly" || cuts.isEmpty ? "the assembly" : "Cut \(cuts.count + 1)"
             v["baseCut"] = t.baseCutID.flatMap { id in cuts.first { $0.id == id }?.name } ?? "the current cut"
             v["noteCount"] = t.noteIDs.count == 1 ? "1 note" : "\(t.noteIDs.count) notes"
-            v["circles"] = "The director circled \(dailies.takes.values.filter(\.circled).count) takes."
+            let circled = dailies.takes.values.filter(\.circled).count
+            // Nothing circled: the director left the takes to the editor (dailies.md › Assemble).
+            v["circles"] = circled == 0 ? "The director circled nothing and left the takes to you: use the ones you suggested while logging, and where a moment has none, the best take. Say in the summary that the takes are your picks." : "The director circled \(circled) take\(circled == 1 ? "" : "s")."
             v["sync"] = syncRules(dailies, assets: p.assets, layout: try store.directingState().layout, styleLayouts: applied.layouts)
             let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }.sorted { ($0.number ?? 0) < ($1.number ?? 0) }
             let library = LibraryCatalog.all()

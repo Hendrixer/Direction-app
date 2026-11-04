@@ -10,7 +10,8 @@ public enum LayoutAnalysis {
     /// The takes in sync with the story over `range`, sorted into cameras (best face first) and screens,
     /// with each camera's face track.
     public static func measure(project: Project, sequence: DirectionCore.Sequence, dailies: Dailies, range: MediaRange?, cacheDirectory: URL) async throws -> LayoutMeasure {
-        let stories = sequence.clips.filter { c in c.kind == .video && c.layer == 0 && c.assetID != nil && (range.map { r in c.start < r.end && c.end > r.start } ?? true) }
+        let story = sequence.storyLayer
+        let stories = sequence.clips.filter { c in c.kind == .video && c.layer == story && c.assetID != nil && (range.map { r in c.start < r.end && c.end > r.start } ?? true) }
         var groups: [SyncGroup] = []
         for c in stories { if let g = dailies.syncGroup(for: c.assetID), !groups.contains(where: { $0.id == g.id }) { groups.append(g) } }
         var cameras: [(id: String, score: Double)] = [], screens: [String] = [], faces: [String: FaceTrack] = [:]

@@ -308,7 +308,14 @@ enum PrepFixtures {
     }
 
     private static func draft() -> FilmModel {
-        let m = film(room: .breakdown, script: passScript(), breakdown: breakdown(ok: false))
+        var b = breakdown(ok: false)
+        // One question open, shown on its shot and counted in the head.
+        if let i = b.shots.firstIndex(where: { $0.code == "2C" }) {
+            b.shots[i].question = PrepQuestion(id: "ask-note", text: "Is the sticky note your handwriting, or printed?", choices: [
+                .init(id: "hand", label: "My handwriting", recommended: true), .init(id: "print", label: "Printed"),
+            ], createdAt: SampleFilm.date(11, 2, 21, 12))
+        }
+        let m = film(room: .breakdown, script: passScript(), breakdown: b)
         m.runs.previewStarts = true
         var r = EditorRun(id: "run-bd", job: .breakdown, state: .done, program: "claudeCode", version: "")
         r.summary = "12 shots in 6 setups. Desk at night is the biggest: shoot it first, after dark, then the whiteboard while the room is set."

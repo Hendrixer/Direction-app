@@ -336,7 +336,8 @@ final class FilmModel {
     /// Scenes as they sit in the watched cut, from the clips on the bottom video layer.
     var stripScenes: [StripScene] {
         guard let sequence else { return [] }
-        let clips = sequence.clips.filter { $0.kind == .video && $0.layer == 0 }.sorted { $0.start < $1.start }
+        let story = sequence.storyLayer
+        let clips = sequence.clips.filter { $0.kind == .video && $0.layer == story }.sorted { $0.start < $1.start }
         var out: [StripScene] = []
         let changed = changedRanges(in: watchedCut)
         for (i, clip) in clips.enumerated() {
@@ -517,11 +518,21 @@ final class FilmModel {
             if !openQuestions.isEmpty { return (String(openQuestions.count), false) }
             let n = draftNotes.count + inbox.count; return n > 0 ? (String(n), true) : nil
         case .changes: let n = unreviewedAnswers.count; return n > 0 ? (String(n), false) : nil
+        // The editor's questions on the script and the breakdown, in its color, so they're seen before the room is.
+        case .script: let n = script?.openQuestions.count ?? 0; return n > 0 ? (String(n), false) : nil
+        case .breakdown: let n = breakdown?.shots.filter { $0.question?.isOpen == true }.count ?? 0; return n > 0 ? (String(n), false) : nil
         default: return nil
         }
     }
+    /// The rooms this film uses. One started from its footage, with no script, has no prep: Script and
+    /// Breakdown come back the moment a script or a story is brought in (File › Bring In a Script…).
+    func isShown(_ room: Room) -> Bool {
+        guard room == .script || room == .breakdown else { return true }
+        return script != nil || breakdown != nil || (!hasFootage && cuts.isEmpty)
+    }
     func isEnabled(_ room: Room) -> Bool {
-        switch room {
+        guard isShown(room) else { return false }
+        return switch room {
         case .finish: isPictureLocked
         // Nothing to watch or note before the first cut.
         case .screening, .notes, .changes: !cuts.isEmpty
@@ -530,8 +541,9 @@ final class FilmModel {
         default: true
         }
     }
-    func go(_ room: Room) {
-        guard isEnabled(room) else { return }
+    /// `force`: the room's reason to open is in the store already, ahead of the next refresh (a script just read).
+    func go(_ room: Room, force: Bool = false) {
+        guard force || isEnabled(room) else { return }
         if self.room == .screening && room != .screening { endScreening(showEndCard: false) }
         // The cut stops where it is when you change rooms; nothing plays in a room you can't see it in.
         if self.room != room, playing || playingChanges { if playingChanges { stopChanges() } else { pause() } }
@@ -779,9 +791,9 @@ final class FilmModel {
     /// Where the cut plays a group's takes with another take's sound: its own, or sound laid in sync under it.
     func soundNoteRange(_ g: SyncGroup, sound: String) -> ClosedRange<Double>? {
         guard let clips = sequence?.clips else { return nil }
-        let members = Set(g.takes.map(\.assetID))
+        let members = Set(g.takes.map(\.assetID)), story = sequence?.storyLayer ?? 0
         let off = clips.filter { c in
-            guard c.kind == .video, c.layer == 0, let id = c.assetID, members.contains(id) else { return false }
+            guard c.kind == .video, c.layer == story, let id = c.assetID, members.contains(id) else { return false }
             let laid = clips.first { $0.synced == true && $0.kind == .audio && $0.start < c.end && $0.end > c.start }?.assetID
             return (laid ?? id) != sound
         }

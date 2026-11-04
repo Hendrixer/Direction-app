@@ -2,7 +2,7 @@
 
 **Purpose.** Every take, grouped by scene and setup, so the director can circle the ones they like, as a script supervisor would on set. Circles are the editor's first source when it assembles or recuts. The editor suggests (diamond); only the director circles (amber hand-drawn circle).
 
-**Primary action.** "Assemble from circles" with the circle count (before the first cut). After a cut exists, the primary becomes "Use circles in next cut" with the count of circles changed since the last turnover; it adds a note "Use my new circles in scenes 2 and 4." to the sheet and opens Notes.
+**Primary action.** "Assemble from circles" with the circle count (before the first cut). With nothing circled it's "Assemble": the editor picks the takes, the ones it suggested while logging, and says so in the summary (disabled while it's still logging). Circles are the director's say, never a gate. After a cut exists, the primary becomes "Use circles in next cut" with the count of circles changed since the last turnover; it adds a note "Use my new circles in scenes 2 and 4." to the sheet and opens Notes.
 
 **Entry points.** Room switcher `⌘3`. Open Dailies from 05. "Open in Dailies" from a take anywhere. `⌘⇧1` jumps to Unsorted.
 
@@ -101,6 +101,8 @@ Frame: `screens/09-dailies-unsorted.html` · Render: `renders/09-dailies-unsorte
 - [ ] Guesses use the diamond and ion text; nothing here uses amber except the sidebar circle counts.
 - [ ] "Accept N guesses" counts only cards with a guess.
 - [ ] Unsorted takes never appear in a cut.
+- [ ] With nothing circled, Assemble builds the first cut from the editor's picks once logging is done.
+- [ ] A film started from its footage shows no Script or Breakdown in the room bar until a script is brought in.
 
 ## From your folders
 

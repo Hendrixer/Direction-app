@@ -1,4 +1,4 @@
-<!-- direction-job breakdown v4 -->
+<!-- direction-job breakdown v5 -->
 # Break down "{{film}}"
 
 Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
@@ -12,7 +12,7 @@ The breakdown is the director's plan for the shoot: every picture in the A/V scr
 3. A shot for every row's picture: the rows it plays under, what we see, size, move, seconds (the rows' seconds, unless the picture should run longer), and its source. A picture that runs across several rows is one shot; a row that cuts between two pictures has two. Titles, graphics and anything that can be made in Direction's graphics are source make with no estimate (they're free); a made shot needs a `makePlan` and an `estimate` from `direction_estimate`. Don't make anything now.
 4. In a film from a story (`kind: "story"`), read the writer's notes (`storyNotes`, with the first page) for the film's rules and what's still to decide. Talk in someone's own words is shot with sound: an on-camera setup that gives them room to talk (the mic, time for takes, what to ask), or, recorded on its own, a setup with one shot, source sound.
 5. What the director set by hand stays theirs unless a note asks. Once it's OK'd, numbers are slates: never move a shot to another setup; add a new one instead.
-6. Answer every note listed below: change the shots it names, then reply in one sentence. Ask on a shot (`questions`) when only the director can choose.
+6. Answer every note listed below: change the shots it names, then reply in one sentence. Ask on a shot (`questions`) when only the director can choose; never ask what the brief lists under Already decided, which includes every question they answered on the script.
 
 ## The notes
 {{notes}}
