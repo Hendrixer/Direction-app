@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-// Small pieces the Notes room draws in several places. Recipes: gate.css, css/notes.css, css/changes.css.
+// Small pieces the Cut room's sheet draws in several places. Recipes: gate.css, css/notes.css, css/changes.css.
 
 /// `.chip.k`: a quiet label chip with a hairline and no fill (kinds, "From screening").
 struct LabelChip: View {

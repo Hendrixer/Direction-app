@@ -7,7 +7,7 @@ Direction is a native Mac app first. Everything here applies across rooms and ov
 - **One main window** (`Window` scene, id `main`): the Films list when no film is open, otherwise the film. Its frame is saved and restored between launches (`setFrameAutosaveName`). Minimum 1180 × 740 pt.
 - **Custom 52 pt titlebar** over a full-size content view. The system traffic lights stay system-drawn, centered vertically in the bar at x 20.
 - **Double-clicking the empty titlebar** does what System Settings › Desktop & Dock › "Double-click a window's title bar to" says (`AppleActionOnDoubleClick`): Zoom (default, also used for Fill), Minimize, or nothing. Dragging the empty titlebar moves the window. Controls in the titlebar don't drag.
-- **Full screen** through the green button, View › Enter Full Screen (`⌃⌘F`), or the Screening dock. Screening in full screen hides the menu bar and Dock.
+- **Full screen** through the green button, View › Enter Full Screen (`⌃⌘F`), or the dock while watching through. Watching through in full screen hides the menu bar and Dock.
 - **⌘W** closes the film back to Films. Closing the last window doesn't quit; clicking the Dock icon brings the main window back.
 - **Settings is its own window**, the `Settings` scene: Direction › Settings… (`⌘,`). Toolbar tabs; the window title is the selected tab's name; the last tab is remembered; changes apply immediately (no OK or Cancel); `esc` and `⌘W` close it. Width 720 pt, height fits the pane and animates between tabs.
 - **Sheets** attach to the main window and block only that window. `esc` cancels; `⌘↩` confirms. Popovers close on `esc` or a click outside.
@@ -19,7 +19,7 @@ Standard menus in standard order: Direction, File, Edit, View, Film, Cut, Playba
 
 - **Direction:** About Direction, Settings… `⌘,`, Services, Hide `⌘H`, Hide Others `⌥⌘H`, Show All, Quit `⌘Q`.
 - **File:** New Film `⌘N`, Open… `⌘O`, Open Recent (system-managed, via `NSDocumentController.noteNewRecentDocumentURL`), Close Film `⌘W`, Bring Footage… `⇧⌘I`, Share… `⇧⌘S`, Deliver… `⇧⌘E`.
-- **Edit:** Undo `⌘Z` and Redo `⇧⌘Z` for every director action (write, edit or drop a note, circle a take, lock a scene, accept an answer, pick an option), plus Cut, Copy, Paste, Select All, Find `⌘F` (finds lines in Script, notes in Notes, takes in Dailies), Emoji & Symbols.
+- **Edit:** Undo `⌘Z` and Redo `⇧⌘Z` for every director action (write, edit or drop a note, circle a take, lock a scene, accept an answer, pick an option), plus Cut, Copy, Paste, Select All, Find `⌘F` (finds lines in Script, notes in the Cut room, takes in Dailies), Emoji & Symbols.
 - **View:** the six rooms (`⌘1`–`⌘6`), Show or Hide Notes Sheet `⌥⌘S`, Command Menu `⌘K`, Keyboard Shortcuts `?`, Enter Full Screen `⌃⌘F`.
 - **Window:** Minimize `⌘M`, Zoom, Fill, Center, Bring All to Front, the open windows.
 - **Help:** Direction Help, Keyboard Shortcuts, Connect an Editor…

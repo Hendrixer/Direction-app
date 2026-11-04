@@ -2,8 +2,8 @@ import SwiftUI
 import ObjectiveC
 import DirectionCore
 
-// Owner: Changes and Finish agent. State and derived data shared by the Changes room (29–33)
-// and the lock bar (34). Kept beside FilmModel so drafts and the open reel survive room switches.
+// State and derived data for the editor's answers in the Cut room (specs/cut.md), Play changes and the lock bar
+// (34). Kept beside FilmModel so reply drafts and the open reel survive room switches.
 
 enum AnswersTab: String, CaseIterable, Identifiable {
     case review, accepted, all
@@ -14,15 +14,17 @@ enum AnswersTab: String, CaseIterable, Identifiable {
 /// Where an answer stands for the director.
 enum AnswerStatus: Equatable { case unreviewed, accepted, reopened }
 
-/// Changes-room state that has to outlive the view: tabs, reply drafts, the reel overlay, history.
+/// Answer state that has to outlive the view: reply drafts, the reel overlay, the cuts list.
 @MainActor @Observable
 final class ChangesState {
-    enum Mode { case answers, history }
-    var mode: Mode = .answers
     /// nil follows the room: To review while anything waits, Accepted once nothing does.
     var chosenTab: AnswersTab?
-    /// Rows acted on during this visit stay in To review (done) until the director leaves the tab.
+    /// Answers acted on during this visit stay on the sheet, done, until the director leaves the room.
     var sticky: Set<String> = []
+    /// Every answer in the cut on screen, not only those still to look at: the answered line, opened.
+    var showAllAnswers = false
+    /// The cuts list under the cut's name in the crumb.
+    var cutsOpen = false
     var replyingNoteID: String?
     /// The answer whose Keep as a rule is open.
     var keepingNoteID: String?
@@ -30,8 +32,8 @@ final class ChangesState {
     var drafts: [String: String] = [:]
     /// Play changes is on screen (31). It stays up on the end card after the reel finishes.
     var reelOpen = false
+    /// The cut Compare puts beside the one before it.
     var historyCutID: String?
-    var historyNoteID: String?
     var revertNoteID: String?
     /// Compare whole cuts (A/B of the previous cut and the selected one).
     var comparingCuts = false
@@ -77,7 +79,7 @@ extension FilmModel {
 
     // MARK: Cuts
 
-    /// The cut the Changes room reviews: the one on screen.
+    /// The cut whose answers the sheet shows: the one on screen.
     var reviewCut: ReviewCut? { watchedCut }
     func cutBefore(_ cut: ReviewCut?) -> ReviewCut? { cut.flatMap { c in cuts.last { $0.createdAt < c.createdAt } } }
     func cutProject(_ cut: ReviewCut?) -> Project? { cut.flatMap { CutProjects.project(self, revision: $0.editRevision) } }
@@ -156,6 +158,8 @@ extension FilmModel {
     /// Selects an answer and cues the picture a handle before its change.
     func selectAnswer(_ c: ReviewComment, cue: Bool = true) {
         selectedAnswerNoteID = c.id
+        // One selection on the sheet: an answer or a note, never both.
+        selectedNoteID = nil
         if cue, let r = answerRange(c) { pause(); seek(max(0, r.lowerBound - handleSeconds)) }
     }
     var selectedAnswer: ReviewComment? { selectedAnswerNoteID.flatMap { id in reviewAnswers.first { $0.id == id } } }
@@ -205,8 +209,7 @@ extension FilmModel {
     func replyToAnswer(_ id: String? = nil) {
         guard let id = id ?? selectedAnswerNoteID, let c = note(id), answer(c, in: reviewCut) != nil, !isPictureLocked else { return }
         if changes.reelOpen { closeReel() }
-        if room != .changes { go(.changes) }
-        changes.mode = .answers
+        if room != .cut { go(.cut) }
         comparingNoteID = nil
         selectAnswer(c)
         withAnimation(gateAnimation(Gate.Motion.glide)) { changes.replyingNoteID = id }
@@ -228,8 +231,8 @@ extension FilmModel {
 
     /// Opens Play changes (31), from the start or from one answer.
     func openChangesReel(from noteID: String? = nil) {
-        if room != .changes { go(.changes) }
-        changes.mode = .answers
+        if room != .cut { go(.cut) }
+        if watchingCut { endScreening(writeUp: false) }
         changes.replyingNoteID = nil
         comparingNoteID = nil
         let reel = changeReel(in: watchedCut)
@@ -284,18 +287,20 @@ extension FilmModel {
         if isPreview { previewAccept(id) } else { acceptAnswer(id) }
     }
     var historyCut: ReviewCut? { changes.historyCutID.flatMap { id in cuts.first { $0.id == id } } ?? reviewCut ?? latestCut }
+    /// Film › Cut History (⌘Y): the cuts list under the cut's name (specs/cut.md › Older cuts).
     func showCutHistory() {
-        if room != .changes { go(.changes) }
+        guard isEnabled(.cut), onboardingStep == nil else { return }
+        if room != .cut { go(.cut) }
         if changes.reelOpen { closeReel() }
-        changes.historyCutID = changes.historyCutID ?? watchedCut?.id
-        withAnimation(gateAnimation(Gate.Motion.settle)) { changes.mode = .history }
+        if watchingCut { endScreening(writeUp: false) }
+        changes.cutsOpen = true
     }
-    func showAnswers() { withAnimation(gateAnimation(Gate.Motion.settle)) { changes.mode = .answers; changes.comparingCuts = false } }
     /// Compare whole cuts: the A/B layout with the cut before and this one, synced.
     func compareWholeCuts(_ cut: ReviewCut) {
+        if room != .cut { go(.cut) }
         changes.historyCutID = cut.id
         comparingNoteID = nil
-        withAnimation(gateAnimation(Gate.Motion.settle)) { changes.mode = .answers; changes.comparingCuts = true }
+        withAnimation(gateAnimation(Gate.Motion.settle)) { changes.comparingCuts = true }
     }
 
     // MARK: Previews

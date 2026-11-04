@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import DirectionCore
 
-/// Naming footage in a note (notes.md › Naming footage): "@Scene 2", "@2A", "@2A Take 3", as Dailies shows them.
+/// Naming footage in a note (cut.md › Naming footage): "@Scene 2", "@2A", "@2A Take 3", as Dailies shows them.
 private func film() -> (Dailies, [MediaAsset], Sequence) {
     let asset = { (id: String, name: String) in MediaAsset(id: id, name: name, path: "/\(name)", duration: .init(seconds: 20), video: [.init(id: 1, width: 1920, height: 1080, frameRate: 24)]) }
     let assets = [asset("t1", "A011_C001.mov"), asset("t3", "A011_C003.mov"), asset("slides", "deck.mov"), asset("s20", "late.mov"), asset("loose", "MVI_0001.MP4")]

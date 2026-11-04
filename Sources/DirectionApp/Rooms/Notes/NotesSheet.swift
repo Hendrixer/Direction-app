@@ -2,8 +2,9 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// The 380 pt notes sheet: head, tabs (Sheet, Questions, Outside), the list, and a foot.
-/// After a turnover the Sheet tab holds the editor's read-back.
+/// The Cut room's 380 pt sheet: head, tabs (Notes, Questions, Outside), the list, and a foot. The Notes tab holds
+/// the answered notes, each with the editor's answer, then the notes for the next turnover (CutSheet.swift).
+/// After a turnover it holds the editor's read-back.
 struct NotesSheet: View {
     @Bindable var model: FilmModel
     /// Gives keyboard focus back to the room.
@@ -40,6 +41,10 @@ struct NotesSheet: View {
                 Text(title).font(Gate.Font.brandM).foregroundStyle(Gate.Text.primary).lineLimit(1)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
+                if model.looksBack, let latest = model.latestCut {
+                    Button { model.watch(latest) } label: { SmallIconLabel("Back to \(latest.name)", icon: "arrow.uturn.backward", size: 9) }
+                        .buttonStyle(.gate(.ghost, .small)).help("Back to the latest cut (esc)")
+                }
                 MoreMenu(label: "More") { menuItems }
             }
             .frame(height: Gate.Size.controlSmall)
@@ -96,6 +101,12 @@ struct NotesSheet: View {
             }
         } else {
             Button("Turn Over…") { model.sheet = .turnover }.disabled(model.readyNotes.isEmpty)
+            if !model.acceptableRemaining.isEmpty && !model.looksBack {
+                Button("Accept All Remaining\u{2026}") { model.changes.confirmAcceptAll = true }.disabled(model.isPictureLocked)
+            }
+            if !model.reviewAnswers.isEmpty && !model.looksBack {
+                Toggle("Show Every Answer", isOn: Binding(get: { model.changes.showAllAnswers }, set: { model.changes.showAllAnswers = $0 }))
+            }
             Toggle("Show Dropped Notes", isOn: $model.showDropped)
             if !model.runs.startsEditor {
                 Divider()
@@ -142,12 +153,12 @@ struct NotesSheet: View {
 
 // MARK: Tabs
 
-/// Sheet · Questions · Outside, each with a mono count. ⌘⌥1–⌘⌥3.
+/// Notes · Questions · Outside, each with a mono count. ⌘⌥1–⌘⌥3.
 struct SheetTabs: View {
     @Bindable var model: FilmModel
     var body: some View {
         HStack(spacing: 2) {
-            tab(.sheet, "Sheet", model.sheetNotes.count, "1")
+            tab(.sheet, "Notes", model.sheetRows.count, "1")
             tab(.questions, "Questions", model.openQuestions.count, "2")
             tab(.outside, "Outside", model.inbox.count, "3")
             Spacer(minLength: 0)
@@ -193,26 +204,35 @@ struct NoteList: View {
     @Bindable var model: FilmModel
     var onLeave: () -> Void
     var body: some View {
-        let notes = model.sheetNotes
-        if notes.isEmpty {
-            EmptyStateView(title: "No notes on \(model.notesCutName) yet.", message: "Screen it first, or press N anywhere.") {
-                Button("Screen \(model.notesCutName)") { model.go(.screening) }.buttonStyle(.gate(.ghost)).disabled(!model.isEnabled(.screening))
+        let answers = model.sheetAnswers, notes = model.sheetNotesBelow
+        let answered = !model.reviewAnswers.isEmpty
+        if !answered && notes.isEmpty {
+            EmptyStateView(title: "No notes on \(model.notesCutName) yet.", message: "Watch it through first, or press N anywhere.") {
+                Button("Watch \(model.notesCutName)") { model.watchThrough() }.buttonStyle(.gate(.ghost)).disabled(!model.isEnabled(.cut))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
+                        if answered {
+                            AnsweredHeader(model: model)
+                            ForEach(answers) { c in
+                                AnsweredNoteRow(model: model, note: c).id(c.id).transition(.opacity)
+                            }
+                            if !notes.isEmpty { NotesBelowHeader(title: model.looksBack ? "Your notes" : "Notes on \(model.notesCutName)") }
+                        }
                         ForEach(notes) { c in
                             NoteRow(model: model, note: c, onSelect: { model.showNote(c); onLeave() })
                                 .id(c.id)
                                 .transition(.opacity)
                         }
                     }
-                    .animation(gateAnimation(Gate.Motion.settle), value: notes.map(\.id))
+                    .animation(gateAnimation(Gate.Motion.settle), value: answers.map(\.id) + notes.map(\.id))
                 }
                 .scrollIndicators(.automatic)
                 .onChange(of: model.selectedNoteID) { _, id in if let id { withAnimation(gateAnimation(Gate.Motion.snap)) { proxy.scrollTo(id) } } }
+                .onChange(of: model.selectedAnswerNoteID) { _, id in if let id { withAnimation(gateAnimation(Gate.Motion.snap)) { proxy.scrollTo(id) } } }
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Notes on \(model.notesCutName)")

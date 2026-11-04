@@ -156,7 +156,7 @@ enum StartFixtures {
         m.turnovers = [t]
         m.cuts = [ReviewCut(id: "cut-assembly", name: "Assembly", editRevision: p.editRevision, sequenceID: "sequence-main", createdAt: Date().timeIntervalSince1970)]
         m.previewAssemblyReady = true
-        m.toast = Toast(title: "The assembly is ready. 4:01.", detail: "Nobody else sees it until you\u{2019}ve screened it. Watch it once all the way through.", editor: true, actionTitle: "Screen it")
+        m.toast = Toast(title: "The assembly is ready. 4:01.", detail: "Nobody else sees it until you\u{2019}ve screened it. Watch it once all the way through.", editor: true, actionTitle: "Watch it")
         return m
     }
 }

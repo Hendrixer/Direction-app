@@ -17,11 +17,12 @@ struct LockFlowTests {
         #expect(m.unlockScenes(for: .init(id: "skip", label: "Skip note 7 for this cut")).isEmpty)
     }
 
-    /// The editor's questions show on the Notes tab, in its color, ahead of marks to write up.
+    /// The editor's questions count on the Cut tab, in its color, ahead of marks to write up.
     @Test func questionsShowWhereverYouAre() {
         let m = ChangesFixtures.question()
-        #expect(m.badge(for: .notes).map { $0.0 } == "1" && m.badge(for: .notes)?.1 == false)
+        let answers = m.unreviewedAnswers.count
+        #expect(m.badge(for: .cut).map { $0.0 } == String(answers + 1) && m.badge(for: .cut)?.1 == false)
         m.questions = []
-        #expect(m.badge(for: .notes) == nil || m.badge(for: .notes)?.1 == true)
+        #expect(m.badge(for: .cut).map { $0.0 } == String(answers))
     }
 }

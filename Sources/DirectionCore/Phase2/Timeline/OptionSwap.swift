@@ -1,6 +1,6 @@
 import Foundation
 
-// Use A / Use B (changes.md › 30). The editor delivers two ways as two revisions that differ only where
+// Use A / Use B (cut.md › 30). The editor delivers two ways as two revisions that differ only where
 // the note is. Using the other one swaps those shots wherever they sit in the cut now, so changes the
 // editor made for other notes, before or after, stay as they are.
 

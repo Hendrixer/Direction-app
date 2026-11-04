@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Drawn over the picture in Notes: the region tool (frame 19) and the picture's context menu.
+/// Drawn over the picture in the Cut room: the region tool (frame 19) and the picture's context menu.
 /// Regions are stored as fractions of the frame, never points. One region per note.
 struct RegionLayer: View {
     @Bindable var model: FilmModel

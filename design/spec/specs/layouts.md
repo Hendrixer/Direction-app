@@ -35,7 +35,7 @@ A style names its own layouts (styles.md › A style on disk): each one a layout
 
 ## Where the director sets it
 
-**Under the picture** in Notes, Changes and Finish (the transport's last button, after Mark), when the film has a camera and a screen recording in sync: a drawing of the layout at the playhead. Click it for the picker:
+**Under the picture** in the Cut room and Finish (the transport's last button, after Mark), when the film has a camera and a screen recording in sync: a drawing of the layout at the playhead. Click it for the picker:
 
 - The four layouts, drawn from the same geometry the renderer uses.
 - For Screen and you: Corner (four dots), Size (S · M · L), Shape (Circle · Rounded · Wide).

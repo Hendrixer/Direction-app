@@ -296,7 +296,7 @@ extension FilmModel {
             let scenes = numbers.isEmpty ? "" : numbers.count == 1 ? " in scene \(numbers[0])" : " in scenes \(numbers.dropLast().joined(separator: ", ")) and \(numbers.last!)"
             self.addNote(text: "Use my new circles\(scenes).", kind: .story)
             self.notesTab = .sheet
-            self.go(.notes)
+            self.go(.cut)
         }
     }
 }

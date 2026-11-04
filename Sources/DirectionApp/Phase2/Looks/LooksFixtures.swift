@@ -12,10 +12,11 @@ enum LooksFixtures {
         ["63-look": { .film(lookSheet()) }]
     }
 
-    /// Screening paused on Cut 4 at 01:20:00 (scene 3, The ridge), the sheet open on the editor's
+    /// Watching Cut 4 through, paused at 01:20:00 (scene 3, The ridge), the sheet open on the editor's
     /// "Window light": Halation 30%, Vignette 20%, Grain 40% Fine. The film has no look yet.
     static func lookSheet() -> FilmModel {
-        let m = SampleFilm.make(room: .screening)
+        let m = SampleFilm.make(room: .cut)
+        m.watchingCut = true
         SampleFilm.withCut4(m)
         m.notes = []
         m.position = SampleFilm.tc(1, 20, 0)

@@ -1,7 +1,7 @@
 import SwiftUI
 import DirectionCore
 
-// Frame 64 (graphics.md › The director's side): a graphic answer in Changes. The picture plays the
+// Frame 64 (graphics.md › The director's side): a graphic answer in the Cut room. The picture plays the
 // cut with the graphic in it; the answer card under it has Accept, Words and Not quite; Words opens
 // a popover where the director fixes the words directly.
 

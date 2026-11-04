@@ -105,7 +105,7 @@ ReadBack   turnover, lines: [ReadBackLine], state: .waiting | .approved | .adjus
 ReadBackLine  note, plan: String ("Trim three pauses, −2.4 s"), options: Bool, conflictWith: Note?
 
 Answer   note, cut, summary, delta: String ("−4.2 s" | "crop" | "−6 dB"), change: Change, options: (A, B)?, pick: A|B?, inCut: A|B?
-         // each option is a revision; using one puts it in the cut (changes.md › 30)
+         // each option is a revision; using one puts it in the cut (cut.md › 30)
 Change   range in new cut, range in old cut, scene, note, revertible: Bool
 
 Question  id, asked: Date, text, choices: [Choice] (2–4, each may show a still or take), freeText: Bool, blocks: [Note]?
@@ -171,12 +171,12 @@ building (agent working, shimmer) ─▶ ready (prism sweep once, toast) ─▶ 
 ```
 
 ### Turnover → new cut (the core loop)
-1. Director presses **Turn over** (`⌘↩`) in Notes. A sheet lists the notes and the latitude for this turnover.
+1. Director presses **Turn over** (`⌘↩`) in the Cut room. A sheet lists the notes and the latitude for this turnover.
 2. Agent returns a **read-back** within seconds: one plain line per note with concrete numbers, flags conflicts, marks which notes it will cut two ways.
 3. If Settings › Editor › "Wait for my OK before cutting" is on (default), the director approves or adjusts lines. Otherwise cutting starts immediately and the read-back stays visible.
 4. Agent cuts. Status pill shows progress per note. The director can keep watching the previous cut or work in Dailies.
 5. Agent may raise a **question** (blocks only the notes it names) or report it **can't** do a note (missing footage, locked scene, contradicts the brief's must-keep).
-6. New cut is ready: one prism sweep across the window top edge (900 ms), toast "Cut 4 is ready", Changes room unlocks.
+6. New cut is ready: one prism sweep across the window top edge (900 ms), toast "Cut 4 is ready", and each answer shows under its note on the Cut room's sheet.
 7. Director plays changes, picks options, accepts or replies per answer.
 
 ### Conflicts
@@ -195,7 +195,7 @@ When two notes pull against each other, the agent resolves them in the order Fee
 | free | Take a pass | May propose changes no note asked for. Each appears as an unrequested answer labeled "Unasked" that the director must accept. |
 
 ### Outside notes
-Viewers of a share link can drop notes. They land in **Notes › Outside**, never in the main sheet. The director accepts (becomes a numbered Note authored by that person), edits then accepts, or declines. The agent never sees an outside note until the director accepts it.
+Viewers of a share link can drop notes. They land in the Cut room's **Outside** tab, never in the main sheet. The director accepts (becomes a numbered Note authored by that person), edits then accepts, or declines. The agent never sees an outside note until the director accepts it.
 
 ### Prep: the A/V script and the breakdown
 A film can start from a script (specs/script.md, specs/breakdown.md). Writing and research happen outside Direction; the script comes in once, as a file, and Direction's copy is the shooting script from then on.
@@ -218,19 +218,17 @@ Films that start from footage (a documentary, an interview) skip both and begin 
 - Watches every passage it changed before delivering a cut.
 
 ## Rooms (top-level navigation)
-Titlebar segmented control, `⌘1`–`⌘7`, in the order a film is made:
+Titlebar segmented control, `⌘1`–`⌘5`, in the order a film is made, showing the rooms the film uses:
 1. **Script**: the A/V script, picture beside sound; edit cells, notes on rows, OK.
 2. **Breakdown**: shots by setup with their sources and slates; coverage after the shoot. Enabled once the script is OK'd.
 3. **Dailies**: footage, scenes, setups, takes, circles.
-4. **Screening**: full-bleed playback of the current cut, marks only.
-5. **Notes**: the notes sheet for the current cut, questions, outside notes, turnover, read-back.
-6. **Changes**: the latest cut's answers, options, play changes, changelog. Badge shows unreviewed answers.
-7. **Finish**: appears enabled only after picture lock (before: disabled with tooltip "Lock picture first").
+4. **Cut**: the cut on screen and its sheet: watch through (full-bleed, marks only), notes, questions, outside notes, turnover, read-back, and the editor's answers under the notes they answer. Older cuts open from the cut's name in the crumb. Badge shows what waits on you (`specs/cut.md`).
+5. **Finish**: appears enabled only after picture lock (before: disabled with tooltip "Lock picture first").
 
 The agent status pill in the titlebar is always visible and clickable (opens the Agent popover).
 
 ## Windows
-- Main window, min 1180 × 740 pt, design size 1440 × 900 pt. Full-screen supported (Screening defaults to full-screen when the window is already full-screen).
+- Main window, min 1180 × 740 pt, design size 1440 × 900 pt. Full-screen supported (watching through stays full-screen when the window already is).
 - Films window (project list), 1080 × 720.
 - Settings window, 720 pt wide, height fits pane, toolbar-style tabs (9: General, Editor, Footage, Cutting, Services, Notifications, Shortcuts, Storage, Sharing).
 - Sheets attach to the main window titlebar.

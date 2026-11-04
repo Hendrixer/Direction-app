@@ -1,15 +1,17 @@
 import SwiftUI
 import DirectionCore
 
-/// The picture with its transport: used by Notes, Changes, Finish and anywhere a cut plays
+/// The picture with its transport: used by the Cut room, Finish and anywhere a cut plays
 /// beside a panel. Black stage, 28 pt padding, aspect-fit frame, HUD timecode, then
-/// play · timecode · scene strip · mark.
+/// play · timecode · scene strip · mark, and in the Cut room Play changes and Watch through.
 struct FilmStage<Overlay: View>: View {
     @Bindable var model: FilmModel
     var marks: [StripMark]? = nil
     var showsMarkButton = true
     var tallStrip = false
     var hudPrefix: String? = nil
+    /// The Cut room's ways to watch: Play changes when the cut has any, and Watch through (W).
+    var showsWatch = false
     /// Drawn over the picture, in picture coordinates (regions, A/B tags).
     @ViewBuilder var overlay: (CGSize) -> Overlay
 
@@ -28,7 +30,7 @@ struct FilmStage<Overlay: View>: View {
                 .overlay { if model.isPreparing { HStack(spacing: 8) { GateSpinner(); Text("Preparing picture").font(Gate.Font.small) }.padding(12).gateGlass(10) } }
                 .position(x: g.size.width / 2, y: 28 + avail.height / 2)
             }
-            FilmTransport(model: model, marks: marks, showsMarkButton: showsMarkButton, tall: tallStrip)
+            FilmTransport(model: model, marks: marks, showsMarkButton: showsMarkButton, tall: tallStrip, showsWatch: showsWatch)
         }
         .background(Gate.Surface.canvas)
     }
@@ -40,8 +42,8 @@ struct FilmStage<Overlay: View>: View {
 }
 
 extension FilmStage where Overlay == EmptyView {
-    init(model: FilmModel, marks: [StripMark]? = nil, showsMarkButton: Bool = true, tallStrip: Bool = false, hudPrefix: String? = nil) {
-        self.init(model: model, marks: marks, showsMarkButton: showsMarkButton, tallStrip: tallStrip, hudPrefix: hudPrefix) { _ in EmptyView() }
+    init(model: FilmModel, marks: [StripMark]? = nil, showsMarkButton: Bool = true, tallStrip: Bool = false, hudPrefix: String? = nil, showsWatch: Bool = false) {
+        self.init(model: model, marks: marks, showsMarkButton: showsMarkButton, tallStrip: tallStrip, hudPrefix: hudPrefix, showsWatch: showsWatch) { _ in EmptyView() }
     }
 }
 
@@ -51,6 +53,7 @@ struct FilmTransport: View {
     var marks: [StripMark]? = nil
     var showsMarkButton = true
     var tall = false
+    var showsWatch = false
     var body: some View {
         HStack(spacing: 12) {
             Button { model.togglePlayback() } label: { Image(systemName: model.playing ? "pause.fill" : "play.fill") }
@@ -69,7 +72,23 @@ struct FilmTransport: View {
             }
             // How the screen and the camera share the frame, when there are both (layouts.md).
             if model.layouts.available(model) { LayoutButton(model: model) }
+            if showsWatch { watch }
         }
         .padding(.horizontal, 24).padding(.top, 6).padding(.bottom, 16)
+    }
+}
+
+extension FilmTransport {
+    /// Only what moved, then the whole cut: the two ways to watch from the Cut room (specs/cut.md).
+    @ViewBuilder fileprivate var watch: some View {
+        let reel = model.changesDuration(in: model.watchedCut)
+        if reel > 0 {
+            Button { model.openChangesReel() } label: { Text("Play changes") }
+                .buttonStyle(.gate(.ghost)).fixedSize()
+                .help("Play only what the editor changed, \(Timecode.duration(reel)) with handles (\u{21E7}\u{2318}P)")
+        }
+        Button { model.watchThrough() } label: { Text("Watch through") }
+            .buttonStyle(.gate(.ghost)).fixedSize()
+            .help("Watch \(model.watchedCut?.name ?? "the cut") straight through, full screen. N marks a moment (W)")
     }
 }

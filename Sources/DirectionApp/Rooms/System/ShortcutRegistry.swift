@@ -91,10 +91,10 @@ enum ShortcutGroup: String, CaseIterable, Identifiable {
         switch self {
         case .everywhere: "Everywhere"
         case .playback: "Playback"
-        case .screening: "Screening and notes"
+        case .screening: "Watching and notes"
         case .script: "Script"
         case .dailies: "Dailies"
-        case .changes: "Changes"
+        case .changes: "Answers"
         }
     }
 }
@@ -106,13 +106,13 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case rooms, commandMenu, shortcutsList, turnOver, lockScene, share, settings
     // Playback
     case playPause, shuttle, frame, second, scene, rangeInOut, fullScreen
-    // Screening and notes
+    // Watching and notes
     case mark, startScreening, endScreening, region, kinds, addNote, dropDraft
     // Script
     case editCell, rowNote, moveRow
     // Dailies
     case circle, openTake, nextTake, assemble
-    // Changes
+    // The editor's answers
     case playChanges, pickOption, acceptAnswer, reply, revert
     // Menu-only commands (not in the overlay)
     case newFilm, openFilm, closeFilm, bringFootage, export, copyTimecode, find, brief, editor, lockPicture, newNote, history, goToTimecode, clearRange, loop, mute, films, help, previousCut
@@ -136,8 +136,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .rangeInOut: "Range in and out"
         case .fullScreen: "Full screen"
         case .mark: "Mark this moment"
-        case .startScreening: "Start screening"
-        case .endScreening: "End screening"
+        case .startScreening: "Watch through"
+        case .endScreening: "Back to notes"
         case .region: "Draw a region"
         case .kinds: "Kind: Feeling … Sound"
         case .addNote: "Add note"
@@ -191,20 +191,20 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
 
     /// The rooms where the key works. Keys can repeat across rooms but not within one.
     var rooms: Set<Room> {
-        let pictureRooms: Set<Room> = [.screening, .notes, .changes, .finish]
+        let pictureRooms: Set<Room> = [.cut, .finish]
         switch self {
-        case .turnOver: return [.notes]
+        case .turnOver: return [.cut]
         case .assemble, .circle, .openTake, .nextTake: return [.dailies]
         case .editCell, .moveRow: return [.script]
         case .rowNote: return [.script, .breakdown]
-        case .playChanges, .pickOption, .acceptAnswer, .reply, .revert: return [.changes]
-        case .mark, .region, .kinds, .addNote, .dropDraft, .endScreening: return [.screening, .notes]
+        case .playChanges, .pickOption, .acceptAnswer, .reply, .revert: return [.cut]
+        case .mark, .region, .kinds, .addNote, .dropDraft, .endScreening: return [.cut]
         case .playPause, .shuttle, .frame, .second, .scene, .rangeInOut: return pictureRooms
         default: return Set(Room.allCases)
         }
     }
 
-    /// The default keys. Rows drawn as ranges ("⌘ 1–6") are fixed and can't be recorded.
+    /// The default keys. Rows drawn as ranges ("⌘ 1–5") are fixed and can't be recorded.
     var defaultCombo: KeyCombo? {
         switch self {
         case .commandMenu: .cmd("k")
@@ -256,7 +256,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     /// Caps for rows that show more than one key or a range.
     var fixedCaps: [String]? {
         switch self {
-        case .rooms: ["⌘", "1–7"]
+        case .rooms: ["⌘", "1–5"]
         case .shuttle: ["J", "K", "L"]
         case .frame: ["←", "→"]
         case .second: ["⇧", "← →"]

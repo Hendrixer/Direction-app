@@ -51,7 +51,7 @@ Frame: `screens/01-films-empty.html` · Render: `renders/01-films-empty@2x.png`
 ## 02 · Films, list
 Frame: `screens/02-films.html` · Render: `renders/02-films@2x.png`
 
-**Arrives from / leads to:** launch with films, Window › Films. Double-click or `↩` on a card → opens the film in the room it was last in (usually Notes or Screening). New film → 03.
+**Arrives from / leads to:** launch with films, Window › Films. Double-click or `↩` on a card → opens the film in the room it was last in (usually the Cut room). New film → 03.
 
 **Layout**
 - Header: 32 pt top, 40 pt sides. "Films" Archivo 800 34 at 125%, subtitle 12 pt `--text-3` 8 pt below. Right: search field 240 × 28, sort segmented control (Recent · Name).
@@ -201,23 +201,23 @@ Frames: `06-assembling`, `06-assembly-question`, `06-assembly-ready` (snapshots 
 
 **No page of its own.** The assembly is built like every later cut: the director stays in the room they asked for it in (Dailies, from Assemble from circles) and keeps circling, and the editor pill carries the work. An earlier full-window frame (a black stage, a title, scene tiles, a log and a "First look is yours" card) looked like nothing else in Direction, and everything on it has a home in the rooms.
 
-**Arrives from / leads to:** Assemble from circles in Dailies (07). When done: one prism sweep under the titlebar, the toast, and the titlebar's steel primary becomes Screen the assembly → 13 (Screening, Assembly).
+**Arrives from / leads to:** Assemble from circles in Dailies (07). When done: one prism sweep under the titlebar, the toast, and the titlebar's steel primary becomes Watch the assembly → 13 (watching the Assembly through).
 
 **While it builds**
 - Pill "Assembling 3 of 5" with a meter. Its popover: "Building the assembly from your circled takes." and what the editor is doing now.
 - Dailies' primary is "Assembling…" (disabled) with the circle count. Circles changed now apply to the next cut, with a toast saying so.
-- Rooms: Dailies and Script enabled. Screening, Notes, Changes and Finish stay off until the assembly is in.
+- Rooms: Dailies and Script enabled. Cut and Finish stay off until the assembly is in.
 
-**The editor asks.** A question during the assembly appears at the top of Dailies, above the scene grid (max 620 pt wide, 28 pt in, the scene header's margin), as the same card Notes › Questions uses (`QuestionCard`, not steel: the titlebar has the steel button). The pill turns `.asks` "1 question"; its popover's Answer opens Dailies. Notes holds questions from the first cut on.
+**The editor asks.** A question during the assembly appears at the top of Dailies, above the scene grid (max 620 pt wide, 28 pt in, the scene header's margin), as the same card the Cut room's Questions tab uses (`QuestionCard`, not steel: the titlebar has the steel button). The pill turns `.asks` "1 question"; its popover's Answer opens Dailies. The Cut room holds questions from the first cut on.
 
 **It stops.** The full-width banner under the titlebar (`EditorRunBanner`, frame 58's copy and actions) shows wherever the director is.
 
-**Ready.** Toast "The assembly is ready. 3:12." / "Nobody else sees it until you've screened it. Watch it once all the way through." with Screen it. The pill reads "Assembly ready"; its popover says the same and offers Screen it. In every room but Screening, the steel primary is **Screen the assembly ⌘↩** until the assembly has been screened or noted.
+**Ready.** Toast "The assembly is ready. 3:12." / "Nobody else sees it until you've screened it. Watch it once all the way through." with Watch it. The pill reads "Assembly ready"; its popover says the same and offers Watch it. In every room, the steel primary is **Watch the assembly ⌘↩** until the assembly has been watched or noted.
 
 **Motion:** On completion, Sweep (900 ms) once across the top edge.
 
 **Acceptance**
 - [ ] Asking for the assembly never takes the director out of the room they're in.
-- [ ] A question about the assembly is always answerable: in Dailies before the first cut, in Notes after.
+- [ ] A question about the assembly is always answerable: in Dailies before the first cut, in the Cut room after.
 - [ ] The Share button is absent until the assembly has been screened once.
 - [ ] Only one prism sweep, on completion.

@@ -1,7 +1,7 @@
 import SwiftUI
 import DirectionCore
 
-// Owner: Changes and Finish agent (29–33). Register a SnapshotScene per frame ID from design/spec/frames.js.
+// The editor's answers in the Cut room (29–33). Register a SnapshotScene per frame ID from design/spec/frames.js.
 @MainActor
 enum ChangesFixtures {
     static var frames: [String: () -> SnapshotScene] {
@@ -10,7 +10,8 @@ enum ChangesFixtures {
             "30-changes-options": { .film(options()) },
             "31-play-changes": { .film(playing()) },
             "32-changes-thread": { .film(replying()) },
-            "33-history": { .film(history()) },
+            "33-history": { cutsList() },
+            "33b-every-answer": { .film(history()) },
             "29-changes-question": { .film(question()) },
         ]
     }
@@ -26,8 +27,8 @@ enum ChangesFixtures {
         return m
     }
 
-    /// Cut 4 on screen in Changes, with every earlier cut registered so lengths and "was" ranges resolve.
-    static func cut4(room: Room = .changes) -> FilmModel {
+    /// Cut 4 on screen in the Cut room, with every earlier cut registered so lengths and "was" ranges resolve.
+    static func cut4(room: Room = .cut) -> FilmModel {
         let m = SampleFilm.make(room: room)
         SampleFilm.withCut4(m)
         registerCuts(m)
@@ -70,7 +71,6 @@ enum ChangesFixtures {
         let m = cut4()
         accept(m, 1)
         m.changes.sticky = ["note-1"]
-        m.changes.chosenTab = .review
         m.selectedAnswerNoteID = "note-2"
         m.comparingNoteID = "note-2"
         m.changes.optionFocus = 1
@@ -96,7 +96,6 @@ enum ChangesFixtures {
         let m = cut4()
         accept(m, 1); accept(m, 2, pick: "B")
         m.changes.sticky = ["note-1", "note-2"]
-        m.changes.chosenTab = .review
         if let i = m.notes.firstIndex(where: { $0.number == 3 }) {
             m.notes[i].replies = [reply("Editor", "Reframed to 1.6\u{00D7} on Maya; sky is now a third of the frame. Going past 1.8\u{00D7} softens the image.", at: SampleFilm.cut4.createdAt + 1)]
         }
@@ -107,7 +106,17 @@ enum ChangesFixtures {
         return m
     }
 
-    // 33: history, note 5's change being reverted.
+    // 33: the cuts list under the cut's name.
+    static func cutsList() -> SnapshotScene {
+        let m = history()
+        m.changes.showAllAnswers = false
+        return SnapshotScene(ZStack(alignment: .topLeading) {
+            FilmWindow(app: nil, model: m)
+            CutsPopover(model: m) {}.background(SystemPopBackground()).offset(x: 150, y: 46)
+        })
+    }
+
+    // 33b: every answer in Cut 4 shown, note 5's change being reverted.
     static func history() -> FilmModel {
         let m = cut4()
         for n in [1, 3, 4, 6, 7] { accept(m, n) }
@@ -117,9 +126,8 @@ enum ChangesFixtures {
             m.notes[i].status = "open"; m.notes[i].noteState = .reopened
             m.notes[i].replies = [reply("Director", "Put this back the way it was in Cut 3.", at: SampleFilm.date(10, 28, 14, 31))]
         }
-        m.changes.mode = .history
-        m.changes.historyCutID = "cut-4"
-        m.changes.historyNoteID = "note-3"
+        m.changes.showAllAnswers = true
+        m.selectedAnswerNoteID = "note-5"
         return m
     }
 }

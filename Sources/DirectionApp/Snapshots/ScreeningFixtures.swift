@@ -1,7 +1,7 @@
 import SwiftUI
 import DirectionCore
 
-// Owner: Script and Screening agent (13–16). Register a SnapshotScene per frame ID from design/spec/frames.js.
+// Watch through, the Cut room's full-screen mode (13–15). Register a SnapshotScene per frame ID from design/spec/frames.js.
 @MainActor
 enum ScreeningFixtures {
     static var frames: [String: () -> SnapshotScene] {
@@ -15,20 +15,20 @@ enum ScreeningFixtures {
                 m.freshMarkID = "note-3"
                 return .film(m)
             },
-            "16-screening-end": {
-                let m = screening(marks: 4, at: 0)
-                m.position = m.duration
-                m.playing = false
-                m.screeningEnded = true
+            // Back from watching through: the marks wait on the sheet as notes to write, the first one open.
+            "16-watch-back": {
+                let m = screening(marks: 4, at: SampleFilm.tc(2, 40))
+                m.endScreening()
                 return .film(m)
             },
         ]
     }
 
-    /// Cut 3 playing in Screening. This screening's marks are the drafts at 00:18:04,
+    /// Cut 3 playing, watched through. This watch's marks are the drafts at 00:18:04,
     /// 00:46:00, 01:12:08 and 01:43:20 (notes 1–4 before they're written).
     static func screening(marks: Int, at time: Double) -> FilmModel {
-        let m = SampleFilm.make(room: .screening)
+        let m = SampleFilm.make(room: .cut)
+        m.watchingCut = true
         let times = [SampleFilm.tc(0, 18, 4), SampleFilm.tc(0, 46), SampleFilm.tc(1, 12, 8), SampleFilm.tc(1, 43, 20)]
         m.notes = (1...marks).map { SampleFilm.note($0, "", time: times[$0 - 1], state: .draft) }
         m.screeningMarkIDs = (1...marks).map { "note-\($0)" }

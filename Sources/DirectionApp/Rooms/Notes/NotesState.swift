@@ -2,14 +2,14 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-// The Notes room's own state and the derived values its views share.
+// The Cut room's notes state and the derived values its views share.
 // FilmModel owns the film; this file only adds view state and read-only helpers,
 // plus a few director actions composed from FilmModel's store actions.
 
 /// What the Notes side shows while a turnover is cutting.
 enum CuttingSide { case progress, readBack, notes }
 
-/// View state for the Notes room that outlives a single view: the composer's pinned
+/// View state for the notes on the Cut room's sheet that outlives a single view: the composer's pinned
 /// anchor, the read-back line being corrected, the choice on each open question.
 /// One per film, so the titlebar's primary and the snapshot fixtures can see it too.
 @MainActor @Observable
@@ -57,7 +57,7 @@ final class NotesUI {
 @MainActor private let notesUIByFilm = NSMapTable<FilmModel, NotesUI>.weakToStrongObjects()
 
 extension FilmModel {
-    /// The Notes room's view state for this film.
+    /// The notes' view state for this film.
     var notesUI: NotesUI {
         if let state = notesUIByFilm.object(forKey: self) { return state }
         let state = NotesUI()
@@ -128,12 +128,14 @@ extension FilmModel {
         if !words.0.isEmpty { draftText = words.0; draftKind = words.1 }
         notesUI.handledComposerFocus = composerFocus
     }
-    /// ↑ / ↓ through the sheet.
+    /// ↑ / ↓ through the sheet: the answered notes, then the notes for the next turnover.
     func selectAdjacentNote(_ step: Int) {
-        let list = sheetNotes
+        let list = sheetRows
         guard !list.isEmpty else { return }
-        let index = list.firstIndex { $0.id == selectedNoteID }.map { $0 + step } ?? (step > 0 ? 0 : list.count - 1)
-        showNote(list[max(0, min(list.count - 1, index))])
+        let current = selectedAnswerNoteID ?? selectedNoteID
+        let index = list.firstIndex { $0.id == current }.map { $0 + step } ?? (step > 0 ? 0 : list.count - 1)
+        let c = list[max(0, min(list.count - 1, index))]
+        if sheetAnswers.contains(where: { $0.id == c.id }) { selectAnswer(c, cue: !isPreview) } else { showNote(c) }
     }
 
     /// The composer's moment: pinned once you type, otherwise the playhead.
@@ -301,6 +303,7 @@ extension FilmModel {
 
     /// The sheet head's status line.
     var sheetStatus: String {
+        if looksBack, let cut = watchedCut { return "Looking back \u{00B7} \(ChangesFormat.dayAndTime(cut.createdAt)) \u{00B7} \(cutSummary(cut))" }
         if let t = notesTurnover {
             switch t.state {
             case .waiting: return "Turned over · waiting for the editor to pick it up"
@@ -310,9 +313,14 @@ extension FilmModel {
         }
         let written = sheetNotes.filter { [.written, .reopened].contains($0.lifecycle) }.count
         let drafts = draftNotes.count, outside = inbox.count
+        // A cut just in, nothing written on it yet: how it came out against the one before.
+        if written + drafts + outside == 0, !reviewAnswers.isEmpty, let cut = reviewCut, let d = cutDuration(cut) {
+            guard let before = cutBefore(cut), let p = cutDuration(before) else { return Timecode.duration(d) }
+            return "\(Timecode.duration(d)) \u{00B7} \(ChangesFormat.lengthChange(d - p, than: before.name))"
+        }
         if written + drafts + outside == 0 { return "Nothing written yet" }
         if drafts == 0 && outside == 0 { return written == 1 ? "1 note, ready to turn over" : "\(written) notes, ready to turn over" }
-        var parts = ["\(written) written"]
+        var parts = written > 0 || drafts == 0 ? ["\(written) written"] : []
         if drafts > 0 { parts.append("\(drafts) from your screening, waiting for words") }
         if outside > 0 { parts.append("\(outside) from people you shared with") }
         return parts.joined(separator: " · ")

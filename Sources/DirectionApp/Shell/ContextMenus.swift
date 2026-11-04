@@ -122,7 +122,7 @@ struct SceneContextMenu: View {
             .separator,
             .item(scene.locked ? "Unlock Scene" : "Lock Scene", icon: scene.locked ? "lock.open" : "lock.fill", key: keys.combo(.lockScene)?.text, shortcut: keys.menuShortcut(.lockScene), disabled: dailiesScene == nil || model.isPictureLocked) { model.lockScene(scene.id, !scene.locked) },
             .item("Open in Dailies", icon: "square.grid.2x2", disabled: dailiesScene == nil) { model.selectedSceneID = scene.id; model.go(.dailies) },
-            .item("History of This Scene", icon: "clock.arrow.circlepath", disabled: !model.isEnabled(.changes)) { model.seek(scene.start); model.go(.changes) },
+            .item("Every Cut", icon: "clock.arrow.circlepath", disabled: !model.isEnabled(.cut)) { model.seek(scene.start); model.showCutHistory() },
         ]
     }
 }
@@ -152,7 +152,7 @@ struct NoteContextMenu: View {
             })
         } else {
             out.append(.item("Reply", icon: "arrowshape.turn.up.left", key: "⌘R", disabled: note.lifecycle != .answered) {
-                model.selectedAnswerNoteID = note.id; model.go(.changes)
+                model.replyToAnswer(note.id)
             })
         }
         out += [
@@ -163,8 +163,10 @@ struct NoteContextMenu: View {
             .item(number.isEmpty ? "Copy Link to Note" : "Copy Link to Note \(number)", icon: "link", disabled: note.number == nil) {
                 SystemSupport.copy("direction://film/\(model.project?.id ?? "film")/note/\(number)")
             },
-            .item("Show in History", icon: "clock.arrow.circlepath", disabled: note.latestAnswer == nil) {
-                model.selectedAnswerNoteID = note.id; model.go(.changes)
+            .item("Show Its Answer", icon: "diamond", disabled: note.latestAnswer == nil) {
+                if let id = note.latestAnswer?.cutID, let cut = model.cuts.first(where: { $0.id == id }) { model.watch(cut) }
+                model.go(.cut); model.changes.showAllAnswers = true; model.notesTab = .sheet
+                if let c = model.note(note.id) { model.selectAnswer(c) }
             },
             .separator,
             .item("Drop Note", icon: "trash", key: "⌫", shortcut: .init(.delete, modifiers: []), destructive: true, disabled: !droppable) { model.dropNote(note.id) },
@@ -187,7 +189,7 @@ struct PictureContextMenu: View {
             .item("Mark This Frame", icon: "mark", key: "N", shortcut: .init("n", modifiers: []), disabled: model.duration <= 0) { model.mark() },
             .item("Draw a Region", icon: "viewfinder", key: "R", shortcut: .init("r", modifiers: []), disabled: model.duration <= 0) {
                 model.pause(); model.anchorMode = .region; model.drawingRegion = true
-                if model.room != .notes && model.room != .screening { model.go(.notes) }
+                if model.room != .cut { model.go(.cut) }
             },
             .item("Note on the Whole Cut", icon: "text.bubble") { FilmActions(model).startNote(anchor: .wholeCut) },
             .item("Look\u{2026}", icon: "camera.filters", key: "\u{2318}\u{2325}L", shortcut: .init("l", modifiers: [.command, .option]), disabled: model.duration <= 0) { model.openLook() },

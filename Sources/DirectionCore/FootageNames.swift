@@ -1,6 +1,6 @@
 import Foundation
 
-/// Scenes, setups and takes by the names the director types after "@" in a note (notes.md › Naming footage),
+/// Scenes, setups and takes by the names the director types after "@" in a note (cut.md › Naming footage),
 /// as Dailies shows them: "Scene 2", "2A", "2A Take 3". A take with no setup is "Scene 4 Take 2"; one with
 /// no scene or code goes by its file's name.
 public struct FootageName: Hashable, Sendable, Identifiable {

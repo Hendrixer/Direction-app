@@ -8,7 +8,7 @@ import DirectionMedia
 import DirectionTools
 
 enum Room: String, CaseIterable, Identifiable {
-    case script, breakdown, dailies, screening, notes, changes, finish
+    case script, breakdown, dailies, cut, finish
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
     var shortcut: KeyEquivalent { KeyEquivalent(Character(String((Room.allCases.firstIndex(of: self) ?? 0) + 1))) }
@@ -71,9 +71,7 @@ final class FilmModel {
     var error: String? { didSet { if let error, error != oldValue, !isPreview { DirectionLog.error("Alert in \(filmName): \(error)") } } }
 
     // MARK: Navigation
-    var room: Room = .notes
-    /// Where esc goes back to from Screening.
-    var previousRoom: Room?
+    var room: Room = .cut
     var sheet: ActiveSheet?
     /// What Direction is doing to get a video ready to learn from (a technique, a style), while it does.
     var learning: String?
@@ -110,10 +108,11 @@ final class FilmModel {
     var composerFocus = 0
     var showDropped = false
 
-    // MARK: Screening
+    // MARK: Watching through
+    /// The Cut room's full-screen mode: the cut straight through, N for marks (specs/cut.md › Watch through).
+    var watchingCut = false
     var screeningStartedAt: Date?
     var screeningMarkIDs: [String] = []
-    var screeningEnded = false
     var freshMarkID: String?
 
     // MARK: Dailies
@@ -271,12 +270,15 @@ final class FilmModel {
             if t.kind == "assembly" {
                 // Nothing to review yet: screen it (start.md › 06).
                 let length = ((try? project?.sequence(cut.sequenceID))??.duration.seconds).map { " " + Timecode.duration($0) + "." } ?? ""
-                toast = Toast(title: "The assembly is ready.\(length)", detail: "Nobody else sees it until you\u{2019}ve screened it. Watch it once all the way through.", editor: true, actionTitle: room == .screening ? nil : "Screen it", run: { [weak self] in self?.go(.screening) })
+                toast = Toast(title: "The assembly is ready.\(length)", detail: "Nobody else sees it until you\u{2019}ve screened it. Watch it once all the way through.", editor: true, actionTitle: watchingCut ? nil : "Watch it", run: { [weak self] in self?.watchThrough() })
                 onNotify?("The assembly is ready", "\(filmName) · screen it when you\u{2019}re ready", NotificationKey.cutReady)
                 continue
             }
             let answers = notes.filter { $0.latestAnswer?.cutID == cut.id }.count
-            toast = Toast(title: "\(cut.name) is ready", detail: "\(answers) answers · \(Timecode.duration(changesDuration(in: cut))) of changes to watch", editor: true, actionTitle: "Watch changes")
+            // Nothing starts playing on its own: the notice offers the whole cut, or only what moved.
+            toast = Toast(title: "\(cut.name) is ready", detail: "\(answers) answers · \(Timecode.duration(changesDuration(in: cut))) of changes to watch", editor: true,
+                          actionTitle: "Play changes", run: { [weak self] in self?.openChangesReel() },
+                          secondTitle: "Watch through", secondRun: { [weak self] in self?.watchThrough() })
             if watchedCutID == nil { loadDisplayed(force: true) }
             onNotify?("\(cut.name) is ready", "\(filmName) · \(answers) answers to review", NotificationKey.cutReady)
         }
@@ -512,21 +514,20 @@ final class FilmModel {
     var loggedCount: Int { footage.filter { dailies.isLogged($0.id) }.count }
     var isLogging: Bool { hasFootage && footage.contains { !dailies.isLogged($0.id) } }
     var defaultRoom: Room {
-        if !unreviewedAnswers.isEmpty { return .changes }
         // A film from a script works in prep until its footage is in.
         if cuts.isEmpty, let script { return !script.isOK ? .script : hasFootage ? .dailies : .breakdown }
         if cuts.isEmpty { return .dailies }
-        if isPictureLocked { return .finish }
-        return .notes
+        if isPictureLocked && unreviewedAnswers.isEmpty { return .finish }
+        return .cut
     }
     func badge(for room: Room) -> (String, Bool)? {
         switch room {
-        // What waits on the director in Notes: the editor's questions first, in its color; then marks to write
-        // up and outside notes to decide.
-        case .notes:
-            if !openQuestions.isEmpty { return (String(openQuestions.count), false) }
+        // What waits on the director in the cut: the editor's answers and questions first, in its color; then
+        // marks to write up and outside notes to decide, in yours.
+        case .cut:
+            let editor = unreviewedAnswers.count + openQuestions.count
+            if editor > 0 { return (String(editor), false) }
             let n = draftNotes.count + inbox.count; return n > 0 ? (String(n), true) : nil
-        case .changes: let n = unreviewedAnswers.count; return n > 0 ? (String(n), false) : nil
         // The editor's questions on the script and the breakdown, in its color, so they're seen before the room is.
         case .script: let n = script?.openQuestions.count ?? 0; return n > 0 ? (String(n), false) : nil
         case .breakdown: let n = breakdown?.shots.filter { $0.question?.isOpen == true }.count ?? 0; return n > 0 ? (String(n), false) : nil
@@ -544,7 +545,7 @@ final class FilmModel {
         return switch room {
         case .finish: isPictureLocked
         // Nothing to watch or note before the first cut.
-        case .screening, .notes, .changes: !cuts.isEmpty
+        case .cut: !cuts.isEmpty
         // There’s nothing to break down until the script is OK’d.
         case .breakdown: script?.isOK == true || breakdown != nil
         default: true
@@ -553,14 +554,21 @@ final class FilmModel {
     /// `force`: the room's reason to open is in the store already, ahead of the next refresh (a script just read).
     func go(_ room: Room, force: Bool = false) {
         guard force || isEnabled(room) else { return }
-        if self.room == .screening && room != .screening { endScreening(showEndCard: false) }
+        if watchingCut && room != .cut { endScreening(writeUp: false) }
         // The cut stops where it is when you change rooms; nothing plays in a room you can't see it in.
         if self.room != room, playing || playingChanges { if playingChanges { stopChanges() } else { pause() } }
-        if self.room != room { previousRoom = self.room }
         // The room is there the moment its tab is clicked: nothing fades or slides in.
         var now = Transaction(); now.disablesAnimations = true
         withTransaction(now) { self.room = room }
-        if room == .screening { startScreening() }
+    }
+    /// W: the cut full screen, straight through, from wherever you are (specs/cut.md › Watch through).
+    func watchThrough() {
+        guard isEnabled(.cut) else { return }
+        if room != .cut { go(.cut) }
+        if changes.reelOpen { closeReel() }
+        var now = Transaction(); now.disablesAnimations = true
+        withTransaction(now) { watchingCut = true }
+        startScreening()
     }
 
     // MARK: Playback
@@ -587,6 +595,8 @@ final class FilmModel {
     }
     func watch(_ cut: ReviewCut?) {
         player.pause(); playing = false
+        // Another cut's answers start folded, the way the sheet first shows them.
+        if (cut?.id ?? latestCut?.id) != watchedCut?.id { changes.sticky = []; changes.showAllAnswers = false; selectedAnswerNoteID = nil }
         watchedCutID = cut?.id == latestCut?.id ? nil : cut?.id
         loadDisplayed(force: true)
     }
@@ -613,8 +623,6 @@ final class FilmModel {
         if player.rate > 0 { player.pause(); playing = false } else { if position >= duration - 0.03 { seek(0) }; player.play(); playing = true }
     }
     func pause() { player.pause(); playing = false }
-    /// Back to the room before this one (esc out of Screening).
-    func goBack() { go(previousRoom.flatMap { isEnabled($0) && $0 != .screening ? $0 : nil } ?? .notes) }
     func step(frames: Double) { pause(); seek(position + frames / fps) }
     func shuttle(_ rate: Float) { guard !isPreview else { return }; if rate == 0 { pause() } else { player.rate = rate; playing = true } }
     /// Keeps the display awake while picture plays.
@@ -628,14 +636,14 @@ final class FilmModel {
         undoManager?.setActionName(name)
     }
     private func didReachEnd() {
-        if room == .screening { screeningEnded = true }
+        if watchingCut { endScreening() }
         if playingChanges { nextChange() }
     }
 
     // MARK: Screening
 
     func startScreening() {
-        screeningStartedAt = Date(); screeningMarkIDs = []; screeningEnded = false
+        screeningStartedAt = Date(); screeningMarkIDs = []
         if position >= duration - 0.5 { seek(0) }
         if !isPreview { player.play(); playing = true }
     }
@@ -645,20 +653,24 @@ final class FilmModel {
         let t = min(position, max(0, duration - 1 / fps))
         if let c = addNote(text: "", time: t, state: .draft) {
             screeningMarkIDs.append(c.id); freshMarkID = c.id
-            toast = Toast(title: "Mark \(c.number ?? screeningMarkIDs.count) at \(Timecode.format(t, fps: fps))", detail: "Keep watching. Write it after.", glass: room == .screening)
+            toast = Toast(title: "Mark \(c.number ?? screeningMarkIDs.count) at \(Timecode.format(t, fps: fps))", detail: "Keep watching. Write it after.", glass: watchingCut)
             Task { try? await Task.sleep(for: .milliseconds(1200)); if freshMarkID == c.id { freshMarkID = nil } }
         }
     }
-    func endScreening(showEndCard: Bool = true) {
-        if showEndCard && room == .screening { pause(); screeningEnded = true; return }
-        screeningEnded = false; screeningStartedAt = nil
-    }
-    func writeNotesAfterScreening() {
-        screeningEnded = false
+    /// Esc, or the end of the cut: back to the sheet. Marks from this watch wait there as notes to write, the
+    /// first one open; without marks the playhead stays where you stopped (specs/cut.md › Watch through).
+    func endScreening(writeUp: Bool = true) {
+        let marked = screeningMarkIDs.filter { id in note(id)?.lifecycle == .draft }
+        pause()
+        var now = Transaction(); now.disablesAnimations = true
+        withTransaction(now) { watchingCut = false }
+        screeningStartedAt = nil
+        guard writeUp, let first = marked.first else { return }
         notesTab = .sheet
-        selectedNoteID = draftNotes.first?.id
-        if let first = draftNotes.first, let t = noteTime(first) { seek(t) }
-        go(.notes); composerFocus += 1
+        selectedNoteID = first
+        selectedAnswerNoteID = nil
+        if let c = note(first), let t = noteTime(c) { seek(t) }
+        composerFocus += 1
     }
 
     // MARK: Notes actions
@@ -698,6 +710,7 @@ final class FilmModel {
     func editNote(_ id: String, text: String? = nil, kind: NoteKind?? = nil) { perform { _ = try $0.editNote(id: id, text: text, kind: kind) } }
     func select(_ c: ReviewComment) {
         selectedNoteID = c.id
+        selectedAnswerNoteID = nil
         if let t = noteTime(c) { pause(); seek(t) }
         region = c.region.map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
         if c.lifecycle == .draft { draftText = ""; draftKind = nil; composerFocus += 1 }
@@ -719,6 +732,9 @@ final class FilmModel {
     }
     func turnOver(latitude: Latitude, waitForOK: Bool) {
         let ids = readyNotes.map(\.id), prefs = editorPreferences
+        // What you didn't push back on stays in the cut, the way it does in a cutting room: answers you hadn't
+        // looked at are accepted with the turnover (specs/cut.md › Turning over).
+        for id in unreviewedAnswers.map(\.id) { perform { try $0.acceptAnswer(noteID: id) } }
         perform { _ = try $0.updateDirectingState(summary: "Updated the editor's instructions") { $0.preferences = prefs; $0.latitude = latitude; $0.waitForOK = waitForOK } }
         perform { _ = try $0.turnOver(noteIDs: ids, latitude: latitude, waitForOK: waitForOK, cutID: self.watchedCut?.id, sequenceID: self.sequence?.id) }
         sheet = nil
@@ -794,7 +810,7 @@ final class FilmModel {
             m.perform { try $0.dropNote(id: note.id) }
             if let before { m.perform { try $0.setSyncSound(assetID: before) } }
         }
-        toast = Toast(title: "Note \(note.number.map(String.init) ?? "") added: use \(label)\u{2019}s sound", detail: "The editor changes the cut at the next turnover.", actionTitle: "Open Notes", run: { [weak self] in self?.go(.notes) })
+        toast = Toast(title: "Note \(note.number.map(String.init) ?? "") added: use \(label)\u{2019}s sound", detail: "The editor changes the cut at the next turnover.", actionTitle: "Open the Cut", run: { [weak self] in self?.go(.cut) })
     }
 
     /// Where the cut plays a group's takes with another take's sound: its own, or sound laid in sync under it.
@@ -846,7 +862,7 @@ final class FilmModel {
 
     // MARK: Brief and footage
 
-    /// The scenes, setups and takes a note can name with "@" (notes.md › Naming footage).
+    /// The scenes, setups and takes a note can name with "@" (cut.md › Naming footage).
     var footageNames: [FootageName] { FootageNames.all(dailies, assets: project?.assets ?? []) }
 
     func saveBrief(_ b: Brief) {

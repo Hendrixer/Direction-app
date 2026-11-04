@@ -4,12 +4,12 @@ Locking protects the director's cut. Scenes can be locked one by one as they're 
 
 Shared:
 - Locked scenes are drawn everywhere as grayscale footage at 28–30% opacity, 135° hatching (1 pt lines at 8% white every 6 pt), a lock glyph before the name, and a 1 pt line-2 border.
-- After picture lock, the crumb shows a "Picture locked" chip (lock glyph, line-2 border, no fill) after the cut name. The Finish room becomes enabled. The Changes and Notes rooms stay viewable but read-only, and their primary buttons disappear.
+- After picture lock, the crumb shows a "Picture locked" chip (lock glyph, line-2 border, no fill) after the cut name. The Finish room becomes enabled. The Cut room stays viewable but read-only, and its primary button disappears.
 
 ## 34 · Locking scenes
 Frame: `screens/34-lock-scenes.html` · Render: `renders/34-lock-scenes@2x.png`
 
-**Arrives from / leads to:** 29, once every answer is accepted. The lock bar is always available in Changes; it's most prominent here. "Lock picture…" leads to 35.
+**Arrives from / leads to:** 29, once every answer is accepted. The lock bar replaces the transport in the Cut room once every answer is accepted and nothing new is written. "Lock picture…" leads to 35.
 
 **Layout:**
 - Stage rows: viewer (picture at 88% width), lock head, lock bar.
@@ -17,7 +17,7 @@ Frame: `screens/34-lock-scenes.html` · Render: `renders/34-lock-scenes@2x.png`
 - Lock bar (`.lockbar`): one tile per scene, flex-proportional to scene length, 3 pt gaps, 24 pt side padding, 84 pt tall, radius 6.
   - Each tile shows footage at 60%, the name (mono 11) at top left, and the range (mono 10.5) at bottom left, with a lock glyph at bottom right when locked.
   - Hover: 1.5 pt text-1 ring and a small "Lock" button at bottom right.
-- The answers panel shows the Accepted tab with all 7 rows done.
+- The sheet shows the answered notes folded: "Answered in Cut 4 · all 7 answered".
 
 **Content:**
 - Help: "3 of 5 locked. Lock a scene when its cut is right; the editor won't recut it. Color and sound stay open."

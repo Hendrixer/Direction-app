@@ -30,7 +30,7 @@ The rendering mode is monochrome and the color is inherited (`.foregroundStyle(.
 | region | Region anchor | `viewfinder` |
 | range | Range anchor | `arrow.left.and.line.vertical.and.arrow.right` |
 | turn | Turn over | `arrow.right` |
-| exit | End screening | `rectangle.portrait.and.arrow.right` |
+| exit | Leaving a sheet or a film | `rectangle.portrait.and.arrow.right` |
 | circle | Circled take | **custom** (see above) |
 | script | Script room, a script file | `doc.text` |
 | strike | Strike a line | `strikethrough` |

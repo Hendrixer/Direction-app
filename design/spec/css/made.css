@@ -6,7 +6,7 @@
 .chip.made .mk.gem { width: 5px; height: 5px; margin: 1px; border-radius: 1px; }
 .chip.made.open { background: var(--hover); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text-1); }
 
-/* Answer rows: two lines at most, then an ellipsis (changes.md › 29) */
+/* Answer rows: two lines at most, then an ellipsis (cut.md › 29) */
 .ans .what .clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .ans .ans-r .dl { display: flex; align-items: center; gap: 6px; }
 

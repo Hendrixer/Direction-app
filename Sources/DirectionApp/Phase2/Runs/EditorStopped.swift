@@ -161,9 +161,9 @@ struct EditorRunBanner: View {
             }
         }
     }
-    /// A stopped turnover shows its own notice in Notes (frame 58).
+    /// A stopped turnover shows its own notice in the Cut room (frame 58).
     private func shownInNotes(_ r: EditorRun) -> Bool {
-        model.room == .notes && model.onboardingStep == nil && r.turnoverID != nil && r.turnoverID == model.openTurnover?.id
+        model.room == .cut && model.onboardingStep == nil && r.turnoverID != nil && r.turnoverID == model.openTurnover?.id
     }
 }
 

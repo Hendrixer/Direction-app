@@ -124,8 +124,8 @@ enum SampleFilm {
         ]
     }
 
-    /// The base world: Cut 3 on screen in Notes, notes 1–2 written and 3–4 still drafts from the screening.
-    static func make(room: Room = .notes) -> FilmModel {
+    /// The base world: Cut 3 on screen in the Cut room, notes 1–2 written and 3–4 still drafts from the screening.
+    static func make(room: Room = .cut) -> FilmModel {
         let m = FilmModel(preview: true)
         m.project = project(clips: cut3Clips, revision: 12)
         m.displayed = m.project

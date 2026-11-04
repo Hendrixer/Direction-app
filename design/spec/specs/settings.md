@@ -26,8 +26,8 @@ Frame: `screens/42-settings-general.html` · Render: `renders/42-settings-genera
 |---|---|---|---|---|
 | Start | When Direction opens | Select: Reopen the last film / Show Films / Start a new film | Reopen the last film | The window shown at launch. |
 | Start | Show Films when no film is open | Switch | On | When the last film window closes, the Films window opens. Off quits the app instead. |
-| Playback | Start screenings full screen | Switch | Off | Entering Screening (`⌘3` or Start screening) also enters full screen. Leaving Screening leaves the full screen it entered; a window that was already full screen stays so. |
-| Playback | Hide controls in Screening after | Select: 1 second / 2 seconds / 4 seconds / Never | 2 seconds | Idle time before Screening goes to frame 14 (picture only). |
+| Playback | Start screenings full screen | Switch | Off | Watching through (`W` or Cut › Watch Through) also enters full screen. Going back to notes leaves the full screen it entered; a window that was already full screen stays so. |
+| Playback | Hide controls while watching after | Select: 1 second / 2 seconds / 4 seconds / Never | 2 seconds | Idle time before watching through goes to frame 14 (picture only). |
 | Playback | Audio output | Select: System default / every Core Audio output | System default | The playback device. |
 | Look | Film grain | Switch | On | The 3.5% grain over UI surfaces. It's never drawn over the picture. |
 | Look | Reduce motion | Select: Follow system / On / Off | Follow system | Replaces shimmer with a static prism edge, sweeps with fades, and slides with fades. |
@@ -116,7 +116,7 @@ These are macOS user notifications. On first launch, Direction asks for permissi
 | Tell me when | The editor can't do a note | Switch | On | "The editor can't do note 7" / "Launch day is locked." Action: **Show me**. |
 | Tell me when | An outside note arrives | Select: Right away / Once an hour / Once a day / Never | Once an hour | "3 outside notes on Cut 3" / "From Priya Shah and Tom Reyes." Action: **Open inbox**. |
 | Tell me when | A delivery finishes | Switch | On | "Launch film is delivered" / "4 files, 2.1 GB." Action: **Show in Finder**. |
-| Quiet | Hold notifications during a screening | Switch | On | Notifications queue while Screening is open and are delivered when it ends. |
+| Quiet | Hold notifications during a screening | Switch | On | Notifications queue while you watch through and are delivered when you're back on your notes. Detail: "They wait until you're back on your notes." |
 | Quiet | Sound | Select: Clapper / Soft / None | Clapper | The sound played with notifications. Clapper is a short bundled wood-block sound. |
 
 Notifications never appear while the Direction window is key and showing the relevant room. In that case a toast is shown instead (see `components.md › Toast`).
@@ -128,7 +128,7 @@ Frame: `screens/46-settings-shortcuts.html` · Render: `renders/46-settings-shor
 
 **Layout:**
 - Top row: a search input (flex) and **Restore defaults**.
-- Groups match the shortcut overlay (frame 50): Everywhere, Playback, Screening and notes, Script, Dailies, Changes.
+- Groups match the shortcut overlay (frame 50): Everywhere, Playback, Watching and notes, Script, Dailies, Answers.
 - The frame shows 3 groups. The full pane scrolls, with all groups in this order.
 
 **Row:** the action label on the left, the current keys on the right as `.kbd` caps.

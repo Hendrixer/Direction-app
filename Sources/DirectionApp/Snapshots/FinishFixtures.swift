@@ -28,7 +28,7 @@ enum FinishFixtures {
 
     // 34: nothing left to review; 3 of 5 scenes locked, The ridge under the pointer.
     static func lockingScenes() -> FilmModel {
-        let m = allAccepted(room: .changes)
+        let m = allAccepted(room: .cut)
         lock(m, [1, 2, 5])
         m.changes.lockSceneID = "scene-3"
         m.position = SampleFilm.tc(1, 30, 0)

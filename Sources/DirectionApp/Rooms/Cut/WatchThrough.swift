@@ -2,16 +2,16 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-// Frames 13–16. Watching a cut straight through: full-bleed picture, glass chrome that
-// fades after the idle time in Settings, and one act: N drops a mark without stopping.
-// Spec: design/spec/specs/screening.md.
+// Watch through (frames 13–15): the Cut room's full-screen mode. The cut straight through, full-bleed, glass chrome
+// that fades after the idle time in Settings, and one act: N drops a mark without stopping. Esc, or the end of the
+// cut, goes back to the sheet with the marks waiting as notes to write. Spec: design/spec/specs/cut.md › Watch through.
 
 extension EnvironmentValues {
     /// Snapshots of frame 14 start with the chrome already hidden.
     @Entry var screeningStartsQuiet = false
 }
 
-struct ScreeningRoom: View {
+struct WatchThrough: View {
     @Bindable var model: FilmModel
     var app: AppModel?
     @Environment(\.screeningStartsQuiet) private var startsQuiet
@@ -29,7 +29,7 @@ struct ScreeningStage: View {
     @State private var dockHovered = false
     @State private var window: NSWindow?
     @State private var fullScreen = false
-    /// Settings › General › Start screenings full screen. Leaving Screening leaves the full screen it entered.
+    /// Settings › General › Start screenings full screen. Back to notes leaves the full screen it entered.
     @AppStorage(SettingsKey.screeningFullScreen) private var startsFullScreen = false
     @State private var enteredFullScreen = false
     @State private var showsVolume = false
@@ -45,9 +45,8 @@ struct ScreeningStage: View {
         _chromeShown = State(initialValue: !startsQuiet)
     }
 
-    private var ended: Bool { model.screeningEnded }
-    /// The chrome stays while paused, at the end card, and whenever VoiceOver runs.
-    private var chromeVisible: Bool { chromeShown || !model.playing || ended || NSWorkspace.shared.isVoiceOverEnabled }
+    /// The chrome stays while paused, and whenever VoiceOver runs.
+    private var chromeVisible: Bool { chromeShown || !model.playing || NSWorkspace.shared.isVoiceOverEnabled }
     private var marks: [ReviewComment] { model.screeningMarkIDs.compactMap { model.note($0) }.filter { $0.lifecycle != .dropped } }
     private var stripMarks: [StripMark] { marks.compactMap { c in model.noteTime(c).map { StripMark(id: c.id, time: $0, fresh: c.id == model.freshMarkID) } } }
     private var visibleToastID: String? { toastMarkID ?? (model.isPreview ? model.freshMarkID : nil) }
@@ -56,18 +55,16 @@ struct ScreeningStage: View {
         ZStack {
             Gate.Surface.canvas
             picture
-            if chromeVisible && !ended && model.playing && showsHint { hint.transition(.opacity) }
-            if !chromeVisible && !ended { quietLabels.transition(.opacity) }
-            if !ended { dock.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible) }
-            ScreeningTitlebar(model: model, app: app, end: end)
+            if chromeVisible && model.playing && showsHint { hint.transition(.opacity) }
+            if !chromeVisible { quietLabels.transition(.opacity) }
+            dock.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible)
+            WatchTitlebar(model: model, app: app, end: end)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible)
-            if let id = visibleToastID, let note = model.note(id), !ended { markToast(note).transition(toastTransition) }
-            if ended { ScreeningEndCard(model: model, marks: marks).transition(settleTransition()) }
+            if let id = visibleToastID, let note = model.note(id) { markToast(note).transition(toastTransition) }
         }
         .ignoresSafeArea()
         .animation(gateAnimation(Gate.Motion.settle), value: chromeVisible)
-        .animation(gateAnimation(Gate.Motion.glide), value: ended)
         .animation(gateAnimation(Gate.Motion.glide), value: visibleToastID)
         .onContinuousHover { phase in if case .active = phase { wake() } }
         .focusable().focusEffectDisabled().focused($focused)
@@ -99,14 +96,12 @@ struct ScreeningStage: View {
     private var picture: some View {
         let still = model.isPreview ? model.stripScene(at: model.position)?.art ?? .dusk : nil
         return PictureView(player: model.isPreview ? nil : model.player, still: still, aspect: model.aspect)
-            .saturation(ended ? 0.6 : 1)
-            .overlay { Color.black.opacity(ended ? 0.68 : 0).allowsHitTesting(false) }
             .overlay { if model.isPreparing { GateSpinner() } }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             // A click plays or pauses at once; the second click of a double-click puts that back and goes full screen.
             .onTapGesture {
-                if !ended { model.togglePlayback() }
+                model.togglePlayback()
                 if NSApp.currentEvent?.clickCount == 2 { toggleFullScreen() }
             }
             .accessibilityHidden(true)
@@ -273,9 +268,7 @@ struct ScreeningStage: View {
         if toastMarkID == id { toastMarkID = nil }
     }
 
-    private func end() {
-        if model.position > 1 || !marks.isEmpty { model.endScreening() } else { model.goBack() }
-    }
+    private func end() { model.endScreening() }
 
     private func toggleFullScreen() { (window ?? NSApp.keyWindow)?.toggleFullScreen(nil) }
     private func enterFullScreenIfAsked(_ window: NSWindow?) {
@@ -304,7 +297,7 @@ struct ScreeningStage: View {
         let after = Self.hideAfter
         guard after > 0 else { return }
         try? await Task.sleep(for: .seconds(after))
-        guard !Task.isCancelled, model.playing, !ended, !dockHovered, !showsVolume, !NSWorkspace.shared.isVoiceOverEnabled else { return }
+        guard !Task.isCancelled, model.playing, !dockHovered, !showsVolume, !NSWorkspace.shared.isVoiceOverEnabled else { return }
         chromeShown = false
         NSCursor.setHiddenUntilMouseMoves(true)
     }
@@ -338,12 +331,6 @@ struct ScreeningStage: View {
     private func handle(_ press: KeyPress) -> KeyPress.Result {
         guard !TextInput.hasFocus else { return .ignored }
         if press.modifiers.contains(.command) || press.modifiers.contains(.control) { return .ignored }
-        if ended {
-            switch press.key {
-            case .escape: model.selectedNoteID = nil; model.go(.notes); return .handled
-            default: return .ignored
-            }
-        }
         let shift = press.modifiers.contains(.shift)
         switch press.key {
         case .space: model.togglePlayback(); return .handled
@@ -358,6 +345,7 @@ struct ScreeningStage: View {
         case "k": model.shuttle(0); return .handled
         case "l": model.shuttle(model.playing && model.player.rate >= 1 ? min(4, model.player.rate * 2) : 1); return .handled
         case "f": toggleFullScreen(); return .handled
+        case "w": end(); return .handled
         default: wake(); return .ignored
         }
     }
@@ -393,11 +381,6 @@ struct ScreeningStage: View {
     }
 }
 
-/// Fade plus a scale from 0.98; a plain fade under Reduce Motion.
-@MainActor func settleTransition(anchor: UnitPoint = .center) -> AnyTransition {
-    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98, anchor: anchor))
-}
-
 /// Remembers the last wake without redrawing on every pointer move.
 @MainActor final class WakeClock { var lastWake = Date.distantPast }
 
@@ -418,9 +401,9 @@ extension FilmModel {
 
 // MARK: Titlebar over picture
 
-/// The titlebar over the picture: crumb without menus, rooms, the editor, End screening.
+/// The titlebar over the picture: crumb without menus, rooms, the editor, Back to notes.
 /// No steel button while a cut plays.
-struct ScreeningTitlebar: View {
+struct WatchTitlebar: View {
     @Bindable var model: FilmModel
     var app: AppModel?
     var end: () -> Void
@@ -443,13 +426,13 @@ struct ScreeningTitlebar: View {
                         .help("The editor")
                     Button(action: end) {
                         HStack(spacing: 6) {
-                            Image(systemName: "rectangle.portrait.and.arrow.right").font(.system(size: 12, weight: .medium))
-                            Text("End screening")
+                            Image(systemName: "text.bubble").font(.system(size: 12, weight: .medium))
+                            Text("Back to notes")
                             KeyHint("esc")
                         }
                     }
                     .buttonStyle(.gate(.ghost))
-                    .help("End screening (esc)")
+                    .help("Back to notes (esc)")
                 }
             }
             .padding(.leading, 20).padding(.trailing, 12)
@@ -457,118 +440,6 @@ struct ScreeningTitlebar: View {
         }
         .frame(height: Gate.Size.titlebar)
         .background(LinearGradient(colors: [.black.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom).allowsHitTesting(false))
-    }
-}
-
-// MARK: End of the cut
-
-/// "That's Cut 3." The marks, then Write notes or Watch again.
-struct ScreeningEndCard: View {
-    @Bindable var model: FilmModel
-    var marks: [ReviewComment]
-    @FocusState private var primaryFocused: Bool
-
-    private var stoppedEarly: Bool { model.position < model.duration - 0.5 }
-    private var cutName: String { model.watchedCut?.name ?? "the cut" }
-    private var canLockPicture: Bool { marks.isEmpty && !model.isPictureLocked && !model.cuts.isEmpty && model.picturelockBlockers.isEmpty }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            SectionLabel(stoppedEarly ? "Stopped at \(Self.minutes(model.position)) of \(Timecode.duration(model.duration))" : "End of screening \u{00B7} \(Timecode.duration(model.duration))")
-            Text("That\u{2019}s \(cutName).").font(Gate.Font.brandXL).tracking(-0.68).foregroundStyle(Gate.Text.primary).lineLimit(1).minimumScaleFactor(0.7)
-            Text(lede).font(.system(size: 14)).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
-            EndCardStrip(scenes: model.stripScenes, duration: model.duration, marks: marks.compactMap { c in model.noteTime(c).map { StripMark(id: c.id, time: $0) } }) { id in
-                model.selectedNoteID = id; model.go(.notes)
-            }
-            HStack(spacing: 8) {
-                if stoppedEarly {
-                    Button { model.screeningEnded = false; if !model.playing { model.togglePlayback() } } label: { Label("Keep watching", systemImage: "play.fill") }
-                        .buttonStyle(.gate(.ghost, .large))
-                }
-                Button { model.screeningEnded = false; model.seek(0); model.startScreening() } label: { Label("Watch again", systemImage: "arrow.uturn.backward") }
-                    .buttonStyle(.gate(.ghost, .large)).keyboardShortcut("r", modifiers: .command).help("Watch again (\u{2318}R)")
-                if canLockPicture {
-                    Button { model.go(.notes); model.sheet = .lockPicture } label: { Text("Lock picture\u{2026}") }.buttonStyle(.gate(.ghost, .large))
-                }
-                Spacer()
-                if marks.isEmpty {
-                    Button { model.go(.notes) } label: { HStack(spacing: 6) { Image(systemName: "text.bubble"); Text("Back to notes"); KeyHint("\u{21A9}") } }
-                        .buttonStyle(.gate(.steel, .large)).keyboardShortcut(.return, modifiers: []).focused($primaryFocused)
-                } else {
-                    Button { model.writeNotesAfterScreening() } label: { HStack(spacing: 6) { Image(systemName: "text.bubble"); Text("Write notes"); KeyHint("\u{21A9}") } }
-                        .buttonStyle(.gate(.steel, .large)).keyboardShortcut(.return, modifiers: []).focused($primaryFocused)
-                }
-            }
-        }
-        .padding(.horizontal, 32).padding(.top, 32).padding(.bottom, 26)
-        .frame(width: 640)
-        .background(GlassBackground(radius: 20))
-        .onAppear { primaryFocused = true }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("That\u{2019}s \(cutName).")
-        .accessibilityAddTraits(.isModal)
-    }
-
-    private var lede: String {
-        switch marks.count {
-        case 0: "No marks this time."
-        case 1: "You dropped 1 mark. Write it up while it\u{2019}s fresh, then turn the sheet over."
-        default: "You dropped \(marks.count) marks. Write them up while it\u{2019}s fresh, then turn the sheet over."
-        }
-    }
-
-    /// "02:10".
-    static func minutes(_ s: Double) -> String { let t = Int(max(0, s)); return String(format: "%02d:%02d", t / 60, t % 60) }
-}
-
-/// The end card's strip: 30 pt scenes, the screening's pins under them, no playhead.
-/// A pin opens its draft in Notes.
-struct EndCardStrip: View {
-    var scenes: [StripScene]
-    var duration: Double
-    var marks: [StripMark]
-    var onPin: (String) -> Void
-    var body: some View {
-        GeometryReader { g in
-            let gaps = CGFloat(max(0, scenes.count - 1)) * Gate.Component.Strip.gap
-            let total = max(duration, scenes.map(\.end).max() ?? 0, 0.001), usable = max(1, g.size.width - gaps)
-            ZStack(alignment: .topLeading) {
-                HStack(spacing: Gate.Component.Strip.gap) {
-                    ForEach(Array(scenes.enumerated()), id: \.offset) { _, scene in StripTile(scene: scene).frame(width: max(2, usable * scene.duration / total), height: 30) }
-                }
-                .padding(.top, 10)
-                ForEach(marks) { mark in
-                    Button { onPin(mark.id) } label: { PinMark(size: 11).frame(width: 16, height: 16).contentShape(Rectangle()) }
-                        .buttonStyle(.plain)
-                        .help("Open this draft in Notes")
-                        .accessibilityLabel("Director\u{2019}s mark at \(Timecode.format(mark.time))")
-                        .position(x: ScreeningStage.stripX(mark.time, scenes: scenes, duration: duration, width: g.size.width), y: 51.5)
-                }
-            }
-        }
-        .frame(height: 56)
-    }
-}
-
-/// A scene on a strip: its footage at 55%, name in mono, locked scenes grey and hatched.
-struct StripTile: View {
-    var scene: StripScene
-    var body: some View {
-        ZStack(alignment: .leading) {
-            Gate.Surface.panel
-            Thumbnail(path: scene.thumbnail, art: scene.art).opacity(scene.locked ? 0.3 : 0.55).grayscale(scene.locked ? 1 : 0)
-            if scene.locked { Hatching(opacity: 0.07) }
-            HStack(spacing: 4) {
-                if scene.locked { Image(systemName: "lock.fill").font(.system(size: 8)) }
-                Text(scene.label).lineLimit(1).truncationMode(.tail)
-            }
-            .font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.primary).shadow(color: .black, radius: 1.5, y: 1)
-            .padding(.horizontal, 6)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 3))
-        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(scene.locked ? Gate.Line.strong : Gate.Line.subtle, lineWidth: 1))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Scene \(scene.label)\(scene.locked ? ", locked" : "")")
     }
 }
 

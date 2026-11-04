@@ -57,7 +57,7 @@ The editor never sets the look itself; no edit function can change it (`look_is_
 ## 63 · The Look sheet
 Frame: `screens/63-look.html` · 1440 × 900, sheet 1120 × 720.
 
-Opens with Film › Look… (`⌥⌘L`; `⇧⌘L` is Lock Picture), from the picture's context menu (Look…), and from a look answer in Changes. Here it's over Screening's paused picture at 01:20:00 (scene 3, The ridge, dusk).
+Opens with Film › Look… (`⌥⌘L`; `⇧⌘L` is Lock Picture), from the picture's context menu (Look…), and from a look answer on the Cut room's sheet. Here it's over Watch through's paused picture at 01:20:00 (scene 3, The ridge, dusk).
 
 - **Left: the picture** (720 wide, 16:9), the current frame with the selected look. `\` holds to show the picture without the look; a small text-3 hint under the picture says "Hold \ to compare". Under it, a strip of 5 stills, one from each scene, all with the selected look, so the director sees it across the film; click a still to show that frame large.
 - **Right: the panel** (360 wide, padding 20):

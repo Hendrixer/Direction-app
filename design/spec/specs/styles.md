@@ -66,7 +66,7 @@ Each move comes from the style, else the house style, else Direction's own (`Sty
 
 When a note says something the director wants every time ("never put words over my face"), the editor offers a rule with its answer (`direction_turnover_complete` › `rule`: one sentence in their words, its area, `scope` style or house, and `replaces`, the ids of rules it takes the place of). Not for one-off fixes.
 
-Once the answer is accepted, Changes shows **Keep as a Rule…** (changes.md). The director edits the wording and picks where it goes: **`<style> films`** (into the style in the Styles folder and the film's copy; films already cut in that style keep their copy until it's picked again) or **Every film** (the house style). Rules it replaces are taken out, so a house rule that overrides a style's says so once instead of being overruled by it. The answer remembers where it went ("Kept as a rule"). A film whose style has left the Styles folder keeps rules in the house style only.
+Once the answer is accepted, its row on the sheet offers **Keep as a Rule…** (cut.md). The director edits the wording and picks where it goes: **`<style> films`** (into the style in the Styles folder and the film's copy; films already cut in that style keep their copy until it's picked again) or **Every film** (the house style). Rules it replaces are taken out, so a house rule that overrides a style's says so once instead of being overruled by it. The answer remembers where it went ("Kept as a rule"). A film whose style has left the Styles folder keeps rules in the house style only.
 
 ## Making a style
 

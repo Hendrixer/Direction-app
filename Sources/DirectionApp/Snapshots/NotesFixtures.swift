@@ -19,7 +19,7 @@ enum NotesFixtures {
             "27-cutting-conflict": { .film(cuttingConflict()) },
             "28-cutting-error": { .film(cuttingError()) },
             "17z-notes-cut-on-v2": { .film(cutOnV2()) },
-            "17zz-screening-cut-on-v2": { let m = cutOnV2(); m.room = .screening; return .film(m) },
+            "17zz-screening-cut-on-v2": { let m = cutOnV2(); m.watchingCut = true; return .film(m) },
         ]
     }
 
@@ -94,7 +94,7 @@ enum NotesFixtures {
                                choices: [
                                    .init(id: "t2", label: "Use T2", detail: "2A · \u{201C}Editing was the part nobody wanted.\u{201D}", assetID: "take-2a-t2"),
                                    .init(id: "t5", label: "Use T5", detail: "2A · slower, a breath before \u{201C}nobody\u{201D}", assetID: "take-2a-t5"),
-                                   .init(id: "both", label: "Cut both ways", detail: "You pick in Changes"),
+                                   .init(id: "both", label: "Cut both ways", detail: "You pick on the sheet"),
                                ],
                                allowsText: true, answer: nil, createdAt: at(14, 3, 210 - 120).timeIntervalSince1970)
         m.questions = [q]

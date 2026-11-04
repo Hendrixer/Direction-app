@@ -72,7 +72,7 @@ struct EditorPopover: View {
             return "The assembly is ready. Nobody else sees it until you\u{2019}ve screened it; watch it once all the way through before giving notes."
         case .cutReady:
             let n = model.unreviewedAnswers.count, cut = model.latestCut?.name ?? "The new cut"
-            return "\(cut) is ready. \(n == 1 ? "1 answer is" : "\(n) answers are") waiting in Changes."
+            return "\(cut) is ready. \(n == 1 ? "1 answer is" : "\(n) answers are") waiting in the Cut room."
         case .waiting:
             return model.openTurnover?.kind == "assembly" ? "You asked for the assembly. It starts when your editor picks it up." : "You turned over \(notes == 1 ? "1 note" : "\(notes) notes"). They\u{2019}re waiting for your editor to pick them up."
         case .readingBack: return "Reading your \(notes) notes. A plan will be ready in a moment."
@@ -144,14 +144,14 @@ struct EditorPopover: View {
         case .stopped:
             if let r = model.runs.failed { EditorStopActions(model: model, run: r, small: true) }
         case .cutReady where model.assemblyAwaitsScreening:
-            Button("Screen it") { open(.screening) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+            Button("Watch it") { model.showEditorPopover = false; model.watchThrough() }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .readBackReady:
-            Button("Open read-back") { open(.notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+            Button("Open read-back") { model.notesTab = .sheet; open(.cut) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .asks:
-            // Before the first cut the assembly's questions wait in Dailies; after, in Notes.
-            Button("Answer") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+            // Before the first cut the assembly's questions wait in Dailies; after, in the Cut room.
+            Button("Answer") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .cut) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .cant:
-            Button("Show me") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .notes) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+            Button("Show me") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .cut) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .waiting where !model.runs.startsEditor:
             HStack(spacing: 8) {
                 Button("Copy request for your editor") { model.copyEditorRequest(); model.showEditorPopover = false }.buttonStyle(.gate(.normal, .small))
@@ -250,17 +250,17 @@ struct EditorPopover: View {
     private var activity: [Activity] {
         var out: [Activity] = []
         for cut in model.cuts {
-            out.append(Activity(id: cut.id, lead: "\(cut.name) is ready.", text: "", at: cut.createdAt, room: .changes, cutID: cut.id))
+            out.append(Activity(id: cut.id, lead: "\(cut.name) is ready.", text: "", at: cut.createdAt, room: .cut, cutID: cut.id))
         }
         for t in model.turnovers where !t.readBack.isEmpty {
             let approved = t.readBackApproved ? (t.adjustments.isEmpty ? " You approved all of them." : " You adjusted \(t.adjustments.count).") : ""
-            out.append(Activity(id: t.id + "-rb", text: "Read back \(t.readBack.count) \(t.readBack.count == 1 ? "note" : "notes").\(approved)", at: t.updatedAt, room: .notes))
+            out.append(Activity(id: t.id + "-rb", text: "Read back \(t.readBack.count) \(t.readBack.count == 1 ? "note" : "notes").\(approved)", at: t.updatedAt, room: .cut))
         }
         if let logged = model.dailies.updatedAt, !model.dailies.takes.isEmpty {
             out.append(Activity(id: "dailies", text: "Logged \(model.dailies.takes.count) \(model.dailies.takes.count == 1 ? "take" : "takes").", at: logged, room: .dailies))
         }
         for q in model.questions {
-            out.append(Activity(id: q.id, text: q.kind == "cant" ? "Couldn\u{2019}t do note \(q.noteIDs.first.map(model.noteNumber) ?? "–")." : "Asked: \(q.text)", at: q.createdAt, room: .notes))
+            out.append(Activity(id: q.id, text: q.kind == "cant" ? "Couldn\u{2019}t do note \(q.noteIDs.first.map(model.noteNumber) ?? "–")." : "Asked: \(q.text)", at: q.createdAt, room: .cut))
         }
         return out.sorted { $0.at > $1.at }.prefix(3).map { a in
             guard let id = a.cutID, let cut = model.cuts.first(where: { $0.id == id }) else { return a }

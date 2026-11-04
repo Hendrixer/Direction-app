@@ -5,7 +5,7 @@ import DirectionCore
 /// The multi-line note field (`.field.area`). A real text view, so it checks spelling and
 /// grammar as you type like any Mac text field. ↩ submits, ⇧↩ adds a line, ⇥ takes the
 /// editor's suggested kind, ⌥1–⌥5 set the kind, esc stops writing. "@" opens the library at the
-/// caret (techniques.md › The library), and the film's scenes, setups and takes (notes.md › Naming
+/// caret (techniques.md › The library), and the film's scenes, setups and takes (cut.md › Naming
 /// footage); a name picked from it shows in the director's color, its "@" drawn as its kind's icon.
 struct NoteField: View {
     @Binding var text: String

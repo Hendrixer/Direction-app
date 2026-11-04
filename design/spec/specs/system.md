@@ -29,7 +29,7 @@ Frame: `screens/49-command.html` · Render: `renders/49-command@2x.png`
 Matching is a fuzzy, prefix-weighted search on the label and its synonyms. Matched characters are 600 weight in text-1 (`<mark>` in the frame) and the rest are 400.
 
 **States and variants:**
-- **Empty query:** shows Recent (the last 5 commands run), then Suggested for the room. In Notes that's Turn over, Start screening, Share Cut 3.
+- **Empty query:** shows Recent (the last 5 commands run), then Suggested for the room. In the Cut room that's Watch through, Play changes, Turn over.
 - **No results:** a single row "No matches for “xyz”", and below it "Ask the editor: “xyz”", which opens Notes with the composer pre-filled.
 - **Note to self:** typing text that starts with `n ` (for example "n music is too loud") offers "Add note at 00:46:12: music is too loud" as the top action.
 
@@ -80,9 +80,9 @@ Frame: `screens/50-shortcuts.html` · Render: `renders/50-shortcuts@2x.png`
 | | Previous or next scene | ↑ ↓ |
 | | Range in and out | I O |
 | | Full screen | ⌃⌘F |
-| Screening and notes | Mark this moment | N |
-| | Start screening | ⌘⇧↩ |
-| | End screening | esc |
+| Watching and notes | Mark this moment | N |
+| | Watch through | ⌘⇧↩ (W in the Cut room) |
+| | Back to notes | esc |
 | | Draw a region | R |
 | | Kind: Feeling … Sound | ⌥1–5 |
 | | Add note | ↩ (in the composer) |
@@ -192,7 +192,7 @@ Frame: `screens/52-media-missing.html` · Render: `renders/52-media-missing@2x.p
 ## 53 · Context menus
 Frame: `screens/53-menus.html` · Render: `renders/53-menus@2x.png`
 
-The frame shows three right-click menus over the Notes room at once, only for reference. In the app, one is open at a time. All three use `.pop.menu`:
+The frame shows three right-click menus over the Cut room at once, only for reference. In the app, one is open at a time. All three use `.pop.menu`:
 - Panel: padding 5, radius 12.
 - Rows 26 tall with radius 6, a 14 icon in text-3 and a 13 label. The shortcut is right-aligned in 12 text-4.
 - Separators are 1 pt hairlines with a 6 inset.
@@ -236,7 +236,7 @@ The frame shows three right-click menus over the Notes room at once, only for re
 | — | | |
 | Drop note | ⌫ | Alert color. Before turnover only. The number is retired, never reused. |
 
-Other context menus follow the same rules: takes in Dailies, rows of the script, answers in Changes, cuts in History.
+Other context menus follow the same rules: takes in Dailies, rows of the script, answers on the Cut room's sheet, cuts in the cuts list.
 - **Take:** Circle, Open, Play, Show in Finder.
 - **Script row:** Note on This Row, Edit Picture, Edit Words, Move Up, Move Down, Add a Row After, Take Out Row.
 - **Answer:** Accept, Reply, Revert this change, Play this change.
@@ -304,10 +304,8 @@ Every command is listed with its key equivalent. Room-scoped commands are disabl
 | Script | ⌘1 |
 | Breakdown | ⌘2 (disabled until the script is OK'd) |
 | Dailies | ⌘3 |
-| Screening | ⌘4 |
-| Notes | ⌘5 |
-| Changes | ⌘6 |
-| Finish | ⌘7 (disabled until picture lock) |
+| Cut | ⌘4 |
+| Finish | ⌘5 (disabled until picture lock) |
 | — | |
 | Show Notes Sheet | ⌥⌘S |
 | Show Transcript Captions | ⌥⌘C |
@@ -337,7 +335,7 @@ Every command is listed with its key equivalent. Room-scoped commands are disabl
 ### Cut
 | Item | Key |
 |---|---|
-| Start Screening | ⌘⇧↩ |
+| Watch Through | ⌘⇧↩ |
 | — | |
 | Mark This Moment | N |
 | New Note | ⌘⌥N |
@@ -354,7 +352,7 @@ Every command is listed with its key equivalent. Room-scoped commands are disabl
 | Compare with Previous Cut | ⌥⌘← |
 | History | ⌘Y |
 
-`⌘↩` is room-scoped: in Notes it's Turn Over, in Dailies it's Assemble from Circles.
+`⌘↩` is room-scoped: in the Cut room it's its one button (Turn Over, Accept, Start Cutting…), in Dailies it's Assemble from Circles.
 
 ### Playback
 | Item | Key |

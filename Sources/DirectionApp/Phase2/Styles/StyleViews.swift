@@ -254,7 +254,7 @@ struct StylesPane: View {
         SettingsPane {
             SettingsGroup(label: "Every film") {
                 let count = house?.rules.count ?? 0
-                SettingsLinkRow(label: StyleLibrary.houseName, detail: count == 0 ? "Rules every film follows. Keep one from an answer in Changes, or write one here." : "\(count) rule\(count == 1 ? "" : "s") every film follows. A film\u{2019}s style wins where it says otherwise.", first: true) {
+                SettingsLinkRow(label: StyleLibrary.houseName, detail: count == 0 ? "Rules every film follows. Keep one from an answer in the Cut room, or write one here." : "\(count) rule\(count == 1 ? "" : "s") every film follows. A film\u{2019}s style wins where it says otherwise.", first: true) {
                     if let house { open(.init(house)) }
                 }
             }

@@ -34,18 +34,18 @@ extension FilmModel {
             let unreviewed = toReview.count
             out.append(.init(id: "notes", status: .fail, title: open.count == 1 ? "1 note still open" : "\(open.count) notes still open",
                              detail: "Notes \(open.compactMap(\.number).sorted().map(String.init).joined(separator: ", "))",
-                             fix: unreviewed > 0 ? ("Review \(unreviewed) answer\(unreviewed == 1 ? "" : "s")", { self.sheet = nil; self.go(.changes); self.changes.chosenTab = .review }) : ("Open Notes", { self.sheet = nil; self.go(.notes) })))
+                             fix: unreviewed > 0 ? ("Review \(unreviewed) answer\(unreviewed == 1 ? "" : "s")", { self.sheet = nil; self.watch(self.latestCut); self.go(.cut); self.notesTab = .sheet }) : ("Open the Cut", { self.sheet = nil; self.go(.cut); self.notesTab = .sheet })))
         }
         let questions = openQuestions.count
         out.append(questions == 0 ? .init(id: "questions", status: .ok, title: "No open questions")
-                   : .init(id: "questions", status: .fail, title: questions == 1 ? "1 question waiting" : "\(questions) questions waiting", fix: ("Answer in Notes", { self.sheet = nil; self.notesTab = .questions; self.go(.notes) })))
+                   : .init(id: "questions", status: .fail, title: questions == 1 ? "1 question waiting" : "\(questions) questions waiting", fix: ("Answer them", { self.sheet = nil; self.notesTab = .questions; self.go(.cut) })))
         let outside = notes.filter(\.isOutside)
         if inbox.isEmpty {
             let names = Array(Set(outside.compactMap { $0.person?.name.split(separator: " ").first.map(String.init) })).sorted()
             let who = names.count > 1 ? names.dropLast().joined(separator: ", ") + " and " + names.last! : names.first
             out.append(.init(id: "outside", status: .ok, title: "No outside notes waiting", detail: who.map { "\($0)\u{2019}s notes were accepted or declined" }))
         } else {
-            out.append(.init(id: "outside", status: .fail, title: inbox.count == 1 ? "1 outside note waiting" : "\(inbox.count) outside notes waiting", fix: ("Open Outside", { self.sheet = nil; self.notesTab = .outside; self.go(.notes) })))
+            out.append(.init(id: "outside", status: .fail, title: inbox.count == 1 ? "1 outside note waiting" : "\(inbox.count) outside notes waiting", fix: ("Open Outside", { self.sheet = nil; self.notesTab = .outside; self.go(.cut) })))
         }
         let length = cutDuration(latestCut) ?? duration
         if length > 0, let lo = brief.lengthMin, let hi = brief.lengthMax {

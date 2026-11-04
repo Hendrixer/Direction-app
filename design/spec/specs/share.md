@@ -9,7 +9,7 @@ Shared styles live in `css/system.css` (`.av`, `.lrow`).
 ## 39 · Share a screening link
 Frame: `screens/39-share.html` · Render: `renders/39-share@2x.png`
 
-**Arrives from / leads to:** Share button in the titlebar (icon button left of the primary, `⌘⇧S`), File › Share Cut…, or the command menu. Leads back to the room it came from. "Share a different cut…" swaps the cut picker into the sheet's title. Viewers then see frame 40, and their notes land in Notes › Outside (frame 21).
+**Arrives from / leads to:** Share button in the titlebar (icon button left of the primary, `⌘⇧S`), File › Share Cut…, or the command menu. Leads back to the room it came from. "Share a different cut…" swaps the cut picker into the sheet's title. Viewers then see frame 40, and their notes land in the Cut room › Outside (frame 21).
 
 **Layout:**
 - Sheet 580 wide, attached under the titlebar (y 52), centered on the window, with radius 0 0 14 14. A 55% black scrim covers the content below the titlebar only, and the titlebar stays live.
@@ -65,12 +65,12 @@ Frame: `screens/39-share.html` · Render: `renders/39-share@2x.png`
 ## 40 · Screening link in a browser
 Frame: `screens/40-share-viewer.html` · Render: `renders/40-share-viewer@2x.png`
 
-**Arrives from / leads to:** A viewer opens the link from frame 39. Their notes appear in the director's Notes › Outside (frame 21). This is the web viewer, a separate small web app that uses the same Gate tokens through `gate.css`.
+**Arrives from / leads to:** A viewer opens the link from frame 39. Their notes appear in the director's Cut room › Outside (frame 21). This is the web viewer, a separate small web app that uses the same Gate tokens through `gate.css`.
 
 **Layout:**
 - The browser chrome (44 tall) is drawn only for context. The page starts at y 44.
 - Header 56 tall with padding 0/20: the 22 app icon, the film name in Archivo 14/700, "/", the cut name in 13/500 text-2, and a chip "3:40 · shared with you until Nov 4". On the right: "Watching as", a 18 avatar and the name.
-- Body grid: picture stage (flex) | a 380 notes column with a hairline left border. This is the same proportion as the director's Notes room.
+- Body grid: picture stage (flex) | a 380 notes column with a hairline left border. This is the same proportion as the director's Cut room.
 - Stage: a 16:9 frame with 28 padding. The transport row holds play, timecode, the scene strip and full screen.
 - Notes column: head ("Your notes" in Archivo 17), a list, and a composer at the bottom.
 
@@ -109,7 +109,7 @@ Frame: `screens/40-share-viewer.html` · Render: `renders/40-share-viewer@2x.png
 **Acceptance:**
 - [ ] No amber and no diamonds anywhere on the page. The viewer is neutral.
 - [ ] The watermark is burned into the stream server side when download is off, not just drawn on top.
-- [ ] Sent notes arrive in Notes › Outside with author, cut, anchor and text.
+- [ ] Sent notes arrive in the Cut room › Outside with author, cut, anchor and text.
 - [ ] A viewer can't see the director's notes or other viewers' notes.
 
 ---
@@ -150,7 +150,7 @@ Frame: `screens/41-agent-popover.html` · Render: `renders/41-agent-popover@2x.p
 | Reading back | `.agent.working` "Reading back" | `.chip.a` Reading back | "Reading your 6 notes. A plan will be ready in a moment." | — |
 | Waiting on read-back | `.agent.asks` "Read-back ready" | `.chip.a` Waiting for you | "The plan for Cut 4 is ready for your OK." | **Open read-back** (default button) |
 | Cutting | `.agent.working` "Cutting 3 of 6" with meter | `.chip.a` Cutting | "Cutting Cut 4. Note 3 now: reframing The ridge." | Per-note checklist (✓ done, spinner current, dim pending) and an "About 2 min left" caption |
-| Questions | `.agent.asks` "2 questions" | `.chip.a` 2 questions | "I need your call on 2 things before I finish Cut 4." | **Answer** opens Notes › Questions |
+| Questions | `.agent.asks` "2 questions" | `.chip.a` 2 questions | "I need your call on 2 things before I finish Cut 4." | **Answer** opens the Cut room's Questions tab |
 | Can't | `.agent.blocked` "Can't do 1" | `.chip.bad` Can't do 1 | "I can't do note 7 without unlocking Launch day." | **Show me** opens frame 26 |
 | Paused | `.agent` with a pause glyph, "Paused" | `.chip` Paused | "Paused. Nothing will change until you resume." | The footer button becomes **Resume editor** |
 | Offline | `.agent` with the offline icon, "Offline" | `.chip` Offline | "You're offline. I'll pick up when you're back." | Latitude is disabled |

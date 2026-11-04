@@ -1,6 +1,6 @@
 # Made picture and sound
 
-Frames 55 (Settings › Services), 61 (a made answer in Changes), 62 (a spend question). Read `product-model.md › Made, Service, Spending` first.
+Frames 55 (Settings › Services), 61 (a made answer in the Cut room), 62 (a spend question). Read `product-model.md › Made, Service, Spending` first.
 
 Sometimes a note needs something the footage doesn't have: music under the drive, the sound of rain, a sky at dusk, a beat more of her face, an establishing shot nobody filmed. The editor can make it through OpenRouter, using the director's key, or on this Mac. Direction makes every request, so keys never reach the editor; every made thing says where it came from and what it cost; and nothing is spent past the director's limits.
 
@@ -144,7 +144,7 @@ Frame: `screens/55-settings-services.html` · 720 × 812. See `settings.md › 5
 ## 61 · Changes, made music
 Frame: `screens/61-changes-made.html` · 1440 × 900.
 
-The Changes room on Cut 4 with note 4 selected ("Music is too sure of itself here.", Sound, 01:43:20). In this frame the answer is two ways:
+The Cut room on Cut 4 with note 4's answer selected ("Music is too sure of itself here.", Sound, 01:43:20). In this frame the answer is two ways:
 - Answer text: "Two ways. A: the same track, down 6 dB under her line. B: a sparser piano bed I made, with no resolve."
 - Options stage as in frame 30: A and B tiles. B's tile carries the **Made** chip.
 - The provenance popover is open from B's chip (320 wide, `.pop`):
@@ -156,7 +156,7 @@ The Changes room on Cut 4 with note 4 selected ("Music is too sure of itself her
 ## 62 · Notes, a spend question
 Frame: `screens/62-notes-spend.html` · 1440 × 900.
 
-The Notes room during the read-back of Cut 4's turnover, the questions panel open (frame 20's layout), with a spend question for a plan.
+The Cut room during the read-back of Cut 4's turnover, the questions panel open (frame 20's layout), with a spend question for a plan.
 
 - Question card text: "Note 3 wants less sky. Reframing to 1.6× gets the sky to a third of the frame. To make the sky itself dusk cloud, I'd change those 5 seconds of the take with Aleph 2.0, and make an establishing shot of the ridge at dusk to lead in."
 - A spend line under the text: "About $2.75. This turnover would reach $5.65 of your $5.00 limit." Money in SF Mono; the limit sentence in text-3.

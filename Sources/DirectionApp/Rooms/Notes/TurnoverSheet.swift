@@ -12,6 +12,8 @@ struct TurnoverSheet: View {
 
     private var notes: [ReviewComment] { model.readyNotes }
     private var drafts: Int { model.draftNotes.count }
+    /// Answers still to look at: turning over keeps them in the cut.
+    private var kept: Int { model.unreviewedAnswers.count }
     private var locked: Int { notes.filter(model.isInLockedScene).count }
 
     var body: some View {
@@ -19,8 +21,8 @@ struct TurnoverSheet: View {
             SheetHeader(title: notes.count == 1 ? "Turn over 1 note" : "Turn over \(notes.count) notes",
                         subtitle: waitForOK ? "The editor reads back its plan for each note, and cuts \(model.nextCutName) when you OK it." : "The editor reads back its plan for each note, then cuts \(model.nextCutName).")
             VStack(alignment: .leading, spacing: 14) {
-                if drafts > 0 {
-                    Text(drafts == 1 ? "1 draft stays behind." : "\(drafts) drafts stay behind.").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                if let behind = leftBehind {
+                    Text(behind).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
                 }
                 CompactNoteList(model: model, notes: notes) { c in model.sheet = nil; model.notesTab = .sheet; model.showNote(c) }
                 VStack(alignment: .leading, spacing: 8) {
@@ -57,6 +59,13 @@ struct TurnoverSheet: View {
         .accessibilityAddTraits(.isModal)
     }
 
+    /// "1 draft stays behind. 2 answers you didn't reply to are kept."
+    private var leftBehind: String? {
+        var parts: [String] = []
+        if drafts > 0 { parts.append(drafts == 1 ? "1 draft stays behind." : "\(drafts) drafts stay behind.") }
+        if kept > 0 { parts.append(kept == 1 ? "1 answer you didn\u{2019}t reply to is kept." : "\(kept) answers you didn\u{2019}t reply to are kept.") }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
     private var caption: String {
         let base = "Notes can\u{2019}t be edited after turnover, only replied to."
         guard locked > 0 else { return base }

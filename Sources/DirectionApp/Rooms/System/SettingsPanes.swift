@@ -28,7 +28,7 @@ struct GeneralPane: View {
             }
             SettingsGroup(label: "Playback") {
                 SettingsRow(label: "Start screenings full screen", first: true) { GateSwitch(isOn: $fullScreen) }
-                SettingsRow(label: "Hide controls in Screening after") {
+                SettingsRow(label: "Hide controls while watching after") {
                     GateSelect(options: [(1.0, "1 second"), (2.0, "2 seconds"), (4.0, "4 seconds"), (0.0, "Never")], selection: $hideAfter)
                 }
                 SettingsRow(label: "Audio output") {
@@ -126,7 +126,7 @@ struct EditorPane: View {
             // The conflict list moved into Change…'s popover so the pane stays under 860 (frame 43).
             SettingsGroup(label: "Before cutting", note: AnyView(SettingsNote("The editor reads the brief before every cut."))) {
                 SettingsRow(label: "Wait for my OK before cutting", detail: "The editor reads back its plan for each note first. Off: it starts cutting right after, and you can still read it.", first: true) { GateSwitch(isOn: $waitForOK) }
-                SettingsRow(label: "Cut Feeling notes two ways", detail: "You pick A or B in Changes.") { GateSwitch(isOn: $twoWays) }
+                SettingsRow(label: "Cut Feeling notes two ways", detail: "You pick A or B on the sheet.") { GateSwitch(isOn: $twoWays) }
                     .disabled(latitude == Latitude.exact.rawValue)
                 SettingsRow(label: "Ask before guessing", detail: "When a note could mean two things, the editor asks instead of choosing.") { GateSwitch(isOn: $askFirst) }
                 ConflictOrderRow(order: $order)
@@ -397,7 +397,7 @@ struct NotificationsPane: View {
                     SettingsRow(label: "A delivery finishes") { GateSwitch(isOn: $delivery) }
                 }
                 SettingsGroup(label: "Quiet") {
-                    SettingsRow(label: "Hold notifications during a screening", detail: "They wait until you end the screening.", first: true) { GateSwitch(isOn: $hold) }
+                    SettingsRow(label: "Hold notifications during a screening", detail: "They wait until you\u{2019}re back on your notes.", first: true) { GateSwitch(isOn: $hold) }
                     SettingsRow(label: "Sound") {
                         GateSelect(options: [("default", "System sound"), ("none", "None")], selection: $sound)
                     }

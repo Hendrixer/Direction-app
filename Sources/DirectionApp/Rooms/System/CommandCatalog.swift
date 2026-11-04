@@ -51,7 +51,7 @@ enum CommandHelp {
         ("How much freedom should the editor have?", "Do what I wrote changes only what each note names. Read between the lines interprets intent and cuts Feeling notes two ways. Take a pass may also suggest changes you didn\u{2019}t ask for, marked Unasked.", ["latitude", "freedom"]),
         ("How do I connect an editor?", "Your editor is an agent like Claude Code or Codex. Add Direction to it as an MCP server (Help \u{203A} Connect an Editor\u{2026}), then ask it to open your film.", ["agent", "claude", "codex", "mcp"]),
         ("Why does a take say it\u{2019}s missing?", "Footage is linked, not copied. When a drive is unplugged or files move, those takes go offline. File \u{203A} Find Missing Footage\u{2026} relinks them; notes, circles and cuts are kept.", ["offline", "relink", "drive"]),
-        ("What are outside notes?", "Notes from people you share a cut with. They wait in Notes \u{203A} Outside until you accept, edit or decline them. The editor never sees them before you accept.", ["producer", "client", "share"]),
+        ("What are outside notes?", "Notes from people you share a cut with. They wait in the Cut room\u{2019}s Outside tab until you accept, edit or decline them. The editor never sees them before you accept.", ["producer", "client", "share"]),
         ("How do I share a cut?", "Screening links aren\u{2019}t available yet. Export a screening copy from the Share sheet (\u{21E7}\u{2318}S) and send it any way you like.", ["link", "export", "send"]),
     ]
 }
@@ -60,7 +60,7 @@ enum CommandHelp {
 enum SettingsIndex {
     static let rows: [(SettingsTab, String)] = [
         (.general, "When Direction opens"), (.general, "Show Films when no film is open"), (.general, "Start screenings full screen"),
-        (.general, "Hide controls in Screening after"), (.general, "Audio output"), (.general, "Film grain"), (.general, "Reduce motion"),
+        (.general, "Hide controls while watching after"), (.general, "Audio output"), (.general, "Film grain"), (.general, "Reduce motion"),
         (.editor, "Wait for my OK before cutting"), (.editor, "Cut Feeling notes two ways"), (.editor, "Ask before guessing"), (.editor, "Follow the brief"),
         (.cutting, "Handles in Play changes"), (.cutting, "Frame rate for new films"), (.cutting, "Loudness target"),
         (.engines, "Recommended"), (.engines, "Editor runs on"), (.engines, "Version and effort"), (.engines, "Start work"), (.engines, "Let the editor run scripts"),
@@ -100,15 +100,17 @@ struct CommandCatalog {
         // Rooms
         for (i, room) in Room.allCases.enumerated() {
             let reason: String? = m.isEnabled(room) ? nil : room == .finish ? "Lock picture first" : "Nothing to watch yet"
-            add("room." + room.rawValue, roomIcon(room), "Go to \(room.title)", .keys(["⌘", "\(i + 1)"]), synonyms: ["room", "open"], disabled: reason) { m.go(room) }
+            // The Cut room is where screening, notes and changes are now: the old names still find it.
+            let synonyms = room == .cut ? ["room", "open", "screening", "notes", "changes", "answers"] : ["room", "open"]
+            add("room." + room.rawValue, roomIcon(room), "Go to \(room.title)", .keys(["⌘", "\(i + 1)"]), synonyms: synonyms, disabled: reason) { m.go(room) }
         }
         // Notes and the editor
         let turnReason: String? = m.openTurnover != nil ? "The editor is still on turnover \(m.openTurnover!.number)" : m.readyNotes.isEmpty ? "No written notes yet" : nil
-        add("turnOver", "arrow.right", "Turn over\u{2026}", sub: m.readyNotes.isEmpty ? nil : "\(m.readyNotes.count) notes", caps(.turnOver), synonyms: ["send", "editor", "hand"], disabled: turnReason) { m.go(.notes); m.sheet = .turnover }
+        add("turnOver", "arrow.right", "Turn over\u{2026}", sub: m.readyNotes.isEmpty ? nil : "\(m.readyNotes.count) notes", caps(.turnOver), synonyms: ["send", "editor", "hand"], disabled: turnReason) { m.go(.cut); m.sheet = .turnover }
         add("newNote", "text.bubble", "New note", caps(.newNote), synonyms: ["write", "add note"]) { actions.startNote() }
         add("wholeCut", "text.bubble", "Note on the whole cut", synonyms: ["write"]) { actions.startNote(anchor: .wholeCut) }
         add("mark", "mappin", "Mark this moment", caps(.mark), synonyms: ["pin", "marker"], disabled: m.duration > 0 ? nil : "Nothing to watch yet", keepsOpen: true) { m.mark() }
-        add("screening", "play.rectangle", "Start screening", caps(.startScreening), synonyms: ["watch", "play"], disabled: m.isEnabled(.screening) ? nil : "Nothing to watch yet") { m.go(.screening) }
+        add("screening", "play.rectangle", "Watch through", caps(.startScreening), synonyms: ["watch", "play", "screen", "screening"], disabled: m.isEnabled(.cut) ? nil : "Nothing to watch yet") { m.watchThrough() }
         if let s = actions.currentScene {
             add("lockScene", s.locked ? "lock.open" : "lock.fill", s.locked ? "Unlock scene" : "Lock scene", sub: s.label, caps(.lockScene), synonyms: ["freeze"], disabled: m.isPictureLocked ? "Picture is locked" : nil) { actions.toggleCurrentSceneLock() }
         } else {
@@ -119,9 +121,9 @@ struct CommandCatalog {
         }
         if m.isPictureLocked { add("unlockPicture", "lock.open", "Unlock picture\u{2026}") { actions.confirmUnlockPicture() } }
         else { add("lockPicture", "lock.fill", "Lock picture\u{2026}", caps(.lockPicture), synonyms: ["finish", "final"], disabled: actions.lockPictureUnavailableReason) { m.sheet = .lockPicture } }
-        add("playChanges", "play.fill", "Play changes", caps(.playChanges), synonyms: ["review", "watch changes"], disabled: m.changeReel(in: m.watchedCut).isEmpty ? "No changes in this cut" : nil) { m.go(.changes); m.playChanges() }
+        add("playChanges", "play.fill", "Play changes", caps(.playChanges), synonyms: ["review", "watch changes"], disabled: m.changeReel(in: m.watchedCut).isEmpty ? "No changes in this cut" : nil) { m.openChangesReel() }
         let answer = m.selectedAnswerNoteID.flatMap(m.note)
-        add("accept", "checkmark", "Accept answer", sub: answer?.number.map { "note \($0)" }, caps(.acceptAnswer), disabled: answer == nil || m.room != .changes ? "Select an answer in Changes" : nil) { if let id = answer?.id { m.acceptAnswer(id) } }
+        add("accept", "checkmark", "Accept answer", sub: answer?.number.map { "note \($0)" }, caps(.acceptAnswer), disabled: answer == nil || m.room != .cut ? "Select an answer in the Cut room" : nil) { if let id = answer?.id { m.acceptAnswerFromChanges(id) } }
         add("assemble", "square.grid.2x2", "Assemble from circles", m.room == .dailies ? caps(.assemble) : .none, synonyms: ["assembly", "first cut"], disabled: m.circledCount == 0 ? "Circle takes first" : m.openTurnover != nil ? "The editor is busy" : !m.cuts.isEmpty ? "The assembly exists" : nil) { m.assembleFromCircles() }
         add("brief", "doc.plaintext", "Brief\u{2026}", caps(.brief), synonyms: ["logline", "intent"]) { m.sheet = .brief }
         add("editor", "diamond", "Editor\u{2026}", caps(.editor), synonyms: ["status", "agent"]) { m.showEditorPopover = true }
@@ -152,7 +154,7 @@ struct CommandCatalog {
         add("nextFrame", "chevron.right", "Next frame", .keys(["→"]), disabled: noPicture, keepsOpen: true) { m.step(frames: 1) }
         add("backSecond", "gobackward", "Back one second", .keys(["⇧", "←"]), disabled: noPicture, keepsOpen: true) { m.pause(); m.seek(m.position - 1) }
         add("forwardSecond", "goforward", "Forward one second", .keys(["⇧", "→"]), disabled: noPicture, keepsOpen: true) { m.pause(); m.seek(m.position + 1) }
-        add("history", "clock.arrow.circlepath", "History", caps(.history), synonyms: ["changelog", "cuts"], disabled: m.isEnabled(.changes) ? nil : "No cuts yet") { m.go(.changes) }
+        add("history", "clock.arrow.circlepath", "Every cut", caps(.history), synonyms: ["history", "changelog", "cuts", "older"], disabled: m.isEnabled(.cut) ? nil : "No cuts yet") { m.showCutHistory() }
         add("prevScene", "chevron.up", "Previous scene", .keys(["↑"]), keepsOpen: true) { actions.jumpScene(-1) }
         add("nextScene", "chevron.down", "Next scene", .keys(["↓"]), keepsOpen: true) { actions.jumpScene(1) }
         add("start", "backward.end", "Go to start", .keys(["Home"]), keepsOpen: true) { m.pause(); m.seek(0) }
@@ -180,9 +182,7 @@ struct CommandCatalog {
         case .dailies: "square.grid.2x2"
         case .script: "doc.text"
         case .breakdown: "list.bullet.rectangle"
-        case .screening: "play.rectangle"
-        case .notes: "text.bubble"
-        case .changes: "arrow.triangle.2.circlepath"
+        case .cut: "film"
         case .finish: "checkmark.seal"
         }
     }
@@ -192,7 +192,7 @@ struct CommandCatalog {
     func noteItems() -> [CommandItem] {
         model.notes.filter { !$0.text.isEmpty && $0.lifecycle != .dropped && !$0.inInbox }.sorted { ($0.number ?? .max) < ($1.number ?? .max) }.map { c in
             CommandItem(id: "note." + c.id, section: .notes, icon: "text.bubble", title: c.text, number: c.number.map(String.init), trailing: .caption(model.anchorText(c)), synonyms: [c.kind?.label ?? "", c.person?.name ?? ""]) {
-                model.notesTab = .sheet; model.go(.notes); model.select(c)
+                model.notesTab = .sheet; model.go(.cut); model.select(c)
             }
         }
     }
@@ -253,12 +253,10 @@ struct CommandCatalog {
     /// What the room suggests with an empty query.
     func suggestedIDs() -> [String] {
         switch model.room {
-        case .notes: ["action.turnOver", "action.screening", "action.share"]
+        case .cut: ["action.screening", "action.playChanges", "action.turnOver"]
         case .dailies: ["action.assemble", "action.footage", "action.screening"]
         case .script: ["action.bringScript", "action.room.breakdown", "action.brief"]
         case .breakdown: ["action.footage", "action.printShootList", "action.room.dailies"]
-        case .screening: ["action.mark", "action.wholeCut", "action.room.notes"]
-        case .changes: ["action.playChanges", "action.accept", "action.share"]
         case .finish: ["action.export", "action.share", "action.unlockPicture"]
         }
     }

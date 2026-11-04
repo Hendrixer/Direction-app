@@ -77,7 +77,7 @@ struct ShareSheet: View {
     /// The link's options, showing the defaults from Settings › Sharing.
     private var options: some View {
         VStack(spacing: 0) {
-            SettingsRow(label: "Viewers can leave notes", detail: "Notes arrive in Notes › Outside for you to accept, edit or decline.", first: true) { GateSwitch(isOn: .constant(linkNotes)) }
+            SettingsRow(label: "Viewers can leave notes", detail: "Notes arrive in the Cut room\u{2019}s Outside tab for you to accept, edit or decline.", first: true) { GateSwitch(isOn: .constant(linkNotes)) }
             SettingsRow(label: "Link expires") { GateSelect(options: [(linkExpiry, expiryText)], selection: .constant(linkExpiry)) }
             SettingsRow(label: "Require a password") { GateSwitch(isOn: .constant(linkPassword)) }
             SettingsRow(label: "Allow download", detail: "Off: viewers can only stream, with a watermark of their name.") { GateSwitch(isOn: .constant(linkDownload)) }
@@ -98,7 +98,7 @@ struct ShareSheet: View {
             SectionLabel("Share it yourself").padding(.top, 4)
             VStack(spacing: 0) {
                 SettingsRow(label: "Export a screening copy", detail: exportDetail, first: true) { exportControl }
-                SettingsRow(label: "Bring their notes in", detail: "Paste what people send you into your editor. Their notes land in Notes › Outside for you to accept.") {
+                SettingsRow(label: "Bring their notes in", detail: "Paste what people send you into your editor. Their notes land in the Cut room\u{2019}s Outside tab for you to accept.") {
                     Button {
                         SystemSupport.copy(outsideRequest); copiedRequest = true
                         Task { try? await Task.sleep(for: .seconds(1.6)); copiedRequest = false }

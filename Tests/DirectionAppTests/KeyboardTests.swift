@@ -10,8 +10,8 @@ import DirectionCore
 @Test func spaceTypesInTheNoteFieldAndPlaysEverywhereElse() throws {
     _ = NSApplication.shared
     let m = SampleFilm.make()
-    m.room = .notes
-    let host = NSHostingView(rootView: NotesRoom(model: m).frame(width: 1200, height: 800))
+    m.room = .cut
+    let host = NSHostingView(rootView: CutRoom(model: m).frame(width: 1200, height: 800))
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     defer { window.close() }

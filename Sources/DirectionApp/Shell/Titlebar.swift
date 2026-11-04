@@ -65,12 +65,15 @@ struct Titlebar: View {
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
             if model.onboardingStep == nil {
                 Text("/").foregroundStyle(Gate.Text.disabled).padding(.horizontal, 2)
-                Menu {
-                    ForEach(model.cuts.reversed()) { cut in
-                        Button { model.watch(cut) } label: { Text(cut.id == model.latestCut?.id ? "\(cut.name) (latest)" : cut.name) }
-                    }
-                } label: { crumbLabel(model.watchedCut?.name ?? (model.openTurnover?.kind == "assembly" ? "Assembly" : "No cuts yet"), bold: false, chevron: !model.cuts.isEmpty) }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().disabled(model.cuts.isEmpty)
+                // The cut's name opens every cut: older ones open in the Cut room (specs/cut.md › Older cuts).
+                Button { model.changes.cutsOpen.toggle() } label: {
+                    crumbLabel(model.watchedCut?.name ?? (model.openTurnover?.kind == "assembly" ? "Assembly" : "No cuts yet"), bold: false, chevron: !model.cuts.isEmpty)
+                }
+                .buttonStyle(.plain).fixedSize().disabled(model.cuts.isEmpty)
+                .help("Every cut (\u{2318}Y)")
+                .gatePopover(isPresented: Binding(get: { model.changes.cutsOpen }, set: { model.changes.cutsOpen = $0 }), arrowEdge: .bottom) {
+                    CutsPopover(model: model) { model.changes.cutsOpen = false }
+                }
                 if model.isPictureLocked { PictureLockChip(model: model).padding(.leading, 6) }
             }
         }
@@ -102,7 +105,7 @@ struct Titlebar: View {
     }
 }
 
-/// Dailies · Script · Screening · Notes · Changes · Finish. ⌘1–⌘6.
+/// Script · Breakdown · Dailies · Cut · Finish, the ones the film uses. ⌘1–⌘5.
 struct RoomSwitcher: View {
     @Bindable var model: FilmModel
     var body: some View {

@@ -10,7 +10,7 @@ import DirectionCore
 // MARK: Notifications
 
 /// User notifications for a cut ready, a question, a can't-do and a delivery, honoring
-/// Settings › Notifications. Held during a screening when asked, and shown as a toast
+/// Settings › Notifications. Held while you watch through when asked, and shown as a toast
 /// instead when Direction is frontmost in the room the notification is about.
 @MainActor
 enum SystemNotifications {
@@ -20,9 +20,8 @@ enum SystemNotifications {
     /// The room a notification opens.
     static func room(for key: String) -> Room {
         switch key {
-        case NotificationKey.cutReady: .changes
         case NotificationKey.delivery: .finish
-        default: .notes
+        default: .cut
         }
     }
 
@@ -30,7 +29,7 @@ enum SystemNotifications {
     static func post(_ title: String, _ body: String, key: String, film: FilmModel?) {
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: key) as? Bool ?? true else { return }
-        if let film, defaults.object(forKey: SettingsKey.holdDuringScreening) as? Bool ?? true, film.room == .screening {
+        if let film, defaults.object(forKey: SettingsKey.holdDuringScreening) as? Bool ?? true, film.watchingCut {
             held.append((title, body, key)); return
         }
         let room = room(for: key)
@@ -47,7 +46,7 @@ enum SystemNotifications {
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
-    /// Delivers what was held during a screening. Call when Screening ends.
+    /// Delivers what was held while you watched through. Call when watching ends.
     static func releaseHeld(film: FilmModel?) {
         let queue = held; held = []
         for (title, body, key) in queue { post(title, body, key: key, film: film) }
@@ -85,14 +84,15 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
-        let path = info["film"] as? String ?? "", room = (info["room"] as? String).flatMap(Room.init(rawValue:))
+        // Notifications posted before Screening, Notes and Changes became the Cut room still open it.
+        let path = info["film"] as? String ?? "", room = (info["room"] as? String).flatMap { Room(rawValue: $0) ?? (["screening", "notes", "changes"].contains($0) ? .cut : nil) }
         await MainActor.run {
             guard let app else { return }
             NSApp.activate()
             NSApp.windows.first { $0.frameAutosaveName == "DirectionMainWindow" }?.makeKeyAndOrderFront(nil)
             if !path.isEmpty, app.film?.url?.path != path, FileManager.default.fileExists(atPath: path) { app.open(URL(fileURLWithPath: path)) }
             guard let film = app.film, let room else { return }
-            if room == .notes, !film.openQuestions.isEmpty { film.notesTab = .questions }
+            if room == .cut, !film.openQuestions.isEmpty { film.notesTab = .questions }
             film.go(room)
         }
     }
@@ -282,12 +282,12 @@ struct FilmActions {
     func setRangeOut() { let start = m.rangeSelection.map { min($0.lowerBound, m.position) } ?? max(0, m.position - 1); m.rangeSelection = start...max(start, m.position); m.anchorMode = .range }
     func clearRange() { m.rangeSelection = nil; if m.anchorMode == .range { m.anchorMode = .moment } }
 
-    /// A new note at the playhead: Notes, composer focused, optionally pre-filled.
+    /// A new note at the playhead: the Cut room, composer focused, optionally pre-filled.
     func startNote(text: String = "", anchor: NoteAnchorMode = .moment) {
         m.anchorMode = anchor
         if !text.isEmpty { m.draftText = text }
         m.notesTab = .sheet
-        m.go(.notes); m.composerFocus += 1
+        m.go(.cut); m.composerFocus += 1
     }
 
     /// Go to Timecode… (⌃G): asks for MM:SS:FF and seeks.

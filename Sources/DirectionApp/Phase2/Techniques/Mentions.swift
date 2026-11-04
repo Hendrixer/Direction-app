@@ -3,7 +3,7 @@ import AppKit
 import DirectionCore
 
 // "@Name" in what the director writes names a transition, a move, an effect, a sound, an image, or a scene,
-// setup or take (techniques.md › The library, notes.md › Naming footage). Wherever it shows, the "@" becomes
+// setup or take (techniques.md › The library, cut.md › Naming footage). Wherever it shows, the "@" becomes
 // an icon of the kind of thing it names, and the name is in the director's color.
 enum Mentions {
     /// The icon of each kind: what it is, not which one.

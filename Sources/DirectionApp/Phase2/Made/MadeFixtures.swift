@@ -17,7 +17,7 @@ enum MadeFixtures {
                                      asked: "Sparse felt piano, unresolved, around 70 bpm. No swell. 24 seconds, ending on a held note.", seconds: 24, spend: 0.04, estimate: 0.04,
                                      noteID: "note-4", turnoverID: "turnover-3", file: "Made/music-sparse-felt-piano-1a2b.wav", createdAt: SampleFilm.date(10, 28, 14, 2))
 
-    /// Frame 61: Cut 4 in Changes, note 4 answered two ways (decision 19), B with made music, its provenance open.
+    /// Frame 61: Cut 4 in the Cut room, note 4 answered two ways (decision 19), B with made music, its provenance open.
     private static func changesMade() -> SnapshotScene {
         let m = ChangesFixtures.cut4()
         ChangesFixtures.accept(m, 1); ChangesFixtures.accept(m, 2, pick: "B")

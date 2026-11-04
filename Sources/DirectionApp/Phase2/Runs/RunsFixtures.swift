@@ -77,7 +77,7 @@ enum RunsFixtures {
         ]
     }
 
-    /// Frame 57: the Notes room while the editor cuts Cut 4, its popover open from the pill.
+    /// Frame 57: the Cut room while the editor cuts Cut 4, its popover open from the pill.
     private static func working() -> SnapshotScene {
         let m = NotesFixtures.cutting()
         m.position = SampleFilm.tc(0, 46, 12)

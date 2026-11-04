@@ -8,7 +8,7 @@ import DirectionCore
 @MainActor
 struct PrepModelTests {
     @Test func theRoomsRunInTheOrderAFilmIsMade() {
-        #expect(Room.allCases == [.script, .breakdown, .dailies, .screening, .notes, .changes, .finish])
+        #expect(Room.allCases == [.script, .breakdown, .dailies, .cut, .finish])
         #expect(Room.script.shortcut == "1" && Room.dailies.shortcut == "3")
         let m = PrepFixtures.film(room: .script, script: PrepFixtures.script())
         // A film that starts from a script works in its rooms from the start.
@@ -141,7 +141,7 @@ struct PrepModelTests {
         var p = Project(name: "Short"); p.assets = [MediaAsset(name: "Take 1.mov", path: "/tmp/direction-short/Take 1.mov", duration: MediaTime(seconds: 30))]
         m.project = p; m.displayed = p
         #expect(!m.isShown(.script) && !m.isShown(.breakdown) && !m.isEnabled(.script))
-        #expect(m.isShown(.dailies) && m.isShown(.notes) && m.isShown(.finish))
+        #expect(m.isShown(.dailies) && m.isShown(.cut) && m.isShown(.finish))
         m.script = PrepFixtures.script()
         #expect(m.isShown(.script) && m.isEnabled(.script) && m.isShown(.breakdown))
     }

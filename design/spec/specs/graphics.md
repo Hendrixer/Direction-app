@@ -63,12 +63,12 @@ Title card · Lower third · Chapter card · End card · Quote · Kinetic words 
 
 ## The director's side
 
-Graphics arrive as answers to notes, with a diamond like every other change. A graphic answer in Changes has a **Words** button. Words are the director's to fix directly, without a turnover: a typo in a title shouldn't cost a round trip.
+Graphics arrive as answers to notes, with a diamond like every other change. A graphic answer on the Cut room's sheet has a **Words** button. Words are the director's to fix directly, without a turnover: a typo in a title shouldn't cost a round trip.
 
 ### 64 · Changes, a title's words
 Frame: `screens/64-changes-graphic.html` · 1440 × 900.
 
-The Changes room on Cut 4 with note 8 selected. Note 8 (Story, on Scene 1): "Put a title over the cold open: two years." Answer: "Added a title over the street wide: “Two years.” In at 00:02, out at 00:06." Delta: "title".
+The Cut room on Cut 4 with note 8's answer selected. Note 8 (Story, on Scene 1): "Put a title over the cold open: two years." Answer: "Added a title over the street wide: “Two years.” In at 00:02, out at 00:06." Delta: "title".
 
 - The picture shows the title rendered over the street wide (`f-night`): "Two years." centered low, Archivo 700 at 64 px, white at 92%.
 - The answer card has, beside Accept and Not quite, a **Words** button (`.btn`, text-cursor icon).

@@ -1,6 +1,6 @@
 # Cutting: the editor at work (frames 25–28)
 
-After the director turns over a notes sheet and approves the read-back (frames 22–23), the editor builds the next cut. Cutting isn't a room. It's a state of the **Notes** room: the notes sheet becomes a progress panel titled "Cut 4 in progress", while the stage keeps playing the **current** cut (Cut 3). The director can watch, switch rooms, or quit the app. Cutting continues in the background and the titlebar pill always reports it.
+After the director turns over a notes sheet and approves the read-back (frames 22–23), the editor builds the next cut. Cutting isn't a room. It's a state of the **Cut** room: the notes sheet becomes a progress panel titled "Cut 4 in progress", while the stage keeps playing the **current** cut (Cut 3). The director can watch, switch rooms, or quit the app. Cutting continues in the background and the titlebar pill always reports it.
 
 Shared layout for 25–28 (styles in `css/changes.css`):
 - Titlebar 52 pt. Crumb shows the cut being watched (`Cut 3`), not the one being built.
@@ -22,7 +22,7 @@ Frame: `screens/25-cutting.html` · Render: `renders/25-cutting@2x.png`
 - Rows: 1 Done, 5 Done, 3 Cutting (with the plan line "Reframe to 1.6× on Maya; sky to a third of frame." from the read-back), then 2, 4, 6 and 7 Queued.
 - Note text wraps to two lines at most, with an ellipsis after that. Only the working row shows its plan line.
 - Foot: "You can keep watching Cut 3. Nothing changes in it."
-- Titlebar primary (steel): "Screen Cut 3", which opens Screening on the current cut.
+- Titlebar primary (steel): "Watch Cut 3", which watches the current cut through.
 
 **States and variants:**
 - No ETA yet: the subline reads "Turned over 7 notes at 14:02 · starting".
@@ -34,7 +34,7 @@ Frame: `screens/25-cutting.html` · Render: `renders/25-cutting@2x.png`
 - Clicking a row seeks the stage to that note's anchor in Cut 3.
 - Right-clicking a queued row gives "Skip this note for Cut 4", which moves it back to the sheet as reopened.
 - The more button offers "Stop cutting…" (confirm: "Stop Cut 4? Finished notes are kept for the next try.") and "Show read-back".
-- `Space` plays or pauses the stage. `⌘3` goes to Screening.
+- `Space` plays or pauses the stage. `W` watches it through.
 
 **Motion:**
 - The pill border and meter shimmer (`--t-shimmer` 2.4 s linear loop) only while cutting.

@@ -62,14 +62,18 @@ struct Toast: Identifiable, Equatable {
     var editor = false
     var actionTitle: String?
     var glass = false
-    /// What the action button does. Without one, the window decides (a ready cut opens Changes).
+    /// What the action button does. Without one, the window decides (a ready cut opens the Cut room).
     var run: (@MainActor () -> Void)? = nil
+    /// A second way in, before the first: a ready cut offers Watch through beside Play changes.
+    var secondTitle: String? = nil
+    var secondRun: (@MainActor () -> Void)? = nil
     static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }
 }
 
 struct ToastView: View {
     var toast: Toast
     var action: (() -> Void)?
+    var second: (() -> Void)? = nil
     var dismiss: () -> Void
     var body: some View {
         HStack(spacing: 12) {
@@ -79,6 +83,7 @@ struct ToastView: View {
                 if let detail = toast.detail { Text(detail).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary) }
             }
             Spacer(minLength: 8)
+            if let title = toast.secondTitle, let second { Button(title, action: second).buttonStyle(.gate(.ghost, .small)) }
             if let title = toast.actionTitle, let action { Button(title, action: action).buttonStyle(.gate(.ghost, .small)) }
             else { Button("Dismiss", action: dismiss).buttonStyle(.gate(.ghost, .small)) }
         }

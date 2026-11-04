@@ -268,7 +268,7 @@ enum LookPreview {
 }
 
 extension FilmModel {
-    /// Film › Look…, the picture's Look…, and a look answer in Changes.
+    /// Film › Look…, the picture's Look…, and a look answer on the sheet.
     func openLook(noteID: String? = nil) { looks.open(self, noteID: noteID) }
 
     /// The director chooses the look: undoable, and in History as "Changed the look of the film".

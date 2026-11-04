@@ -8,7 +8,7 @@ import DirectionTools
 @MainActor
 struct FilmModelTests {
     /// The assembly has no page of its own (start.md › 06): asking for it leaves you in Dailies, its
-    /// questions wait there, and once it's in every room's one button screens it.
+    /// questions wait there, and once it's in every room's one button watches it.
     @Test func theAssemblyIsBuiltFromTheRoomYouAskedIn() {
         let building = StartFixtures.assembling()
         #expect(building.onboardingStep == nil && building.room == .dailies)
@@ -17,9 +17,9 @@ struct FilmModelTests {
         #expect(asking.onboardingStep == nil && asking.pill == .asks(1))
         let ready = StartFixtures.assemblyReady()
         #expect(ready.pill == .cutReady("Assembly ready"))
-        for room in [Room.dailies, .breakdown, .notes] {
+        for room in [Room.dailies, .breakdown, .cut] {
             ready.room = room
-            #expect(ready.primaryAction?.title == "Screen the assembly", "in \(room)")
+            #expect(ready.primaryAction?.title == "Watch the assembly", "in \(room)")
         }
     }
 
@@ -129,10 +129,11 @@ struct FilmModelTests {
     }
 
     @Test func changingRoomsStopsTheCutWhereItIs() {
-        let m = SampleFilm.make(room: .screening)
+        let m = SampleFilm.make(room: .cut)
+        m.watchingCut = true
         m.playing = true
         m.go(.dailies)
-        #expect(!m.playing)
+        #expect(!m.playing && !m.watchingCut)
         #expect(m.room == .dailies)
     }
 
@@ -159,7 +160,7 @@ struct FilmModelTests {
         #expect(m.sheetNotes.compactMap(\.number) == [1, 2, 3, 4])
         #expect(m.readyNotes.compactMap(\.number) == [1, 2])
         #expect(m.draftNotes.compactMap(\.number) == [3, 4])
-        #expect(m.badge(for: .notes)?.0 == "2")
+        #expect(m.badge(for: .cut)?.0 == "2")
     }
 
     @Test func pillTellsTheTruthAboutTheEditor() {
@@ -186,7 +187,7 @@ struct FilmModelTests {
         let separated = zip(reel, reel.dropFirst()).allSatisfy { a, b in a.upperBound < b.lowerBound }
         #expect(separated)
         #expect(m.unreviewedAnswers.count == 7)
-        #expect(m.defaultRoom == .changes)
+        #expect(m.defaultRoom == .cut)
         let changed = m.stripScenes.contains { s in s.changed }
         #expect(changed)
     }

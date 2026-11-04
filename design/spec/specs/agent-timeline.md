@@ -229,4 +229,4 @@ We looked at how other editors expose their work to code, without handing anythi
 - [ ] `tightenPauses` never cuts inside a word.
 - [ ] Any operation inside Launch day (locked) fails with `scene_locked` and its index, and nothing in the batch commits.
 - [ ] Every catalog effect renders the same frame in preview, `direction_frame` and export.
-- [ ] Each change in Changes names the operation and note that made it.
+- [ ] Each change in the Cut room names the operation and note that made it.

@@ -35,7 +35,7 @@ struct FilmWindow: View {
             }
             // Under a sheet or an overlay, pictures don't cut through the grain on top of it.
             .transformPreference(GrainHolesKey.self) { if model.sheet != nil || model.showCommandMenu || model.showShortcuts { $0 = [] } }
-            if screeningFullBleed { ScreeningRoom(model: model, app: app).environment(\.editorPlayhead, nil) }
+            if screeningFullBleed { WatchThrough(model: model, app: app).environment(\.editorPlayhead, nil) }
             sweepEdge
             if let sheet = model.sheet { sheetView(sheet).zIndex(10) }
             if model.showCommandMenu { CommandMenuOverlay(model: model, app: app).zIndex(20) }
@@ -58,10 +58,10 @@ struct FilmWindow: View {
         .animation(gateAnimation(Gate.Motion.glide), value: model.sheet)
     }
 
-    private var screeningFullBleed: Bool { model.room == .screening && model.onboardingStep == nil }
-    /// The editor's latest timed activity, for every scene strip. Never in Screening.
+    private var screeningFullBleed: Bool { model.watchingCut && model.room == .cut && model.onboardingStep == nil }
+    /// The editor's latest timed activity, for every scene strip. Never while you watch through.
     private var editorPlayhead: EditorPlayheadValue? {
-        guard model.room != .screening, let a = model.runs.playhead, let t = a.time else { return nil }
+        guard !model.watchingCut, let a = model.runs.playhead, let t = a.time else { return nil }
         return EditorPlayheadValue(time: t, at: a.at, hold: model.isPreview)
     }
 
@@ -72,9 +72,7 @@ struct FilmWindow: View {
             case .dailies: DailiesRoom(model: model)
             case .script: ScriptRoom(model: model)
             case .breakdown: BreakdownRoom(model: model)
-            case .screening: Color.clear
-            case .notes: NotesRoom(model: model)
-            case .changes: ChangesRoom(model: model)
+            case .cut: CutRoom(model: model)
             case .finish: FinishRoom(model: model)
             }
         }
@@ -117,11 +115,16 @@ struct FilmWindow: View {
     @ViewBuilder private var toast: some View {
         if let toast = model.toast {
             VStack {
-                if model.room == .screening { ToastView(toast: toast, action: toast.run.map { run in { model.toast = nil; run() } }) { model.toast = nil }.padding(.top, 70); Spacer() }
-                else { Spacer(); ToastView(toast: toast, action: toast.actionTitle == nil ? nil : { model.toast = nil; if let run = toast.run { run() } else { model.go(.changes) } }) { model.toast = nil }.padding(.bottom, 96) }
+                if screeningFullBleed { ToastView(toast: toast, action: toast.run.map { run in { model.toast = nil; run() } }) { model.toast = nil }.padding(.top, 70); Spacer() }
+                else {
+                    Spacer()
+                    ToastView(toast: toast, action: toast.actionTitle == nil ? nil : { model.toast = nil; if let run = toast.run { run() } else { model.go(.cut) } },
+                              second: toast.secondRun.map { run in { model.toast = nil; run() } }) { model.toast = nil }
+                        .padding(.bottom, 96)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: model.room == .screening ? .topTrailing : .bottomLeading)
-            .padding(.horizontal, model.room == .screening ? 20 : 24)
+            .frame(maxWidth: .infinity, alignment: screeningFullBleed ? .topTrailing : .bottomLeading)
+            .padding(.horizontal, screeningFullBleed ? 20 : 24)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
             .task(id: toast.id) { try? await Task.sleep(for: .seconds(toast.actionTitle == nil ? 4 : 8)); if model.toast?.id == toast.id { model.toast = nil } }
         }
@@ -142,27 +145,25 @@ extension FilmModel {
     var primaryAction: PrimaryAction? {
         if let p = editorPrimary { return p }
         if let step = onboardingStep { return onboardingPrimary(step) }
-        // Until the assembly has been screened, every room's one button is to screen it (start.md › 06).
-        if assemblyAwaitsScreening, room != .screening {
-            return PrimaryAction(title: "Screen the assembly", icon: "play.fill", help: "Screen the assembly (\u{2318}\u{21A9})") { self.go(.screening) }
+        // Until the assembly has been watched, every room's one button is to watch it (start.md › 06).
+        if assemblyAwaitsScreening, !watchingCut {
+            return PrimaryAction(title: "Watch the assembly", icon: "play.fill", help: "Watch the assembly through (\u{2318}\u{21A9})") { self.watchThrough() }
         }
         switch room {
         case .dailies: return dailiesPrimary
         case .script: return scriptPrimary
         case .breakdown: return breakdownPrimary
-        case .screening: return nil
-        case .notes: return notesPrimary
-        case .changes: return changesPrimary
+        case .cut: return watchingCut ? nil : cutPrimary
         case .finish: return finishPrimary
         }
     }
 
     /// When Direction starts the editor: work held for your Start makes the room's primary "Start the
-    /// editor", and a stopped turnover makes it "Try again" in Notes (frame 58).
+    /// editor", and a stopped turnover makes it "Try again" in the Cut room (frame 58).
     private var editorPrimary: PrimaryAction? {
-        guard runs.startsEditor, room != .screening, onboardingStep != .brief else { return nil }
+        guard runs.startsEditor, !watchingCut, onboardingStep != .brief else { return nil }
         if case .readyToCut = pill { return PrimaryAction(title: "Start the editor", icon: "play.fill", help: "Start the editor (\u{2318}\u{21A9})") { self.runs.start(self) } }
-        if let f = runs.failed, room == .notes, onboardingStep == nil, f.turnoverID != nil, f.turnoverID == openTurnover?.id {
+        if let f = runs.failed, room == .cut, onboardingStep == nil, f.turnoverID != nil, f.turnoverID == openTurnover?.id {
             return PrimaryAction(title: "Try again", icon: "arrow.uturn.backward", help: "Start the editor again where it stopped (\u{2318}\u{21A9})") { self.runs.retry(self) }
         }
         return nil

@@ -25,7 +25,7 @@ struct SystemBanners: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in refreshMissing() }
         .onChange(of: network.online, initial: true) { _, online in syncOffline(online) }
         .onChange(of: model.jobs.map(\.status)) { _, _ in DeliveryWatch.check(model) }
-        .onChange(of: model.room) { old, _ in if old == .screening { SystemNotifications.releaseHeld(film: model) } }
+        .onChange(of: model.watchingCut) { was, _ in if was { SystemNotifications.releaseHeld(film: model) } }
         .onChange(of: model.turnovers.count) { _, n in if n > 0 { SystemNotifications.requestPermissionIfNeeded() } }
         .background { if !model.isPreview { SceneTracker(model: model) } }
         .onChange(of: missing.count, initial: true) { _, n in if !model.isPreview { MenuState.shared.missingCount = n; model.missingTakes = n } }

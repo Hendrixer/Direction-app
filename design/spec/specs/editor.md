@@ -105,7 +105,7 @@ A skill is a short playbook in Markdown (`plugins/direction/skills/<name>/SKILL.
 ## What you see while the editor works
 
 - **The pill** shows the current Activity: "Watching 01:12", "Cutting scene 2", "Making music". Shimmer (prism, 2.4 s) while working. Truncate the object at 18 characters.
-- **The editor's playhead.** On every scene strip, a 9 pt prism diamond rides the top edge at the latest Activity time, with a 1 pt prism line down through the strip. It glides (Settle) between times and fades out 2 s after the last Activity that had a time. It never moves the director's playhead and isn't drawn in Screening.
+- **The editor's playhead.** On every scene strip, a 9 pt prism diamond rides the top edge at the latest Activity time, with a 1 pt prism line down through the strip. It glides (Settle) between times and fades out 2 s after the last Activity that had a time. It never moves the director's playhead and isn't drawn while you watch through.
 - **No window edge.** The pill and the editor's playhead are enough. A line around the window's content fought the window's rounded corners, so it was dropped.
 - **The popover** (frame 57) lists what the editor did, newest first.
 - **Notifications.** "Cut 4 is ready" is unchanged. New: "The editor stopped" with the reason as the body and **Show me**.
@@ -185,7 +185,7 @@ States: neither program found shows both cards as "Not installed" with their ins
 ## 57 · The editor at work
 Frame: `screens/57-editor-working.html` · 1440 × 900.
 
-The Notes room while the editor cuts Cut 4 (state of frame 25), with the popover open from the pill.
+The Cut room while the editor cuts Cut 4 (state of frame 25), with the popover open from the pill.
 
 - Pill: shimmering "Cutting 3 of 7".
 - Scene strip: the editor's playhead at 01:12:08 in scene 3 (note 3's anchor).
@@ -213,7 +213,7 @@ The list keeps the newest 6. "Show all" appears under it when there are more and
 ## 58 · The editor stopped
 Frame: `screens/58-editor-stopped.html` · 1440 × 900.
 
-The Notes room after a run failed during Cut 4.
+The Cut room after a run failed during Cut 4.
 
 - Pill: "Stopped" in alert red (`--alert` text, alert wash), no shimmer.
 - A banner at the top of the Notes sheet (the cutting-error banner from frame 28, alert): title "The editor stopped: Claude Code isn't signed in." Body: "Open Terminal, run claude, and sign in. Then try again. Cut 4 isn't finished; notes 1–7 are still turned over." Buttons in the banner: **Open Terminal**, **Take the turnover back**.

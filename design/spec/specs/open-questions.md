@@ -9,8 +9,8 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 3. **The turnover covers notes 1–7.** Note 7 is Priya's accepted outside note. Script frame 11 shows notes 8 and 9 being written against Cut 3 *after* that frame's moment; they aren't part of the turnover drawn in 22. In the app, notes written after a turnover wait for the next one.
 4. **Question takes.** Frame 20 asks about line 12 with "T2" and "T5". Treat T5 as `2A T5`, a fifth take of setup 2A that frame 07 doesn't show. Sample data is illustrative; the app shows whatever takes exist.
 5. **"Needs you" is neutral.** Amber is only for the director's own acts. Things waiting on the director use neutral steel chips; hard blockers (can't do, stopped, missing license) use alert red.
-6. **The Changes room** shows answers as diamonds on the strip. Director pins are hidden there; they live in Notes.
-7. **Room-scoped keys.** `⌘↩` runs the room's primary (Turn over, Assemble from circles, Play changes…). `R` is Region in Notes and Other readings in Script.
+6. **The Cut room** shows answers as diamonds on the strip and the director's pins only for notes not yet answered.
+7. **Room-scoped keys.** `⌘↩` runs the room's primary (Turn over, Assemble from circles, Play changes…). `R` is Region (or Reply, with an answer selected) in the Cut room and Other readings in Script.
 8. **Strip proportions** in the frames are approximate. The app sizes scenes from real durations.
 9. **Account name** in frame 48 is sample data ("Dana Moreau"). The director is never named elsewhere; the UI says "you".
 10. **Class names `.agent` and `.side`** in `gate.css` are reserved for the titlebar pill and the sidebar. Don't reuse them inside other components.

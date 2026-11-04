@@ -112,7 +112,7 @@ private struct EditMenuItems: View {
         Divider()
         Button("Find\u{2026}") {
             guard let film else { return }
-            CommandMenuLaunch.pendingFilter = switch film.room { case .notes, .screening, .changes: .notes; case .dailies: .takes; default: nil }
+            CommandMenuLaunch.pendingFilter = switch film.room { case .cut: .notes; case .dailies: .takes; default: nil }
             film.showCommandMenu = true
         }
         .shortcut(.find).disabled(film == nil)
@@ -131,7 +131,7 @@ private struct ViewMenuItems: View {
                 .disabled(film.map { !$0.isEnabled(room) || $0.onboardingStep != nil } ?? true)
         }
         Divider()
-        Button("Show Notes") { film?.go(.notes) }.keyboardShortcut("s", modifiers: [.command, .option]).disabled(film == nil || film?.room == .notes)
+        Button("Show Notes") { film?.go(.cut); film?.notesTab = .sheet }.keyboardShortcut("s", modifiers: [.command, .option]).disabled(film.map { !$0.isEnabled(.cut) } ?? true)
         Button("Show Transcript Captions") {}.disabled(true)
         Button("Show Safe Areas") {}.disabled(true)
         Divider()
@@ -192,28 +192,28 @@ private struct CutMenuItems: View {
     var app: AppModel
     var body: some View {
         let film = app.film
-        let canWatch = film.map { $0.isEnabled(.screening) && $0.onboardingStep == nil } ?? false
-        Button("Start Screening") { film?.go(.screening) }.shortcut(.startScreening).disabled(!canWatch)
+        let canWatch = film.map { $0.isEnabled(.cut) && $0.onboardingStep == nil } ?? false
+        Button("Watch Through") { film?.watchThrough() }.shortcut(.startScreening).disabled(!canWatch)
         Divider()
         Button("Mark This Moment") { film?.mark() }.disabled(!canWatch)
         Button("New Note") { if let film { FilmActions(film).startNote() } }.shortcut(.newNote).disabled(film == nil || film?.onboardingStep != nil)
         Button("Turn Over\u{2026}") { film?.sheet = .turnover }
-            .keyboardShortcut(film?.room == .notes ? ShortcutStore.shared.menuShortcut(.turnOver) : nil)
+            .keyboardShortcut(film?.room == .cut ? ShortcutStore.shared.menuShortcut(.turnOver) : nil)
             .disabled(film.map { $0.readyNotes.isEmpty || $0.openTurnover != nil || $0.sheet != nil } ?? true)
         Divider()
-        Button("Play Changes") { film?.go(.changes); film?.playChanges() }.shortcut(.playChanges).disabled(film.map { $0.changeReel(in: $0.watchedCut).isEmpty } ?? true)
-        Button("Accept Answer") { if let film, let id = film.selectedAnswerNoteID { film.acceptAnswer(id) } }
-            .disabled(film.map { $0.room != .changes || $0.selectedAnswerNoteID.flatMap($0.note)?.lifecycle != .answered } ?? true)
+        Button("Play Changes") { film?.openChangesReel() }.shortcut(.playChanges).disabled(film.map { $0.changeReel(in: $0.watchedCut).isEmpty } ?? true)
+        Button("Accept Answer") { if let film, let id = film.selectedAnswerNoteID { film.acceptAnswerFromChanges(id) } }
+            .disabled(film.map { $0.room != .cut || $0.selectedAnswerNoteID.flatMap($0.note)?.lifecycle != .answered } ?? true)
         Divider()
         Button("Assemble from Circles") { film?.assembleFromCircles() }
             .keyboardShortcut(film?.room == .dailies ? ShortcutStore.shared.menuShortcut(.assemble) : nil)
             .disabled(film.map { $0.circledCount == 0 || $0.openTurnover != nil || !$0.cuts.isEmpty || $0.sheet != nil } ?? true)
         Divider()
-        Picker("Go to Cut", selection: Binding(get: { film?.watchedCut?.id ?? "" }, set: { id in if let film { film.watch(film.cuts.first { $0.id == id }) } })) {
+        Picker("Go to Cut", selection: Binding(get: { film?.watchedCut?.id ?? "" }, set: { id in if let film { film.watch(film.cuts.first { $0.id == id }); film.go(.cut) } })) {
             ForEach((film?.cuts ?? []).reversed()) { Text($0.name).tag($0.id) }
         }
         .disabled(film?.cuts.isEmpty ?? true)
-        Button("History") { film?.go(.changes) }.shortcut(.history).disabled(film.map { !$0.isEnabled(.changes) } ?? true)
+        Button("Every Cut\u{2026}") { film?.showCutHistory() }.shortcut(.history).disabled(film.map { !$0.isEnabled(.cut) } ?? true)
     }
 }
 

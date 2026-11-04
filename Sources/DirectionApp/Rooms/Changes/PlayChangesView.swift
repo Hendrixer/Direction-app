@@ -1,8 +1,8 @@
 import SwiftUI
 import DirectionCore
 
-// Owner: Changes and Finish agent. Play changes (31): only the passages that moved, with handles,
-// full picture like Screening. Nothing moves during playback except the playhead and time.
+// Play changes (31): the Cut room's full-screen mode for only the passages that moved, with handles, the same
+// picture and glass as Watch through. Esc goes back to the notes. Nothing moves during playback except the playhead and time.
 
 struct PlayChangesView: View {
     @Bindable var model: FilmModel
@@ -81,14 +81,14 @@ struct PlayChangesView: View {
                     slash
                     crumb(model.watchedCut?.name ?? "", color: Gate.Text.secondary, weight: .medium)
                     slash
-                    crumb("Changes", color: Gate.Text.tertiary, weight: .medium)
+                    crumb("Only what changed", color: Gate.Text.tertiary, weight: .medium)
                 }
                 Spacer(minLength: 12)
                 EditorPill(state: model.pill, program: model.editorProgram)
                 Button { model.closeReel() } label: {
-                    HStack(spacing: 6) { Image(systemName: "rectangle.portrait.and.arrow.right"); Text("Stop"); KeyHint("esc") }
+                    HStack(spacing: 6) { Image(systemName: "text.bubble").font(.system(size: 12, weight: .medium)); Text("Back to notes"); KeyHint("esc") }
                 }
-                .buttonStyle(.gate(.ghost)).help("Stop playing changes (esc)")
+                .buttonStyle(.gate(.ghost)).help("Back to notes (esc)")
             }
             .padding(.leading, 20).padding(.trailing, 12)
         }
@@ -181,11 +181,11 @@ struct PlayChangesView: View {
     private var endCard: some View {
         HStack(spacing: 10) {
             let left = model.toReview.count
-            Text(left == 0 ? "That\u{2019}s every change. Nothing left to review." : "That\u{2019}s every change. \(left) to review.")
+            Text(left == 0 ? "That\u{2019}s every change. Nothing left to look at." : "That\u{2019}s every change. \(left) to look at.")
                 .font(.system(size: 13)).foregroundStyle(Gate.Text.primary)
             Spacer(minLength: 8)
             Button("Play again") { model.playChanges() }.buttonStyle(.gate(.normal))
-            Button("Back to answers") { model.closeReel() }.buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
+            Button("Back to notes") { model.closeReel() }.buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
         }
         .padding(.vertical, 4).padding(.leading, 4)
     }
