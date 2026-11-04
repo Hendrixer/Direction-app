@@ -29,6 +29,8 @@ struct BriefSheet: View {
     @State private var title: String
     @State private var brief: Brief
     @State private var missing: Set<OnboardingSession.Field> = []
+    /// A new shape for a cut: black bars (false) or the editor fills the frame (true).
+    @State private var fill = false
 
     init(model: FilmModel) {
         self.model = model
@@ -40,7 +42,7 @@ struct BriefSheet: View {
         AttachedSheet(width: 720, onDismiss: { model.sheet = nil }) {
             SheetHeader(title: "The brief", subtitle: model.latestCut.map { "Changes apply from the next cut. \($0.name) was made with the earlier brief." } ?? "The editor reads this first and checks against it last.")
             ScrollView {
-                BriefForm(model: model, title: $title, brief: $brief, missing: missing, compact: true)
+                BriefForm(model: model, title: $title, brief: $brief, missing: missing, compact: true, fill: $fill)
                     .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 22)
             }
             .frame(maxHeight: 600)
@@ -59,20 +61,25 @@ struct BriefSheet: View {
         let old = model.brief
         model.renameFilm(title)
         if brief != old {
-            model.saveBrief(brief)
-            model.registerUndo("Edit Brief") { $0.saveBrief(old) }
+            let note = model.saveBrief(brief, fill: fill)
+            model.registerUndo("Edit Brief") { m in
+                m.saveBrief(old)
+                if let note { m.perform { try $0.dropNote(id: note) } }
+            }
         }
         model.sheet = nil
     }
 }
 
-/// The questions, in visual order: title, logline, feeling, length and audience, style, must keep, references, avoid.
+/// The questions, in visual order: title, logline, feeling, length and audience, shape, style, must keep, references, avoid.
 struct BriefForm: View {
     var model: FilmModel
     @Binding var title: String
     @Binding var brief: Brief
     var missing: Set<OnboardingSession.Field>
     var compact = false
+    /// Once there's a cut, how a new shape changes it (BriefSheet).
+    var fill: Binding<Bool>? = nil
     @FocusState private var focus: Field?
     /// Where the caret is in the fields that take "@" (techniques.md › The library).
     @State private var feelingCaret: TextSelection?
@@ -136,6 +143,7 @@ struct BriefForm: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            question("Shape", model.footageShapeLabel.map { "Your footage is \($0)" } ?? "Optional") { shape }
             question("Style", "Optional. How your videos look, sound and move") { BriefStylePicker(model: model, style: $brief.style) }
             question("Must keep", "The editor will never cut these") { mustKeep }
             question("References", "Drop clips, stills or links. Say why.", accessory: {
@@ -153,6 +161,27 @@ struct BriefForm: View {
             minText = brief.lengthMin.map(Timecode.duration) ?? ""
             maxText = brief.lengthMax.map(Timecode.duration) ?? ""
             if title.isEmpty && !model.isPreview { focus = .title }
+        }
+    }
+
+    /// The shape it's cut in; once there's a cut, a new one asks how: black bars now, or the editor fills the frame.
+    @ViewBuilder private var shape: some View {
+        let blocker = model.shapeBlocker
+        GateSegmented(options: [(FilmShape?.none, "As shot")] + FilmShape.allCases.map { (FilmShape?.some($0), $0.label) }, selection: $brief.shape)
+            .fixedSize()
+            .disabled(blocker != nil).opacity(blocker != nil ? 0.5 : 1)
+            .help(blocker ?? "The shape every cut is made in. As shot is your footage\u{2019}s own.")
+            .accessibilityLabel("Shape")
+        if let blocker {
+            Text(blocker).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+        } else if let fill, let change = model.shapeChange(to: brief.shape) {
+            HStack(spacing: 10) {
+                Text("\(change.cut.name) is \(change.from).").font(Gate.Font.small).foregroundStyle(Gate.Text.secondary)
+                GateSegmented(options: [(false, "Black bars"), (true, "Fill the frame")], selection: fill).fixedSize()
+            }
+            Text(fill.wrappedValue ? "Black bars until the editor crops each shot to fill the frame, in your next turnover."
+                 : "Every shot stays whole, with black \(change.taller ? "above and below" : "at the sides"). \(change.cut.name) changes when you save.")
+                .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
         }
     }
 

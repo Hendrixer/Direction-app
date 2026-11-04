@@ -13,6 +13,8 @@ public struct FrameLayout: Codable, Hashable, Sendable {
         public var label: String {
             switch self { case .screenAndYou: "Screen and you"; case .you: "You"; case .screen: "Screen"; case .sideBySide: "Side by side" }
         }
+        /// In a frame taller than it's wide, side by side stacks: the screen over you.
+        public func label(tall: Bool) -> String { self == .sideBySide && tall ? "Stacked" : label }
         var needsCamera: Bool { self != .screen }
         var needsScreen: Bool { self != .you }
     }
@@ -147,18 +149,32 @@ public enum LayoutGeometry {
             let h = l.size.height * frame.h, w = h * l.shape.aspect
             return Rect(x: (l.corner.right ? frame.w - m - w : m) / frame.w, y: (l.corner.bottom ? frame.h - m - h : m) / frame.h, w: w / frame.w, h: h / frame.h)
         case .sideBySide:
+            if stacks(frame) {
+                let top = stackSplit(frame) * frame.h + m / 2
+                return Rect(x: m / frame.w, y: top / frame.h, w: (frame.w - 2 * m) / frame.w, h: (frame.h - m - top) / frame.h)
+            }
             let left = split * frame.w + m / 2
             return Rect(x: left / frame.w, y: m / frame.h, w: (frame.w - m - left) / frame.w, h: (frame.h - 2 * m) / frame.h)
         }
     }
     /// Side by side: the screen takes the frame's left 64 %.
     static let split = 0.64
+    /// A frame taller than it's wide (9:16, 4:5) stacks side by side: the screen across the top, you under it.
+    public static func stacks(_ frame: Size) -> Bool { frame.h > frame.w * 1.1 }
+    /// Stacked: the top of the frame a 16:9 screen needs across its width, at most 64 % of it.
+    static func stackSplit(_ frame: Size) -> Double {
+        let m = margin * frame.h
+        return min(split, ((frame.w - 2 * m) * 9 / 16 + 1.5 * m) / frame.h)
+    }
 
-    /// Where the screen goes: the whole frame, or fitted inside a padded frame (framed), or the left of side by side.
+    /// Where the screen goes: the whole frame, or fitted inside a padded frame (framed), or the left of side by side
+    /// (its top, stacked).
     public static func screenRect(_ l: FrameLayout, frame: Size, screen: Size) -> Rect {
         let m = margin * frame.h
         guard l.kind == .sideBySide || (l.kind != .you && l.screen == .framed) else { return Rect(x: 0, y: 0, w: 1, h: 1) }
-        let area = l.kind == .sideBySide ? Rect(x: m, y: m, w: split * frame.w - 1.5 * m, h: frame.h - 2 * m) : Rect(x: 1.5 * m, y: 1.5 * m, w: frame.w - 3 * m, h: frame.h - 3 * m)
+        let area = l.kind != .sideBySide ? Rect(x: 1.5 * m, y: 1.5 * m, w: frame.w - 3 * m, h: frame.h - 3 * m)
+            : stacks(frame) ? Rect(x: m, y: m, w: frame.w - 2 * m, h: stackSplit(frame) * frame.h - 1.5 * m)
+            : Rect(x: m, y: m, w: split * frame.w - 1.5 * m, h: frame.h - 2 * m)
         let fit = min(area.w / screen.w, area.h / screen.h), w = screen.w * fit, h = screen.h * fit
         return Rect(x: (area.x + (area.w - w) / 2) / frame.w, y: (area.y + (area.h - h) / 2) / frame.h, w: w / frame.w, h: h / frame.h)
     }

@@ -8,7 +8,7 @@ The room bar is **Script · Breakdown · Dailies · Cut · Finish**, showing onl
 
 The window is split in two: the picture **stage** on `--canvas` (left, flexible) and the **sheet** on `--ground` (right, 380 wide, `--sheet-w`).
 
-- **Stage:** the picture fitted at its aspect, the HUD timecode bottom-left, then the transport. From the left: play, timecode, scene strip, mark, the layout button (when there's one), **Play changes** (when the cut on screen has changes) and **Watch through**. Both are ghost buttons; their keys (`⇧⌘P`, `W`) are in their tooltips.
+- **Stage:** the picture fitted at its aspect, with a 1 pt `--line-2` hairline just outside its edge so black in the picture reads apart from the stage around it, and the HUD bottom-left with the timecode and the cut's shape ("01:00:12:04 · 9:16"; snapshot `17-tall-cut`). Then the transport. From the left: play, timecode, scene strip, mark, the layout button (when there's one), **Play changes** (when the cut on screen has changes) and **Watch through**. Both are ghost buttons; their keys (`⇧⌘P`, `W`) are in their tooltips.
   - Marks on the strip: amber pins for your notes not yet answered, and prism diamonds for the editor's answers in the cut on screen. In the Outside tab, steel pins for outside notes. Every changed scene has a 2 pt prism top edge.
   - The stage changes for some answers. It shows two pictures for an answer with two options (30) or for Compare (33). It shows the lock bar once everything is accepted (34, `finish.md`), and a graphic answer's card (64).
 - **Sheet:** head, tabs, list, composer.
@@ -113,6 +113,15 @@ The cut's name in the crumb ("Cut 4 ▾") opens **every cut**, newest first, in 
   - It's for looking back: the steel button watches it.
   - Esc or **Back to Cut 5** returns to the latest.
 - The cuts list also opens from Cut › Every Cut… (`⌘Y`), Go to Cut, and the scene strip's menu.
+
+## Changing the shape
+
+The shape is chosen in the brief (start.md › 03 · Shape). Changing it once there's a cut works the way a cutting room would:
+- **Black bars** never lose picture, so Direction does it at once, as the director's own edit on the latest cut: every shot whole, with black where it doesn't reach. A toast says "Cut 4 is 9:16 now", with what was placed for the old frame ("2 titles and 1 layout were placed for 16:9. Look at them in the new shape."). The cuts list shows it as an event line, "Shape: 9:16", with the aspect-ratio glyph. `⌘Z` puts the brief and the cut back.
+- **Fill the frame** loses picture, so it's the editor's, and you watch it like any cut. Direction puts the bars in at once (the cut plays in its new shape straight away) and writes a picture note on the whole cut: "Fill the 9:16 frame: crop each shot instead of the black bars." It goes in your next turnover. The editor frames shot by shot (the `reframe` skill: following faces, stacking a camera and a screen, a blurred fill where a crop would lose what matters) and answers the note once, naming the shots it made a call on. Play changes plays every shot it framed.
+- Neither happens while picture is locked or while the editor is making the next cut.
+
+A cut with shots of another shape (a phone shot in a 16:9 cut) plays them whole, with black at their sides; a note can ask the editor to fill them, or to put them on a blurred fill of themselves (`backdrop`).
 
 **Leaving.** Going to any other room (the switcher, `⌘1`–`⌘5`) stops the cut where it is and leaves Watch through or Play changes. The playhead stays. Nothing plays in a room the picture isn't in.
 

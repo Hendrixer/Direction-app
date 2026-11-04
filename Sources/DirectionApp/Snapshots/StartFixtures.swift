@@ -36,6 +36,20 @@ enum StartFixtures {
                 session.title = "Launch film"; session.brief = SampleFilm.briefValue
                 return .film(m)
             },
+            // The brief's Shape once there's a cut: 9:16 picked for a 16:9 cut, with how it changes the cut.
+            "03b-brief-shape": {
+                let m = SampleFilm.make(room: .cut)
+                m.brief.shape = .tall
+                m.sheet = .brief
+                return .film(m)
+            },
+            // A 9:16 cut on the stage: the hairline at the frame's edge and the shape beside the timecode.
+            "17-tall-cut": {
+                let m = SampleFilm.make(room: .cut)
+                m.project?.sequences[0].width = 1080; m.project?.sequences[0].height = 1920
+                m.displayed = m.project
+                return .film(m)
+            },
             "04-footage-drop": {
                 let m = newFilm()
                 m.project?.assets = []; m.dailies = Dailies(); m.displayed = m.project

@@ -157,6 +157,12 @@ public enum TimelineExport {
                 let srcEnd = c.hold == nil ? c.sourceRange.end.seconds : c.sourceRange.start.seconds
                 parts.append("src \(tc(c.sourceRange.start.seconds))–\(tc(srcEnd))")
             }
+            // Footage of another shape than the cut: the scale that fills the frame, and how far it stays sharp (reframe skill).
+            if c.kind == .video, a?.graphic == nil, let v = a?.video.first, v.width > 0, v.height > 0,
+               FilmShape.label(width: v.width, height: v.height) != FilmShape.label(width: s.width, height: s.height) {
+                let source = (width: v.width, height: v.height), frame = (width: s.width, height: s.height)
+                parts.append("\(FilmShape.label(width: v.width, height: v.height)) footage, fills at \(String(format: "%.2f", FrameFill.cover(source: source, frame: frame)))×, sharp to \(String(format: "%.2f", FrameFill.sharp(source: source, frame: frame)))×")
+            }
             if c.synced == true { parts.append("in sync") }
             if let l = c.layout { parts.append("layout \(l.role.rawValue)") }
             if let t = c.transition { parts.append("\(t.type == "shader" ? t.file ?? "shader" : t.type) \(t.frames)f in") }

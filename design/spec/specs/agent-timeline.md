@@ -46,6 +46,8 @@ V1  00:09:12–00:25:00  clip-13  1B T4  src 00:00:20–00:16:08  ‹scene 1›
 A2  00:00:00–00:25:00  clip-40  music "Felt piano" (made)  ducked −6 dB under A1
 ```
 
+A shot whose footage is another shape than the cut says so, with the `reframe` scale that covers the frame and the scale past which it shows bigger than it was shot: `16:9 footage, fills at 3.16×, sharp to 1.78×` (1920 × 1080 footage in a 1080 × 1920 cut; FilmShape, `FrameFill`).
+
 The editor may export the document to its working folder and analyze it in a script (Python with `opentimelineio`, or JavaScript). The analysis can decide which operations to send; it can't send a document back.
 
 ## Writing: edit functions
@@ -94,10 +96,12 @@ The editor may export the document to its working folder and analyze it in a scr
 
 | Op | Arguments | What Direction does |
 |---|---|---|
-| `reframe` | `clipID`, `scale`, `x?`, `y?`, `follow?` (`face`/`subject`), `keepIn?` (thirds/center) | With `follow`, Direction tracks the face or subject with Vision and writes the keyframes that keep it placed |
+| `reframe` | `clipID`, `scale`, `x?`, `y?`, `follow?` (`face`/`subject`), `keepIn?` (thirds/center) | With `follow`, Direction tracks the face or subject with Vision and writes the keyframes that keep it placed. `scale` is over the picture fitted in the frame: a shot of another shape fills it at the outline's "fills at" |
 | `punchIn` | `range`, `scales?` (`[1, 1.15]`), `keepIn?` | Moves. On every jump cut over `range` (a take cut to itself) the framing changes to the next of `scales`, framed on the face (eyes on the upper third with `thirds`); a cut to another take starts from the first again; it carries on from the shot before `range`. Shots that already move are left alone, with a warning. Numbers default to the film's style (styles.md › Moves) |
 | `emphasisPunch` | `range`, `scale?`, `keepIn?` | Moves. Cuts in to `scale` on the face for `range` (one line, inside one shot on V1) and back out: two cuts on the same take, nothing else moves |
 | `slowPush` | `range`, `scales?` (`[from, to]`), `longerThan?`, `keepIn?` | Moves. On each still shot over `range` at least `longerThan` long, scale keys from the first to the second across the shot, toward the face. A punched-in shot is left alone |
+
+The moves' scales start from filling the frame: 1.15 on a 16:9 take in a 9:16 cut is 1.15 × 3.16, framed on the face. A shot kept whole on its `backdrop` starts from 1, so it stays whole.
 | `autoZoom` | `range`, `clipID?`, `scale?` | Moves. Screen Studio-style zooms over `range` on the screen recording showing there (a layout's screen, or the take on V1). Direction looks at what changes four times a second (`ScreenActivity`: the cursor, clicks landing, typing; a new page ends a moment), keeps moments where the action stays in one area for about ¾ s, zooms so it fills about half the view (the style's `screenZoom` min to max), pans between moments close together, and eases out after. Keys go on the clip's transform (scale, x, y), never past the picture's edges |
 | `zoomTo` | `range`, `focus?` (`"action"`, `{x, y}`, `{text}`), `clipID?`, `scale?` | Moves. One zoom: in at `range`'s start, out by its end, to the action there, a point, or words found on screen with Vision at the start |
 | `technique` | `name`, `variant?`, `editPoint?` (a transition), `clipID?` (an effect), `frames?`, `params?` | Uses a technique from the director's Techniques folder (techniques.md): Direction turns it into the `transition` or `addEffect` it makes, its Metal checked and its sound placed. A recipe is followed by the editor, not run |
@@ -132,7 +136,7 @@ The editor may export the document to its working folder and analyze it in a scr
 | `placeMusic` | `madeID` or `assetID`, `at`, `endOn` (`cut`, `word`, or a time) | Lines the music's end up with a cut or a word, trimming from the head |
 | `audio` | as today | EQ, compression and per-track settings |
 
-**Film**: `format` and `duplicateSequence` as today.
+**Film**: `format` and `duplicateSequence` as today. A `format` that changes the cut's shape warns about the titles, graphics and layouts placed for the old one ("2 titles and 1 layout were placed for 16:9. Look at them in the new shape."). The director changes the shape from the brief (start.md › 03): Direction sends the `format` as the director's own edit, and the `reframe` skill fills the frame when a note asks.
 
 Every operation is checked before anything commits:
 
@@ -163,6 +167,7 @@ Used by `addEffect` and `setEffect`.
 | `card` | `radius` (0–0.5 of the shorter side, 0.2), `edge` (0–1, 0.3), `shadow` (0–1, 0.5), `background` (#RRGGBB), `edgeColor` (#RRGGBB) | no | The placed picture with rounded corners or as a circle, a thin light edge (solid and a little bolder in `edgeColor`) and a soft shadow, over a background that fills the frame when given. `layout` writes it |
 | `place` | `x`, `y`, `w`, `h` (the rectangle in the frame), `fromX`, `fromY`, `fromW`, `fromH` (the part of the clip's finished picture), fractions of the frame from its top left | yes | After the clip's transform and its other effects, so a zoom or a blur plays inside the rectangle. `layout` writes it for a smaller screen and owns it |
 | `pixelGrid` | `cells` (4–64, 16), `lines` (0–1, 0.6), `lineWidth` (0.5–8 px at 1080, 1.5), `lineColor` (#RRGGBB), `threshold` (0.05–1, 0.35) | no | On a clip over another: it shows only in the squares of a `cells`-wide grid its subject fills, with grid lines over the frame. Direction finds the subject with Vision when it's added (and when `cells` changes) and keeps it with the effect |
+| `backdrop` | `blur` (0–1, 0.5), `dim` (0–1, 0.3) | no | On a V1 shot that doesn't reach the frame's edges: the shot itself behind it, enlarged to fill the frame, blurred (`blur` 0.5 is a sigma of 2.5 % of the frame's height) and darkened (`dim` × 2.5 stops), in place of black. Not with `pin`, `place` or `card` |
 | `blur` | `radius` (0–100 px, 0) | yes | |
 | `sharpen` | `amount` (0–1, 0) | no | |
 | `stabilize` | `amount` (0–1, 0.5) | no | Vision homographic registration, cached per clip |

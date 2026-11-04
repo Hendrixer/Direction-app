@@ -2,7 +2,8 @@ import SwiftUI
 import DirectionCore
 
 /// The picture with its transport: used by the Cut room, Finish and anywhere a cut plays
-/// beside a panel. Black stage, 28 pt padding, aspect-fit frame, HUD timecode, then
+/// beside a panel. Black stage, 28 pt padding, aspect-fit frame with a hairline at its edge (so black in the
+/// picture reads apart from the stage around it), HUD timecode and shape, then
 /// play · timecode · scene strip · mark, and in the Cut room Play changes and Watch through.
 struct FilmStage<Overlay: View>: View {
     @Bindable var model: FilmModel
@@ -25,14 +26,21 @@ struct FilmStage<Overlay: View>: View {
                     overlay(size)
                 }
                 .frame(width: size.width, height: size.height)
+                .overlay { Rectangle().strokeBorder(Gate.Line.strong, lineWidth: 1).padding(-1).allowsHitTesting(false) }
                 .contextMenu { PictureContextMenu(model: model) }
-                .overlay(alignment: .bottomLeading) { HUDTag(hudPrefix.map { "\($0) · \(Timecode.format(model.position, fps: model.fps))" } ?? Timecode.format(model.position, fps: model.fps)).padding(12) }
+                .overlay(alignment: .bottomLeading) { HUDTag(hud).padding(12).help("The cut is \(model.shapeLabel). Black inside the line is in the picture.") }
                 .overlay { if model.isPreparing { HStack(spacing: 8) { GateSpinner(); Text("Preparing picture").font(Gate.Font.small) }.padding(12).gateGlass(10) } }
                 .position(x: g.size.width / 2, y: 28 + avail.height / 2)
             }
             FilmTransport(model: model, marks: marks, showsMarkButton: showsMarkButton, tall: tallStrip, showsWatch: showsWatch)
         }
         .background(Gate.Surface.canvas)
+    }
+
+    /// "01:00:12:04 · 9:16": where the playhead is, and the cut's shape.
+    private var hud: String {
+        let time = hudPrefix.map { "\($0) \u{00B7} \(Timecode.format(model.position, fps: model.fps))" } ?? Timecode.format(model.position, fps: model.fps)
+        return model.shapeLabel.isEmpty ? time : "\(time) \u{00B7} \(model.shapeLabel)"
     }
 
     private func fit(_ aspect: CGFloat, in size: CGSize) -> CGSize {

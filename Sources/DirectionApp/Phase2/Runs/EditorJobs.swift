@@ -196,6 +196,8 @@ enum EditorJobs {
         if !brief.feeling.isEmpty { b.append("- How it should feel: \(brief.feeling)") }
         if let lo = brief.lengthMin, let hi = brief.lengthMax { b.append("- Length: \(minutes(lo))\u{2013}\(minutes(hi))") }
         if let a = brief.audience, !a.isEmpty { b.append("- Audience: \(a)") }
+        // The shape is said once, here, for every job (FilmShape).
+        if let shape = brief.shape { b.append("- Shape: \(shape.label). The cut is \(shape.label); frame every shot for it as you cut, and where the footage is another shape, follow the `reframe` skill (`.claude/skills/reframe/SKILL.md`).") }
         for k in brief.mustKeep { b.append("- Must keep: \(k)") }
         for r in brief.references {
             // A video the director gave as inspiration, studied by Direction (styles.md › In the brief).

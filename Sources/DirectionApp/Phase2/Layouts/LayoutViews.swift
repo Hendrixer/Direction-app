@@ -118,7 +118,7 @@ struct LayoutButton: View {
     var body: some View {
         let current = layouts.current(model)
         Button { layouts.open ? (layouts.open = false) : layouts.show(model) } label: {
-            LayoutGlyph(layout: current, size: CGSize(width: 22, height: 14), lit: layouts.open)
+            LayoutGlyph(layout: current, size: model.aspect < 0.9 ? CGSize(width: 9, height: 15) : CGSize(width: 22, height: 14), lit: layouts.open)
         }
         .buttonStyle(.gate(.ghost, icon: true))
         .help(current.map { "Layout: \($0.label)" } ?? "Layout")
@@ -179,8 +179,8 @@ struct LayoutPicker: View {
     private func tile(_ l: FrameLayout, on: Bool) -> some View {
         Button { layouts.apply(l, film: model) } label: {
             VStack(spacing: 6) {
-                LayoutGlyph(layout: l, size: CGSize(width: 52, height: 30), lit: on)
-                Text(l.name ?? l.kind.label).font(.system(size: 10.5, weight: .medium)).foregroundStyle(on ? Gate.Text.primary : Gate.Text.secondary).lineLimit(1).minimumScaleFactor(0.85)
+                LayoutGlyph(layout: l, size: model.aspect < 0.9 ? CGSize(width: 18, height: 30) : CGSize(width: 52, height: 30), lit: on)
+                Text(l.name ?? l.kind.label(tall: model.aspect < 0.9)).font(.system(size: 10.5, weight: .medium)).foregroundStyle(on ? Gate.Text.primary : Gate.Text.secondary).lineLimit(1).minimumScaleFactor(0.85)
             }
             .padding(.vertical, 6).frame(maxWidth: .infinity)
             .background(RoundedRectangle(cornerRadius: Gate.Radius.control, style: .continuous).fill(on ? Gate.Surface.hover : Color.clear))
@@ -189,7 +189,7 @@ struct LayoutPicker: View {
         }
         .buttonStyle(.plain)
         .disabled(layouts.working)
-        .accessibilityLabel(l.name ?? l.kind.label)
+        .accessibilityLabel(l.name ?? l.kind.label(tall: model.aspect < 0.9))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -235,7 +235,8 @@ struct LayoutGlyph: View {
     var size: CGSize
     var lit = false
     var body: some View {
-        let frame = LayoutGeometry.Size(16, 9)
+        // The glyph is the frame's own shape: tall cuts stack side by side.
+        let frame = LayoutGeometry.Size(size.width, size.height)
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 2.5).fill(Gate.Surface.sunken)
             if let l = layout {

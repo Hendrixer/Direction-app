@@ -865,10 +865,19 @@ final class FilmModel {
     /// The scenes, setups and takes a note can name with "@" (cut.md › Naming footage).
     var footageNames: [FootageName] { FootageNames.all(dailies, assets: project?.assets ?? []) }
 
-    func saveBrief(_ b: Brief) {
+    /// A new shape changes the cut at once, with black where its shots don't reach; with `fill`, a note asks the
+    /// editor to fill the frame instead. Returns that note's id. A shape that can't change now stays as it was.
+    @discardableResult
+    func saveBrief(_ b: Brief, fill: Bool = false) -> String? {
+        var b = b, note: String?
+        if b.shape != brief.shape {
+            let changed = reshape(b.shape, fill: fill)
+            if changed.ok { note = changed.note } else { b.shape = brief.shape }
+        }
         brief = b; perform { try $0.saveBrief(b) }
         // A reference taken out takes its study with it.
         if let store, !isPreview { ReferenceVideo.cleanUp(b, film: store.url) }
+        return note
     }
     /// Files on their way in. The footage step shows logging from the first one, not the drop zone.
     var importingFootage = 0

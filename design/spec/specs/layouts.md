@@ -15,7 +15,7 @@ For a stretch of the cut where a screen recording and a camera are in sync (a sy
 | **Screen and you** | The screen, with you in a bubble. Corner: any of four, 4 % of the frame's height in from both edges. Size: S · M · L (22, 28, 36 % of the frame's height). Shape: Circle · Rounded (a square) · Wide (16:9). A thin light edge and a soft shadow. |
 | **You** | The camera, full frame. |
 | **Screen** | The screen alone. |
-| **Side by side** | You and the screen, split. |
+| **Side by side** | You and the screen, split: the screen on the left 64 %. In a frame taller than it's wide (9:16, 4:5) it's **Stacked**: the screen across the top, as tall as a 16:9 screen needs (at most 64 %), and you under it. The picker draws its tiles in the cut's shape. |
 
 **Screen framing**, for Screen and Screen and you: **Full**, or **Framed**, the screen smaller on a background (the style's background, or a color) with rounded corners and a shadow. Note 3 asked for this ("frame this with some padding and a background").
 

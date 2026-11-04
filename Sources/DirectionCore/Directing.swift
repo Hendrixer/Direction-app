@@ -44,6 +44,8 @@ public struct Brief: Codable, Hashable, Sendable {
     public var avoid: String?
     /// The style it's cut in (styles.md): a folder in the Styles folder, copied into the film as Style/.
     public var style: String?
+    /// The shape it's cut in; nil is the footage's own (FilmShape).
+    public var shape: FilmShape?
     public var updatedAt: Double?
     public init() {}
     public var isComplete: Bool { !logline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !feeling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -346,7 +348,7 @@ public struct FinishingItem: Codable, Hashable, Sendable, Identifiable {
         .init(id: "captions", title: "Captions", detail: "Captions from the transcript. Check names.", by: ["editor", "you"]),
         .init(id: "titles", title: "Titles and credits", detail: "Opening title and end card.", by: ["you"]),
         .init(id: "licenses", title: "Music licenses", detail: "Every track needs a license before you publish.", by: ["you"]),
-        .init(id: "deliver", title: "Deliver", detail: "Master, web, vertical and captions.", by: ["editor", "you"]),
+        .init(id: "deliver", title: "Deliver", detail: "Master, web and captions.", by: ["editor", "you"]),
     ]
 }
 

@@ -37,7 +37,6 @@ struct AskOutput: Identifiable {
     var request: String
     var art: FootageArt
     static let all: [AskOutput] = [
-        .init(id: "vertical", name: "Vertical 9:16", spec: "1080 \u{00D7} 1920 \u{00B7} Direction can\u{2019}t make this yet", request: "make a vertical 9:16 version", art: .dusk),
         .init(id: "captions", name: "Captions", spec: "SRT and WebVTT \u{00B7} Direction can\u{2019}t make these yet", request: "write caption files (SRT and WebVTT)", art: .night),
     ]
 }

@@ -39,6 +39,7 @@ enum ClipRendering {
         let tr = effects.first { $0.name == "transform" }
         let cl = tr?.number("crop.l", at: k, default: 0) ?? 0, cr = tr?.number("crop.r", at: k, default: 0) ?? 0
         let ct = tr?.number("crop.t", at: k, default: 0) ?? 0, cb = tr?.number("crop.b", at: k, default: 0) ?? 0
+        let whole = image
         if cl + cr + ct + cb > 0 { image = image.cropped(to: CGRect(x: cl * w, y: cb * h, width: max(1, w * (1 - cl - cr)), height: max(1, h * (1 - ct - cb)))) }
         let f = l.framing
         if let pin = effects.first(where: { $0.name == "pin" }) {
@@ -60,6 +61,9 @@ enum ClipRendering {
                 let cx = bounds.minX + ox + w * ratio / 2, cy = bounds.minY + oy + h * ratio / 2
                 image = image.transformed(by: CGAffineTransform(translationX: -cx, y: -cy).concatenating(.init(rotationAngle: -rotation * .pi / 180)).concatenating(.init(translationX: cx, y: cy)))
             }
+        }
+        if let bd = effects.first(where: { $0.name == "backdrop" }), !effects.contains(where: { ["pin", "place", "card"].contains($0.name) }) {
+            image = image.cropped(to: bounds).composited(over: backdrop(whole, bd, bounds: bounds))
         }
         image = apply(effects, to: image.cropped(to: bounds), at: k, frameIndex: frameIndex, bounds: bounds, scale: scale)
         if let place = effects.first(where: { $0.name == "place" }) { image = self.place(image, place, at: k, bounds: bounds) }
@@ -100,6 +104,21 @@ enum ClipRendering {
         let span = tr.before + tr.after, start = cut - tr.before
         guard span > 0, t >= start - 1e-9, t < cut + tr.after - 1e-9 else { return nil }
         return min(1, max(0, (t - start) / span))
+    }
+
+    /// `backdrop`: the shot itself behind it, enlarged to fill the frame, blurred and darkened, where black would
+    /// be. Blurred at an eighth of the size, so a big blur costs little.
+    static func backdrop(_ picture: CIImage, _ e: ClipEffect, bounds: CGRect) -> CIImage {
+        let x = picture.extent
+        guard x.width > 1, x.height > 1, bounds.width > 1, bounds.height > 1 else { return CIImage(color: .black).cropped(to: bounds) }
+        let blur = e.number("blur", at: nil, default: 0.5), dim = e.number("dim", at: nil, default: 0.3)
+        let down: CGFloat = 8, fill = max(bounds.width / x.width, bounds.height / x.height) * 1.06
+        var b = picture.transformed(by: .init(translationX: -x.minX, y: -x.minY)).transformed(by: .init(scaleX: fill / down, y: fill / down))
+        b = b.clampedToExtent().applyingGaussianBlur(sigma: max(0.5, blur * 0.05 * bounds.height / down))
+        b = b.transformed(by: .init(scaleX: down, y: down))
+        b = b.transformed(by: .init(translationX: bounds.midX - x.width * fill / 2, y: bounds.midY - x.height * fill / 2))
+        if dim > 0 { b = b.applyingFilter("CIExposureAdjust", parameters: ["inputEV": -2.5 * dim]) }
+        return b.cropped(to: bounds)
     }
 
     static func opacity(_ image: CIImage, _ a: Double) -> CIImage { image.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: a)]) }

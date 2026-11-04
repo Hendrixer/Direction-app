@@ -100,6 +100,7 @@ Frame: `screens/03-brief.html` · Render: `renders/03-brief@2x.png`
 - Title: label "TITLE", then the title as Archivo 800 34 at 125%, 1 pt `--line-2` underline, no box.
 - Questions: label 13 pt semibold + optional 12 pt `--text-4` qualifier, 8 pt gap, then the input. Logline and feeling inputs use large text (17/1.4, 12/14 padding). Feeling is a text area, minimum 88 pt.
 - Length and audience sit in a 2-column row (20 pt gap). Length is two 76 pt mono fields with "to".
+- Shape sits under them: a segmented control, **As shot · 16:9 · 9:16 · 1:1 · 4:5**, with the qualifier "Your footage is 16:9" once there's footage ("Optional" before).
 - Must keep: tags (26 pt pills) with a quote or film icon by type, × to remove, and a dashed "+ Add".
 - References: 96 × 54 thumbnail + title + "why" line + more menu, 8 pt gap between cards.
 - Aside: 40/28 padding, ion uppercase label with a diamond, Archivo 14 heading, three `.say` rows, hairline, 12 pt footnote.
@@ -110,6 +111,8 @@ Frame: `screens/03-brief.html` · Render: `renders/03-brief@2x.png`
 - Continue is disabled until title, logline and feeling are non-empty.
 - Validation: on Continue with an empty required field, that field gets `.field.err` and a 12 pt `--alert` helper "The editor needs this to start."
 - References accept drag-in of video files (thumbnail = first frame), stills, or URLs (thumbnail = page image; while fetching, a 54 pt sunken box with a spinner).
+- **Shape.** As shot is the footage's own shape. Another one cuts the film in it from the start: the first footage sets the cut's size at that shape, its short side kept (1920 × 1080 footage cuts 9:16 at 1080 × 1920, 4:5 at 1080 × 1350, 1:1 at 1080 × 1080), and every job reads "Shape: 9:16" in the brief and frames for it (the `reframe` skill). Changed before anything's cut, the cut-to-be takes the new size at once.
+- **Shape, once there's a cut.** Picking another shape shows a line under it: "Cut 4 is 16:9." with a segmented **Black bars · Fill the frame**, and one sentence: "Every shot stays whole, with black above and below. Cut 4 changes when you save." (at the sides, for a wider shape), or "Black bars until the editor crops each shot to fill the frame, in your next turnover." Save brief makes the change (cut.md › Changing the shape). Snapshot `03b-brief-shape`. The control is dimmed, with its reason under it, while picture is locked ("Picture is locked. Unlock it to change the shape.") and while the editor is making the next cut ("The editor is making the next cut. Change the shape once it’s handed back.").
 - Editing an existing brief after Cut 1 shows a banner at the top of the form: "Changes apply from the next cut. Cut 3 was made with the earlier brief." with "See earlier brief".
 
 **Interactions:** `Tab` moves through fields in visual order. `⌘↩` Continue. In Must keep, typing and `↩` adds a tag; pasting a line from the transcript adds it as a quote tag. Dragging a clip from Dailies onto Must keep adds a film tag. References: drag to reorder.
@@ -122,6 +125,7 @@ Frame: `screens/03-brief.html` · Render: `renders/03-brief@2x.png`
 - [ ] The form column is 640 pt wide and centered in the space left of the aside.
 - [ ] Title uses Archivo; every other field uses SF Pro.
 - [ ] Continue stays disabled until three required fields have text.
+- [ ] A brief with a shape cuts the assembly in it: 1920 × 1080 footage with Shape 9:16 makes a 1080 × 1920 cut.
 
 ---
 

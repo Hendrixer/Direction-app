@@ -538,6 +538,16 @@ struct EditWork {
         return a
     }
     func assetOf(_ c: Clip) -> MediaAsset? { c.assetID.flatMap { id in project.assets.first { $0.id == id } } }
+    /// What was placed for the frame before its shape changed: titles, graphics and layouts.
+    func placedForFrame(_ was: String) -> String? {
+        let titles = s.clips.filter { $0.kind == .title }.count
+        let graphics = s.clips.filter { $0.kind == .video && assetOf($0)?.graphic != nil }.count
+        let layouts = Set(s.clips.compactMap { $0.layout?.layout }).count
+        let parts = [(titles, "title"), (graphics, "graphic"), (layouts, "layout")].filter { $0.0 > 0 }.map { "\($0.0) \($0.1)\($0.0 == 1 ? "" : "s")" }
+        guard !parts.isEmpty else { return nil }
+        let list = parts.count == 1 ? parts[0] : parts.dropLast().joined(separator: ", ") + " and " + parts.last!
+        return "\(list) \(titles + graphics + layouts == 1 ? "was" : "were") placed for \(was). Look at \(titles + graphics + layouts == 1 ? "it" : "them") in the new shape."
+    }
     /// "1A T2", or the clip's name.
     func label(_ c: Clip) -> String {
         if let t = c.assetID.flatMap({ context?.dailies.takes[$0] }), let code = t.code { return [t.setupCode, code].compactMap { $0 }.joined(separator: " ") }
@@ -699,8 +709,11 @@ struct EditWork {
         case "parts": return try partsOp(op)
         case "audio": return try audio(op)
         case "format":
+            let was = FilmShape.label(width: s.width, height: s.height)
             if let width = op.width { s.width = width }; if let height = op.height { s.height = height }; if let rate = op.frameRate { s.frameRate = rate }
-            return .init(summary: "Changed the format to \(s.width)×\(s.height)", changes: [.init(before: (0, s.duration.seconds), after: (0, s.duration.seconds), tracks: ["all"])])
+            var out = Outcome(summary: "Changed the format to \(s.width)×\(s.height)", changes: [.init(before: (0, s.duration.seconds), after: (0, s.duration.seconds), tracks: ["all"])])
+            if FilmShape.label(width: s.width, height: s.height) != was, let placed = placedForFrame(was) { out.warnings.append(placed) }
+            return out
         case "rename":
             if let name = op.text, !name.isEmpty { s.name = name }
             return .init(summary: "Renamed the cut")
@@ -1269,6 +1282,7 @@ struct EditWork {
         if effect == "shader" { guard op.resolved?.source != nil else { throw bad("A shader is compiled and checked by Direction's tools; send it through direction_edit.") } }
         if effect == "stabilize" { guard case .clip(_) = target, op.resolved?.keys != nil else { throw bad("stabilize is measured per clip by Direction's tools; send it through direction_edit.") } }
         if effect == "pixelGrid" { guard case .clip(_) = target, op.resolved?.data != nil else { throw bad("pixelGrid finds the subject square by square with Direction's tools; send it through direction_edit.") } }
+        if effect == "backdrop" { guard case .clip(let i) = target, s.clips[i].layer == 0, s.clips[i].kind == .video else { throw bad("backdrop goes on a shot on V1, behind it.") } }
         guard effect == "shader" || EditCatalog.effect(effect) != nil else { throw bad("There's no effect \(effect). direction_edit_catalog lists them.") }
         let source = op.resolved?.source
         var fx = ClipEffect(name: effect, params: try checkedParams(effect, op.params ?? [:], source: source), source: source)

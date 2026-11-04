@@ -59,6 +59,12 @@ extension EditWork {
     /// A transform that moves on its own (a push, a follow) isn't framed over.
     func moving(_ c: Clip) -> Bool { c.effects?.first { $0.name == "transform" }?.keys.map { $0["scale"] != nil || $0["x"] != nil } ?? false }
     func scaleOf(_ c: Clip) -> Double { c.effects?.first { $0.name == "transform" }?.params["scale"]?.double ?? 1 }
+    /// The scale a move starts from: the one that fills the frame, so a 16:9 take in a 9:16 cut punches in from
+    /// filling it, not from a band; 1 for a take of the frame's shape, and for one kept whole on its `backdrop`.
+    func base(_ c: Clip) -> Double {
+        guard c.effects?.contains(where: { $0.name == "backdrop" }) != true, let v = project.assets.first(where: { $0.id == c.assetID })?.video.first else { return 1 }
+        return FrameFill.cover(source: (v.width, v.height), frame: (s.width, s.height))
+    }
 
     /// `punchIn`: on every jump cut over `range` (one take cut to itself), the framing changes to the next
     /// of `scales`, so no cut looks like a twitch; a cut to another take starts again from the first.
@@ -72,13 +78,14 @@ extension EditWork {
         func jump(_ a: Clip, _ b: Clip) -> Bool { a.assetID == b.assetID && abs(a.end.seconds - b.start.seconds) < frame / 2 }
         // Carry on from the shot before the range, so its framing isn't repeated across the first cut.
         let before = s.clips.filter { $0.kind == .video && $0.layer == 0 && $0.assetID != nil && abs($0.end.seconds - story[0].start.seconds) < frame / 2 }.first
-        var k = before.map { b in jump(b, story[0]) ? ((scales.firstIndex { abs($0 - scaleOf(b)) < 0.005 } ?? -1) + 1) % scales.count : 0 } ?? 0
+        var k = before.map { b in jump(b, story[0]) ? ((scales.firstIndex { abs($0 - scaleOf(b) / base(b)) < 0.005 } ?? -1) + 1) % scales.count : 0 } ?? 0
         var framed: [Clip] = [], skipped: [String] = []
         for (n, c) in story.enumerated() {
             if n > 0 { k = jump(story[n - 1], c) ? (k + 1) % scales.count : 0 }
             guard !moving(c) else { skipped.append(label(c)); continue }
             for i in fullFrame(c) where !moving(s.clips[i]) {
-                _ = setFraming(i, scale: scales[k], at: faceFraming(s.clips[i], scale: scales[k], keepIn: op.keepIn ?? "thirds", faces: op.resolved?.faces))
+                let scale = scales[k] * base(s.clips[i])
+                _ = setFraming(i, scale: scale, at: faceFraming(s.clips[i], scale: scale, keepIn: op.keepIn ?? "thirds", faces: op.resolved?.faces))
             }
             framed.append(c)
         }
@@ -107,7 +114,8 @@ extension EditWork {
         }
         let punched = s.clips[i]
         for j in fullFrame(punched) {
-            _ = setFraming(j, scale: scale, at: faceFraming(s.clips[j], scale: scale, keepIn: op.keepIn ?? "thirds", faces: op.resolved?.faces))
+            let at = scale * base(s.clips[j])
+            _ = setFraming(j, scale: at, at: faceFraming(s.clips[j], scale: at, keepIn: op.keepIn ?? "thirds", faces: op.resolved?.faces))
         }
         return Outcome(summary: "Punched in to \(String(format: "%g", scale))× on \(tc(r.start))–\(tc(r.end))", changes: [.init(before: (r.start.seconds, r.end.seconds), after: (r.start.seconds, r.end.seconds), tracks: [punched.trackName])], clipIDs: [punched.id])
     }
@@ -122,16 +130,16 @@ extension EditWork {
         guard longer >= 0, longer < 600 else { throw bad("longerThan is the shortest shot to push in on, in seconds.") }
         let r = snap(raw)
         var pushed: [Clip] = []
-        for c in storyClips(r) where c.duration.seconds >= longer - 1e-6 && !moving(c) && abs(scaleOf(c) - scales[0]) < 0.005 {
+        for c in storyClips(r) where c.duration.seconds >= longer - 1e-6 && !moving(c) && abs(scaleOf(c) / base(c) - scales[0]) < 0.005 {
             for i in fullFrame(c) where !moving(s.clips[i]) {
-                let t = s.clips[i]
-                let a = faceFraming(t, scale: scales[0], keepIn: op.keepIn ?? "thirds", faces: op.resolved?.faces)
-                let b = faceFraming(t, scale: scales[1], keepIn: op.keepIn ?? "thirds", faces: op.resolved?.faces)
+                let t = s.clips[i], from = scales[0] * base(t), to = scales[1] * base(t)
+                let a = faceFraming(t, scale: from, keepIn: op.keepIn ?? "thirds", faces: op.resolved?.faces)
+                let b = faceFraming(t, scale: to, keepIn: op.keepIn ?? "thirds", faces: op.resolved?.faces)
                 var fx = t.effects?.first { $0.name == "transform" } ?? ClipEffect(name: "transform")
                 let t0 = t.sourceRange.start.seconds, t1 = t.sourceRange.end.seconds
-                fx.params["scale"] = .number(scales[0]); fx.params["x"] = .number(a.x); fx.params["y"] = .number(a.y)
+                fx.params["scale"] = .number((from * 10_000).rounded() / 10_000); fx.params["x"] = .number(a.x); fx.params["y"] = .number(a.y)
                 var keys = fx.keys ?? [:]
-                keys["scale"] = [.init(t: t0, v: scales[0]), .init(t: t1, v: scales[1])]
+                keys["scale"] = [.init(t: t0, v: (from * 10_000).rounded() / 10_000), .init(t: t1, v: (to * 10_000).rounded() / 10_000)]
                 keys["x"] = [.init(t: t0, v: a.x), .init(t: t1, v: b.x)]
                 keys["y"] = [.init(t: t0, v: a.y), .init(t: t1, v: b.y)]
                 fx.keys = keys

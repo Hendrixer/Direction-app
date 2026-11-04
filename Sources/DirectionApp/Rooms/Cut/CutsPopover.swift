@@ -96,6 +96,8 @@ struct CutsPopover: View {
             case let s where e.kind == "look.updated": out.append(.init(id: "event-\(e.id)", kind: .event(s), time: e.createdAt))
             // A graphic's words, fixed by the director without a new cut (graphics.md › 64).
             case let s where e.kind == "graphic.words": out.append(.init(id: "event-\(e.id)", kind: .event(s), time: e.createdAt))
+            // A new shape, changed by the director with black bars (cut.md › Changing the shape).
+            case let s where e.kind == "edit.committed" && s.hasPrefix("Shape: "): out.append(.init(id: "event-\(e.id)", kind: .event(s), time: e.createdAt))
             default: break
             }
         }
@@ -185,7 +187,7 @@ struct CutsPopover: View {
 
     private func eventRow(_ text: String, time: Double) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: text.hasPrefix("Changed the look") ? "camera.filters" : text.contains("the words of") ? "character.cursor.ibeam" : text.contains("unlocked") ? "lock.open" : "lock.fill").font(.system(size: 10, weight: .medium)).foregroundStyle(Gate.Text.tertiary).frame(width: 18)
+            Image(systemName: text.hasPrefix("Changed the look") ? "camera.filters" : text.contains("the words of") ? "character.cursor.ibeam" : text.hasPrefix("Shape: ") ? "aspectratio" : text.contains("unlocked") ? "lock.open" : "lock.fill").font(.system(size: 10, weight: .medium)).foregroundStyle(Gate.Text.tertiary).frame(width: 18)
             Text(text).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary)
             Spacer(minLength: 6)
             Text(ChangesFormat.when(time)).font(.system(size: 11, design: .monospaced)).foregroundStyle(Gate.Text.disabled)

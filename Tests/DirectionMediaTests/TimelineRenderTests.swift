@@ -71,6 +71,22 @@ struct TimelineRenderTests {
         #expect(half.0 > full.0 * 0.3 && half.0 < full.0 * 0.9)
     }
 
+    @Test func aBackdropFillsTheBarsWithTheShotItself() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        // The 16:9 fixture in a 9:16 cut: a band across the middle, black above and below.
+        _ = try await edit(f, [#"{"op":"format","width":180,"height":320}"#])
+        let top = CGRect(x: 0, y: 0, width: 1, height: 0.15), middle = CGRect(x: 0.3, y: 0.45, width: 0.4, height: 0.1)
+        let bars = try await frame(f, 0.5, in: top), band = try await frame(f, 0.5, in: middle)
+        #expect(bars.0 < 4 && band.0 > 120, "\(bars) \(band)")
+        let id = try f.store.read().sequences[0].clips[0].id
+        _ = try await edit(f, [#"{"op":"addEffect","target":"\#(id)","effect":"backdrop","params":{"blur":0.5,"dim":0.3}}"#])
+        // Above the band it's the red shot now, darker than the shot itself; the shot in the middle is as it was.
+        let filled = try await frame(f, 0.5, in: top), still = try await frame(f, 0.5, in: middle)
+        #expect(filled.0 > 30 && filled.0 < band.0 - 20 && filled.0 > filled.2 * 2 && abs(still.0 - band.0) < 6, "\(filled) \(still)")
+        // Only on V1.
+        await expectToolError("bad_argument", f, [#"{"op":"addEffect","target":"A1","effect":"backdrop"}"#])
+    }
+
     @Test func blendModesMixAnOverlayIntoTheStory() async throws {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         let asset = try f.store.read().assets[0].id

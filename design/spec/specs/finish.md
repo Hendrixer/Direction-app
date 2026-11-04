@@ -100,7 +100,7 @@ Frame: `screens/36-finish.html` · Render: `renders/36-finish@2x.png`
 3. **Captions** (Editor + You, selected): "41 English captions. Check the spelling of names: Maya Okafor, Priya Shah." "Needs you" chip (neutral) · Check 2 names.
 4. **Titles and credits** (You): "Opening title off. End card: logo on black, 3 s. Credits not written yet." Write credits.
 5. **Music licenses** (You): "2 tracks. "Slow Rooms" is licensed. "North Light" needs a license before you publish." "1 missing" (red chip) · Add license…
-6. **Deliver** (Editor + You): "Master, web, vertical and captions. You can deliver now; open items are listed first." 4 outputs.
+6. **Deliver** (Editor + You): "Master, web and captions. You can deliver now; open items are listed first." 3 outputs. A film's shape is chosen in the brief and watched in the Cut room (cut.md › Changing the shape), never made at delivery.
 
 Also:
 - Pill: "Mixing sound", shimmer, with the meter at 62%.
@@ -141,24 +141,22 @@ Frame: `screens/37-export.html` · Render: `renders/37-export@2x.png`
   - A "Save to" row with a folder select.
   - An "Also" row with two checkboxes.
   - A red-bordered warning line.
-- Foot: total size and free space at left, then Cancel and "Deliver 4 files" (steel).
+- Foot: total size and free space at left, then Cancel and "Deliver 3 files" (steel).
 
 **Content:**
 - Title "Deliver Cut 4". Format line: "3:31 · 3840 × 2160 · 23.976 fps".
 - Outputs:
   - Master: "ProRes 422 HQ · 3840 × 2160 · stereo + stems", ~38 GB (on).
   - Web: "H.264 · 1920 × 1080 · −14 LUFS", ~180 MB (on).
-  - Vertical 9:16: "H.264 · 1080 × 1920 · reframed by the editor", ~120 MB (on), with the ion link "Review reframe (5 shots)".
   - Captions: "SRT and WebVTT · English · 41 lines", 8 KB (on).
   - Burned-in captions: "Adds a web copy with captions in the picture", ~180 MB (off).
 - Save to: "Movies › Launch film › Delivery".
 - Also: "Update the screening link to the final cut" (on), "Make a Finder alias on the Desktop" (off).
 - Warning: ""North Light" still needs a music license. You can deliver, but don't publish yet."
-- Foot: "4 files · about 38.3 GB · 312 GB free".
+- Foot: "3 files · about 38.2 GB · 312 GB free".
 
 **States and variants:**
 - The button label counts checked outputs ("Deliver 1 file"). It's disabled at 0 files, or when the size exceeds free space ("Not enough space on Macintosh HD").
-- "Review reframe" opens the vertical crops on the stage, one per shot, with the options component for each.
 - Output presets are editable in Settings › Cutting (not here).
 
 **Interactions:**
@@ -186,11 +184,10 @@ Frame: `screens/38-delivered.html` · Render: `renders/38-delivered@2x.png`
 - Stage: the last frame, playhead at the end.
 
 **Content:**
-- Title: "Launch film is delivered". Meta: "Cut 4 · 3:31 · 4 files · Oct 28 at 16:40".
+- Title: "Launch film is delivered". Meta: "Cut 4 · 3:31 · 3 files · Oct 28 at 16:40".
 - Files:
   - "Launch film – Master.mov" (ProRes 422 HQ · 37.6 GB)
   - "Launch film – Web.mp4" (H.264 1080p · 176 MB)
-  - "Launch film – Vertical.mp4" (H.264 1080×1920 · 118 MB)
   - "Launch film – Captions.srt" (SRT + VTT · 8 KB)
 - Link notice: "Screening link updated": "Priya and Tom now see the final cut. Notes are closed on it." with a Copy link button.
 - Open item: "Still open: a license for "North Light"."
@@ -206,7 +203,7 @@ Frame: `screens/38-delivered.html` · Render: `renders/38-delivered@2x.png`
 
 **Motion:** The success circle scales from 0.9 to 1 and fades in (Settle). No confetti, no sweep.
 
-**Accessibility:** Announced: "Launch film is delivered, 4 files." Focus goes to Show in Finder.
+**Accessibility:** Announced: "Launch film is delivered, 3 files." Focus goes to Show in Finder.
 
 **Acceptance:**
 - [ ] File names follow "<Film title> – <Output>.<ext>".
