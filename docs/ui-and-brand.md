@@ -1,10 +1,10 @@
 # Direction's visual system and review comments
 
-The app uses the approved icon export from Scott's Documents/Direction Icon folder. Resources/AppIcon.icns is the unmodified app icon; Sources/DirectionApp/Resources/DirectionBrand.png is the unmodified transparent 1024px export used by the interface.
+The app icon and brand mark are approved exports kept in the repository. Resources/AppIcon.icns is the unmodified app icon; Sources/DirectionApp/Resources/DirectionBrand.png is the unmodified transparent 1024px export used by the interface.
 
 ## Interface
 
-The current system follows [Gate 2.0](https://claude.ai/artifact/KBjd5vAbxK1p5fJFhFTG23), Scott's supplied design guide. Its extracted source and implementation mapping are in [design/gate](../design/gate/README.md). The previous monochrome app is preserved in commit `e81ec17`.
+The current system follows Gate 2.0, the supplied design guide. Its extracted source and implementation mapping are in [design/gate](../design/gate/README.md). The previous monochrome app is preserved in commit `e81ec17`.
 
 - The semantic Gate tokens define the exact OKLCH steel ramp, text hierarchy, spacing, radii, type, and motion. Compatibility Palette names bind to these roles.
 - Work surfaces are black and near-neutral steel. A cached 192px noise tile supplies the guide's 3.5% window grain and 18% steel grain. Video remains clean black with no grain or tint over the picture or export: every picture (players, thumbnails, stills, looks) is marked `clearOfGrain()` and cuts itself out of the window's grain, except where it’s tilted art or covered by a sheet.

@@ -8,6 +8,7 @@ export DIRECTION_LIBRARY_PATH="$direction_root/build/verification/test-library.s
 export DIRECTION_CACHE_DIR="$direction_root/build/verification/caches"
 export DIRECTION_LOG_DIR="$direction_root/build/verification/logs"
 export DIRECTION_STYLES_PATH="$direction_root/build/verification/styles"
+export DIRECTION_TECHNIQUES_PATH="$direction_root/build/verification/techniques"
 export DIRECTION_SOUNDS_PATH="$direction_root/build/verification/sounds"
 export DIRECTION_IMAGES_PATH="$direction_root/build/verification/images"
 swift test

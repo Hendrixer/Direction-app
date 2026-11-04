@@ -1,6 +1,6 @@
 # Gate in Direction
 
-Source: [Gate design language 2.0](https://claude.ai/artifact/KBjd5vAbxK1p5fJFhFTG23), reviewed in Yab on 28 October 2026. `reference.txt` and `reference.css` preserve the supplied guide. The app before this pass is saved in commit `e81ec17` and `before.png`.
+Source: the Gate design language 2.0 guide, reviewed on 28 October 2026. `reference.txt` and `reference.css` preserve the supplied guide. The app before this pass is saved in commit `e81ec17` and `before.png`.
 
 The implementation uses the live CSS values where the illustrative Swift snippet differs: the ten explicit OKLCH steel stops and the four individual prism stops. Gate has three layers: primitives, semantic roles, and reusable component materials. The existing Palette names adapt to those semantics so utility screens share the system.
 

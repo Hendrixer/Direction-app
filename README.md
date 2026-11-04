@@ -1,88 +1,107 @@
 # Direction
 
-A native Mac video editor for an external agent and a human director. Import footage, make edits through local tools, review the result, and leave feedback that the agent can inspect with the original picture, audio, transcript, and source context.
+Direction is a Mac app for directing a film while an editor cuts it. The editor is Claude Code or Codex running on your Mac with Direction's tools. You work the way you would with a human editor: write the brief, bring in footage, circle takes, then watch cuts and give notes. The editor logs the footage, cuts each version, answers your notes and finishes the film. You never touch a timeline.
 
-**Version 0.2** includes a working SwiftUI/AppKit app, shared native editing engine, CLI, JSON line API, and official MCP stdio server. There is no embedded chatbot or cloud service.
+Direction runs on your Mac. The editor works through your own Claude or ChatGPT plan, and OpenRouter is used only if you add a key. Films are folders ending in `.direction`, kept in `~/Movies/Direction` unless you choose another folder. Your original footage is linked, never changed.
 
-![Direction running the local verification project](docs/images/direction-v0.2.png)
+![The Cut room: a cut with the editor’s answers under each note](docs/images/direction-cut.png)
+
+## What you need
+
+- A Mac with Apple Silicon, running macOS 26 or later.
+- Xcode 26 or later. Direction is built and tested with Xcode 27.2 (Swift 6.4); older versions haven't been tried. If you've never opened Xcode, open it once so it finishes setting up.
+- One editor, not both:
+  - [Claude Code](https://claude.com/claude-code), signed in with your Claude account:
+    ```sh
+    curl -fsSL https://claude.ai/install.sh | bash
+    claude        # sign in once, then quit
+    ```
+  - Or [Codex](https://github.com/openai/codex), signed in with ChatGPT:
+    ```sh
+    npm install -g @openai/codex
+    codex login
+    ```
 
 ## Build and open
 
-Requires Apple Silicon, macOS 26 or later, and Xcode 26 or later with Swift 6.2+. Development and verification used Xcode 27.1 / Swift 6.4 on an M4 Max.
-
 ```sh
+git clone https://github.com/Hendrixer/Direction-app.git
+cd Direction-app
 ./scripts/build-app.sh release
 open build/Direction.app
 ```
 
-The script builds and ad-hoc signs a local app containing both executables. It is not a notarized distribution build. Open `Package.swift` in Xcode to work on the sources.
+The first build downloads three Swift packages (GRDB, the MCP Swift SDK and Swift Argument Parser) and takes a few minutes. The app is signed for your own Mac only and isn't notarized, so anyone else who wants it should build it themselves.
+
+To update, quit Direction, run `git pull`, then run `./scripts/build-app.sh release` again.
+
+## Making a film
+
+1. **File › New Film…** (or New Film from a Script / from a Story). Write the brief: what the film is, how it should feel, and its shape (16:9, 9:16, 1:1, 4:5, or as shot). **Film › Brief…** (⌘B) opens it again later.
+2. **Add footage.** The first time there's work, Direction asks **Who's editing?** Pick Claude Code or Codex. Direction starts it with your own sign-in whenever there's work, and you can pause or stop it at any time.
+3. **Dailies.** The editor logs every take. Circle the ones you want.
+4. **Cut.** The editor cuts an assembly. Watch it, write notes, then turn them over. The editor reads your notes back to you, cuts the next version and answers each note. Play changes shows only what changed.
+5. **Finish.** Lock picture, then deliver a master, a web copy and captions.
+
+**Script** and **Breakdown** are for when you start from a script or story. The editor writes an A/V script, and the breakdown lists what to shoot.
+
+Settings › Engines › Who edits chooses the program and, for each job, its version and effort.
+
+## Do I need API keys?
+
+No. Nothing in this repo holds a key, and the main work needs none:
+
+| What | What it needs | Where |
+|---|---|---|
+| The editor | Your Claude Code or Codex sign-in. No API key; the editor uses your plan. | Run `claude` or `codex login` once in Terminal |
+| Transcription | Nothing. Apple's on-device speech is used (macOS may download its language model the first time). | Settings › Engines › Transcription |
+| Cutting, color, sound, titles, graphics, export | Nothing. All of it runs on your Mac. | — |
+
+Optional extras:
+
+| Extra | What it needs | Where |
+|---|---|---|
+| Whisper transcription (tighter word timing) | `pip install mlx-whisper` and `brew install ffmpeg` | Settings › Engines › Transcription |
+| Describing shots on this Mac, so the editor can find "the wide of the window" | `uv tool install mlx-vlm`, then download a model from Settings | Settings › Engines › Looking at footage |
+| Making shots, stills and music, or describing shots online | An [OpenRouter key](https://openrouter.ai/keys). Paid per use; you set spending limits in Settings. | Settings › Engines › OpenRouter |
+| Learning a technique from a video link | `uv tool install yt-dlp` (or drop the video file in instead) | Film › Learn a Technique… |
+
+A key you paste in Settings is kept in your Mac's keychain. It's never written into a film or this repo, and the editor never sees it.
+
+## Running your own editor session (optional)
+
+You don't need this: Direction starts the editor itself. If you'd rather drive Claude Code or Codex yourself, choose "I'll run my own session instead" in Who's editing?, then install Direction's tools:
 
 ```sh
-CLI="$PWD/build/Direction.app/Contents/Helpers/direction"
-"$CLI" create "$HOME/Movies/My edit.direction" --name "My edit"
-"$CLI" import /absolute/path/footage.mov --project "$HOME/Movies/My edit.direction" --append
-open build/Direction.app --args --project "$HOME/Movies/My edit.direction"
+./scripts/install-local.sh                      # links ~/.local/bin/direction
+claude --plugin-dir "$PWD/plugins/direction"    # or see docs/plugins.md for Codex
 ```
 
-Use the project menu for **New Project**, **Open Project**, and recent projects; use **Add media** to import footage. The first import is appended automatically; later sources remain in the media library until added to the cut. Originals are linked and never modified.
+Direction then shows what your session does, but it can't start, pause or stop it.
 
-## What works
-
-- A director's app built on the Gate design language (`design/spec/`): six rooms in the order the work happens. **Dailies** (circle takes; the editor only suggests), **Script** (strike, hold, move or pick another reading of a line, each becoming a note), **Screening** (full-bleed, press N to mark without stopping), **Notes** (numbered notes, regions, the editor's questions, outside notes, turnover and read-back), **Changes** (answers per note, A/B options, play only what changed, history) and **Finish** (scene and picture lock, finishing checklist, delivery). No timeline; the director never edits.
-- The director–editor protocol: brief, numbered notes that stay private until turned over, read-backs the director approves, questions with concrete choices, cuts named Assembly, Cut 2, Cut 3…, and locks enforced on every edit.
-- Atomic programmatic insert, trim, split, move, remove, speed, layering, title, framing, canvas, color, and audio edits.
-- Metal/Core Image compositing shared by playback, frame sampling, and export. Native H.264, HEVC, and ProRes export.
-- Moment, range, whole-cut, and frame-region feedback pinned to an immutable edit revision. Agents can fetch inline PNG frames and WAV audio through MCP.
-- On-device transcription with Apple SpeechAnalyzer (fast) or Whisper through mlx-whisper (tighter word times), chosen in Settings › Footage. Agents can cut by transcript; the director directs from the Script room. Ambiguous repeated words require exact word selection.
-- Agent tools for independent mute/gain on every embedded source audio track, plus per-clip overrides. Native EQ, compression, limiter, and fades.
-- Landscape, portrait, and square sequences; supplied B-roll, still images, titles, and separate audio. Source-timed transcript cuts ripple across all layers.
-- The app observes external edits. A playing review stays on its current revision until you load the update; paused playback refreshes automatically.
-
-Turning notes over in the app does not wake an agent. The editor pill shows "Waiting for the editor" and offers a request to paste into Claude Code or Codex; the agent then follows the take-turnover skill (`direction_turnovers`, read-back, cut, `direction_turnover_complete`).
-
-## Connect an agent
-
-The shared [Direction plugin](plugins/direction) includes Codex and Claude Code manifests, MCP wiring, and three skills: start-project, edit-video, review-feedback. See [installation](docs/plugins.md).
+## Development
 
 ```sh
-./scripts/install-local.sh
+swift build           # or open Package.swift in Xcode
+./scripts/test.sh     # every test: Swift tests, then CLI, JSON API and MCP checks
 ```
 
-The server starts without a project. Use `direction_projects`, `direction_create_project`, or `direction_open_project`, then pass the returned `projectPath` on subsequent calls. The app and tools share a recent-project index. For manual MCP configuration:
+`scripts/test.sh` takes several minutes. It keeps its library, caches, logs, styles and techniques under `build/verification/`, so it doesn't touch `~/Movies/Direction`. The tests make their own video, so they need no footage and no keys.
 
-```json
-{
-  "mcpServers": {
-    "direction": {
-      "command": "/absolute/path/Direction.app/Contents/Helpers/direction",
-      "args": ["mcp"]
-    }
-  }
-}
-```
+| Folder | What's there |
+|---|---|
+| `Sources/DirectionCore` | Films, edits, notes, cuts and locks, stored in SQLite (GRDB) |
+| `Sources/DirectionMedia` | Playback, Metal/Core Image rendering, export, transcription |
+| `Sources/DirectionTools` | The tools the editor uses over MCP |
+| `Sources/DirectionApp` | The SwiftUI app |
+| `Sources/DirectionCLI` | The `direction` command: CLI, JSON line API and MCP server |
+| `plugins/direction` | The skills the editor follows, and the plugin for your own sessions |
+| `design/spec` | The product spec: every room and screen, and the Gate design system |
+| `docs` | [Architecture](docs/architecture.md), [the agent contract](docs/agent-contract.md), [editor runs](docs/editor-runs.md), [verification](docs/verification.md) |
 
-`direction tools` prints all schemas. `direction call TOOL --file arguments.json` exposes every MCP operation through the CLI. Pass `projectPath` in JSON or use a fixed `--project PATH`. `direction api` (optionally `--project PATH`) serves the same operations as newline-delimited JSON on stdin/stdout. The app does not need to be open for these tools to work.
+## Limits
 
-See [the agent contract](docs/agent-contract.md) for exact edit examples, job handling, transcript edits, and multimodal feedback.
-
-## Tests
-
-```sh
-./scripts/test.sh
-
-# Optional real on-device recognition test; first use may download Apple's model.
-python3 scripts/test-speech.py "$(swift build --show-bin-path)/direction" build/verification
-```
-
-Tests generate their own native video with two distinguishable audio streams. They inspect real rendered pixels, decoded audio, and exported media, and exercise CLI/API/MCP as external processes. No FFmpeg or user footage is required. Reports and reusable fixtures are written under `build/verification/`.
-
-## Current boundaries
-
-This is an initial local editor. SDR Rec.709 is the delivery target; HDR video (an iPhone's HLG, PQ) comes into a film as an SDR copy Direction makes in the film's Footage folder, and the original stays as it is; so does a file with open keyframes (FFmpeg's x265), copied without re-encoding so it plays from any frame. Music beds, sound effects, logos and stills the director keeps are in the Library window, outside any film and never footage (docs/library.md). Text edits delete existing speech; they do not generate new speech. Multi-camera footage can be aligned and layered through tools, but automatic camera synchronization and a multicam switcher are not included. Audio exports are mixed down. There is no generative footage, cloud review, automatic pause removal, subtitle export, transitions, advanced color scopes/LUT workflow, or proxy manager yet.
-
-Large-project/4K throughput and Intel compatibility have not been qualified. Keep linked sources available and unchanged. Jobs run in their starting app/API/MCP process and are marked interrupted if that process exits; they do not survive as background services. Speech recognition runs on-device after Apple's language model is installed.
-
-- [Architecture and persistence](docs/architecture.md)
-- [Product and UI behavior](docs/product-and-ux.md)
-- [Verification record](docs/verification.md)
-- [Relevant open-source dependencies](THIRD_PARTY_NOTICES.md)
+- Apple Silicon and macOS 26 or later only. Intel Macs haven't been tried.
+- Delivery is SDR Rec.709. HDR footage (an iPhone's HLG, for example) is copied to SDR inside the film; the original stays as it is.
+- Screening links aren't available yet. To share a cut, export a screening copy with File › Share Cut….
+- Open-source parts are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
