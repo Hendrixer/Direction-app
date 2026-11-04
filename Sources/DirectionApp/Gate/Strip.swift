@@ -13,7 +13,9 @@ struct StripScene: Identifiable, Equatable {
     var locked = false
     /// The editor changed this scene in the cut being watched: 2 pt prism top edge.
     var changed = false
-    var label: String { title.isEmpty ? "\(number)" : "\(number) \(title)" }
+    /// A stretch with no story under it (a title alone over black): a place on the strip, not a scene.
+    var passage = false
+    var label: String { passage ? "" : title.isEmpty ? "\(number)" : "\(number) \(title)" }
     var duration: Double { max(0, end - start) }
 }
 
@@ -60,9 +62,13 @@ struct SceneStrip<Menu: View>: View {
             let x = { (t: Double) -> CGFloat in xPosition(t, scenes: scenes, total: total, usable: usable) }
             ZStack(alignment: .topLeading) {
                 HStack(spacing: Gate.Component.Strip.gap) {
-                    ForEach(scenes) { scene in
-                        sceneTile(scene, isCurrent: scene.id == current?.id)
-                            .frame(width: max(2, usable * scene.duration / total), height: sceneHeight)
+                    // A scene the cut comes back to has a tile each time: tiles are places, identified by position.
+                    ForEach(Array(scenes.enumerated()), id: \.offset) { _, scene in
+                        let w = max(2, usable * scene.duration / total)
+                        // Kept to its own width: a short scene shows its picture, never spills into the next.
+                        sceneTile(scene, isCurrent: scene.id == current?.id, width: w)
+                            .frame(width: w, height: sceneHeight)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
                             .contextMenu { menu(scene) }
                     }
                 }
@@ -155,16 +161,17 @@ struct SceneStrip<Menu: View>: View {
         }
     }
 
-    private func sceneTile(_ scene: StripScene, isCurrent: Bool) -> some View {
+    private func sceneTile(_ scene: StripScene, isCurrent: Bool, width: CGFloat) -> some View {
         ZStack(alignment: .leading) {
             Gate.Surface.panel
             Thumbnail(path: scene.thumbnail, art: scene.art)
                 .opacity(scene.locked ? 0.3 : isCurrent ? 0.8 : 0.55).grayscale(scene.locked ? 1 : 0)
             if scene.locked { Hatching(opacity: 0.07) }
-            if showsNames {
+            // The name where it fits, then only the lock, then only the picture.
+            if showsNames && width >= 18 && (width >= 34 || scene.locked) {
                 HStack(spacing: 4) {
                     if scene.locked { Image(systemName: "lock.fill").font(.system(size: 8)) }
-                    Text(scene.label).lineLimit(1).truncationMode(.tail)
+                    if width >= 34 { Text(scene.label).lineLimit(1).truncationMode(.tail) }
                 }
                 .font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.primary).shadow(color: .black, radius: 1.5, y: 1)
                 .padding(.horizontal, 6)

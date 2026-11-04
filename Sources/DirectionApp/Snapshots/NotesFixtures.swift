@@ -18,7 +18,35 @@ enum NotesFixtures {
             "26-cutting-cant": { .film(cuttingCant()) },
             "27-cutting-conflict": { .film(cuttingConflict()) },
             "28-cutting-error": { .film(cuttingError()) },
+            "17z-notes-cut-on-v2": { .film(cutOnV2()) },
+            "17zz-screening-cut-on-v2": { let m = cutOnV2(); m.room = .screening; return .film(m) },
         ]
+    }
+
+    /// A delivered cut built on V2 the way an editor can leave it: V1 empty, a title alone on V3 for the
+    /// first 4.3 s, then the story cut short and back and forth between scenes, every scene locked.
+    static func cutOnV2() -> FilmModel {
+        let m = SampleFilm.make()
+        func rebuild(_ p: inout Project) {
+            for i in p.sequences.indices {
+                let story = p.sequences[i].clips.filter { $0.kind == .video && $0.layer == 0 && $0.assetID != nil }
+                guard !story.isEmpty else { continue }
+                var clips = p.sequences[i].clips.filter { $0.kind != .video }
+                var t = 4.3, n = 0
+                while t < 120 {
+                    let from = story[n % story.count], length = [1.4, 3.2, 2.1, 4.6, 0.9, 2.7][n % 6]
+                    clips.append(Clip(assetID: from.assetID, name: from.name, layer: 1, start: MediaTime(seconds: t), sourceRange: MediaRange(start: from.sourceRange.start.seconds, end: from.sourceRange.start.seconds + length)))
+                    t += length; n += 1
+                }
+                clips.append(Clip(assetID: "asset-title", name: "coded-love-title", layer: 2, start: .zero, sourceRange: MediaRange(start: 0, end: 4.3)))
+                p.sequences[i].clips = clips
+            }
+        }
+        if var p = m.project { rebuild(&p); m.project = p }
+        if var d = m.displayed { rebuild(&d); m.displayed = d }
+        for i in m.dailies.scenes.indices { m.dailies.scenes[i].locked = true }
+        m.position = 4.3
+        return m
     }
 
     private static func tc(_ m: Int, _ s: Int, _ f: Int = 0) -> Double { SampleFilm.tc(m, s, f) }

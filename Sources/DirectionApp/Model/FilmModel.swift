@@ -333,20 +333,29 @@ final class FilmModel {
         return store.map { p.footage(film: $0.url) } ?? p.assets
     }
 
-    /// Scenes as they sit in the watched cut, from the clips on the bottom video layer.
+    /// Scenes as they sit in the watched cut, from the clips on the story's layer, end to end from 0: a stretch
+    /// with no story under it (a title card alone on V3, black at the end) is a plain passage of its own, so
+    /// every moment of the cut has a place on the strip.
     var stripScenes: [StripScene] {
         guard let sequence else { return [] }
         let story = sequence.storyLayer
         let clips = sequence.clips.filter { $0.kind == .video && $0.layer == story }.sorted { $0.start < $1.start }
         var out: [StripScene] = []
         let changed = changedRanges(in: watchedCut)
+        // What plays in a stretch with no story: the top picture there, if any.
+        func passage(_ a: Double, _ b: Double) -> StripScene {
+            let over = sequence.clips.filter { $0.kind == .video && $0.start.seconds < b && $0.end.seconds > a }.max { $0.layer < $1.layer }
+            return StripScene(id: "passage-\(a)", number: 0, title: "", start: a, end: b, art: .room, thumbnail: asset(over?.assetID)?.thumbnailPath, passage: true)
+        }
         for (i, clip) in clips.enumerated() {
             let scene = dailies.scene(for: clip.assetID)
             let start = clip.start.seconds, end = clip.end.seconds
+            if start - (out.last?.end ?? 0) > 0.05 { out.append(passage(out.last?.end ?? 0, start)) }
             if let last = out.last, let scene, last.id == scene.id, abs(last.end - start) < 0.05 { out[out.count - 1].end = end; continue }
             let number = scene?.number ?? (i + 1)
             out.append(StripScene(id: scene?.id ?? clip.id, number: number, title: scene?.title ?? (dailies.scenes.isEmpty ? clip.name : ""), start: start, end: end, art: FootageArt.forScene(number), thumbnail: asset(clip.assetID)?.thumbnailPath, locked: scene?.locked ?? false))
         }
+        if let last = out.last, duration - last.end > 0.05 { out.append(passage(last.end, duration)) }
         for i in out.indices { out[i].changed = changed.contains { $0.overlaps(out[i].start...out[i].end) } }
         return out
     }

@@ -44,13 +44,13 @@ struct LockBar: View {
     private var state: ChangesState { model.changes }
 
     var body: some View {
-        let scenes = model.stripScenes
+        let (scenes, time) = Self.lockable(model.stripScenes)
         GeometryReader { g in
-            let total = max(0.001, scenes.map(\.duration).reduce(0, +))
+            let total = max(0.001, time.values.reduce(0, +))
             let usable = max(1, g.size.width - CGFloat(max(0, scenes.count - 1)) * 3)
             HStack(spacing: 3) {
                 ForEach(scenes) { s in
-                    tile(s).frame(width: max(24, usable * s.duration / total))
+                    tile(s).frame(width: max(24, usable * (time[s.id] ?? s.duration) / total))
                 }
             }
         }
@@ -66,6 +66,17 @@ struct LockBar: View {
     private var unlockTitle: String {
         let s = state.unlockSceneID.flatMap { id in model.dailies.scenes.first { $0.id == id } }
         return "Unlock \(s?.label ?? "this scene")?"
+    }
+
+    /// One tile per scene, however often the cut comes back to it (scenes are what lock), at its first place
+    /// and sized by all its time in the cut. A passage with no story under it isn't a scene.
+    static func lockable(_ strip: [StripScene]) -> (scenes: [StripScene], time: [String: Double]) {
+        var scenes: [StripScene] = [], time: [String: Double] = [:]
+        for s in strip where !s.passage {
+            if time[s.id] == nil { scenes.append(s) }
+            time[s.id, default: 0] += s.duration
+        }
+        return (scenes, time)
     }
 
     private func isLocked(_ s: StripScene) -> Bool { model.dailies.scenes.first { $0.id == s.id }?.locked ?? s.locked }
@@ -116,7 +127,7 @@ struct LockBar: View {
     private func select(_ s: StripScene) {
         let shift = NSEvent.modifierFlags.contains(.shift)
         if shift, let anchor = state.lockAnchorID, !model.isPictureLocked {
-            let scenes = model.stripScenes
+            let scenes = Self.lockable(model.stripScenes).scenes
             if let a = scenes.firstIndex(where: { $0.id == anchor }), let b = scenes.firstIndex(where: { $0.id == s.id }) {
                 for scene in scenes[min(a, b)...max(a, b)] where !isLocked(scene) { setLock(scene.id, true) }
             }

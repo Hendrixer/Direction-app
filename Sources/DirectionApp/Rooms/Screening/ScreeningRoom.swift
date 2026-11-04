@@ -534,7 +534,7 @@ struct EndCardStrip: View {
             let total = max(duration, scenes.map(\.end).max() ?? 0, 0.001), usable = max(1, g.size.width - gaps)
             ZStack(alignment: .topLeading) {
                 HStack(spacing: Gate.Component.Strip.gap) {
-                    ForEach(scenes) { scene in StripTile(scene: scene).frame(width: max(2, usable * scene.duration / total), height: 30) }
+                    ForEach(Array(scenes.enumerated()), id: \.offset) { _, scene in StripTile(scene: scene).frame(width: max(2, usable * scene.duration / total), height: 30) }
                 }
                 .padding(.top, 10)
                 ForEach(marks) { mark in

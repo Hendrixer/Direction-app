@@ -110,6 +110,30 @@ struct PrepModelTests {
         #expect(p.sequences[0].storyLayer == 0)
     }
 
+    /// A title alone on V3 before the story starts, and black at the end, still have their place on the strip:
+    /// it runs from 0 to the end, so every moment can be reached.
+    @Test func theStripCoversTheWholeCut() {
+        let m = FilmModel(preview: true)
+        var p = Project(name: "Coded love")
+        let take = MediaAsset(name: "Take 1.mov", path: "/tmp/direction-v2/Take 1.mov", duration: MediaTime(seconds: 30))
+        p.assets = [take]
+        p.sequences[0].clips = [
+            Clip(assetID: "asset-title", name: "coded-love-title", layer: 2, start: .zero, sourceRange: MediaRange(start: 0, end: 4.3)),
+            Clip(assetID: take.id, name: take.name, layer: 1, start: MediaTime(seconds: 4.3), sourceRange: MediaRange(start: 0, end: 6)),
+            Clip(assetID: take.id, name: take.name, layer: 1, start: MediaTime(seconds: 10.3), sourceRange: MediaRange(start: 12, end: 15)),
+            Clip(assetID: "asset-end", name: "end-card", layer: 2, start: MediaTime(seconds: 13.3), sourceRange: MediaRange(start: 0, end: 2)),
+        ]
+        m.project = p; m.displayed = p
+        let strip = m.stripScenes
+        #expect(strip.first?.start == 0 && strip.first?.passage == true && strip.first?.label == "")
+        #expect(abs((strip.last?.end ?? 0) - 15.3) < 0.001 && strip.last?.passage == true)
+        #expect(strip.filter { !$0.passage }.count == 2)
+        // Each place on the strip follows the last: nothing is left out, nothing overlaps.
+        #expect(zip(strip, strip.dropFirst()).allSatisfy { abs($0.end - $1.start) < 0.001 })
+        // Scene lookups never land on a passage as a scene: locking sees only scenes.
+        #expect(LockBar.lockable(strip).scenes.allSatisfy { !$0.passage })
+    }
+
     /// A film started from its footage has no prep rooms; a script brought in brings them back.
     @Test func roomsFollowTheFilm() {
         let m = FilmModel(preview: true)
