@@ -6,9 +6,10 @@ cd "$direction_root"
 swift build -c "$direction_configuration" --product DirectionApp
 swift build -c "$direction_configuration" --product direction
 direction_bin="$(swift build -c "$direction_configuration" --show-bin-path)"
-direction_app="$direction_root/build/Direction.app"
+# DIRECTION_APP_DIR: where the app goes (scripts/release.sh builds its own copy, so the one you run stays).
+direction_app="${DIRECTION_APP_DIR:-$direction_root/build/Direction.app}"
 rm -rf "$direction_app"
-mkdir -p "$direction_app/Contents/MacOS" "$direction_app/Contents/Helpers" "$direction_app/Contents/Resources"
+mkdir -p "$direction_app/Contents/MacOS" "$direction_app/Contents/Helpers" "$direction_app/Contents/Resources" "$direction_app/Contents/Frameworks"
 cp "$direction_bin/DirectionApp" "$direction_app/Contents/MacOS/Direction"
 cp "$direction_bin/direction" "$direction_app/Contents/Helpers/direction"
 if cmp -s "$direction_app/Contents/MacOS/Direction" "$direction_app/Contents/Helpers/direction"; then
@@ -32,6 +33,14 @@ for direction_dependency in "$direction_root"/.build/checkouts/*; do
 done
 for direction_bundle in "$direction_bin"/*.bundle; do
   if [ -d "$direction_bundle" ]; then cp -R "$direction_bundle" "$direction_app/Contents/Resources/"; fi
+done
+# Sparkle, for updates to the copies we sign (docs/releasing.md). ditto keeps the framework's symlinks.
+ditto "$direction_bin/Sparkle.framework" "$direction_app/Contents/Frameworks/Sparkle.framework"
+# SwiftPM leaves search paths into this checkout's build folder; the app finds Sparkle in Contents/Frameworks.
+for direction_executable in "$direction_app/Contents/MacOS/Direction" "$direction_app/Contents/Helpers/direction"; do
+  for direction_rpath in $(otool -l "$direction_executable" | awk '/LC_RPATH/ { getline; getline; print $2 }' | grep "^$direction_root/" || true); do
+    install_name_tool -delete_rpath "$direction_rpath" "$direction_executable" 2>/dev/null
+  done
 done
 codesign --force --sign - "$direction_app/Contents/Helpers/direction"
 codesign --force --deep --sign - "$direction_app"

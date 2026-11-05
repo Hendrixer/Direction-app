@@ -281,12 +281,15 @@ enum EditorJobs {
     static func skillsFolder() -> URL? {
         let fm = FileManager.default
         if let r = Bundle.main.resourceURL?.appendingPathComponent("Skills"), fm.fileExists(atPath: r.path) { return r }
+        // The checkout, for tests and `swift run`. Debug builds only, so a copy we hand out doesn't carry this Mac's paths.
+        #if DEBUG
         var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         for _ in 0..<6 {
             let s = dir.appendingPathComponent("plugins/direction/skills")
             if fm.fileExists(atPath: s.path) { return s }
             dir.deleteLastPathComponent()
         }
+        #endif
         return nil
     }
 

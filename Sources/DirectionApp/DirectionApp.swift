@@ -10,6 +10,8 @@ import DirectionCore
         NSApplication.shared.activate()
         NSWindow.allowsAutomaticWindowTabbing = false
         ReaperLaunch.start()
+        // A signed copy checks for updates (docs/releasing.md); one built from source doesn't.
+        _ = AppUpdates.shared
         // The log keeps 30 days: trimmed now and once a day while Direction stays open.
         DispatchQueue.global(qos: .utility).async { DirectionLog.prune() }
         logPruning = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) { _ in DispatchQueue.global(qos: .utility).async { DirectionLog.prune() } }

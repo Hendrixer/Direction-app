@@ -97,7 +97,7 @@ swift build           # or open Package.swift in Xcode
 | `Sources/DirectionCLI` | The `direction` command: CLI, JSON line API and MCP server |
 | `plugins/direction` | The skills the editor follows, and the plugin for your own sessions |
 | `design/spec` | The product spec: every room and screen, and the Gate design system |
-| `docs` | [Architecture](docs/architecture.md), [the agent contract](docs/agent-contract.md), [editor runs](docs/editor-runs.md), [verification](docs/verification.md) |
+| `docs` | [Architecture](docs/architecture.md), [the agent contract](docs/agent-contract.md), [editor runs](docs/editor-runs.md), [verification](docs/verification.md), [releasing](docs/releasing.md) |
 
 ## Limits
 
