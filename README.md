@@ -6,10 +6,15 @@ Direction runs on your Mac. The editor works through your own Claude or ChatGPT 
 
 ![The Cut room: a cut with the editor’s answers under each note](docs/images/direction-cut.png)
 
+## Download
+
+**[Download Direction for Mac](https://updates.givedirection.ai/Direction.dmg)** (Apple Silicon, macOS 26 or later). Open the DMG, drag Direction to Applications, and open it from there. It's signed and notarized by Apple, and it checks for updates once a day and asks before installing one.
+
+Then sign in one editor, as below. To build it yourself instead, see [Build and open](#build-and-open).
+
 ## What you need
 
 - A Mac with Apple Silicon, running macOS 26 or later.
-- Xcode 26 or later. Direction is built and tested with Xcode 27.2 (Swift 6.4); older versions haven't been tried. If you've never opened Xcode, open it once so it finishes setting up.
 - One editor, not both:
   - [Claude Code](https://claude.com/claude-code), signed in with your Claude account:
     ```sh
@@ -24,6 +29,8 @@ Direction runs on your Mac. The editor works through your own Claude or ChatGPT 
 
 ## Build and open
 
+To build from source you also need Xcode 26 or later. Direction is built and tested with Xcode 27.2 (Swift 6.4); older versions haven't been tried. If you've never opened Xcode, open it once so it finishes setting up.
+
 ```sh
 git clone https://github.com/Hendrixer/Direction-app.git
 cd Direction-app
@@ -31,9 +38,9 @@ cd Direction-app
 open build/Direction.app
 ```
 
-The first build downloads three Swift packages (GRDB, the MCP Swift SDK and Swift Argument Parser) and takes a few minutes. The app is signed for your own Mac only and isn't notarized, so anyone else who wants it should build it themselves.
+The first build downloads four Swift packages (GRDB, the MCP Swift SDK, Swift Argument Parser and Sparkle) and takes a few minutes. A copy you build is signed for your own Mac only and doesn't update itself: to update, quit Direction, run `git pull`, then run `./scripts/build-app.sh release` again. Use it instead of a downloaded copy, not beside one, since both share the same library and settings.
 
-To update, quit Direction, run `git pull`, then run `./scripts/build-app.sh release` again.
+Releases are made with `scripts/release.sh` (see [releasing](docs/releasing.md)).
 
 ## Making a film
 

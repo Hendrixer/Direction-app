@@ -32,8 +32,10 @@ put "$dmg" "Direction.dmg" "application/x-apple-diskimage"
 echo "Uploading the feed…"
 put "$feed" "appcast.xml" "application/xml"
 # Cloudflare caches what the bucket serves: the names that change with every release go from the cache now.
-cf cache purge --zone "$zone_id" --body "{\"files\":[\"$host/appcast.xml\",\"$host/Direction.dmg\"]}" >/dev/null
+cf cache purge --force --zone "$zone_id" --body "{\"files\":[\"$host/appcast.xml\",\"$host/Direction.dmg\"]}" >/dev/null
 
-curl -fsS -o /dev/null "$host/Direction-$version.dmg" || fail "$host/Direction-$version.dmg doesn't download yet."
-curl -fsS "$host/appcast.xml" | grep -q "Direction-$version.dmg" || fail "$host/appcast.xml doesn't offer $version yet (the cache may still hold the old feed)."
+# Through Cloudflare's DNS, so a Mac that cached the name before it existed still checks the real thing.
+fetch() { curl -fsS --doh-url https://cloudflare-dns.com/dns-query "$@"; }
+fetch -o /dev/null "$host/Direction-$version.dmg" || fail "$host/Direction-$version.dmg doesn't download yet."
+fetch "$host/appcast.xml" | grep -q "Direction-$version.dmg" || fail "$host/appcast.xml doesn't offer $version yet (the cache may still hold the old feed)."
 printf '\nPublished Direction %s:\n  %s/Direction.dmg\n  %s/appcast.xml\n' "$version" "$host" "$host"
