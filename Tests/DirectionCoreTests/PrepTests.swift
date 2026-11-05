@@ -247,7 +247,7 @@ struct PrepTests {
     private func brokenDown(_ store: ProjectStore) throws -> (AVScript, Breakdown) {
         let s = try store.importScript(essay, fileName: "The Chat Box.md")
         let r = s.rows.map(\.id)
-        let (b, refused) = try store.updateBreakdown(setups: [
+        let (b, refused, _) = try store.updateBreakdown(setups: [
             SetupInput(name: "Screen recordings", noCamera: true),
             SetupInput(name: "Desk at night", needs: "After dark, lamp off"),
             SetupInput(name: "Narration", needs: "The good mic"),
@@ -291,12 +291,45 @@ struct PrepTests {
         #expect(d.scenes[1].setups.map(\.code) == ["2A", "2B"] && d.scenes[1].number == 2)
         // After the OK a new shot takes the next letter and nothing else moves.
         let desk = b.setups.first { $0.name == "Desk at night" }!
-        let (later, _) = try store.updateBreakdown(shots: [ShotInput(setupID: desk.id, rowIDs: [s.rows[0].id], what: "Hands on the keys.", source: .shoot)])
+        let (later, _, _) = try store.updateBreakdown(shots: [ShotInput(setupID: desk.id, rowIDs: [s.rows[0].id], what: "Hands on the keys.", source: .shoot)])
         #expect(later.shots.map(\.code) == ["1A", "2A", "2B", "2C", "3A"])
         #expect(later.shot(code: "2C")?.addedAfterOK == true)
         #expect(try store.dailies().scenes[1].setups.map(\.code) == ["2A", "2B", "2C"])
-        let (_, refused) = try store.updateBreakdown(shots: [ShotInput(id: later.shot(code: "2A")!.id, setupID: later.setups[2].id)])
+        let (_, refused, _) = try store.updateBreakdown(shots: [ShotInput(id: later.shot(code: "2A")!.id, setupID: later.setups[2].id)])
         #expect(refused.count == 1)
+    }
+
+    /// The words name shots by number. When the shots are numbered again the numbers follow their shots, and a
+    /// number that names no shot, or one taken out, comes back for the editor to fix.
+    @Test func shotNumbersInTheWordsFollowTheirShots() throws {
+        let store = try seededStore()
+        let (s, b) = try brokenDown(store)
+        let wide = b.shot(code: "2A")!, close = b.shot(code: "2B")!
+        _ = try store.updateBreakdown(shots: [ShotInput(id: wide.id, how: "On a tripod in the same spot as 2B. Shoot 4K; it plays 2X slower.")])
+        // A shot on the row between them takes 2B, and the close moves to 2C, in the words too.
+        let (added, _, toFix) = try store.updateBreakdown(shots: [ShotInput(setup: "Desk at night", rowIDs: [s.rows[2].id], what: "Hands on the keys, as in 9Q.", source: .shoot)])
+        let hands = added.shots.first { $0.what.hasPrefix("Hands") }!
+        #expect(hands.code == "2B" && added.shot(close.id)?.code == "2C")
+        #expect(added.shot(wide.id)?.how == "On a tripod in the same spot as 2C. Shoot 4K; it plays 2X slower.")
+        #expect(toFix == ["2B names 9Q, but no shot has that number."])
+        // Taking the hands out gives the close 2B again; words that named the hands come back.
+        _ = try store.updateBreakdown(shots: [ShotInput(id: hands.id, what: "Hands on the keys."), ShotInput(id: wide.id, why: "Cut with 2B.")])
+        let (gone, _, fix) = try store.updateBreakdown(remove: [hands.id])
+        #expect(gone.shot(close.id)?.code == "2B")
+        #expect(gone.shot(wide.id)?.how == "On a tripod in the same spot as 2B. Shoot 4K; it plays 2X slower.")
+        #expect(fix == ["2A names 2B: that shot was taken out, and 2B is another shot now."])
+    }
+
+    /// How to shoot it is the editor's until the director changes it; then it's theirs.
+    @Test func howToShootItStaysTheDirectorsOnceTheyChangeIt() throws {
+        let store = try seededStore()
+        let (_, b) = try brokenDown(store)
+        let wide = b.shot(code: "2A")!
+        var after = try store.updateBreakdown(shots: [ShotInput(id: wide.id, how: "On a tripod behind the chair. Record 10 seconds.", why: "It opens the film.")]).0
+        #expect(after.shot(wide.id)?.how == "On a tripod behind the chair. Record 10 seconds." && after.shot(wide.id)?.why == "It opens the film.")
+        _ = try store.editShot(wide.id, how: "Handheld, from the door.")
+        after = try store.updateBreakdown(shots: [ShotInput(id: wide.id, how: "On a tripod again.")]).0
+        #expect(after.shot(wide.id)?.how == "Handheld, from the door." && after.shot(wide.id)?.yours?.contains("how") == true)
     }
 
     @Test func aSpokenSlateOrAFileNameFilesTheTake() throws {

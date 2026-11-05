@@ -41,6 +41,8 @@ public struct ShotInput: Codable, Sendable {
     public var setup: String?
     public var rowIDs: [String]?
     public var what: String?
+    public var how: String?
+    public var why: String?
     public var size: ShotSize?
     public var move: ShotMove?
     public var seconds: Double?
@@ -287,11 +289,13 @@ extension ProjectStore {
     public func beginBreakdownPass() throws -> Breakdown { try changeBreakdown("The editor started on the breakdown") { $0.pass += 1 } }
 
     /// The editor lays out setups and shots. Before the director's OK, shot numbers follow the setups and
-    /// the script; after it they're slates and never change, and new shots take the next letter.
-    public func updateBreakdown(setups: [SetupInput] = [], shots: [ShotInput] = [], remove: [String] = [], replies: [String: String] = [:], questions: [String: PrepQuestion] = [:]) throws -> (Breakdown, refused: [String]) {
+    /// the script; after it they're slates and never change, and new shots take the next letter. toFix: the shot
+    /// numbers in the words that name no shot now, for the editor to put right.
+    public func updateBreakdown(setups: [SetupInput] = [], shots: [ShotInput] = [], remove: [String] = [], replies: [String: String] = [:], questions: [String: PrepQuestion] = [:]) throws -> (Breakdown, refused: [String], toFix: [String]) {
         let script = try self.script() ?? AVScript()
-        var refused: [String] = []
+        var refused: [String] = [], toFix: [String] = []
         let b = try changeBreakdown("The editor broke down the script") { b in
+            let numbered = Dictionary(b.shots.map { ($0.id, $0.code) }, uniquingKeysWith: { a, _ in a })
             let noted = Set(b.notes.filter { $0.state == .turnedOver }.flatMap { $0.shotIDs ?? [] })
             if b.pass == 0 { b.pass = 1 }
             for input in setups {
@@ -310,6 +314,8 @@ extension ProjectStore {
                     var shot = b.shots[i]
                     let mayChange = { (field: String) in !shot.isYours(field) || noted.contains(id) }
                     if let v = input.what, mayChange("what") { shot.what = v }
+                    if let v = input.how, mayChange("how") { shot.how = v.nilIfEmpty }
+                    if let v = input.why { shot.why = v.nilIfEmpty }
                     if let v = input.size, mayChange("size") { shot.size = v }
                     if let v = input.move, mayChange("move") { shot.move = v }
                     if let v = input.seconds { shot.seconds = v }
@@ -329,6 +335,7 @@ extension ProjectStore {
                     let rows = (input.rowIDs ?? []).filter { r in script.rows.contains { $0.id == r } }
                     let seconds = input.seconds ?? rows.compactMap { r in script.row(r)?.seconds }.reduce(0, +)
                     var shot = BreakdownShot(id: input.id ?? newID("shot"), setupID: sid, rowIDs: rows, what: input.what ?? "", size: input.size, move: input.move, seconds: max(seconds, 1), source: input.source ?? .shoot, board: input.board)
+                    shot.how = input.how?.nilIfEmpty; shot.why = input.why?.nilIfEmpty
                     shot.makePlan = input.makePlan?.nilIfEmpty; shot.estimate = input.estimate; shot.pass = b.pass
                     if b.isOK { shot.addedAfterOK = true }
                     b.shots.append(shot)
@@ -350,10 +357,48 @@ extension ProjectStore {
                 b.shots[i].question = q
             }
             Self.number(&b, script: script)
+            toFix = Self.keepNumbers(&b, numbered: numbered)
             b.scriptRevision = script.revision
         }
-        return (b, refused)
+        return (b, refused, toFix)
     }
+
+    /// The words name shots by number ("the same frame as 2B"). When the shots are numbered again, those numbers
+    /// follow their shots, so what the editor wrote stays true. A number that names no shot now, or one taken out,
+    /// comes back to be fixed. numbered: each shot's number before this change.
+    static func keepNumbers(_ b: inout Breakdown, numbered: [String: String]) -> [String] {
+        var renumbered: [String: String] = [:], takenOut: Set<String> = []
+        for (id, was) in numbered where !was.isEmpty {
+            if let now = b.shot(id)?.code { if now != was { renumbered[was] = now } } else { takenOut.insert(was) }
+        }
+        let codes = Set(b.shots.map(\.code))
+        var toFix: [String] = []
+        func follow(_ text: String, _ place: String) -> String {
+            let words = NSMutableString(string: text)
+            for m in shotNumber.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length)).reversed() {
+                let n = (text as NSString).substring(with: m.range)
+                if let now = renumbered[n] { words.replaceCharacters(in: m.range, with: now) }
+                else if takenOut.contains(n) { toFix.append(codes.contains(n) ? "\(place) names \(n): that shot was taken out, and \(n) is another shot now." : "\(place) names \(n): that shot was taken out.") }
+                else if !codes.contains(n), !notAShot(n) { toFix.append("\(place) names \(n), but no shot has that number.") }
+            }
+            return words as String
+        }
+        for i in b.setups.indices { if let n = b.setups[i].needs { b.setups[i].needs = follow(n, "Setup \(b.setups[i].number)") } }
+        for i in b.shots.indices {
+            let code = b.shots[i].code
+            b.shots[i].what = follow(b.shots[i].what, code)
+            if let v = b.shots[i].how { b.shots[i].how = follow(v, code) }
+            if let v = b.shots[i].why { b.shots[i].why = follow(v, code) }
+            if let v = b.shots[i].makePlan { b.shots[i].makePlan = follow(v, "\(code)\u{2019}s plan") }
+        }
+        var seen: Set<String> = []
+        return toFix.reversed().filter { seen.insert($0).inserted }.reversed()
+    }
+
+    /// A shot number in words: 2C, 12A, 3Z1. Not part of 1.8X or 0:03A.
+    private static let shotNumber = try! NSRegularExpression(pattern: #"(?<![\w.:$])\d{1,3}(?:Z\d+|[A-Z])(?!\w)"#)
+    /// Words that look like shot numbers and aren't: 4K, 2X, 60P, 2D and 3D.
+    private static func notAShot(_ n: String) -> Bool { ["K", "X", "P"].contains(n.suffix(1)) || n == "2D" || n == "3D" }
 
     /// Setups numbered in the order they're first needed (no-camera ones after), shots lettered by their first
     /// row. Once OK'd, numbers already given stay, so slates never change.
@@ -386,11 +431,12 @@ extension ProjectStore {
     // MARK: The breakdown, by the director
 
     @discardableResult
-    public func editShot(_ id: String, what: String? = nil, size: ShotSize?? = nil, move: ShotMove?? = nil, source: ShotSource? = nil) throws -> Breakdown {
+    public func editShot(_ id: String, what: String? = nil, how: String? = nil, size: ShotSize?? = nil, move: ShotMove?? = nil, source: ShotSource? = nil) throws -> Breakdown {
         try changeBreakdown("Changed a shot") { b in
             guard let i = b.shots.firstIndex(where: { $0.id == id }) else { throw DirectionError("shot_not_found", "There\u{2019}s no shot \(id).") }
             var yours = Set(b.shots[i].yours ?? [])
             if let what { b.shots[i].what = what; yours.insert("what") }
+            if let how { b.shots[i].how = how.nilIfEmpty; yours.insert("how") }
             if let size { b.shots[i].size = size; yours.insert("size") }
             if let move { b.shots[i].move = move; yours.insert("move") }
             if let source { b.shots[i].source = source; yours.insert("source"); if source != .have { b.shots[i].haveAssetID = nil; b.shots[i].haveRange = nil } }
