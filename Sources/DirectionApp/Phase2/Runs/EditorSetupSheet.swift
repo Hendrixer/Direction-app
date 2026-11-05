@@ -2,9 +2,10 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Frame 56: Who's editing? Shown the first time a film needs the editor and none is set up, and
-/// from Settings › Engines › Set up again…. Cancel leaves the film where it was: the pill says
-/// "Editor not set up" and nothing is lost.
+/// Frame 56: Who's editing? Opens on every new film, with the editor chosen last; the film keeps the choice
+/// (DirectingState.editor) and nothing of its starts until it's made. Also shown the first time an older film
+/// needs the editor and none is chosen, and from the pill's Set up…. Cancel leaves the film on the editor in
+/// Settings › Engines, or with "Editor not set up" when there's none, and nothing is lost.
 struct EditorSetupSheet: View {
     @Bindable var model: FilmModel
     @State private var choice: EditorProgram = .claudeCode
@@ -30,7 +31,7 @@ struct EditorSetupSheet: View {
     @ViewBuilder private var chooser: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Who\u{2019}s editing?").font(Gate.Font.brand(size: 22, width: 120)).foregroundStyle(Gate.Text.primary).accessibilityAddTraits(.isHeader)
-            Text("Direction starts the editor on this Mac whenever there\u{2019}s work, and you can pause or stop it anytime. It uses your own sign-in.")
+            Text("Direction starts the editor on this Mac whenever this film has work, and you can pause or stop it anytime. It uses your own sign-in.")
                 .font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).cssLineHeight(1.5, size: 13).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 490, alignment: .leading)
         }
@@ -129,7 +130,7 @@ struct EditorSetupSheet: View {
         SheetFooter {
             Button { ownSession = false } label: { HStack(spacing: 4) { Image(systemName: "chevron.left").font(.system(size: 8, weight: .semibold)); Text("Who\u{2019}s editing?") }.font(.system(size: 12)).foregroundStyle(Gate.Text.secondary) }.buttonStyle(.plain)
         } trailing: {
-            Button { EditorSetup.choose(.yourOwn); close() } label: { HStack(spacing: 6) { Text("Done"); KeyHint("\u{2318}\u{21A9}") } }
+            Button { model.chooseEditor(.yourOwn); close() } label: { HStack(spacing: 6) { Text("Done"); KeyHint("\u{2318}\u{21A9}") } }
                 .buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
         }
     }
@@ -138,7 +139,7 @@ struct EditorSetupSheet: View {
 
     private func load() {
         programs.refreshIfNeeded()
-        if let p = EditorSetup.runsOn.program, programs.install(p) != nil { choice = p }
+        if let p = model.runs.runsOn.program, programs.install(p) != nil { choice = p }
         else { choice = EditorProgram.allCases.first { programs.install($0) != nil } ?? .claudeCode }
         asksFirst = EditorSetup.asksFirst
         if programs.install(choice) != nil { programs.checkSignIn(choice) }
@@ -146,10 +147,10 @@ struct EditorSetupSheet: View {
 
     private func confirm() {
         guard foundAny, programs.install(choice) != nil else { programs.refresh(); return }
-        EditorSetup.choose(EditorRunsOn(rawValue: choice.rawValue) ?? .claudeCode)
+        model.chooseEditor(EditorRunsOn(rawValue: choice.rawValue) ?? .claudeCode)
         EditorSetup.setAsksFirst(asksFirst)
         programs.checkSignIn(choice)
-        // Right away: logging starts now (findWork runs on refresh).
+        // Right away: the film's work starts now (findWork runs on refresh, once the sheet is closed).
         close()
     }
 

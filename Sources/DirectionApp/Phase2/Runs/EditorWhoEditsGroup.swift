@@ -1,8 +1,9 @@
 import SwiftUI
 import DirectionCore
 
-/// Settings › Engines › Who edits (frame 43, specs/editor.md › 43). Choosing a program that isn't
-/// installed keeps the choice and shows how to install it; work waits with "Editor not set up".
+/// Settings › Engines › Who edits (frame 43, specs/editor.md › 43): the open film's editor, and the one a new
+/// film starts with. Choosing a program that isn't installed keeps the choice and shows how to install it;
+/// work waits with "Editor not set up".
 struct EditorWhoEditsGroup: View {
     var app: AppModel?
     var preview = false
@@ -10,7 +11,7 @@ struct EditorWhoEditsGroup: View {
 
     var body: some View {
         let _ = programs.changes
-        let runsOn = EditorSetup.runsOn, own = runsOn == .yourOwn, program = runsOn.program ?? .claudeCode
+        let runsOn = app?.film?.runs.runsOn ?? EditorSetup.runsOn, own = runsOn == .yourOwn, program = runsOn.program ?? .claudeCode
         SettingsGroup(label: "Who edits") {
             runsOnRow(runsOn)
             EditorPicksRow(program: program)
@@ -69,7 +70,7 @@ struct EditorWhoEditsGroup: View {
     }
 
     private func choose(_ c: EditorRunsOn) {
-        EditorSetup.choose(c)
+        if let film = app?.film { film.chooseEditor(c) } else { EditorSetup.choose(c) }
         if let p = c.program { programs.checkSignIn(p) }
         app?.film?.refresh(force: true)
     }

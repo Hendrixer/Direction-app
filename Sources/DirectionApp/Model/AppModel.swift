@@ -106,14 +106,14 @@ final class AppModel {
         if panel.runModal() == .OK, let url = panel.url { open(url) }
     }
 
-    /// New film: a .direction package in the library folder, named later in the brief.
+    /// New film: a .direction package in the library folder, named later in the brief. It opens on Who's editing?
     func newFilm(named name: String = "Untitled film") {
         guard mayCloseFilm(opening: "a new film") else { return }
         let folder = URL(fileURLWithPath: UserDefaults.standard.string(forKey: "libraryFolder") ?? (NSHomeDirectory() + "/Movies/Direction"))
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var target = folder.appendingPathComponent(name + ".direction"), n = 2
         while FileManager.default.fileExists(atPath: target.path) { target = folder.appendingPathComponent("\(name) \(n).direction"); n += 1 }
-        do { _ = try ProjectStore.create(at: target, name: target.deletingPathExtension().lastPathComponent); show(target) } catch { self.error = error.localizedDescription }
+        do { _ = try ProjectStore.create(at: target, name: target.deletingPathExtension().lastPathComponent); show(target); film?.askWhoEdits() } catch { self.error = error.localizedDescription }
     }
 
     /// Dock badge: what's waiting for the director.

@@ -420,11 +420,11 @@ final class FilmModel {
 
     // MARK: Derived: editor and rooms
 
-    /// The program the editor runs on: the running one's, the one chosen in Settings, or your own session's
-    /// when it says which it is.
+    /// The program the editor runs on: the running one's, the one chosen for this film (or in Settings), or your
+    /// own session's when it says which it is.
     var editorProgram: EditorProgram? {
         if let p = runs.active.flatMap({ EditorProgram(rawValue: $0.program) }) { return p }
-        if let p = EditorSetup.runsOn.program { return p }
+        if let p = runs.runsOn.program { return p }
         let agent = editorStatus?.agent?.lowercased() ?? ""
         return agent.contains("claude") ? .claudeCode : agent.contains("codex") ? .codex : nil
     }
@@ -991,6 +991,15 @@ final class FilmModel {
     }
     /// Paused: by you, or a run Direction started.
     var editorIsPaused: Bool { directing.editorPaused || runs.isPaused }
+    /// Who's editing? for this film: it keeps the choice, and the next new film starts from it.
+    func chooseEditor(_ c: EditorRunsOn) {
+        EditorSetup.choose(c)
+        guard store != nil else { runs.choice = c; return }
+        if directing.editor != c.rawValue { perform { _ = try $0.updateDirectingState(summary: "Who edits: \(c.label)") { $0.editor = c.rawValue } } }
+        runs.choice = c
+    }
+    /// A film just started asks who's editing it, before any of its work starts.
+    func askWhoEdits() { if sheet == nil { sheet = .editorSetup } }
     /// Try again: a new run of the same job when Direction starts the editor, else the request to copy.
     func retryEditor() { if runs.startsEditor && runs.failed != nil { runs.retry(self) } else { copyEditorRequest() } }
     /// Words a director can paste to their agent; in-app turnovers don't wake it.

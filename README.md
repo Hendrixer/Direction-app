@@ -38,14 +38,14 @@ To update, quit Direction, run `git pull`, then run `./scripts/build-app.sh rele
 ## Making a film
 
 1. **File › New Film…** (or New Film from a Script / from a Story). Write the brief: what the film is, how it should feel, and its shape (16:9, 9:16, 1:1, 4:5, or as shot). **Film › Brief…** (⌘B) opens it again later.
-2. **Add footage.** The first time there's work, Direction asks **Who's editing?** Pick Claude Code or Codex. Direction starts it with your own sign-in whenever there's work, and you can pause or stop it at any time.
+2. **Who's editing?** Each new film asks which program edits it: Claude Code or Codex (your last choice is already picked). Direction starts it with your own sign-in whenever the film has work, and you can pause or stop it at any time. Then add footage.
 3. **Dailies.** The editor logs every take. Circle the ones you want.
 4. **Cut.** The editor cuts an assembly. Watch it, write notes, then turn them over. The editor reads your notes back to you, cuts the next version and answers each note. Play changes shows only what changed.
 5. **Finish.** Lock picture, then deliver a master, a web copy and captions.
 
 **Script** and **Breakdown** are for when you start from a script or story. The editor writes an A/V script, and the breakdown lists what to shoot.
 
-Settings › Engines › Who edits chooses the program and, for each job, its version and effort.
+Settings › Engines › Who edits changes the open film's editor and the one new films start with, and, for each job, its version and effort.
 
 ## Do I need API keys?
 

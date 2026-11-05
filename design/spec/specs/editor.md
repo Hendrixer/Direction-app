@@ -162,10 +162,10 @@ Each kind of work runs on its own version and effort (decided 2026-11-03): writi
 ## 56 · Who's editing? (setup sheet)
 Frame: `screens/56-editor-setup.html` · film window, sheet 560 wide.
 
-Shown the first time a film needs the editor (after Bring footage, before logging) when no editor has been set up, and from Settings › Engines › Set up again… Over the Footage step (frame 04's state behind the scrim).
+Opens on every new film (New Film…, from a script or a story, a dropped folder), over its first step, with the editor chosen last already picked; nothing of the film's starts until it's answered (2026-11-04). The film keeps the choice (`DirectingState.editor`), so films can be edited by different programs, and the next new film starts from it. Settings › Engines › Who edits changes the open film's editor and the one new films start with. A film started before films kept their own follows Settings. It also shows itself the first time an older film needs the editor (takes to log, or a script whose picture isn't written) when none has been chosen, and from the pill's Set up…. Frame 56 draws it over the Footage step (frame 04's state behind the scrim).
 
 - Title (Archivo 22): "Who's editing?"
-- Body (13 text-2): "Direction starts the editor on this Mac whenever there's work, and you can pause or stop it anytime. It uses your own sign-in."
+- Body (13 text-2): "Direction starts the editor on this Mac whenever this film has work, and you can pause or stop it anytime. It uses your own sign-in."
 - Two program cards side by side (`--raised`, radius 10, padding 14, the same selection ring as the Freedom cards):
   - **Claude Code**: "Found · 2.4.1 · signed in" with a green dot (`--approve`). Selected.
   - **Codex**: "Not installed" text-3, and under it SF Mono 11.5 `npm install -g @openai/codex` with a copy icon.
@@ -177,7 +177,7 @@ Shown the first time a film needs the editor (after Bring footage, before loggin
 States: neither program found shows both cards as "Not installed" with their install commands, and the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Open Terminal**.
 
 **Acceptance:**
-- [ ] Cancel leaves the film on the Footage step with the pill "Editor not set up". Nothing is lost; footage stays.
+- [ ] Cancel leaves the film on the Footage step: on the editor in Settings, or with the pill "Editor not set up" when none was ever chosen. Nothing is lost; footage stays.
 - [ ] Choosing starts logging immediately when Start work is Right away.
 
 ---

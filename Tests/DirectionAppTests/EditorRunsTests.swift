@@ -490,6 +490,68 @@ struct EditorRunnerTests {
         EditorRunner.shared.programOverride = [.claudeCode: Self.fake]
     }
 
+    /// Who's editing? belongs to the film: its choice wins over Settings, a run waiting to start takes it,
+    /// and choosing again keeps it in the film and makes it the one the next new film starts with.
+    @Test func aFilmKeepsItsOwnEditor() throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1"), .codex: EditorInstall(program: .codex, path: Self.fake, version: "0.9.0")],
+                                         values: [EditorSetupKey.runsOn: "claudeCode", EditorSetupKey.startWork: "askFirst", EditorSetupKey.signedIn(.claudeCode): true, EditorSetupKey.signedIn(.codex): true])
+        defer { EditorPrograms.shared.setPreview([:]) }
+        _ = try store.updateDirectingState(summary: "Who edits: Codex") { $0.editor = "codex" }
+        var b = Brief(); b.logline = "One sentence."; b.feeling = "Quiet."; try store.saveBrief(b)
+        let m = FilmModel()
+        m.runtime = try ToolRuntime(store: store)
+        defer { m.close() }
+        let t = try store.turnOver(noteIDs: [], kind: "assembly", latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
+        m.refresh(force: true)
+        #expect(m.runs.runsOn == .codex && m.editorProgram == .codex)
+        #expect(m.runs.held?.turnoverID == t.id && m.runs.held?.program == "codex")
+        #expect(EditorSetup.runsOn == .claudeCode)
+        m.chooseEditor(.claudeCode)
+        #expect(try store.directingState().editor == "claudeCode" && m.runs.runsOn == .claudeCode)
+        m.chooseEditor(.codex)
+        #expect(try store.directingState().editor == "codex" && EditorSetup.runsOn == .codex)
+        // A film from before films kept their own follows Settings.
+        _ = try store.updateDirectingState(summary: "Older film") { $0.editor = nil }
+        EditorSetup.choose(.claudeCode)
+        m.refresh(force: true)
+        #expect(m.runs.choice == nil && m.runs.runsOn == .claudeCode)
+    }
+
+    /// A new film opens on Who's editing?, and none of its work starts until it's answered.
+    @Test func aNewFilmsWorkWaitsForWhoEdits() throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1")],
+                                         values: [EditorSetupKey.runsOn: "claudeCode", EditorSetupKey.startWork: "askFirst", EditorSetupKey.signedIn(.claudeCode): true])
+        defer { EditorPrograms.shared.setPreview([:]) }
+        var b = Brief(); b.logline = "One sentence."; b.feeling = "Quiet."; try store.saveBrief(b)
+        let m = FilmModel()
+        m.runtime = try ToolRuntime(store: store)
+        defer { m.close() }
+        m.askWhoEdits()
+        #expect(m.sheet == .editorSetup)
+        _ = try store.turnOver(noteIDs: [], kind: "assembly", latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
+        m.refresh(force: true)
+        #expect(m.runs.runs.isEmpty)
+        m.chooseEditor(.claudeCode); m.sheet = nil; m.refresh(force: true)
+        #expect(m.runs.held?.program == "claudeCode")
+        #expect(try store.directingState().editor == "claudeCode")
+    }
+
+    /// With no editor chosen anywhere, a film started from a script asks as soon as its picture needs writing,
+    /// not only once footage is logging.
+    @Test func aScriptWithNoEditorChosenAsksWhoEdits() throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1")])
+        defer { EditorPrograms.shared.setPreview([:]) }
+        _ = try store.importScript(PrepFixtures.essay, fileName: "The Chat Box.md")
+        let m = FilmModel()
+        m.runtime = try ToolRuntime(store: store)
+        defer { m.close() }
+        m.refresh(force: true)
+        #expect(m.sheet == .editorSetup && m.runs.runs.isEmpty)
+    }
+
     /// A notes turnover that waits for the OK, in a film whose window finds the work (Direction starts the editor).
     private func readBackFilm(_ store: ProjectStore) throws -> (FilmModel, Turnover, ReviewComment) {
         EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1")],

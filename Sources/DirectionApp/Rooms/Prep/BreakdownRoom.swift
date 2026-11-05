@@ -30,6 +30,9 @@ private struct BreakdownPage: View {
     @State private var selected: String?
     @State private var order: BreakdownOrder = .setup
     @State private var jump: String?
+    /// The scroll area's width: a wide window reads bigger (PrepMeasure).
+    @State private var available: CGFloat = 0
+    private var measure: PrepMeasure { PrepMeasure(available: available) }
 
     /// Worked out once a draw: every row and shot reads them.
     private let coverage: [String: ShotCoverage]
@@ -52,8 +55,9 @@ private struct BreakdownPage: View {
         HStack(spacing: 0) {
             nav.frame(width: 240)
             ScrollViewReader { proxy in
-                // Centered and kept to a width you can read across; the rows get their air from the space.
-                ScrollView { main.frame(maxWidth: 1120).padding(.horizontal, 32).padding(.vertical, 22).frame(maxWidth: .infinity) }
+                // Centered and kept to a width you can read across; a wide page reads a step bigger (PrepMeasure).
+                ScrollView { main.frame(maxWidth: PrepMeasure.cap).padding(.horizontal, PrepMeasure.margin).padding(.vertical, 22).frame(maxWidth: .infinity) }
+                    .measuringWidth($available)
                     .onChange(of: jump) { _, id in if let id { withAnimation(gateAnimation(Gate.Motion.glide)) { proxy.scrollTo(id, anchor: .top) }; jump = nil } }
             }
             .frame(maxWidth: .infinity).background(Gate.Surface.ground)
@@ -188,8 +192,8 @@ private struct BreakdownPage: View {
         return HStack(spacing: 10) {
             Text("\(s.number)").font(.system(size: 11.5, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
                 .frame(minWidth: 22, minHeight: 22).background(RoundedRectangle(cornerRadius: 6).fill(Gate.Surface.raised)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Gate.Line.subtle))
-            Text(s.name).font(.system(size: 13, weight: .semibold))
-            if let needs = s.needs { Text(needs).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
+            Text(s.name).font(.system(size: measure.text(13), weight: .semibold))
+            if let needs = s.needs { Text(needs).font(.system(size: measure.caption(12))).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
             Spacer()
             Text(model.hasFootage && breakdown.isOK ? "\(shots.filter { coverage[$0.id]?.isIn == true }.count) of \(shots.count)" : shots.count == 1 ? "1 shot" : "\(shots.count) shots").font(Gate.Font.mono).foregroundStyle(Gate.Text.disabled)
         }
@@ -209,13 +213,13 @@ private struct BreakdownPage: View {
                         if shot.addedAfterOK == true || (breakdown.pass > 1 && shot.pass == breakdown.pass) { GemMark(size: 7, solid: true) }
                         Text(shot.code).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
                     }.frame(width: 34, alignment: .leading)
-                    ShotPicture(model: model, shot: shot, coverage: c).frame(width: 96, height: 54)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(shot.what).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).lineLimit(2)
-                        Text(caption(shot, c)).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
+                    ShotPicture(model: model, shot: shot, coverage: c).frame(width: measure.shot, height: measure.shot * 9 / 16)
+                    VStack(alignment: .leading, spacing: 3 + measure.step) {
+                        Text(shot.what).font(.system(size: measure.text(13))).foregroundStyle(Gate.Text.primary).lineLimit(measure.step > 0 ? 3 : 2)
+                        Text(caption(shot, c)).font(.system(size: measure.caption(11))).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     if covering { takes(c).frame(width: 164, alignment: .leading) }
-                    else { playsUnder(shot).frame(width: 210, alignment: .leading) }
+                    else { playsUnder(shot).frame(width: 210 + 45 * measure.step, alignment: .leading) }
                     if !covering { Text(Timecode.duration(shot.seconds)).font(Gate.Font.mono).foregroundStyle(Gate.Text.secondary).frame(width: 40, alignment: .trailing) }
                     status(shot, c).frame(width: covering ? 110 : 86, alignment: .trailing)
                 }
@@ -223,14 +227,15 @@ private struct BreakdownPage: View {
                 if let q = shot.question, q.isOpen {
                     HStack(spacing: 9) {
                         GemMark()
-                        Text(q.text).font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
+                        Text(q.text).font(.system(size: measure.text(12.5))).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
                         Spacer(minLength: 8)
                         Text("Answer\u{2026}").font(.system(size: 12, weight: .medium)).foregroundStyle(Gate.Text.secondary)
                     }
-                    .padding(.leading, 158)
+                    // Under the words: past the code and the picture.
+                    .padding(.leading, 34 + 14 + measure.shot + 14)
                 }
             }
-            .padding(.horizontal, 8).padding(.vertical, 13)
+            .padding(.horizontal, 8).padding(.vertical, measure.rowPadding)
             .background(isSel ? RoundedRectangle(cornerRadius: 8).fill(Gate.Surface.panel) : nil)
             .overlay(isSel ? RoundedRectangle(cornerRadius: 8).strokeBorder(Gate.Line.subtle) : nil)
             .overlay(alignment: .bottom) { if !isSel { Rectangle().fill(Gate.Line.subtle).frame(height: 1) } }
@@ -257,8 +262,8 @@ private struct BreakdownPage: View {
             let row = script.rows[n - 1]
             return row.story.map { let lead = ScriptImport.beatLead($0); return lead.title ?? lead.body } ?? row.sound.text
         } ?? ""
-        return (Text(numbers.count == 1 ? "Row \(numbers[0])" : "Rows \(EditorJobs.rowList(numbers))").font(.system(size: 10.5, weight: .medium, design: .monospaced)).foregroundColor(Gate.Text.secondary)
-            + Text(first.isEmpty ? "" : " \u{00B7} \u{201C}\(first)\u{201D}").font(.system(size: 11.5)).foregroundColor(Gate.Text.tertiary))
+        return (Text(numbers.count == 1 ? "Row \(numbers[0])" : "Rows \(EditorJobs.rowList(numbers))").font(.system(size: measure.caption(10.5), weight: .medium, design: .monospaced)).foregroundColor(Gate.Text.secondary)
+            + Text(first.isEmpty ? "" : " \u{00B7} \u{201C}\(first)\u{201D}").font(.system(size: measure.caption(11.5))).foregroundColor(Gate.Text.tertiary))
             .lineLimit(2)
     }
 

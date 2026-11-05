@@ -69,6 +69,14 @@ enum EditorSetup {
         return .yourOwn
     }
     static func choose(_ c: EditorRunsOn) { put(EditorSetupKey.runsOn, c.rawValue) }
+    /// A film's editor: the one chosen for it in Who's editing?, or this setting for a film started before
+    /// films kept their own (DirectingState.editor).
+    static func runsOn(film choice: String?) -> EditorRunsOn { choice.flatMap(EditorRunsOn.init(rawValue:)) ?? runsOn }
+    /// Chosen (for the film or here), and the program it starts is on this Mac (or the first look hasn't finished yet).
+    static func ready(_ runsOn: EditorRunsOn, chosen: Bool) -> Bool {
+        let p = EditorPrograms.shared
+        return chosen && runsOn.program.map { !p.checked || p.install($0) != nil } ?? false
+    }
 
     // MARK: Version and effort, per job (specs/editor.md › Version and effort)
 
@@ -117,13 +125,8 @@ enum EditorSetup {
     static func setRunsScripts(_ on: Bool) { put(EditorSetupKey.scripts, on) }
     static func signedIn(_ p: EditorProgram) -> Bool? { value(EditorSetupKey.signedIn(p)) as? Bool }
     static func setSignedIn(_ p: EditorProgram, _ on: Bool?) { put(EditorSetupKey.signedIn(p), on) }
-    /// Direction starts the editor (not your own session).
-    static var directionStarts: Bool { runsOn != .yourOwn }
     /// Chosen, and the program it starts is on this Mac (or the first look hasn't finished yet).
-    static var ready: Bool {
-        let p = EditorPrograms.shared
-        return isChosen && runsOn.program.map { !p.checked || p.install($0) != nil } ?? false
-    }
+    static var ready: Bool { ready(runsOn, chosen: isChosen) }
 }
 
 /// Programs found on this Mac. Looked for once at launch, and again on Check again.

@@ -76,8 +76,9 @@ import DirectionTools
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
-        // A run that never started takes the editor chosen now for its job (Choose another editor…, Change per job…).
-        if run.invocations == 0, let p = EditorSetup.runsOn.program, programOverride.isEmpty {
+        // A run that never started takes the film's editor and the version and effort chosen now for its job
+        // (Choose another editor…, Change per job…).
+        if run.invocations == 0, let p = EditorSetup.runsOn(film: try? store.directingState().editor).program, programOverride.isEmpty {
             let version = EditorSetup.version(p, for: run.job), effort = EditorSetup.effort(p, for: run.job)
             if p.rawValue != run.program || version != run.version || effort != run.effort {
                 run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = version; $0.effort = effort }) ?? run
