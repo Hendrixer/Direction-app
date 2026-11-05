@@ -10,14 +10,15 @@ enum RunsFixtures {
             "43-settings-editor": { settings() },
             "43-editor-per-job": { perJob() },
             "56-editor-setup": { setup() },
+            "56-editor-not-signed-in": { setup(signedIn: false) },
             "57-editor-working": { working() },
             "58-editor-stopped": { stopped() },
         ]
     }
 
     /// Claude Code 2.4.1 found and signed in; Codex not installed.
-    static func previewPrograms(chosen: Bool) {
-        var values: [String: Any] = [EditorSetupKey.signedIn(.claudeCode): true]
+    static func previewPrograms(chosen: Bool, signedIn: Bool = true) {
+        var values: [String: Any] = [EditorSetupKey.signedIn(.claudeCode): signedIn]
         if chosen { values[EditorSetupKey.runsOn] = EditorRunsOn.claudeCode.rawValue }
         EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: "/Users/you/.local/bin/claude", version: "2.4.1")], values: values)
     }
@@ -41,8 +42,9 @@ enum RunsFixtures {
     // MARK: 56
 
     /// Over the Footage step (frame 04's state): nothing set up yet, so the pill says so.
-    private static func setup() -> SnapshotScene {
-        previewPrograms(chosen: false)
+    /// Who's editing? for a new film; not signed in: the sign-in step, with Check again.
+    private static func setup(signedIn: Bool = true) -> SnapshotScene {
+        previewPrograms(chosen: false, signedIn: signedIn)
         let m = StartFixtures.newFilm()
         m.project?.assets = []; m.dailies = Dailies(); m.displayed = m.project
         m.runs.previewStarts = true; m.runs.previewReady = false

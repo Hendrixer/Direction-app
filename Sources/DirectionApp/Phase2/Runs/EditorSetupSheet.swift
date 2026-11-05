@@ -83,7 +83,7 @@ struct EditorSetupSheet: View {
                 if let install {
                     HStack(spacing: 7) {
                         Circle().fill(signedIn == false ? Gate.State.alert : Gate.State.approve).frame(width: 6, height: 6)
-                        Text(["Found", install.version, signedIn == false ? "not signed in" : signedIn == true ? "signed in" : nil].compactMap { $0 }.joined(separator: " \u{00B7} "))
+                        Text(["Found", install.version, signedIn == false ? "not signed in" : signedIn == true ? "signed in" : programs.couldNotCheck[p] != nil ? "couldn\u{2019}t check sign-in" : nil].compactMap { $0 }.joined(separator: " \u{00B7} "))
                             .font(.system(size: 12)).foregroundStyle(Gate.Text.secondary).lineLimit(1)
                         if programs.signingIn.contains(p) { GateSpinner() }
                     }
@@ -103,13 +103,18 @@ struct EditorSetupSheet: View {
         .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
     }
 
-    /// Found but not signed in: "Open Terminal, run claude, and sign in."
+    /// Found but not signed in: "Open Terminal, run claude, and sign in." Or the check couldn't tell, and why.
+    /// Either way Check again asks now, and the work can start regardless: a run that finishes settles it.
     private var signInStep: AnyView? {
-        guard programs.install(choice) != nil, EditorSetup.signedIn(choice) == false else { return nil }
+        guard programs.install(choice) != nil else { return nil }
+        let why = programs.couldNotCheck[choice]
+        guard EditorSetup.signedIn(choice) == false || why != nil else { return nil }
         return AnyView(HStack(spacing: 10) {
-            EditorStopBody(text: "Open Terminal, run \(choice == .claudeCode ? "claude" : "codex login"), and sign in.", program: choice)
+            if let why { Text("Direction couldn\u{2019}t check the sign-in: \(why). You can start anyway.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true) }
+            else { EditorStopBody(text: "Open Terminal, run \(choice == .claudeCode ? "claude" : "codex login"), and sign in.", program: choice) }
             Spacer(minLength: 8)
-            Button { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) } label: { Label("Open Terminal", systemImage: "terminal") }.buttonStyle(.gate)
+            Button { programs.checkSignIn(choice, force: true) } label: { Text("Check again") }.buttonStyle(.gate).disabled(programs.signingIn.contains(choice))
+            if why == nil { Button { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) } label: { Label("Open Terminal", systemImage: "terminal") }.buttonStyle(.gate) }
         })
     }
 

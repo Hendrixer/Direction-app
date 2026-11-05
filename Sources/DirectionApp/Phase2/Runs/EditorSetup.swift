@@ -14,6 +14,8 @@ enum EditorSetupKey {
     static let scripts = "editorRunsScripts"
     /// true once the ready job answered; false after a sign-in failure; absent until checked.
     static func signedIn(_ p: EditorProgram) -> String { "editorSignedIn." + p.rawValue }
+    /// true when the program has no sign-in of its own and works with the API key the shell sets.
+    static func shellKey(_ p: EditorProgram) -> String { "editorShellKey." + p.rawValue }
 }
 
 extension EditorProgram {
@@ -125,6 +127,8 @@ enum EditorSetup {
     static func setRunsScripts(_ on: Bool) { put(EditorSetupKey.scripts, on) }
     static func signedIn(_ p: EditorProgram) -> Bool? { value(EditorSetupKey.signedIn(p)) as? Bool }
     static func setSignedIn(_ p: EditorProgram, _ on: Bool?) { put(EditorSetupKey.signedIn(p), on) }
+    static func usesShellKey(_ p: EditorProgram) -> Bool { value(EditorSetupKey.shellKey(p)) as? Bool ?? false }
+    static func setUsesShellKey(_ p: EditorProgram, _ on: Bool) { put(EditorSetupKey.shellKey(p), on ? true : nil) }
     /// Chosen, and the program it starts is on this Mac (or the first look hasn't finished yet).
     static var ready: Bool { ready(runsOn, chosen: isChosen) }
 }
@@ -138,6 +142,8 @@ enum EditorSetup {
     private(set) var checking = false
     /// Sign-in checks in flight.
     private(set) var signingIn: Set<EditorProgram> = []
+    /// Why the last check couldn't tell (too slow, another error). Not saved: the next check asks again.
+    private(set) var couldNotCheck: [EditorProgram: String] = [:]
     /// Previews and snapshots set what they show; nothing is looked for and nothing is saved.
     var preview = false
     @ObservationIgnored var previewValues: [String: Any] = [:]
@@ -155,21 +161,38 @@ enum EditorSetup {
             _ = EditorDiscovery.loginPath
             await MainActor.run {
                 self.installs = found; self.checked = true; self.checking = false; self.changes += 1
-                if let p = EditorSetup.runsOn.program, EditorSetup.isChosen { self.checkSignIn(p) }
+                // A program that wasn't signed in is asked again at every launch: it may be now.
+                if let p = EditorSetup.runsOn.program, EditorSetup.isChosen { self.checkSignIn(p, force: EditorSetup.signedIn(p) == false) }
             }
         }
     }
     func refreshIfNeeded() { if !checked { refresh() } }
 
-    /// Runs the ready job once (at setup, and after a failure). Its answer is remembered.
+    /// Runs the ready job (at setup, at launch while it isn't signed in, after a failure, on Check again).
+    /// Only a clear answer is remembered; a check that couldn't tell says why and asks again next time.
     func checkSignIn(_ p: EditorProgram, force: Bool = false) {
         guard !preview, let i = installs[p], !signingIn.contains(p), force || EditorSetup.signedIn(p) == nil else { return }
-        signingIn.insert(p)
+        signingIn.insert(p); couldNotCheck[p] = nil
         // The version cutting runs on: the one most of the work uses.
         let version = EditorSetup.version(p, for: .assemble)
         Task.detached {
-            let ok = EditorDiscovery.checkSignedIn(i, version: version)
-            await MainActor.run { EditorSetup.setSignedIn(p, ok); self.signingIn.remove(p) }
+            var answer = EditorDiscovery.checkSignedIn(i, version: version)
+            // No sign-in of its own, but the shell sets an API key: that's how this person uses it in Terminal.
+            var withKey = false
+            if case .notSignedIn = answer, EditorDiscovery.hasShellKey(p), EditorDiscovery.checkSignedIn(i, version: version, shellKey: true) == .signedIn { answer = .signedIn; withKey = true }
+            switch answer {
+            case .signedIn: DirectionLog.info("\(p.name) is signed in\(withKey ? " with the API key the shell sets" : "")", "editor")
+            case .notSignedIn(let why): DirectionLog.warning("\(p.name) isn\u{2019}t signed in: \(why)", "editor")
+            case .couldNotCheck(let why): DirectionLog.warning("Couldn\u{2019}t check \(p.name)\u{2019}s sign-in: \(why)", "editor")
+            }
+            await MainActor.run {
+                switch answer {
+                case .signedIn: EditorSetup.setSignedIn(p, true); EditorSetup.setUsesShellKey(p, withKey)
+                case .notSignedIn: EditorSetup.setSignedIn(p, false); EditorSetup.setUsesShellKey(p, false)
+                case .couldNotCheck(let why): EditorSetup.setSignedIn(p, nil); self.couldNotCheck[p] = why
+                }
+                self.signingIn.remove(p); self.changes += 1
+            }
         }
     }
 

@@ -176,6 +176,13 @@ struct EditorInstall: Equatable, Sendable {
     var version: String?
 }
 
+/// What the ready job said: signed in, not signed in, or no clear answer (too slow, another error).
+enum SignInCheck: Equatable, Sendable {
+    case signedIn
+    case notSignedIn(String)
+    case couldNotCheck(String)
+}
+
 /// Finding programs, their versions and the login shell's PATH. Blocking; call off the main actor.
 enum EditorDiscovery {
     static func find(_ program: EditorProgram) -> EditorInstall? {
@@ -196,20 +203,74 @@ enum EditorDiscovery {
         text.firstMatch(of: /(\d+\.\d+(?:\.\d+)?)/).map { String($0.1) }
     }
 
-    /// The login shell's PATH, so programs installed with npm, nvm or Homebrew find `node` and friends.
+    /// The PATH Terminal has, so programs installed with npm, nvm or Homebrew find `node` and friends.
     nonisolated(unsafe) private static var cachedPath: String?
     static var loginPath: String {
         if let cachedPath { return cachedPath }
-        let p = shell("printf %s \"$PATH\"").flatMap { $0.isEmpty ? nil : $0 } ?? ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        let p = shellEnvironment["PATH"].flatMap { $0.isEmpty ? nil : $0 } ?? shell("printf %s \"$PATH\"").flatMap { $0.isEmpty ? nil : $0 } ?? ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
         cachedPath = p
         return p
     }
 
-    /// The environment a program runs with: the app's, with the login PATH and the program's own folder first.
-    /// Claude Code's own markers are dropped so a Direction started from a Claude Code terminal doesn't nest.
-    static func environment(adding program: String, extra: [String: String] = [:]) -> [String: String] {
+    /// What the person's shell sets when they open Terminal, .zshrc included: an app opened from the Dock
+    /// gets none of it. Read once; empty when the shell doesn't answer in 10 seconds.
+    nonisolated(unsafe) private static var cachedShell: [String: String]?
+    static var shellEnvironment: [String: String] {
+        if let cachedShell { return cachedShell }
+        // Into a file, not a pipe: something .zshrc starts in the background can hold a pipe open forever.
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("direction-shell-\(UUID().uuidString).env")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        p.arguments = ["-ilc", "/usr/bin/env -0 > \"$DIRECTION_SHELL_FILE\""]
+        // A clean start, as a new Terminal window has: what comes back is what the person's shell sets, not
+        // what launched Direction (a Claude Code session's own settings, say).
+        let mine = ProcessInfo.processInfo.environment
+        var env = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "DIRECTION_SHELL_FILE": file.path]
+        for key in ["HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG"] { env[key] = mine[key] }
+        p.environment = env
+        p.standardInput = FileHandle.nullDevice; p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        let done = DispatchSemaphore(value: 0)
+        p.terminationHandler = { p in ChildProcesses.ended(p); done.signal() }
+        var found: [String: String] = [:]
+        if (try? p.run()) != nil {
+            ChildProcesses.started(p)
+            if done.wait(timeout: .now() + 10) == .timedOut { p.terminate() }
+            else if let data = try? Data(contentsOf: file) {
+                for pair in data.split(separator: 0) {
+                    let text = String(decoding: pair, as: UTF8.self)
+                    guard let eq = text.firstIndex(of: "="), text[..<eq] != "DIRECTION_SHELL_FILE" else { continue }
+                    found[String(text[..<eq])] = String(text[text.index(after: eq)...])
+                }
+            }
+        }
+        cachedShell = found
+        return found
+    }
+
+    /// The shell's settings an editor reads to find its sign-in and the network: where its settings live,
+    /// a Bedrock or Vertex setup, a proxy and its certificates.
+    static func carried(_ key: String) -> Bool {
+        let prefixes = ["ANTHROPIC_", "CLAUDE_CODE_", "CODEX_", "OPENAI_", "AWS_", "VERTEX_"]
+        let names = ["CLAUDE_CONFIG_DIR", "GOOGLE_APPLICATION_CREDENTIALS", "CLOUD_ML_REGION", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"]
+        return (names.contains(key) || prefixes.contains { key.hasPrefix($0) }) && !nesting.contains(key)
+    }
+    /// Billed per use, not the person's plan: passed only when the program has no sign-in of its own.
+    static let shellKeys = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY"]
+    /// Claude Code's own markers, so a Direction started from a Claude Code terminal doesn't nest.
+    static let nesting = ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
+    static func hasShellKey(_ p: EditorProgram) -> Bool {
+        let keys = p == .claudeCode ? ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] : ["OPENAI_API_KEY", "CODEX_API_KEY"]
+        return keys.contains { shellEnvironment[$0]?.isEmpty == false }
+    }
+
+    /// The environment a program runs with: the app's, the shell's settings for it, the login PATH and the
+    /// program's own folder first. An API key goes only with `shellKey`, so work runs on the person's plan.
+    static func environment(adding program: String, extra: [String: String] = [:], shellKey: Bool = false) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
-        for key in ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"] { env.removeValue(forKey: key) }
+        for (k, v) in shellEnvironment where carried(k) && env[k] == nil { env[k] = v }
+        if !shellKey { for key in shellKeys { env.removeValue(forKey: key) } }
+        for key in nesting { env.removeValue(forKey: key) }
         env["PATH"] = ((program as NSString).deletingLastPathComponent) + ":" + loginPath
         for (k, v) in extra { env[k] = v }
         return env
@@ -240,13 +301,42 @@ enum EditorDiscovery {
         return (String(decoding: outData, as: UTF8.self), String(decoding: errData, as: UTF8.self), p.terminationStatus)
     }
 
-    /// Signed in: the ready job answers within 30 s without an auth error.
-    static func checkSignedIn(_ install: EditorInstall, version: String) -> Bool {
+    /// Asks the program to answer "ready". Signed in when it does; not signed in only when it says so.
+    static func checkSignedIn(_ install: EditorInstall, version: String, shellKey: Bool = false) -> SignInCheck {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("direction-ready-check")
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        guard let r = run(install.path, install.program.readyArguments(version: version), environment: environment(adding: install.path), timeout: 30, directory: folder) else { return false }
-        let text = (r.output + "\n" + r.error)
-        if EditorFailure.reason(text) == .notSignedIn { return false }
-        return r.status == 0 && text.lowercased().contains("ready")
+        let seconds = 45
+        guard let r = run(install.path, install.program.readyArguments(version: version), environment: environment(adding: install.path, shellKey: shellKey), timeout: Double(seconds), directory: folder) else {
+            return .couldNotCheck("\(install.program.name) didn\u{2019}t answer within \(seconds) seconds")
+        }
+        return readyAnswer(install.program, output: r.output, error: r.error, status: r.status)
+    }
+
+    /// What the ready job's output says. Its JSON is read, not searched, so a number or an id in a good
+    /// answer never reads as an error.
+    static func readyAnswer(_ program: EditorProgram, output: String, error: String, status: Int32) -> SignInCheck {
+        var answered = false, said: [String] = []
+        for line in output.split(separator: "\n") {
+            guard let o = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any] else { continue }
+            switch program {
+            case .claudeCode:
+                guard o["type"] as? String == "result" || o["result"] != nil else { continue }
+                let text = o["result"] as? String ?? ""
+                if o["is_error"] as? Bool == true || (o["subtype"] as? String).map({ $0 != "success" }) == true { said.append(text.isEmpty ? o["subtype"] as? String ?? "an error" : text) }
+                else if text.lowercased().contains("ready") { answered = true }
+            case .codex:
+                let item = (o["item"] ?? o["msg"]) as? [String: Any]
+                if item?["type"] as? String == "agent_message", ((item?["text"] ?? item?["message"]) as? String)?.lowercased().contains("ready") == true { answered = true }
+                if o["type"] as? String == "error", let m = o["message"] as? String { said.append(m) }
+                if let m = (o["error"] as? [String: Any])?["message"] as? String { said.append(m) }
+            }
+        }
+        if answered, status == 0 { return .signedIn }
+        let stderr = error.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let problem = (said + stderr.suffix(3)).joined(separator: " ")
+        if EditorFailure.reason(problem) == .notSignedIn { return .notSignedIn(String(problem.prefix(200))) }
+        // A version that answers in plain words instead of JSON.
+        if status == 0, said.isEmpty, !output.contains("{"), output.lowercased().contains("ready") { return .signedIn }
+        return .couldNotCheck(problem.isEmpty ? "\(program.name) stopped (exit \(status)) without answering" : String(problem.prefix(200)))
     }
 }

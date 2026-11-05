@@ -131,8 +131,9 @@ struct EditorResult: Equatable {
 enum EditorFailure {
     static func reason(_ text: String) -> EditorRunReason? {
         let t = text.lowercased()
-        let auth = ["not logged in", "please run /login", "run /login", "invalid api key", "authentication_failed", "authentication failed", "unauthorized", "401", "oauth token", "not signed in", "please log in", "login required", "codex login", "invalid_grant"]
-        if auth.contains(where: t.contains) { return .notSignedIn }
+        let auth = ["not logged in", "please run /login", "run /login", "invalid api key", "authentication_failed", "authentication failed", "authentication_error", "unauthorized", "oauth token", "not signed in", "please log in", "login required", "codex login", "invalid_grant"]
+        // 401 only as a status ("API Error: 401", "status 401"), never inside an id or a number.
+        if auth.contains(where: t.contains) || t.contains(/(status|error|http|code)[ :=(]{0,3}401\b/) { return .notSignedIn }
         let offline = ["enotfound", "econnrefused", "econnreset", "etimedout", "getaddrinfo", "could not resolve", "connection error", "network error", "network is unreachable", "internet connection", "offline", "stream disconnected", "failed to connect", "unable to connect"]
         if offline.contains(where: t.contains) { return .offline }
         if isSpendCap(t) { return .spendCap }

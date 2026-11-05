@@ -7,6 +7,8 @@ Direction uses the following relevant open-source libraries, resolved in Package
 - [Swift Argument Parser](https://github.com/apple/swift-argument-parser), 1.8.2: typed command-line commands and help. Apache-2.0 with Swift Runtime Library Exception; copyright Apple Inc. and contributors.
 - [Sparkle](https://github.com/sparkle-project/Sparkle), 2.10.1: updates for the signed copies. MIT license, with notices for the code it includes (bsdiff, ed25519 and others) in its LICENSE file; copyright Andy Matuschak, the Sparkle Project contributors and others. The packaging script copies that file into the app's resources.
 
+Direction doesn't ship [yt-dlp](https://github.com/yt-dlp/yt-dlp) (the Unlicense, public domain). The first time someone gives Direction a video link, it downloads yt-dlp's macOS build from yt-dlp's GitHub releases, checks it against the checksums published with the release, and keeps it in `~/Library/Application Support/Direction/Tools/`.
+
 The MCP SDK also brings Swift NIO, Swift Atomics, Swift Collections, Swift System, Swift Log, and EventSource as transitive dependencies. Their complete source and license notices are in the corresponding SwiftPM checkouts. The packaging script copies their upstream license files into the app's resources.
 
 The interface bundles [Archivo](https://github.com/google/fonts/tree/main/ofl/archivo), a variable typeface by Omnibus-Type, under the SIL Open Font License 1.1. The original font and license are included in the app's resource bundle; registration is limited to the app process.

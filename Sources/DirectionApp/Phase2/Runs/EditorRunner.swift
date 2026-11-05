@@ -108,7 +108,7 @@ import DirectionTools
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = program.arguments(invocation)
             p.currentDirectoryURL = folder
-            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id])
+            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id], shellKey: EditorSetup.usesShellKey(program))
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
             let l = LiveRun(runID: run.id, store: store, program: program, process: p)

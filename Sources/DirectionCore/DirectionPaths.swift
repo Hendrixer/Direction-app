@@ -12,6 +12,15 @@ public enum DirectionPaths {
     }
     public static func cache(forFilm projectID: String) -> URL { caches.appendingPathComponent(projectID) }
 
+    /// Programs Direction fetches and keeps up to date itself (yt-dlp, for video links). Tests use a temporary
+    /// folder, and `DIRECTION_TOOLS_DIR` moves it anywhere.
+    public static var tools: URL {
+        let env = ProcessInfo.processInfo.environment
+        if let dir = env["DIRECTION_TOOLS_DIR"], !dir.isEmpty { return URL(fileURLWithPath: dir) }
+        if isTesting { return FileManager.default.temporaryDirectory.appendingPathComponent("DirectionTestTools") }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Direction/Tools")
+    }
+
     /// A test process: XCTest or Swift Testing.
     public static var isTesting: Bool {
         let p = ProcessInfo.processInfo

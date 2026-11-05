@@ -166,7 +166,7 @@ struct StyleFromVideoSheet: View {
                     Text("What you like about it").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Gate.Text.primary)
                     GateTextArea(text: $ask, placeholder: "How fast it moves, the yellow captions three words at a time, the punch-in on every joke.", minHeight: 64)
                 }
-                Text("Videos from links are downloaded to study them. Everything fetched is removed once the style is saved; the style keeps the link, what was measured and a few stills.")
+                Text("Videos from links are downloaded to study them, with yt-dlp: Direction gets it the first time and keeps it up to date. Everything fetched is removed once the style is saved; the style keeps the link, what was measured and a few stills.")
                     .font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
             }
             .padding(20)

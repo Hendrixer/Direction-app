@@ -71,7 +71,7 @@ Optional extras:
 | Whisper transcription (tighter word timing) | `pip install mlx-whisper` and `brew install ffmpeg` | Settings › Engines › Transcription |
 | Describing shots on this Mac, so the editor can find "the wide of the window" | `uv tool install mlx-vlm`, then download a model from Settings | Settings › Engines › Looking at footage |
 | Making shots, stills and music, or describing shots online | An [OpenRouter key](https://openrouter.ai/keys). Paid per use; you set spending limits in Settings. | Settings › Engines › OpenRouter |
-| Learning a technique from a video link | `uv tool install yt-dlp` (or drop the video file in instead) | Film › Learn a Technique… |
+| Videos from links, for a style or a technique | Nothing: Direction gets [yt-dlp](https://github.com/yt-dlp/yt-dlp) from its GitHub releases the first time and keeps it up to date. YouTube works best with [Deno](https://deno.com) (`brew install deno`). Or drop the video file in instead. | Film › Learn a Technique…, or a style from a video |
 
 A key you paste in Settings is kept in your Mac's keychain. It's never written into a film or this repo, and the editor never sees it.
 

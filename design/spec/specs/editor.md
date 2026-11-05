@@ -23,7 +23,8 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 | Codex (`codex`) | the same folders, then `zsh -lc 'command -v codex'` | The program's default, Other… (a text field) | The program's default |
 
 - The version list ships with the app and is updated with it. "Other…" accepts any version string the program accepts.
-- **Signed in** is checked once at setup and after a failure. Direction runs the program with a job that only replies `ready` (no tools). No reply within 30 s or an auth error shows "Not signed in" with the sign-in step.
+- **Signed in** is checked at setup, at every launch while the answer was no, after a sign-in failure, and on **Check again**. Direction runs the program with a job that only replies `ready` (no tools) and reads its answer (Claude Code's result JSON, Codex's events), never searching the reply for error words. It answers "ready": signed in. It says it isn't signed in (an invalid key, "run /login", a 401 status): "Not signed in" with the sign-in step; that answer is remembered. Anything else (no reply within 45 s, another error): "Couldn't check sign-in" with why and **Check again**, remembered as nothing, and the work can start anyway. A run that finishes means signed in. Each answer goes to Direction's log with its reason.
+- **The shell's settings.** An app opened from the Dock gets none of what the person's shell sets, so Direction reads it once from their interactive shell, started clean as a new Terminal window is (.zshrc included), through a file so nothing it starts can hold Direction up: its PATH, and the settings an editor reads for its sign-in and the network (`ANTHROPIC_*`, `CLAUDE_CODE_*`, `CLAUDE_CONFIG_DIR`, `CODEX_*`, `OPENAI_*`, Bedrock and Vertex, proxies and certificates). API keys (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `CODEX_API_KEY`) are billed per use, so they go only when the program isn't signed in without one and is with it; Settings then says "signed in with your shell's API key".
 - The program uses the director's own sign-in and plan. Direction never stores the program's credentials.
 - Check every flag below against `claude --help` and `codex exec --help` when building; programs change. Keep the command lines in one file, `EditorPrograms.swift`, with a test that runs `--help` and fails if a flag disappears.
 
@@ -174,7 +175,7 @@ Opens on every new film (New Film…, from a script or a story, a dropped folder
 - A text link (text-2, 12): "I'll run my own session instead". It turns the sheet into the MCP instructions (the install script and the "Copy request for your editor" text), with **Done**.
 - Buttons: Cancel (plain) · **Use Claude Code** (steel). The steel label follows the selected card.
 
-States: neither program found shows both cards as "Not installed" with their install commands, and the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Open Terminal**.
+States: neither program found shows both cards as "Not installed" with their install commands, and the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Check again** and **Open Terminal**. A check that couldn't tell shows "Found · couldn't check sign-in" and "Direction couldn't check the sign-in: <why>. You can start anyway." with **Check again**.
 
 **Acceptance:**
 - [ ] Cancel leaves the film on the Footage step: on the editor in Settings, or with the pill "Editor not set up" when none was ever chosen. Nothing is lost; footage stays.

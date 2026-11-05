@@ -42,6 +42,32 @@ struct EditorStreamTests {
         #expect(EditorFailure.reason("Invalid API key · Please run /login") == .notSignedIn)
     }
 
+    /// The sign-in check reads the program's answer. A good answer with 401 in an id or a number is still signed
+    /// in; only the program saying so is "not signed in"; anything else is "couldn't check", with why.
+    @Test func theSignInCheckReadsTheAnswerNotItsDigits() {
+        let ready = #"{"type":"result","subtype":"success","is_error":false,"duration_ms":2401,"num_turns":1,"result":"ready","session_id":"5b4014a0-0401-4e01-9401-a401b4017401","total_cost_usd":0.0401,"usage":{"input_tokens":401}}"#
+        #expect(EditorDiscovery.readyAnswer(.claudeCode, output: ready, error: "", status: 0) == .signedIn)
+        let key = #"{"type":"result","subtype":"success","is_error":true,"result":"Invalid API key · Please run /login","session_id":"s"}"#
+        #expect(EditorDiscovery.readyAnswer(.claudeCode, output: key, error: "", status: 1) == .notSignedIn("Invalid API key · Please run /login"))
+        #expect(EditorDiscovery.readyAnswer(.claudeCode, output: "", error: #"API Error: 401 {"type":"error","error":{"type":"authentication_error"}}"#, status: 1) != .signedIn)
+        if case .notSignedIn = EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "API Error: 401 Unauthorized", status: 1) {} else { Issue.record("a 401 status is a sign-in error") }
+        if case .couldNotCheck(let why) = EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "Error: model claude-x not found", status: 1) { #expect(why.contains("not found")) } else { Issue.record("another error isn't a sign-in answer") }
+        if case .couldNotCheck = EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "", status: 1) {} else { Issue.record("no answer at all can't tell") }
+        let codex = [#"{"type":"thread.started","thread_id":"01a18401-5cc0-7410-875d-55d7457034f8"}"#, #"{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ready"}}"#, #"{"type":"turn.completed","usage":{"input_tokens":2401}}"#].joined(separator: "\n")
+        #expect(EditorDiscovery.readyAnswer(.codex, output: codex, error: "", status: 0) == .signedIn)
+        let codexOut = #"{"type":"error","message":"Not logged in. Run codex login."}"#
+        if case .notSignedIn = EditorDiscovery.readyAnswer(.codex, output: codexOut, error: "", status: 1) {} else { Issue.record("Codex saying so is not signed in") }
+        // 401 inside an id or a count isn't a sign-in error.
+        #expect(EditorFailure.reason("session 5b401 took 2401 ms for 401 tokens") == nil)
+    }
+
+    /// From the shell: an editor's sign-in and network settings, never the nesting markers.
+    @Test func theShellsSettingsAnEditorNeedsAreCarried() {
+        #expect(EditorDiscovery.carried("CLAUDE_CONFIG_DIR") && EditorDiscovery.carried("ANTHROPIC_BASE_URL") && EditorDiscovery.carried("HTTPS_PROXY") && EditorDiscovery.carried("CODEX_HOME"))
+        #expect(!EditorDiscovery.carried("CLAUDECODE") && !EditorDiscovery.carried("CLAUDE_CODE_ENTRYPOINT") && !EditorDiscovery.carried("TERM") && !EditorDiscovery.carried("HOME"))
+        #expect(EditorDiscovery.shellKeys.contains("ANTHROPIC_API_KEY") && EditorDiscovery.shellKeys.contains("OPENAI_API_KEY"))
+    }
+
     /// Codex 0.164 `exec --json`: the real `ready` check's shape plus an MCP call, a command and a file change.
     static let codex = [
         #"{"type":"thread.started","thread_id":"01a186af-5cc0-7410-875d-55d7457034f8"}"#,

@@ -11,7 +11,8 @@ import DirectionCore
 /// their times, and a frame every two seconds on contact sheets, so the editor can find the result and the
 /// settings it's built from.
 public enum TutorialStudy {
-    /// yt-dlp, where uv, Homebrew or a person put it.
+    /// A yt-dlp already on the Mac, where uv, Homebrew or a person put it: the fallback for Direction's own
+    /// (VideoDownloader).
     public static func downloader() -> URL? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let paths = ["\(home)/.local/bin/yt-dlp", "/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp"] + (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map { "\($0)/yt-dlp" }
@@ -22,15 +23,34 @@ public enum TutorialStudy {
     /// it (its title, maker, length and description) as info.json.
     public static func download(_ link: URL, to folder: URL) async throws -> URL {
         guard ["http", "https"].contains(link.scheme?.lowercased() ?? "") else { throw DirectionError("bad_link", "That isn't a link to a video.") }
-        guard let tool = downloader() else { throw DirectionError("downloader_missing", "Direction fetches videos from links with yt-dlp. Install it with `uv tool install yt-dlp` in Terminal, or drop the video file in instead.") }
+        let (tool, own) = try await VideoDownloader.shared.ready()
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var arguments = ["-q", "--no-warnings", "--no-playlist", "-f", "bv*[height<=720][ext=mp4]+ba/b[height<=720]/bv*[height<=720]+ba", "--merge-output-format", "mp4",
                          "--write-info-json", "-o", folder.appendingPathComponent("video.%(ext)s").path]
         if let ffmpeg = WhisperTranscriber.ffmpeg() { arguments += ["--ffmpeg-location", ffmpeg.deletingLastPathComponent().path] }
-        let (status, output) = try await run(tool, arguments + [link.absoluteString])
+        // YouTube wants a JavaScript runtime: yt-dlp finds Deno itself; Node only when it's told (and only a
+        // current yt-dlp, Direction's own, knows how to be told).
+        let runtime = JavaScriptRuntime.find()
+        if own, runtime?.name == "node", let node = runtime { arguments += ["--js-runtimes", "node:\(node.url.path)"] }
+        let (status, output) = try await run(tool, arguments + [link.absoluteString], path: runtime.map { $0.url.deletingLastPathComponent().path })
         let video = folder.appendingPathComponent("video.mp4")
-        guard status == 0, FileManager.default.fileExists(atPath: video.path) else { throw DirectionError("download_failed", "The video didn\u{2019}t download: \(output.split(separator: "\n").last.map(String.init) ?? "yt-dlp stopped").") }
+        guard status == 0, FileManager.default.fileExists(atPath: video.path) else {
+            let said = output.split(separator: "\n").last.map { String($0).replacingOccurrences(of: "ERROR: ", with: "") } ?? "yt-dlp stopped"
+            DirectionLog.warning("yt-dlp couldn\u{2019}t get \(link.absoluteString): \(output.suffix(600))", "media")
+            throw DirectionError("download_failed", "The video didn\u{2019}t download (\(said.trimmingCharacters(in: CharacterSet(charactersIn: ". ")))). Try again later, or download it yourself and drop the file in instead.")
+        }
         return video
+    }
+
+    /// A JavaScript runtime for yt-dlp: Deno, which it looks for itself, or Node.
+    enum JavaScriptRuntime {
+        static func find() -> (name: String, url: URL)? {
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            let places = ["deno": ["\(home)/.deno/bin/deno", "/opt/homebrew/bin/deno", "/usr/local/bin/deno"],
+                          "node": ["/opt/homebrew/bin/node", "/usr/local/bin/node", "\(home)/.volta/bin/node"]]
+            for name in ["deno", "node"] { if let p = places[name]!.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) { return (name, URL(fileURLWithPath: p)) } }
+            return nil
+        }
     }
 
     /// Reads a video into `folder`: transcript.txt (its words, a line every few seconds with the time) and
@@ -124,15 +144,24 @@ public enum TutorialStudy {
         guard CGImageDestinationFinalize(dest) else { throw DirectionError("write_failed", "Can't write \(url.lastPathComponent).") }
     }
 
-    static func run(_ tool: URL, _ arguments: [String]) async throws -> (Int32, String) {
+    /// Runs to the end. Its output is read as it comes, so a chatty run can't fill the pipe and stall; `path`
+    /// goes first on PATH (an app opened from the Dock has only the system's).
+    static func run(_ tool: URL, _ arguments: [String], path: String? = nil) async throws -> (Int32, String) {
         try await withCheckedThrowingContinuation { done in
             let p = Process(), pipe = Pipe()
             p.executableURL = tool; p.arguments = arguments; p.standardOutput = pipe; p.standardError = pipe
+            var env = ProcessInfo.processInfo.environment
+            env["PATH"] = ([path].compactMap { $0 } + ["/opt/homebrew/bin", "/usr/local/bin", env["PATH"] ?? "/usr/bin:/bin"]).joined(separator: ":")
+            p.environment = env
+            nonisolated(unsafe) var output = Data()
+            let read = DispatchGroup()
+            read.enter()
+            DispatchQueue.global().async { output = pipe.fileHandleForReading.readDataToEndOfFile(); read.leave() }
             p.terminationHandler = { proc in
-                let text = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                done.resume(returning: (proc.terminationStatus, text))
+                read.wait()
+                done.resume(returning: (proc.terminationStatus, String(decoding: output, as: UTF8.self)))
             }
-            do { try p.run() } catch { done.resume(throwing: error) }
+            do { try p.run() } catch { try? pipe.fileHandleForWriting.close(); done.resume(throwing: error) }
         }
     }
 }
