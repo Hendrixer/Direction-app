@@ -11,16 +11,20 @@ struct ShotInspector: View {
     var shot: BreakdownShot
     var coverage: ShotCoverage
     @State private var what: String
+    @State private var how: String
     @State private var noteText = ""
     @State private var noteKind: NoteKind?
     @State private var dropping = false
     @FocusState private var whatFocus: Bool
+    @FocusState private var howFocus: Bool
 
     private let rowNumber: [String: Int]
+    private let plays: PlaysAt
 
-    init(model: FilmModel, breakdown: Breakdown, shot: BreakdownShot, coverage: ShotCoverage, rowNumber: [String: Int]) {
-        self.model = model; self.breakdown = breakdown; self.shot = shot; self.coverage = coverage; self.rowNumber = rowNumber
+    init(model: FilmModel, breakdown: Breakdown, shot: BreakdownShot, coverage: ShotCoverage, rowNumber: [String: Int], plays: PlaysAt) {
+        self.model = model; self.breakdown = breakdown; self.shot = shot; self.coverage = coverage; self.rowNumber = rowNumber; self.plays = plays
         _what = State(initialValue: shot.what)
+        _how = State(initialValue: shot.how ?? "")
     }
 
     private var script: AVScript { model.script ?? AVScript() }
@@ -44,10 +48,22 @@ struct ShotInspector: View {
                     if coverage == .missing { missing }
                     if let q = shot.question, q.isOpen { RowQuestion(question: q) { model.answerShot(shot.id, choice: $0) } }
                     SectionLabel("What we see")
-                    TextField("", text: $what, axis: .vertical).textFieldStyle(.plain).font(.system(size: 13)).lineLimit(2...5)
+                    TextField("", text: $what, axis: .vertical).textFieldStyle(.plain).font(.system(size: 13)).lineLimit(2...8)
                         .padding(.horizontal, 10).padding(.vertical, 8).background(GateFieldBackground(focused: whatFocus))
                         .focused($whatFocus).onSubmit(commitWhat).onChange(of: whatFocus) { _, on in if !on { commitWhat() } }
                         .padding(.top, -6)
+                    // On the day: where the camera goes, how long to record. A made shot has its plan instead.
+                    if shot.source != .make, shot.source != .have {
+                        SectionLabel(shot.source == .shoot ? "How to shoot it" : "How to record it")
+                        TextField(shot.source == .shoot ? "Where the camera goes, and how long to record" : "What to record, and how long", text: $how, axis: .vertical).textFieldStyle(.plain).font(.system(size: 13)).lineLimit(2...8)
+                            .padding(.horizontal, 10).padding(.vertical, 8).background(GateFieldBackground(focused: howFocus))
+                            .focused($howFocus).onSubmit(commitHow).onChange(of: howFocus) { _, on in if !on { commitHow() } }
+                            .padding(.top, -6)
+                    }
+                    if let why = shot.why {
+                        SectionLabel("What it\u{2019}s for")
+                        Text(why).font(.system(size: 13)).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, -6)
+                    }
                     field("Framing") {
                         GateSelect(options: [(ShotSize?.none, "\u{2014}")] + ShotSize.allCases.map { (Optional($0), $0.label) }, selection: Binding(get: { shot.size }, set: { model.editShot(shot.id, size: .some($0)) }))
                     }
@@ -57,7 +73,6 @@ struct ShotInspector: View {
                     field("Length") {
                         HStack(spacing: 8) {
                             Text(Timecode.duration(shot.seconds)).font(Gate.Font.timecode).foregroundStyle(Gate.Text.primary)
-                            Text("from \(rowsLabel)").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
                         }
                     }
                     field("Source") {
@@ -77,11 +92,6 @@ struct ShotInspector: View {
         .hairlineBorder(.leading)
     }
 
-    private var rowsLabel: String {
-        let n = shot.rowIDs.compactMap { rowNumber[$0] }
-        return n.count == 1 ? "row \(n[0])" : "rows \(EditorJobs.rowList(n))"
-    }
-
     private func field<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         HStack(spacing: 10) { Text(title).font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).frame(width: 64, alignment: .leading); content(); Spacer(minLength: 0) }
     }
@@ -89,6 +99,11 @@ struct ShotInspector: View {
     private func commitWhat() {
         let t = what.trimmingCharacters(in: .whitespacesAndNewlines)
         if !t.isEmpty, t != shot.what { model.editShot(shot.id, what: t) }
+    }
+
+    private func commitHow() {
+        let t = how.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t != (shot.how ?? "") { model.editShot(shot.id, how: t) }
     }
 
     // MARK: The picture: a board, the circled take, or a place for footage you have
@@ -134,7 +149,7 @@ struct ShotInspector: View {
         let choices: [(MissingChoice, String, String)] = [
             (.make, "Make it", free ? "The editor makes it in Direction, for free." : "The editor makes it. About \(PrepDollars.text(shot.estimate ?? 0)), and asks first if it\u{2019}s more."),
             (.pickup, "Pick it up", "It goes on the pickup list for your next shoot."),
-            (.without, "Do without it", "Its rows play over the shots around them."),
+            (.without, "Do without it", "The shots around it play over its moment."),
         ]
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 9) { GemMark().padding(.top, 5); Text("No take came in for \(shot.code). What should happen?").font(.system(size: 13)).foregroundStyle(Gate.Text.primary) }
@@ -173,9 +188,12 @@ struct ShotInspector: View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel("Plays under")
             ForEach(shot.rowIDs.prefix(4).compactMap { id in rowNumber[id].map { (id, script.rows[$0 - 1]) } }, id: \.0) { id, r in
+                // A story's beat is named by its title; under it, what we hear there, like a script's line.
+                let lead = r.story.map(ScriptImport.beatLead)
+                let kind = r.sound.kind == .onCamera ? (r.sound.speaker ?? "On camera") : r.sound.kind.label
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("ROW \(rowNumber[id] ?? 0) \u{00B7} \(r.sound.kind == .onCamera ? (r.sound.speaker ?? "ON CAMERA").uppercased() : r.sound.kind.label.uppercased())").font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6).foregroundStyle(Gate.Text.tertiary)
-                    Text(r.story ?? (r.sound.text.isEmpty ? r.sound.kind.label : r.sound.text)).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
+                    Text("\((lead?.title ?? kind).uppercased()) \u{00B7} \(plays.times([id]))").font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6).foregroundStyle(Gate.Text.tertiary)
+                    Text(r.sound.text.isEmpty ? (lead?.body ?? r.sound.kind.label) : r.sound.text).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Gate.Surface.sunken)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Gate.Line.subtle))

@@ -76,8 +76,9 @@ import DirectionTools
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
-        // A run that never started takes the editor chosen now for its job (Choose another editor…, Change per job…).
-        if run.invocations == 0, let p = EditorSetup.runsOn.program, programOverride.isEmpty {
+        // A run that never started takes the film's editor and the version and effort chosen now for its job
+        // (Choose another editor…, Change per job…).
+        if run.invocations == 0, let p = EditorSetup.runsOn(film: try? store.directingState().editor).program, programOverride.isEmpty {
             let version = EditorSetup.version(p, for: run.job), effort = EditorSetup.effort(p, for: run.job)
             if p.rawValue != run.program || version != run.version || effort != run.effort {
                 run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = version; $0.effort = effort }) ?? run
@@ -107,7 +108,7 @@ import DirectionTools
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = program.arguments(invocation)
             p.currentDirectoryURL = folder
-            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id])
+            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id], shellKey: EditorSetup.usesShellKey(program))
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
             let l = LiveRun(runID: run.id, store: store, program: program, process: p)
@@ -403,6 +404,7 @@ enum EditorStopCopy {
         switch reason {
         case .notInstalled: return "The editor isn\u{2019}t installed."
         case .notSignedIn: return "\(name) isn\u{2019}t signed in."
+        case .outOfDate: return "\(name) needs updating."
         case .offline: return "The editor is offline."
         case .programQuit: return "The editor quit unexpectedly."
         case .stoppedWithoutFinishing: return "The editor stopped before finishing."

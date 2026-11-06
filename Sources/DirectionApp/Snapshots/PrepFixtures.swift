@@ -291,6 +291,17 @@ enum PrepFixtures {
             shot("6B", 6, [1], "The question types on over black.", nil, nil, .make, .title, 4),
         ]
         b.shots[10].makePlan = "A graphic Direction draws. Free."
+        // How to get each one on the day, in plain words.
+        let how: [String: (String, String?)] = [
+            "1A": ("Read it once through for each section, close to the mic, in a quiet room. Leave a breath between sections.", nil),
+            "2A": ("On a tripod behind the chair, not moving. Record 10 seconds.", nil),
+            "2B": ("On a tripod, close to the keys. Record 10 seconds; the hands lift off at about 3.", nil),
+            "2D": ("On a tripod at the side of the desk, at eye height. Record 15 seconds so there\u{2019}s room for the laugh.", "It plays under the line about the thermostat."),
+            "3A": ("On a tripod across the desk, at eye height. Talk through the second half twice.", nil),
+            "4A": ("The camera moves in slowly on the board, over about 5 seconds.", nil),
+            "5A": ("Record the screen while you open each app\u{2019}s chat panel, one after another.", nil),
+        ]
+        for i in b.shots.indices { if let h = how[b.shots[i].code] { b.shots[i].how = h.0; b.shots[i].why = h.1 } }
         b.scriptRevision = 5
         b.pass = 1
         if ok { b.okAt = SampleFilm.date(11, 2, 10, 40) }

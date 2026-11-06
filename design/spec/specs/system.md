@@ -177,6 +177,10 @@ Frame: `screens/52-media-missing.html` · Render: `renders/52-media-missing@2x.p
 
 ---
 
+## Opened from the disk image
+
+A downloaded copy opened straight from its disk image runs from a read-only place macOS picks (App Translocation, or the mounted image): it can't update itself and it's gone when the image is ejected. At launch a signed copy there asks "Move Direction to Applications?" (Move to Applications · Not Now). Moving copies it to /Applications (an older Direction there goes to the Trash; one as new or newer is opened as it is), opens that copy and quits. When it can't (no permission), it says to drag Direction to Applications. A copy built from source never asks.
+
 ## Deleting a film
 
 **Move to Trash** (Films, ⌘⌫), or leaving a new film you never put anything into, moves the film's `.direction` package to the Trash. Finder's Put Back brings it back.

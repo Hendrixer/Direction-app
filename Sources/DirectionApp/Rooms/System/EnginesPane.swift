@@ -109,12 +109,14 @@ struct ThisMacGroup: View {
     @AppStorage(SharedSettings.IndexKey.detail, store: SharedSettings.defaults) private var detail = SharedSettings.defaultLookDetail()
     @AppStorage(SharedSettings.Key.transcriptionEngine, store: SharedSettings.defaults) private var transcription = SharedSettings.TranscriptionEngine.apple.rawValue
     private var programs: EditorPrograms { EditorPrograms.shared }
+    /// The open film's editor, or the one new films start with.
+    private var editorNow: EditorRunsOn { app?.film?.runs.runsOn ?? EditorSetup.runsOn }
 
     var body: some View {
         let _ = programs.changes
         SettingsGroup(label: "This Mac", note: AnyView(SettingsNote("Recommended from this Mac\u{2019}s chip, memory, free space and what\u{2019}s installed. Nothing changes until you choose."))) {
             if let facts {
-                let advice = EngineAdvice.advise(facts, editor: EditorSetup.runsOn, installed: Set(EditorProgram.allCases.filter { programs.install($0) != nil }))
+                let advice = EngineAdvice.advise(facts, editor: editorNow, installed: Set(EditorProgram.allCases.filter { programs.install($0) != nil }))
                 SettingsRow(label: facts.chip, detail: "\(facts.memory >> 30) GB memory \u{00B7} \(SystemSupport.bytes(facts.freeBytes)) free on \(facts.volume)", first: true) { EmptyView() }
                 ForEach(advice.missing, id: \.name) { m in
                     SettingsRow(label: "\(m.name) isn\u{2019}t installed", detail: m.why) {
@@ -147,7 +149,7 @@ struct ThisMacGroup: View {
             look = chosenEngine == SharedSettings.LookEngine.openRouter.rawValue ? "OpenRouter" : SharedSettings.lookDetails.first { $0.id == chosenDetail }?.label.components(separatedBy: " \u{00B7} ").first
         }
         let words = (preview ? "apple" : transcription) == a.transcription.rawValue ? nil : "Whisper"
-        let editor = a.editor.flatMap { $0 == EditorSetup.runsOn ? nil : EditorSetup.runsOn.label }
+        let editor = a.editor.flatMap { $0 == editorNow ? nil : editorNow.label }
         return (look, words, editor, look != nil || words != nil || editor != nil)
     }
     private func now(_ current: String?) -> String { current.map { ", instead of \($0)" } ?? "" }
@@ -156,6 +158,6 @@ struct ThisMacGroup: View {
         lookEngine = a.lookEngine.rawValue
         if let d = a.lookDetail { detail = d }
         transcription = a.transcription.rawValue
-        if let e = a.editor, e != EditorSetup.runsOn { EditorSetup.choose(e); app?.film?.refresh(force: true) }
+        if let e = a.editor, e != editorNow { if let film = app?.film { film.chooseEditor(e) } else { EditorSetup.choose(e) }; app?.film?.refresh(force: true) }
     }
 }

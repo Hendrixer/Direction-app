@@ -24,7 +24,10 @@ enum EditorJobs {
         return out.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
     }
 
-    static var role: String { fill(template("editor-role") ?? "", [:]) }
+    static var role: String { fill(template("editor-role") ?? "", [:]) + (DeveloperTools.installed ? "" : "\n" + noDeveloperTools) }
+    /// Without Apple's developer tools, python3, git and friends are placeholders that open an installer on the
+    /// director's screen.
+    static let noDeveloperTools = "- This Mac doesn\u{2019}t have Apple\u{2019}s developer tools, so `python3`, `pip3`, `git`, `make`, `clang` and `swift` aren\u{2019}t real commands here: running one opens an installer on the director\u{2019}s screen and does nothing. Don\u{2019}t run them. Use Direction\u{2019}s tools, and the commands macOS has (`sips`, `afinfo`, `mdls`, `plutil`, the shell\u{2019}s own)."
     static func skillPath(_ job: EditorJob) -> String { ".claude/skills/\(job.skill)/SKILL.md" }
 
     /// What the director answered, one line each: Row 1, “Is ‘Notes’ the film’s name?”: Yes, kept off screen.
@@ -281,12 +284,15 @@ enum EditorJobs {
     static func skillsFolder() -> URL? {
         let fm = FileManager.default
         if let r = Bundle.main.resourceURL?.appendingPathComponent("Skills"), fm.fileExists(atPath: r.path) { return r }
+        // The checkout, for tests and `swift run`. Debug builds only, so a copy we hand out doesn't carry this Mac's paths.
+        #if DEBUG
         var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         for _ in 0..<6 {
             let s = dir.appendingPathComponent("plugins/direction/skills")
             if fm.fileExists(atPath: s.path) { return s }
             dir.deleteLastPathComponent()
         }
+        #endif
         return nil
     }
 

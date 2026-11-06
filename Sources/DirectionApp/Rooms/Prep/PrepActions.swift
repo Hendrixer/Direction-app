@@ -114,7 +114,7 @@ extension FilmModel {
 
     var shotCoverage: [String: ShotCoverage] { breakdown.map { ProjectStore.coverage($0, dailies: dailies) } ?? [:] }
 
-    func editShot(_ id: String, what: String? = nil, size: ShotSize?? = nil, move: ShotMove?? = nil, source: ShotSource? = nil) { perform { _ = try $0.editShot(id, what: what, size: size, move: move, source: source) } }
+    func editShot(_ id: String, what: String? = nil, how: String? = nil, size: ShotSize?? = nil, move: ShotMove?? = nil, source: ShotSource? = nil) { perform { _ = try $0.editShot(id, what: what, how: how, size: size, move: move, source: source) } }
     func decideMissing(_ shotID: String, _ choice: MissingChoice?) { perform { _ = try $0.decideMissing(shotID: shotID, choice) } }
     func addShotNote(shots: [String], kind: NoteKind?, text: String) { perform { _ = try $0.addBreakdownNote(shotIDs: shots, kind: kind, text: text) } }
     func dropShotNote(_ id: String) { perform { _ = try $0.editBreakdownNote(id, text: nil, drop: true) } }
@@ -182,6 +182,7 @@ extension FilmModel {
                 let done = coverage[s.id]?.isIn == true ? "\u{2713}" : "\u{2610}"
                 let how = [s.size?.label, s.move?.label].compactMap { $0 }.joined(separator: " \u{00B7} ")
                 out.append("  \(done) \(s.code)  \(s.what)\(how.isEmpty ? "" : "  (\(how))")  \(Timecode.duration(s.seconds))")
+                if let onTheDay = s.how { out.append("       \(onTheDay)") }
             }
             out.append("")
         }

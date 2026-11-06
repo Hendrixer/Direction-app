@@ -406,6 +406,9 @@ public struct DirectingState: Codable, Hashable, Sendable {
     /// License files copied into the film (Licenses/), in the order they were added.
     public var licenses: [LicenseFile]?
     public var editorPaused: Bool = false
+    /// Who edits this film, as chosen in Who's editing? when it was started: "claudeCode", "codex" or
+    /// "yourOwn". nil in films started before 2026-11-04, which follow Settings › Engines › Who edits.
+    public var editor: String?
     /// The director's standing instructions to the editor (Settings › Editor).
     public var preferences: EditorPreferences?
     /// How a camera and a screen recording in sync share the frame, chosen in Dailies (layouts.md).

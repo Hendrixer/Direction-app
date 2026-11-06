@@ -37,6 +37,8 @@ import DirectionTools
     /// Called from `FilmModel.refresh()` whenever the store changes.
     func refresh(_ film: FilmModel) {
         guard !film.isPreview, let store = film.store else { return }
+        let chosen = film.directing.editor.flatMap(EditorRunsOn.init(rawValue:))
+        if chosen != choice { choice = chosen }
         let runner = EditorRunner.shared
         runner.register(store)
         if !recovered { recovered = true; runner.recover(store); EditorPrograms.shared.refreshIfNeeded() }
@@ -69,10 +71,14 @@ import DirectionTools
         }
     }
 
-    /// Direction starts the editor (Settings › Engines › Editor runs on isn't Your own session).
-    var startsEditor: Bool { previewStarts ?? EditorSetup.directionStarts }
+    /// Who edits this film, as chosen for it in Who's editing? (nil: a film from before films kept their own).
+    var choice: EditorRunsOn?
+    /// The film's editor, or Settings › Engines › Who edits for a film that has none of its own.
+    var runsOn: EditorRunsOn { choice ?? EditorSetup.runsOn }
+    /// Direction starts the editor (not your own session).
+    var startsEditor: Bool { previewStarts ?? (runsOn != .yourOwn) }
     /// The program Direction starts is chosen and found.
-    var ready: Bool { previewStarts != nil ? previewReady : EditorSetup.ready }
+    var ready: Bool { previewStarts != nil ? previewReady : EditorSetup.ready(runsOn, chosen: choice != nil || EditorSetup.isChosen) }
 
     /// The run the window shows: working, paused, waiting, stopped or held, newest first.
     var current: EditorRun? {
@@ -132,7 +138,8 @@ import DirectionTools
     // MARK: Finding work
 
     private func findWork(_ film: FilmModel, store: ProjectStore) {
-        guard startsEditor, ready, !film.offline, !film.directing.editorPaused, let program = EditorSetup.runsOn.program else { return }
+        // Nothing starts while Who's editing? is open: a new film's work waits for its editor.
+        guard startsEditor, ready, !film.offline, !film.directing.editorPaused, film.sheet != .editorSetup, let program = runsOn.program else { return }
         func latest(_ job: EditorJob, _ turnoverID: String? = nil) -> EditorRun? { runs.last { $0.job == job && $0.turnoverID == turnoverID } }
         // Turn over, Assemble from circles: each open turnover gets one run.
         for t in film.turnovers where t.state.isOpen && !runs.contains(where: { $0.turnoverID == t.id }) {
@@ -205,7 +212,7 @@ import DirectionTools
     /// False when Direction doesn't start the editor (Your own session) or it isn't set up.
     @discardableResult
     func makeStyle(_ film: FilmModel, request: String, fromFilm: Bool, studies: [URL] = []) -> Bool {
-        guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program else { return false }
+        guard startsEditor, ready, let store = film.store, let program = runsOn.program else { return false }
         var run = EditorSetup.newRun(.style, on: program)
         run.request = request; run.fromFilm = fromFilm; run.studies = studies.isEmpty ? nil : studies.map(\.path)
         try? store.saveRun(run)
@@ -217,7 +224,7 @@ import DirectionTools
     /// Learn a technique from a video (techniques.md › Learning one), once Direction has it ready in `folder`.
     @discardableResult
     func learnTechnique(_ film: FilmModel, request: String, folder: URL, video: URL) -> Bool {
-        guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program else { return false }
+        guard startsEditor, ready, let store = film.store, let program = runsOn.program else { return false }
         var run = EditorSetup.newRun(.technique, on: program)
         run.request = request; run.learnFolder = folder.path; run.learnVideo = video.path
         try? store.saveRun(run)
@@ -241,7 +248,7 @@ import DirectionTools
     /// Update the breakdown after the script changed (the Breakdown room's banner).
     @discardableResult
     func updateBreakdown(_ film: FilmModel) -> Bool {
-        guard startsEditor, ready, let store = film.store, let program = EditorSetup.runsOn.program, runs.last(where: { $0.job == .breakdown })?.state.isOpen != true else { return false }
+        guard startsEditor, ready, let store = film.store, let program = runsOn.program, runs.last(where: { $0.job == .breakdown })?.state.isOpen != true else { return false }
         startPrep(.breakdown, film: film, program: program, store: store)
         if let r = runs.last { _ = try? store.updateRun(r.id) { $0.held = false } }
         film.refresh(force: true)
@@ -283,9 +290,11 @@ import DirectionTools
         return said.isEmpty ? nil : said.joined(separator: "\n")
     }
 
-    /// Frame 56 shows itself the first time a film needs the editor and none is set up.
+    /// Frame 56 opens on a new film (FilmModel.askWhoEdits). It also shows itself the first time an older
+    /// film needs the editor and none is chosen: takes to log, or a script whose picture isn't written yet.
     private func offerSetup(_ film: FilmModel) {
-        guard !offeredSetup, !EditorSetup.isChosen, film.hasFootage, film.isLogging, film.sheet == nil else { return }
+        let work = (film.hasFootage && film.isLogging) || film.script?.rows.contains(where: { $0.picture.isEmpty }) == true
+        guard !offeredSetup, choice == nil, !EditorSetup.isChosen, work, film.sheet == nil else { return }
         offeredSetup = true
         film.sheet = .editorSetup
     }
@@ -308,7 +317,7 @@ import DirectionTools
         // Logging you stopped starts again on the same takes; what's logged already stays.
         if let r = stoppedLogging { _ = try? store.updateRun(r.id) { $0.state = .queued; $0.held = false; $0.reason = nil }; refresh(film); return }
         // A turnover you stopped waits for Start: it gets a new run.
-        if let t = film.openTurnover, let program = EditorSetup.runsOn.program, run(for: t)?.state == .stopped {
+        if let t = film.openTurnover, let program = runsOn.program, run(for: t)?.state == .stopped {
             create(t.kind == "assembly" ? .assemble : .turnover, program: program, turnoverID: t.id, store: store)
             if let r = runs.last { _ = try? store.updateRun(r.id) { $0.held = false } }
             refresh(film)
@@ -345,7 +354,7 @@ import DirectionTools
     /// Finishing again, once you've done what the editor stopped to ask for: a new run for whatever
     /// on the checklist isn't done.
     func finishAgain(_ film: FilmModel) {
-        guard let store = film.store, film.isPictureLocked, active == nil, let program = EditorSetup.runsOn.program else { return }
+        guard let store = film.store, film.isPictureLocked, active == nil, let program = runsOn.program else { return }
         create(.finish, program: program, store: store)
         if let r = runs.last { _ = try? store.updateRun(r.id) { $0.held = false } }
         film.refresh(force: true)

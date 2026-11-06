@@ -82,7 +82,8 @@ public actor LocalVisionHelper {
         guard let script = script ?? VisionHelper.script() else { throw DirectionError("vision_helper_missing", "Direction's vision helper (describe.py) is missing from the app.") }
         let p = Process()
         p.executableURL = python
-        p.arguments = ["-u", script.path, "--model", repo, "--max-tokens", String(DescribePrompt.maxTokens)]
+        // -B: no __pycache__ beside the script, which would break the signed app's seal.
+        p.arguments = ["-B", "-u", script.path, "--model", repo, "--max-tokens", String(DescribePrompt.maxTokens)]
         var env = ProcessInfo.processInfo.environment
         env["PYTHONUNBUFFERED"] = "1"; env["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"; env["TOKENIZERS_PARALLELISM"] = "false"
         env.merge(environment) { _, new in new }

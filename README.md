@@ -6,10 +6,15 @@ Direction runs on your Mac. The editor works through your own Claude or ChatGPT 
 
 ![The Cut room: a cut with the editor’s answers under each note](docs/images/direction-cut.png)
 
+## Download
+
+**[Download Direction for Mac](https://updates.givedirection.ai/Direction.dmg)** (Apple Silicon, macOS 26 or later). Open the DMG, drag Direction to Applications, and open it from there. It's signed and notarized by Apple, and it checks for updates once a day and asks before installing one.
+
+Then sign in one editor, as below. To build it yourself instead, see [Build and open](#build-and-open).
+
 ## What you need
 
 - A Mac with Apple Silicon, running macOS 26 or later.
-- Xcode 26 or later. Direction is built and tested with Xcode 27.2 (Swift 6.4); older versions haven't been tried. If you've never opened Xcode, open it once so it finishes setting up.
 - One editor, not both:
   - [Claude Code](https://claude.com/claude-code), signed in with your Claude account:
     ```sh
@@ -24,6 +29,8 @@ Direction runs on your Mac. The editor works through your own Claude or ChatGPT 
 
 ## Build and open
 
+To build from source you also need Xcode 26 or later. Direction is built and tested with Xcode 27.2 (Swift 6.4); older versions haven't been tried. If you've never opened Xcode, open it once so it finishes setting up.
+
 ```sh
 git clone https://github.com/Hendrixer/Direction-app.git
 cd Direction-app
@@ -31,21 +38,21 @@ cd Direction-app
 open build/Direction.app
 ```
 
-The first build downloads three Swift packages (GRDB, the MCP Swift SDK and Swift Argument Parser) and takes a few minutes. The app is signed for your own Mac only and isn't notarized, so anyone else who wants it should build it themselves.
+The first build downloads four Swift packages (GRDB, the MCP Swift SDK, Swift Argument Parser and Sparkle) and takes a few minutes. A copy you build is signed for your own Mac only and doesn't update itself: to update, quit Direction, run `git pull`, then run `./scripts/build-app.sh release` again. Use it instead of a downloaded copy, not beside one, since both share the same library and settings.
 
-To update, quit Direction, run `git pull`, then run `./scripts/build-app.sh release` again.
+Releases are made with `scripts/release.sh` (see [releasing](docs/releasing.md)).
 
 ## Making a film
 
 1. **File › New Film…** (or New Film from a Script / from a Story). Write the brief: what the film is, how it should feel, and its shape (16:9, 9:16, 1:1, 4:5, or as shot). **Film › Brief…** (⌘B) opens it again later.
-2. **Add footage.** The first time there's work, Direction asks **Who's editing?** Pick Claude Code or Codex. Direction starts it with your own sign-in whenever there's work, and you can pause or stop it at any time.
+2. **Who's editing?** Each new film asks which program edits it: Claude Code or Codex (your last choice is already picked). Direction starts it with your own sign-in whenever the film has work, and you can pause or stop it at any time. Then add footage.
 3. **Dailies.** The editor logs every take. Circle the ones you want.
 4. **Cut.** The editor cuts an assembly. Watch it, write notes, then turn them over. The editor reads your notes back to you, cuts the next version and answers each note. Play changes shows only what changed.
 5. **Finish.** Lock picture, then deliver a master, a web copy and captions.
 
 **Script** and **Breakdown** are for when you start from a script or story. The editor writes an A/V script, and the breakdown lists what to shoot.
 
-Settings › Engines › Who edits chooses the program and, for each job, its version and effort.
+Settings › Engines › Who edits changes the open film's editor and the one new films start with, and, for each job, its version and effort.
 
 ## Do I need API keys?
 
@@ -64,7 +71,7 @@ Optional extras:
 | Whisper transcription (tighter word timing) | `pip install mlx-whisper` and `brew install ffmpeg` | Settings › Engines › Transcription |
 | Describing shots on this Mac, so the editor can find "the wide of the window" | `uv tool install mlx-vlm`, then download a model from Settings | Settings › Engines › Looking at footage |
 | Making shots, stills and music, or describing shots online | An [OpenRouter key](https://openrouter.ai/keys). Paid per use; you set spending limits in Settings. | Settings › Engines › OpenRouter |
-| Learning a technique from a video link | `uv tool install yt-dlp` (or drop the video file in instead) | Film › Learn a Technique… |
+| Videos from links, for a style or a technique | Nothing: Direction gets [yt-dlp](https://github.com/yt-dlp/yt-dlp) from its GitHub releases the first time and keeps it up to date. YouTube works best with [Deno](https://deno.com) (`brew install deno`). Or drop the video file in instead. | Film › Learn a Technique…, or a style from a video |
 
 A key you paste in Settings is kept in your Mac's keychain. It's never written into a film or this repo, and the editor never sees it.
 
@@ -97,7 +104,7 @@ swift build           # or open Package.swift in Xcode
 | `Sources/DirectionCLI` | The `direction` command: CLI, JSON line API and MCP server |
 | `plugins/direction` | The skills the editor follows, and the plugin for your own sessions |
 | `design/spec` | The product spec: every room and screen, and the Gate design system |
-| `docs` | [Architecture](docs/architecture.md), [the agent contract](docs/agent-contract.md), [editor runs](docs/editor-runs.md), [verification](docs/verification.md) |
+| `docs` | [Architecture](docs/architecture.md), [the agent contract](docs/agent-contract.md), [editor runs](docs/editor-runs.md), [verification](docs/verification.md), [releasing](docs/releasing.md) |
 
 ## Limits
 

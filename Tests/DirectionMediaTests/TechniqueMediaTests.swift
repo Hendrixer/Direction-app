@@ -15,6 +15,27 @@ import DirectionCore
         return px.map { Double($0) / 255 }
     }
 
+    /// Direction's own yt-dlp: the release's checksum is found by name, and a copy checked today is used as it
+    /// is, with nothing fetched.
+    @Test func theDownloaderIsCheckedByItsReleaseChecksum() async throws {
+        let sums = """
+        0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa  yt-dlp_macos
+        20d98fa608998eff87d1d35a6e9fb65e4b874639a6cc89addc19da3becde3ef1  yt-dlp_macos.zip
+        9a1b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b *yt-dlp.exe
+        """
+        #expect(VideoDownloader.checksum(for: "yt-dlp_macos", in: sums) == "0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa")
+        #expect(VideoDownloader.checksum(for: "yt-dlp.exe", in: sums) == "9a1b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b")
+        #expect(VideoDownloader.checksum(for: "yt-dlp", in: sums) == nil)
+        #expect(VideoDownloader.sha256(Data("abc".utf8)) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        let fm = FileManager.default
+        try fm.createDirectory(at: VideoDownloader.folder, withIntermediateDirectories: true)
+        try Data("#!/bin/sh\necho 2026.11.01\n".utf8).write(to: VideoDownloader.tool)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: VideoDownloader.tool.path)
+        VideoDownloader.touch()
+        let (tool, own) = try await VideoDownloader.shared.ready()
+        #expect(tool == VideoDownloader.tool && own)
+    }
+
     @Test func thePixelGridShowsTheClipOnlyInTheSquaresItsSubjectFills() {
         let bounds = CGRect(x: 0, y: 0, width: 400, height: 200)
         let red = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: bounds)

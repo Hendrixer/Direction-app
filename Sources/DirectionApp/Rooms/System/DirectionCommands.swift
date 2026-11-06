@@ -20,7 +20,8 @@ struct DirectionCommands: Commands {
             Button("About Direction") { NSApp.orderFrontStandardAboutPanel(nil) }
         }
         CommandGroup(after: .appSettings) {
-            Button("Check for Updates\u{2026}") {}.disabled(true)
+            // Only a signed copy updates itself; one built from source updates with git pull.
+            Button("Check for Updates\u{2026}") { AppUpdates.shared.check() }.disabled(!AppUpdates.shared.canCheck)
         }
         CommandGroup(replacing: .newItem) { FileMenuItems(app: app) }
         CommandGroup(replacing: .saveItem) { CloseItem(app: app) }

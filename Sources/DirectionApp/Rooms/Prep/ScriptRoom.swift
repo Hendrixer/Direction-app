@@ -66,6 +66,8 @@ private struct ScriptPage: View {
     /// The row whose question the sheet shows.
     @State private var asking: String?
     @State private var showNotes = false
+    /// The scroll area's width: a wide window reads bigger (PrepMeasure).
+    @State private var available: CGFloat = 0
     @FocusState private var focus: ScriptCell?
     @FocusState private var findFocus: Bool
     /// Snapshots: a cell drawn as if you were typing in it.
@@ -100,6 +102,7 @@ private struct ScriptPage: View {
                 toolbar
                 ScrollViewReader { proxy in
                     ScrollView { page.padding(.bottom, 48) }
+                        .measuringWidth($available)
                         .focusable().focusEffectDisabled()
                         .onKeyPress(phases: .down) { press in keys(press) }
                         .onChange(of: center) { _, id in if let id { withAnimation(gateAnimation(Gate.Motion.glide)) { proxy.scrollTo(id, anchor: .center) } } }
@@ -121,6 +124,7 @@ private struct ScriptPage: View {
     }
 
     private var orderedSelection: [String] { script.rows.map(\.id).filter(selected.contains) }
+    private var measure: PrepMeasure { PrepMeasure(available: available) }
 
     // MARK: Outline
 
@@ -238,8 +242,9 @@ private struct ScriptPage: View {
                     .buttonStyle(.gate(.ghost, .small)).padding(.leading, 40).padding(.top, 10)
             }
         }
-        // As wide as the window gives, to a page you can still read across: picture and sound get room.
-        .frame(maxWidth: 1180).padding(.horizontal, 32).padding(.top, 18)
+        // As wide as the window gives, to a page you can still read across: picture and sound get room, and a
+        // wide page reads a step bigger (PrepMeasure).
+        .frame(maxWidth: PrepMeasure.cap).padding(.horizontal, PrepMeasure.margin).padding(.top, 18)
         .frame(maxWidth: .infinity)
     }
 
@@ -329,14 +334,14 @@ private struct ScriptPage: View {
                     // A film from a story: the beat it came from, above what we see and hear.
                     if let story = r.story { beat(r, story: story, found: found && matches(story)) }
                     // Picture and sound share the row evenly, the way an A/V script is laid out.
-                    HStack(alignment: .top, spacing: 28) {
+                    HStack(alignment: .top, spacing: 28 + 6 * measure.step) {
                         picture(r, notes: notes, found: found && matches(r.picture.text)).frame(maxWidth: .infinity, alignment: .leading)
                         sound(r, found: found && matches(r.sound.text)).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 Text(Timecode.duration(r.seconds)).font(Gate.Font.timecodeSmall).foregroundStyle(Gate.Text.disabled).frame(width: 40, height: 18, alignment: .trailing)
             }
-            .padding(.vertical, 13)
+            .padding(.vertical, measure.rowPadding)
             if let q = r.question, q.isOpen { questionLine(r, q).padding(.leading, 46).padding(.trailing, 56).padding(.bottom, 10) }
         }
         .background {
@@ -354,32 +359,37 @@ private struct ScriptPage: View {
         .id(r.id)
     }
 
-    /// The beat in one quiet line, its title first; whole once clicked, before there's a picture under it, or
-    /// when Find is in its words. Its number and times are the row's.
+    /// The beat, quietly: its title alone while the picture under it says what happens there (a beat without a
+    /// title reads one line). Whole once clicked, before there's a picture under it, or when Find is in its
+    /// words. Its number and times are the row's.
     private func beat(_ r: AVRow, story: String, found: Bool) -> some View {
         let lead = ScriptImport.beatLead(story)
         let whole = openStory.contains(r.id) || r.picture.isEmpty || found
-        let title = lead.title.map { Text($0 + "  ").fontWeight(.medium).foregroundColor(Gate.Text.secondary) } ?? Text("")
-        return (title + Text(lead.body).foregroundColor(Gate.Text.tertiary))
-            .font(.system(size: 12.5)).lineSpacing(2).lineLimit(whole ? nil : 1).truncationMode(.tail)
-            .fixedSize(horizontal: false, vertical: whole)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background { if found { RoundedRectangle(cornerRadius: 5).fill(Gate.Surface.hover).padding(.horizontal, -5).padding(.vertical, -3) } }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if openStory.contains(r.id) { openStory.remove(r.id) } else { openStory.insert(r.id) }
-                select(r.id, flags: NSEvent.modifierFlags)
-            }
-            .help(whole ? "" : "Show the whole beat")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(whole ? "" : "Shows the whole beat")
+        let shut = !whole && lead.title != nil
+        let title = lead.title.map { Text($0 + (shut ? "" : "  ")).fontWeight(.medium).foregroundColor(Gate.Text.secondary) } ?? Text("")
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            (title + Text(shut ? "" : lead.body).foregroundColor(Gate.Text.tertiary))
+                .font(.system(size: measure.text(12.5))).lineSpacing(2).lineLimit(whole ? nil : 1).truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: whole)
+            if shut { Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Gate.Text.disabled) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { if found { RoundedRectangle(cornerRadius: 5).fill(Gate.Surface.hover).padding(.horizontal, -5).padding(.vertical, -3) } }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if openStory.contains(r.id) { openStory.remove(r.id) } else { openStory.insert(r.id) }
+            select(r.id, flags: NSEvent.modifierFlags)
+        }
+        .help(whole ? "" : "Show the writer\u{2019}s beat")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(whole ? "" : "Shows the writer\u{2019}s beat")
     }
 
     /// The editor's question in one line; its choices are in the sheet, with the notes.
     private func questionLine(_ r: AVRow, _ q: PrepQuestion) -> some View {
         HStack(spacing: 9) {
             GemMark()
-            Text(q.text).font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
+            Text(q.text).font(.system(size: measure.text(12.5))).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 8)
             Button("Answer\u{2026}") { ask(r.id) }.buttonStyle(.gate(.ghost, .small))
         }
@@ -390,17 +400,17 @@ private struct ScriptPage: View {
     @ViewBuilder private func picture(_ r: AVRow, notes: [PrepNote], found: Bool) -> some View {
         HStack(alignment: .top, spacing: 14) {
             if r.picture.isEmpty {
-                if r.question != nil { BoardView(kind: .empty).frame(width: 80) }
-                else { RoundedRectangle(cornerRadius: 4).fill(Gate.Surface.sunken).overlay(Hatching().clipShape(RoundedRectangle(cornerRadius: 4))).overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Gate.Line.subtle)).frame(width: 80, height: 45) }
+                if r.question != nil { BoardView(kind: .empty).frame(width: measure.board) }
+                else { RoundedRectangle(cornerRadius: 4).fill(Gate.Surface.sunken).overlay(Hatching().clipShape(RoundedRectangle(cornerRadius: 4))).overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Gate.Line.subtle)).frame(width: measure.board, height: measure.board * 9 / 16) }
             } else {
-                BoardView(kind: r.picture.board ?? .medium, move: r.picture.move).frame(width: 80)
+                BoardView(kind: r.picture.board ?? .medium, move: r.picture.move).frame(width: measure.board)
             }
             VStack(alignment: .leading, spacing: 4) {
                 let writing = model.writingPicture && firstEmpty == r.id
-                if writing { HStack(spacing: 8) { GateSpinner(); Text("Writing\u{2026}").foregroundStyle(Gate.Voice.agent) }.font(.system(size: 13)) }
+                if writing { HStack(spacing: 8) { GateSpinner(); Text("Writing\u{2026}").foregroundStyle(Gate.Voice.agent) }.font(.system(size: measure.text(13))) }
                 else {
                     ScriptCellText(text: r.picture.text, placeholder: r.question != nil ? "Nothing yet." : (r.hint.map { "Writer\u{2019}s idea: \($0)" } ?? "What do we see?"),
-                                   size: 13, found: found, cell: .picture(r.id), focus: $focus, preview: previewFocus == .picture(r.id) ? (previewText ?? r.picture.text) : nil) { model.editPicture(r.id, $0) }
+                                   size: measure.text(13), found: found, cell: .picture(r.id), focus: $focus, preview: previewFocus == .picture(r.id) ? (previewText ?? r.picture.text) : nil) { model.editPicture(r.id, $0) }
                 }
                 let how = [r.picture.size?.label, r.picture.move?.label].compactMap { $0 }.joined(separator: " \u{00B7} ")
                 if !notes.isEmpty || changedThisPass(r) || r.picture.yours == true || !how.isEmpty {
@@ -408,7 +418,7 @@ private struct ScriptPage: View {
                         ForEach(notes, id: \.id) { n in Chip("Note \(n.number)", style: .director) }
                         if changedThisPass(r) { Chip("Changed", style: .agent, mono: false) }
                         if r.picture.yours == true { Chip("Your words", style: .plain, icon: "character.cursor.ibeam", mono: false) }
-                        if !how.isEmpty { Text(how).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary) }
+                        if !how.isEmpty { Text(how).font(.system(size: measure.caption(11))).foregroundStyle(Gate.Text.tertiary) }
                     }
                 }
             }
@@ -426,7 +436,7 @@ private struct ScriptPage: View {
             }
             // Cues, and talk found on the day, read as what we hear rather than words to say.
             let cue = ![.voice, .onCamera].contains(r.sound.kind) || r.sound.ownWords == true
-            ScriptCellText(text: r.sound.text, placeholder: undecided ? "What do we hear?" : r.sound.ownWords == true ? "What about?" : cue ? r.sound.kind.label + "." : "What\u{2019}s said?", size: cue || undecided ? 13 : 14, italic: cue, secondary: cue,
+            ScriptCellText(text: r.sound.text, placeholder: undecided ? "What do we hear?" : r.sound.ownWords == true ? "What about?" : cue ? r.sound.kind.label + "." : "What\u{2019}s said?", size: measure.text(cue || undecided ? 13 : 14), italic: cue, secondary: cue,
                            found: found, cell: .sound(r.id), focus: $focus, preview: nil) { model.editSound(r.id, $0) }
         }
     }

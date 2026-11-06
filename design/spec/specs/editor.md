@@ -11,7 +11,7 @@ Direction starts the editor itself whenever there's work: footage to log, an ass
 | Connection | What happens | Control |
 |---|---|---|
 | **Direction starts it** (default) | Direction runs Claude Code or Codex on this Mac for each job, with Direction's tools connected and a job written for it. | Start, pause, resume, stop, retry. Activity, spend. |
-| **Your own session** | You run Claude Code or Codex yourself and connect it over MCP (`./scripts/install-local.sh`). Direction shows what it does from its tool calls. | Activity only. Direction can't start, pause or stop it; the pill's popover says "Your own session" and shows the request to copy, as today. |
+| **Your own session** | You run Claude Code or Codex yourself and connect it over MCP: the sheet gives `claude mcp add direction -- "<the app's Helpers/direction>" mcp` and the same for `codex`, or, in a copy built from source, `./scripts/install-local.sh`. Direction shows what it does from its tool calls. | Activity only. Direction can't start, pause or stop it; the pill's popover says "Your own session" and shows the request to copy, as today. |
 
 Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex, Your own session.
 
@@ -23,8 +23,10 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 | Codex (`codex`) | the same folders, then `zsh -lc 'command -v codex'` | The program's default, Other… (a text field) | The program's default |
 
 - The version list ships with the app and is updated with it. "Other…" accepts any version string the program accepts.
-- **Signed in** is checked once at setup and after a failure. Direction runs the program with a job that only replies `ready` (no tools). No reply within 30 s or an auth error shows "Not signed in" with the sign-in step.
+- **Signed in** is checked at setup, at every launch while the answer was no, after a sign-in failure, and on **Check again**. Direction runs the program with a job that only replies `ready` (no tools) and reads its answer (Claude Code's result JSON, Codex's events), never searching the reply for error words. It answers "ready": signed in. It says it isn't signed in (an invalid key, "run /login", a 401 status): "Not signed in" with the sign-in step; that answer is remembered. Anything else (no reply within 45 s, another error): "Couldn't check sign-in" with why and **Check again**, remembered as nothing, and the work can start anyway. A run that finishes means signed in. Each answer goes to Direction's log with its reason.
+- **The shell's settings.** An app opened from the Dock gets none of what the person's shell sets, so Direction reads it once from their interactive shell, started clean as a new Terminal window is (.zshrc included), through a file so nothing it starts can hold Direction up: its PATH, and the settings an editor reads for its sign-in and the network (`ANTHROPIC_*`, `CLAUDE_CODE_*`, `CLAUDE_CONFIG_DIR`, `CODEX_*`, `OPENAI_*`, Bedrock and Vertex, proxies and certificates). API keys (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `CODEX_API_KEY`) are billed per use, so they go only when the program isn't signed in without one and is with it; Settings then says "signed in with your shell's API key".
 - The program uses the director's own sign-in and plan. Direction never stores the program's credentials.
+- **Without Apple's developer tools**, `/usr/bin/python3`, `git` and the rest are placeholders that open an installer when run. Direction never runs them (`DeveloperTools`, from `xcode-select -p`), and the editor's role says not to, naming the commands macOS has instead.
 - Check every flag below against `claude --help` and `codex exec --help` when building; programs change. Keep the command lines in one file, `EditorPrograms.swift`, with a test that runs `--help` and fails if a flag disappears.
 
 ## How Direction runs a job
@@ -162,10 +164,10 @@ Each kind of work runs on its own version and effort (decided 2026-11-03): writi
 ## 56 · Who's editing? (setup sheet)
 Frame: `screens/56-editor-setup.html` · film window, sheet 560 wide.
 
-Shown the first time a film needs the editor (after Bring footage, before logging) when no editor has been set up, and from Settings › Engines › Set up again… Over the Footage step (frame 04's state behind the scrim).
+Opens on every new film (New Film…, from a script or a story, a dropped folder), over its first step, with the editor chosen last already picked; nothing of the film's starts until it's answered (2026-11-04). The film keeps the choice (`DirectingState.editor`), so films can be edited by different programs, and the next new film starts from it. Settings › Engines › Who edits changes the open film's editor and the one new films start with. A film started before films kept their own follows Settings. It also shows itself the first time an older film needs the editor (takes to log, or a script whose picture isn't written) when none has been chosen, and from the pill's Set up…. Frame 56 draws it over the Footage step (frame 04's state behind the scrim).
 
 - Title (Archivo 22): "Who's editing?"
-- Body (13 text-2): "Direction starts the editor on this Mac whenever there's work, and you can pause or stop it anytime. It uses your own sign-in."
+- Body (13 text-2): "Direction starts the editor on this Mac whenever this film has work, and you can pause or stop it anytime. It uses your own sign-in."
 - Two program cards side by side (`--raised`, radius 10, padding 14, the same selection ring as the Freedom cards):
   - **Claude Code**: "Found · 2.4.1 · signed in" with a green dot (`--approve`). Selected.
   - **Codex**: "Not installed" text-3, and under it SF Mono 11.5 `npm install -g @openai/codex` with a copy icon.
@@ -174,10 +176,10 @@ Shown the first time a film needs the editor (after Bring footage, before loggin
 - A text link (text-2, 12): "I'll run my own session instead". It turns the sheet into the MCP instructions (the install script and the "Copy request for your editor" text), with **Done**.
 - Buttons: Cancel (plain) · **Use Claude Code** (steel). The steel label follows the selected card.
 
-States: neither program found shows both cards as "Not installed" with their install commands, and the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Open Terminal**.
+States: neither program found shows both cards as "Not installed" with their install commands, and the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Check again** and **Open Terminal**. A check that couldn't tell shows "Found · couldn't check sign-in" and "Direction couldn't check the sign-in: <why>. You can start anyway." with **Check again**.
 
 **Acceptance:**
-- [ ] Cancel leaves the film on the Footage step with the pill "Editor not set up". Nothing is lost; footage stays.
+- [ ] Cancel leaves the film on the Footage step: on the editor in Settings, or with the pill "Editor not set up" when none was ever chosen. Nothing is lost; footage stays.
 - [ ] Choosing starts logging immediately when Start work is Right away.
 
 ---
@@ -223,6 +225,7 @@ The Cut room after a run failed during Cut 4.
 |---|---|---|---|
 | Not installed | "The editor isn't installed." | "Direction couldn't find Claude Code on this Mac." | Copy install command · Choose another editor… |
 | Not signed in | "Claude Code isn't signed in." | as above | Open Terminal · Try again |
+| Out of date | "Claude Code needs updating." | "It's older than Direction needs. In Terminal, run claude update, then try again." (Codex: `npm install -g @openai/codex@latest`, or `brew upgrade codex` for Homebrew's.) Read from the program refusing an option ("unknown option '--effort'"); the sign-in check says the same as "couldn't check". | Copy update command · Open Terminal · Try again |
 | No internet | "The editor is offline." | "It will try again when this Mac is back online." | (retries automatically every 30 s) |
 | Program quit | "The editor quit unexpectedly." | The last line of its error output, in SF Mono 11.5. | Try again · Copy details |
 | Stopped without finishing | "The editor stopped before finishing." | "It ended without delivering Cut 4." | Try again · Take the turnover back |

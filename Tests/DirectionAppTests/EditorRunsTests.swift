@@ -42,6 +42,60 @@ struct EditorStreamTests {
         #expect(EditorFailure.reason("Invalid API key · Please run /login") == .notSignedIn)
     }
 
+    /// The sign-in check reads the program's answer. A good answer with 401 in an id or a number is still signed
+    /// in; only the program saying so is "not signed in"; anything else is "couldn't check", with why.
+    @Test func theSignInCheckReadsTheAnswerNotItsDigits() {
+        let ready = #"{"type":"result","subtype":"success","is_error":false,"duration_ms":2401,"num_turns":1,"result":"ready","session_id":"5b4014a0-0401-4e01-9401-a401b4017401","total_cost_usd":0.0401,"usage":{"input_tokens":401}}"#
+        #expect(EditorDiscovery.readyAnswer(.claudeCode, output: ready, error: "", status: 0) == .signedIn)
+        let key = #"{"type":"result","subtype":"success","is_error":true,"result":"Invalid API key · Please run /login","session_id":"s"}"#
+        #expect(EditorDiscovery.readyAnswer(.claudeCode, output: key, error: "", status: 1) == .notSignedIn("Invalid API key · Please run /login"))
+        #expect(EditorDiscovery.readyAnswer(.claudeCode, output: "", error: #"API Error: 401 {"type":"error","error":{"type":"authentication_error"}}"#, status: 1) != .signedIn)
+        if case .notSignedIn = EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "API Error: 401 Unauthorized", status: 1) {} else { Issue.record("a 401 status is a sign-in error") }
+        if case .couldNotCheck(let why) = EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "Error: model claude-x not found", status: 1) { #expect(why.contains("not found")) } else { Issue.record("another error isn't a sign-in answer") }
+        if case .couldNotCheck = EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "", status: 1) {} else { Issue.record("no answer at all can't tell") }
+        let codex = [#"{"type":"thread.started","thread_id":"01a18401-5cc0-7410-875d-55d7457034f8"}"#, #"{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ready"}}"#, #"{"type":"turn.completed","usage":{"input_tokens":2401}}"#].joined(separator: "\n")
+        #expect(EditorDiscovery.readyAnswer(.codex, output: codex, error: "", status: 0) == .signedIn)
+        let codexOut = #"{"type":"error","message":"Not logged in. Run codex login."}"#
+        if case .notSignedIn = EditorDiscovery.readyAnswer(.codex, output: codexOut, error: "", status: 1) {} else { Issue.record("Codex saying so is not signed in") }
+        // 401 inside an id or a count isn't a sign-in error.
+        #expect(EditorFailure.reason("session 5b401 took 2401 ms for 401 tokens") == nil)
+    }
+
+    /// An editor older than Direction's options says so plainly, with the command that updates it.
+    @Test func anOldEditorIsOutOfDateWithItsUpdateCommand() {
+        #expect(EditorFailure.reason("error: unknown option '--effort'") == .outOfDate)
+        #expect(EditorFailure.reason("error: unexpected argument '--ephemeral' found") == .outOfDate)
+        #expect(RunStateMachine.outcome(RunStateMachine.Exit(status: 1, failures: ["error: unknown option '--no-session-persistence'"])).reason == .outOfDate)
+        #expect(EditorFailure.reason("ffmpeg: unknown encoder 'libx265'") == nil)
+        #expect(EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "error: unknown option '--tools'", status: 1) == .couldNotCheck("Claude Code is out of date for Direction. In Terminal, run claude update"))
+        #expect(EditorProgram.codex.updateCommand(path: "/opt/homebrew/bin/codex") == "brew upgrade codex")
+        #expect(EditorProgram.codex.updateCommand(path: "/Users/you/.npm-global/bin/codex") == "npm install -g @openai/codex@latest")
+        #expect(EditorStopCopy.title(.outOfDate, run: nil) == "The editor needs updating.")
+    }
+
+    /// Without Apple's developer tools, /usr/bin/python3 and git are placeholders: Direction never runs them,
+    /// and the editor is told so.
+    @Test func placeholdersForTheDeveloperToolsAreNeverRun() {
+        #expect(DeveloperTools.isPlaceholder("/usr/bin/python3") == !DeveloperTools.installed)
+        #expect(!DeveloperTools.isPlaceholder("/opt/homebrew/bin/python3") && !DeveloperTools.isPlaceholder("/usr/bin/sips"))
+        #expect(EditorJobs.noDeveloperTools.contains("`python3`") && EditorJobs.noDeveloperTools.contains("`git`"))
+        #expect(EditorJobs.role.contains("developer tools") == !DeveloperTools.installed)
+    }
+
+    /// A downloaded copy opened from its disk image offers to move to Applications; one in place doesn't.
+    @MainActor @Test func aCopyOnTheDiskImageIsToldToMove() {
+        #expect(MoveToApplications.isFromDownload("/private/var/folders/xy/T/AppTranslocation/4F1E/d/Direction.app"))
+        #expect(MoveToApplications.isFromDownload("/Volumes/Direction/Direction.app"))
+        #expect(!MoveToApplications.isFromDownload("/Applications/Direction.app") && !MoveToApplications.isFromDownload("/Users/you/Code/direction/build/Direction.app"))
+    }
+
+    /// From the shell: an editor's sign-in and network settings, never the nesting markers.
+    @Test func theShellsSettingsAnEditorNeedsAreCarried() {
+        #expect(EditorDiscovery.carried("CLAUDE_CONFIG_DIR") && EditorDiscovery.carried("ANTHROPIC_BASE_URL") && EditorDiscovery.carried("HTTPS_PROXY") && EditorDiscovery.carried("CODEX_HOME"))
+        #expect(!EditorDiscovery.carried("CLAUDECODE") && !EditorDiscovery.carried("CLAUDE_CODE_ENTRYPOINT") && !EditorDiscovery.carried("TERM") && !EditorDiscovery.carried("HOME"))
+        #expect(EditorDiscovery.shellKeys.contains("ANTHROPIC_API_KEY") && EditorDiscovery.shellKeys.contains("OPENAI_API_KEY"))
+    }
+
     /// Codex 0.164 `exec --json`: the real `ready` check's shape plus an MCP call, a command and a file change.
     static let codex = [
         #"{"type":"thread.started","thread_id":"01a186af-5cc0-7410-875d-55d7457034f8"}"#,
@@ -488,6 +542,68 @@ struct EditorRunnerTests {
         m.runs.takeTurnoverBack(m)
         #expect(try store.turnover(t.id).state == .cancelled)
         EditorRunner.shared.programOverride = [.claudeCode: Self.fake]
+    }
+
+    /// Who's editing? belongs to the film: its choice wins over Settings, a run waiting to start takes it,
+    /// and choosing again keeps it in the film and makes it the one the next new film starts with.
+    @Test func aFilmKeepsItsOwnEditor() throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1"), .codex: EditorInstall(program: .codex, path: Self.fake, version: "0.9.0")],
+                                         values: [EditorSetupKey.runsOn: "claudeCode", EditorSetupKey.startWork: "askFirst", EditorSetupKey.signedIn(.claudeCode): true, EditorSetupKey.signedIn(.codex): true])
+        defer { EditorPrograms.shared.setPreview([:]) }
+        _ = try store.updateDirectingState(summary: "Who edits: Codex") { $0.editor = "codex" }
+        var b = Brief(); b.logline = "One sentence."; b.feeling = "Quiet."; try store.saveBrief(b)
+        let m = FilmModel()
+        m.runtime = try ToolRuntime(store: store)
+        defer { m.close() }
+        let t = try store.turnOver(noteIDs: [], kind: "assembly", latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
+        m.refresh(force: true)
+        #expect(m.runs.runsOn == .codex && m.editorProgram == .codex)
+        #expect(m.runs.held?.turnoverID == t.id && m.runs.held?.program == "codex")
+        #expect(EditorSetup.runsOn == .claudeCode)
+        m.chooseEditor(.claudeCode)
+        #expect(try store.directingState().editor == "claudeCode" && m.runs.runsOn == .claudeCode)
+        m.chooseEditor(.codex)
+        #expect(try store.directingState().editor == "codex" && EditorSetup.runsOn == .codex)
+        // A film from before films kept their own follows Settings.
+        _ = try store.updateDirectingState(summary: "Older film") { $0.editor = nil }
+        EditorSetup.choose(.claudeCode)
+        m.refresh(force: true)
+        #expect(m.runs.choice == nil && m.runs.runsOn == .claudeCode)
+    }
+
+    /// A new film opens on Who's editing?, and none of its work starts until it's answered.
+    @Test func aNewFilmsWorkWaitsForWhoEdits() throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1")],
+                                         values: [EditorSetupKey.runsOn: "claudeCode", EditorSetupKey.startWork: "askFirst", EditorSetupKey.signedIn(.claudeCode): true])
+        defer { EditorPrograms.shared.setPreview([:]) }
+        var b = Brief(); b.logline = "One sentence."; b.feeling = "Quiet."; try store.saveBrief(b)
+        let m = FilmModel()
+        m.runtime = try ToolRuntime(store: store)
+        defer { m.close() }
+        m.askWhoEdits()
+        #expect(m.sheet == .editorSetup)
+        _ = try store.turnOver(noteIDs: [], kind: "assembly", latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
+        m.refresh(force: true)
+        #expect(m.runs.runs.isEmpty)
+        m.chooseEditor(.claudeCode); m.sheet = nil; m.refresh(force: true)
+        #expect(m.runs.held?.program == "claudeCode")
+        #expect(try store.directingState().editor == "claudeCode")
+    }
+
+    /// With no editor chosen anywhere, a film started from a script asks as soon as its picture needs writing,
+    /// not only once footage is logging.
+    @Test func aScriptWithNoEditorChosenAsksWhoEdits() throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: Self.fake, version: "2.4.1")])
+        defer { EditorPrograms.shared.setPreview([:]) }
+        _ = try store.importScript(PrepFixtures.essay, fileName: "The Chat Box.md")
+        let m = FilmModel()
+        m.runtime = try ToolRuntime(store: store)
+        defer { m.close() }
+        m.refresh(force: true)
+        #expect(m.sheet == .editorSetup && m.runs.runs.isEmpty)
     }
 
     /// A notes turnover that waits for the OK, in a film whose window finds the work (Direction starts the editor).

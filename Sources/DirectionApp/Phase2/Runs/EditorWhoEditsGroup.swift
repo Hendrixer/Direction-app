@@ -1,8 +1,9 @@
 import SwiftUI
 import DirectionCore
 
-/// Settings › Engines › Who edits (frame 43, specs/editor.md › 43). Choosing a program that isn't
-/// installed keeps the choice and shows how to install it; work waits with "Editor not set up".
+/// Settings › Engines › Who edits (frame 43, specs/editor.md › 43): the open film's editor, and the one a new
+/// film starts with. Choosing a program that isn't installed keeps the choice and shows how to install it;
+/// work waits with "Editor not set up".
 struct EditorWhoEditsGroup: View {
     var app: AppModel?
     var preview = false
@@ -10,7 +11,7 @@ struct EditorWhoEditsGroup: View {
 
     var body: some View {
         let _ = programs.changes
-        let runsOn = EditorSetup.runsOn, own = runsOn == .yourOwn, program = runsOn.program ?? .claudeCode
+        let runsOn = app?.film?.runs.runsOn ?? EditorSetup.runsOn, own = runsOn == .yourOwn, program = runsOn.program ?? .claudeCode
         SettingsGroup(label: "Who edits") {
             runsOnRow(runsOn)
             EditorPicksRow(program: program)
@@ -49,9 +50,14 @@ struct EditorWhoEditsGroup: View {
         let detail = Font.system(size: 11.5)
         if let p = runsOn.program {
             if let install = programs.install(p) {
-                let signedIn = EditorSetup.signedIn(p)
-                Text([p.name + (install.version.map { " \($0)" } ?? ""), signedIn == true ? "signed in" : signedIn == false ? "not signed in" : nil].compactMap { $0 }.joined(separator: " \u{00B7} "))
-                    .font(detail).foregroundStyle(signedIn == false ? Gate.State.alert : Gate.Text.tertiary).cssLineHeight(1.4, size: 11.5)
+                let signedIn = EditorSetup.signedIn(p), why = programs.couldNotCheck[p]
+                HStack(spacing: 8) {
+                    Text([p.name + (install.version.map { " \($0)" } ?? ""), signedIn == true ? (EditorSetup.usesShellKey(p) ? "signed in with your shell\u{2019}s API key" : "signed in") : signedIn == false ? "not signed in" : why != nil ? "couldn\u{2019}t check sign-in" : nil].compactMap { $0 }.joined(separator: " \u{00B7} "))
+                        .font(detail).foregroundStyle(signedIn == false ? Gate.State.alert : Gate.Text.tertiary).cssLineHeight(1.4, size: 11.5)
+                        .help(why ?? "")
+                    if programs.signingIn.contains(p) { GateSpinner() }
+                    else if signedIn != true { Button("Check again") { programs.checkSignIn(p, force: true) }.buttonStyle(.gate(.ghost, .small)) }
+                }
             } else if programs.checked {
                 HStack(spacing: 8) {
                     Text("Not installed. Install it, then come back.").font(detail).foregroundStyle(Gate.Text.tertiary)
@@ -69,7 +75,7 @@ struct EditorWhoEditsGroup: View {
     }
 
     private func choose(_ c: EditorRunsOn) {
-        EditorSetup.choose(c)
+        if let film = app?.film { film.chooseEditor(c) } else { EditorSetup.choose(c) }
         if let p = c.program { programs.checkSignIn(p) }
         app?.film?.refresh(force: true)
     }

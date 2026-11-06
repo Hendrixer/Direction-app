@@ -21,6 +21,8 @@ public enum VisionHelper {
             var seen = Set<String>()
             for dir in dirs where seen.insert(dir).inserted {
                 let candidate = URL(fileURLWithPath: dir).appendingPathComponent("python3")
+                // Without the developer tools /usr/bin/python3 opens an installer; it never has mlx_vlm anyway.
+                guard !DeveloperTools.isPlaceholder(candidate.path) else { continue }
                 if fm.isExecutableFile(atPath: candidate.path), canImport(candidate) { result = candidate; break }
             }
         }
@@ -55,10 +57,15 @@ public enum VisionHelper {
                 if fm.fileExists(atPath: url.path) { return url }
             }
         }
-        // A source checkout (tests and `swift run`).
+        // A source checkout (tests and `swift run`). Debug builds only, so a copy we hand out doesn't carry this
+        // Mac's paths.
+        #if DEBUG
         let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("DirectionApp/Resources/Vision/describe.py")
         return fm.fileExists(atPath: source.path) ? source : nil
+        #else
+        return nil
+        #endif
     }
 
     // MARK: Weights

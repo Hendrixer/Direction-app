@@ -2,9 +2,10 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Frame 56: Who's editing? Shown the first time a film needs the editor and none is set up, and
-/// from Settings › Engines › Set up again…. Cancel leaves the film where it was: the pill says
-/// "Editor not set up" and nothing is lost.
+/// Frame 56: Who's editing? Opens on every new film, with the editor chosen last; the film keeps the choice
+/// (DirectingState.editor) and nothing of its starts until it's made. Also shown the first time an older film
+/// needs the editor and none is chosen, and from the pill's Set up…. Cancel leaves the film on the editor in
+/// Settings › Engines, or with "Editor not set up" when there's none, and nothing is lost.
 struct EditorSetupSheet: View {
     @Bindable var model: FilmModel
     @State private var choice: EditorProgram = .claudeCode
@@ -30,7 +31,7 @@ struct EditorSetupSheet: View {
     @ViewBuilder private var chooser: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Who\u{2019}s editing?").font(Gate.Font.brand(size: 22, width: 120)).foregroundStyle(Gate.Text.primary).accessibilityAddTraits(.isHeader)
-            Text("Direction starts the editor on this Mac whenever there\u{2019}s work, and you can pause or stop it anytime. It uses your own sign-in.")
+            Text("Direction starts the editor on this Mac whenever this film has work, and you can pause or stop it anytime. It uses your own sign-in.")
                 .font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).cssLineHeight(1.5, size: 13).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 490, alignment: .leading)
         }
@@ -82,7 +83,7 @@ struct EditorSetupSheet: View {
                 if let install {
                     HStack(spacing: 7) {
                         Circle().fill(signedIn == false ? Gate.State.alert : Gate.State.approve).frame(width: 6, height: 6)
-                        Text(["Found", install.version, signedIn == false ? "not signed in" : signedIn == true ? "signed in" : nil].compactMap { $0 }.joined(separator: " \u{00B7} "))
+                        Text(["Found", install.version, signedIn == false ? "not signed in" : signedIn == true ? "signed in" : programs.couldNotCheck[p] != nil ? "couldn\u{2019}t check sign-in" : nil].compactMap { $0 }.joined(separator: " \u{00B7} "))
                             .font(.system(size: 12)).foregroundStyle(Gate.Text.secondary).lineLimit(1)
                         if programs.signingIn.contains(p) { GateSpinner() }
                     }
@@ -102,13 +103,18 @@ struct EditorSetupSheet: View {
         .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
     }
 
-    /// Found but not signed in: "Open Terminal, run claude, and sign in."
+    /// Found but not signed in: "Open Terminal, run claude, and sign in." Or the check couldn't tell, and why.
+    /// Either way Check again asks now, and the work can start regardless: a run that finishes settles it.
     private var signInStep: AnyView? {
-        guard programs.install(choice) != nil, EditorSetup.signedIn(choice) == false else { return nil }
+        guard programs.install(choice) != nil else { return nil }
+        let why = programs.couldNotCheck[choice]
+        guard EditorSetup.signedIn(choice) == false || why != nil else { return nil }
         return AnyView(HStack(spacing: 10) {
-            EditorStopBody(text: "Open Terminal, run \(choice == .claudeCode ? "claude" : "codex login"), and sign in.", program: choice)
+            if let why { Text("Direction couldn\u{2019}t check the sign-in: \(why). You can start anyway.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true) }
+            else { EditorStopBody(text: "Open Terminal, run \(choice == .claudeCode ? "claude" : "codex login"), and sign in.", program: choice) }
             Spacer(minLength: 8)
-            Button { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) } label: { Label("Open Terminal", systemImage: "terminal") }.buttonStyle(.gate)
+            Button { programs.checkSignIn(choice, force: true) } label: { Text("Check again") }.buttonStyle(.gate).disabled(programs.signingIn.contains(choice))
+            if why == nil { Button { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) } label: { Label("Open Terminal", systemImage: "terminal") }.buttonStyle(.gate) }
         })
     }
 
@@ -117,9 +123,15 @@ struct EditorSetupSheet: View {
     @ViewBuilder private var ownSessionPage: some View {
         SheetHeader(title: "Run your own session", subtitle: "Direction shows what your editor does, but can\u{2019}t start, pause or stop it.")
         VStack(alignment: .leading, spacing: 12) {
-            Text("Install Direction\u{2019}s tools for Claude Code or Codex, then ask your editor to open this film.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
-            CopyableCommand(text: "./scripts/install-local.sh")
-            CopyableCommand(text: EditorConnection.claudeCommand)
+            // The tools are inside the app; a copy built from a checkout links them with the checkout's script.
+            Text(EditorConnection.isBundled ? "Add Direction\u{2019}s tools to Claude Code or Codex in Terminal, then ask your editor to open this film." : "Install Direction\u{2019}s tools for Claude Code or Codex, then ask your editor to open this film.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+            if EditorConnection.isBundled {
+                CopyableCommand(text: EditorConnection.claudeCommand)
+                CopyableCommand(text: EditorConnection.codexCommand)
+            } else {
+                CopyableCommand(text: "./scripts/install-local.sh")
+                CopyableCommand(text: EditorConnection.claudeCommand)
+            }
             if model.url != nil {
                 Text("Then paste this into your editor to start:").font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary)
                 CopyableCommand(text: model.editorRequest, copyLabel: "Copy request for your editor")
@@ -129,7 +141,7 @@ struct EditorSetupSheet: View {
         SheetFooter {
             Button { ownSession = false } label: { HStack(spacing: 4) { Image(systemName: "chevron.left").font(.system(size: 8, weight: .semibold)); Text("Who\u{2019}s editing?") }.font(.system(size: 12)).foregroundStyle(Gate.Text.secondary) }.buttonStyle(.plain)
         } trailing: {
-            Button { EditorSetup.choose(.yourOwn); close() } label: { HStack(spacing: 6) { Text("Done"); KeyHint("\u{2318}\u{21A9}") } }
+            Button { model.chooseEditor(.yourOwn); close() } label: { HStack(spacing: 6) { Text("Done"); KeyHint("\u{2318}\u{21A9}") } }
                 .buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
         }
     }
@@ -138,7 +150,7 @@ struct EditorSetupSheet: View {
 
     private func load() {
         programs.refreshIfNeeded()
-        if let p = EditorSetup.runsOn.program, programs.install(p) != nil { choice = p }
+        if let p = model.runs.runsOn.program, programs.install(p) != nil { choice = p }
         else { choice = EditorProgram.allCases.first { programs.install($0) != nil } ?? .claudeCode }
         asksFirst = EditorSetup.asksFirst
         if programs.install(choice) != nil { programs.checkSignIn(choice) }
@@ -146,10 +158,10 @@ struct EditorSetupSheet: View {
 
     private func confirm() {
         guard foundAny, programs.install(choice) != nil else { programs.refresh(); return }
-        EditorSetup.choose(EditorRunsOn(rawValue: choice.rawValue) ?? .claudeCode)
+        model.chooseEditor(EditorRunsOn(rawValue: choice.rawValue) ?? .claudeCode)
         EditorSetup.setAsksFirst(asksFirst)
         programs.checkSignIn(choice)
-        // Right away: logging starts now (findWork runs on refresh).
+        // Right away: the film's work starts now (findWork runs on refresh, once the sheet is closed).
         close()
     }
 

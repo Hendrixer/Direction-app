@@ -17,6 +17,7 @@ extension EditorRunsModel {
         switch run.reason ?? .stoppedWithoutFinishing {
         case .notInstalled: body = "Direction couldn\u{2019}t find \(program.name) on this Mac."
         case .notSignedIn: body = "Open Terminal, run \(program == .claudeCode ? "claude" : "codex login"), and sign in. Then try again."
+        case .outOfDate: body = "It\u{2019}s older than Direction needs. In Terminal, run \(program.updateCommand(path: EditorPrograms.shared.install(program)?.path)), then try again."
         case .offline: body = "It will try again when this Mac is back online."
         case .programQuit: return run.detail ?? "It quit without saying why."
         case .stoppedWithoutFinishing:
@@ -69,6 +70,10 @@ struct EditorStopActions: View {
                 Button { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) } label: { Label("Open Terminal", systemImage: "terminal") }.buttonStyle(.gate(.normal, size))
                 if inTurnover { takeBack(size) } else { tryAgain(size) }
             case .offline:
+                if inTurnover { takeBack(size) } else { tryAgain(size) }
+            case .outOfDate:
+                Button(copied ? "Copied" : "Copy update command") { SystemSupport.copy(program.updateCommand(path: EditorPrograms.shared.install(program)?.path)); flashCopied() }.buttonStyle(.gate(.normal, size))
+                Button { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) } label: { Label("Open Terminal", systemImage: "terminal") }.buttonStyle(.gate(.ghost, size))
                 if inTurnover { takeBack(size) } else { tryAgain(size) }
             case .programQuit:
                 if !inTurnover { tryAgain(size) }

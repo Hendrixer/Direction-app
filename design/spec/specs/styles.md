@@ -79,7 +79,7 @@ Once the answer is accepted, its row on the sheet offers **Keep as a Rule…** (
 
 The quickest way to a style is a video the director wishes theirs felt like. **New Style › Make One from a Video…** in the brief, or **Film › Make a Style from a Video…**: up to three videos (a YouTube, Vimeo or other link, or a file; two or three by the same person make a truer style) and what they like about them.
 
-1. **Direction fetches and studies each, on this Mac.** A link is downloaded with yt-dlp (at most 720p, with its sound); a file is studied where it is (the study folder holds a link to it, never a copy). Each video gets its own folder in `<film>.direction/Editor/Learn/<time>-<n>/`: its words (`transcript.txt`), a frame every two seconds (`sheet-N.jpg`), and what Direction can count (`study.json`, and `study.md` in words), so the editor judges only what it can't:
+1. **Direction fetches and studies each, on this Mac.** A link is downloaded with Direction's own yt-dlp (techniques.md › Learning one from a video; at most 720p, with its sound); a file is studied where it is (the study folder holds a link to it, never a copy). Each video gets its own folder in `<film>.direction/Editor/Learn/<time>-<n>/`: its words (`transcript.txt`), a frame every two seconds (`sheet-N.jpg`), and what Direction can count (`study.json`, and `study.md` in words), so the editor judges only what it can't:
    - **pace:** the shots and their lengths, cuts a minute and in each minute, when the first cut comes;
    - **words:** words a minute, the gaps left between them and how many pauses run over half a second;
    - **sound:** integrated loudness and true peak, how much of it has music and how much music under speech;

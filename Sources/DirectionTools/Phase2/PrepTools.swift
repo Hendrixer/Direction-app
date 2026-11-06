@@ -16,10 +16,10 @@ extension ToolCatalog {
                 "replies": list(reply),
                 "questions": list(record(["rowID": string, "text": string, "choices": list(choice)], required: ["rowID", "text", "choices"])),
             ], readOnly: false),
-            definition("direction_breakdown", "Read the breakdown: setups (number, name, needs, noCamera) and their shots (code: the slate, like 2C; the rows it plays under; what we see; size; move; seconds; source shoot|screen|make|have|sound; makePlan and estimate for made shots; coverage: planned, got with its takes, missing, needsFootage or toMake; the director's choice for a missing shot). scriptChanged says the script moved on since the breakdown was last made. notes are the director's notes on shots. includeScript adds a page of the A/V script (from: the first row, default 1; count: rows, default 40; its next is where the following page starts) with each row's picture as words (and, in a film from a story, its kind story and each beat's part of the story; talk with ownWords is found on the day, so it's shot with sound): add that page's shots before reading the next.", ["includeScript": bool, "from": integer, "count": integer]),
-            definition("direction_breakdown_update", "Lay out the breakdown, or change it. setups: [{id?, name, needs? (what it takes: time of day, light, props, what's on the screen), noCamera? (screen recordings, made shots, footage the director has)}]: group shots by place and light, so each setup is set up once. shots: [{id? (to change one), setupID or setup (a setup's name), rowIDs (the rows it plays under, in order), what (what we see), size?, move?, seconds?, source (shoot, screen for a screen recording, make, have when the director said they have it, sound for sound only like a narration), board?, makePlan? and estimate? (dollars, nil when it's free like a graphic) for source make}]. Direction numbers setups in the order they're needed and letters shots by row; once the director OKs the breakdown the numbers are slates and never change, and a new shot takes the next letter. remove: shot ids. Fields the director set, and footage they added, change only where a turned-over note asks. replies: [{noteID, reply}]; questions: [{shotID, text, choices}].", [
+            definition("direction_breakdown", "Read the breakdown: setups (number, name, needs, noCamera) and their shots (code: the slate, like 2C; the rows it plays under; what we see; how to shoot it; what it's for; size; move; seconds; source shoot|screen|make|have|sound; makePlan and estimate for made shots; coverage: planned, got with its takes, missing, needsFootage or toMake; the director's choice for a missing shot). scriptChanged says the script moved on since the breakdown was last made. notes are the director's notes on shots. includeScript adds a page of the A/V script (from: the first row, default 1; count: rows, default 40; its next is where the following page starts) with each row's picture as words (and, in a film from a story, its kind story and each beat's part of the story; talk with ownWords is found on the day, so it's shot with sound): add that page's shots before reading the next.", ["includeScript": bool, "from": integer, "count": integer]),
+            definition("direction_breakdown_update", "Lay out the breakdown, or change it. setups: [{id?, name, needs? (what it takes: time of day, light, props, what's on the screen), noCamera? (screen recordings, made shots, footage the director has)}]: group shots by place and light, so each setup is set up once. shots: [{id? (to change one), setupID or setup (a setup's name), rowIDs (the rows it plays under, in order), what (what we see and what happens, in plain words), how? (how to get it on the day, for a director who's never been on a set: where the camera goes and whether it moves, how long to record, what to get right; not for made shots), why? (what it's for, in a line, when what we see doesn't say), size?, move?, seconds?, source (shoot, screen for a screen recording, make, have when the director said they have it, sound for sound only like a narration), board?, makePlan? and estimate? (dollars, nil when it's free like a graphic) for source make}]. No crew shorthand in the words (locked off, plate, cover, matte, layer, roll). Direction numbers setups in the order they're needed and letters shots by row; once the director OKs the breakdown the numbers are slates and never change, and a new shot takes the next letter. Name another shot by the number Direction last gave it: when Direction numbers shots again, the numbers in the words follow, and toFix lists any number that names no shot. remove: shot ids. Fields the director set, and footage they added, change only where a turned-over note asks. replies: [{noteID, reply}]; questions: [{shotID, text, choices}].", [
                 "setups": list(record(["id": string, "name": string, "needs": string, "noCamera": bool], required: ["name"])),
-                "shots": list(record(["id": string, "setupID": string, "setup": string, "rowIDs": list(string), "what": string, "size": sizes, "move": moves, "seconds": number, "source": strings(ShotSource.allCases.map(\.rawValue)), "board": boards, "makePlan": string, "estimate": number])),
+                "shots": list(record(["id": string, "setupID": string, "setup": string, "rowIDs": list(string), "what": string, "how": string, "why": string, "size": sizes, "move": moves, "seconds": number, "source": strings(ShotSource.allCases.map(\.rawValue)), "board": boards, "makePlan": string, "estimate": number])),
                 "remove": list(string),
                 "replies": list(reply),
                 "questions": list(record(["shotID": string, "text": string, "choices": list(choice)], required: ["shotID", "text", "choices"])),
@@ -64,7 +64,7 @@ extension ToolRuntime {
             let remove = a["remove"].array?.compactMap(\.string) ?? []
             let (replies, questions) = try Self.repliesAndQuestions(a, key: "shotID")
             guard try store.script() != nil else { throw DirectionError("script_not_found", "This film has no script to break down.") }
-            let (b, refused) = try store.updateBreakdown(setups: setups, shots: shots, remove: remove, replies: replies, questions: questions)
+            let (b, refused, toFix) = try store.updateBreakdown(setups: setups, shots: shots, remove: remove, replies: replies, questions: questions)
             let covered = Set(b.shots.flatMap(\.rowIDs))
             let script = try store.script()
             return ToolResponse(.object([
@@ -72,6 +72,7 @@ extension ToolRuntime {
                 "rowsWithoutShot": .array((script?.rows ?? []).enumerated().filter { !covered.contains($0.element.id) }.map { .number(Double($0.offset + 1)) }),
                 "notesWaiting": .array(b.turnedOver.map { .number(Double($0.number)) }),
                 "refused": .array(refused.map(JSONValue.string)),
+                "toFix": .array(toFix.map(JSONValue.string)),
             ]))
         default: return nil
         }
@@ -131,6 +132,8 @@ extension ToolRuntime {
             let shots: [JSONValue] = b.shots(in: setup.id).map { shot in
                 var o: [String: JSONValue] = ["id": .string(shot.id), "code": .string(shot.code), "what": .string(shot.what), "seconds": .number(shot.seconds), "source": .string(shot.source.rawValue),
                                               "rows": .array(shot.rowIDs.compactMap { script?.number(of: $0) }.map { .number(Double($0)) }), "rowIDs": .array(shot.rowIDs.map(JSONValue.string))]
+                if let v = shot.how { o["how"] = .string(v) }
+                if let v = shot.why { o["why"] = .string(v) }
                 if let v = shot.size { o["size"] = .string(v.rawValue) }
                 if let v = shot.move { o["move"] = .string(v.rawValue) }
                 if let v = shot.makePlan { o["makePlan"] = .string(v) }

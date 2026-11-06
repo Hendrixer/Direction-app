@@ -17,6 +17,7 @@ struct GeneralPane: View {
     @AppStorage(SettingsKey.filmGrain) private var grain = true
     @AppStorage(SettingsKey.reduceMotion) private var reduceMotion = "system"
     @State private var outputs: [AudioOutputDevice] = []
+    @State private var checksForUpdates = AppUpdates.shared.checksAutomatically
 
     var body: some View {
         SettingsPane {
@@ -25,6 +26,11 @@ struct GeneralPane: View {
                     GateSelect(options: [("lastFilm", "Reopen the last film"), ("films", "Show Films"), ("newFilm", "Start a new film")], selection: $whenOpening)
                 }
                 SettingsRow(label: "Show Films when no film is open") { GateSwitch(isOn: $showFilms) }
+                if AppUpdates.shared.updates {
+                    SettingsRow(label: "Check for updates automatically", detail: "Once a day. Direction asks before it installs one.") {
+                        GateSwitch(isOn: Binding(get: { checksForUpdates }, set: { checksForUpdates = $0; AppUpdates.shared.checksAutomatically = $0 }))
+                    }
+                }
             }
             SettingsGroup(label: "Playback") {
                 SettingsRow(label: "Start screenings full screen", first: true) { GateSwitch(isOn: $fullScreen) }

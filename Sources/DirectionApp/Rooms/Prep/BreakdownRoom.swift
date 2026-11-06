@@ -15,7 +15,7 @@ struct BreakdownRoom: View {
         if let b = model.breakdown, !b.shots.isEmpty { BreakdownPage(model: model, breakdown: b, preview: preview) }
         else {
             EmptyStateView(art: nil, title: model.breakingDown ? "Breaking down the script" : "No breakdown yet",
-                           message: model.breakingDown ? "The editor is turning every row into shots, grouped by where and in what light you\u{2019}ll shoot them. They show here as each page of the script is done." : "OK the script and the editor breaks it down into shots by setup.") {
+                           message: model.breakingDown ? "The editor is turning every moment of the script into shots, grouped by where and in what light you\u{2019}ll shoot them. They show here as each page of the script is done." : "OK the script and the editor breaks it down into shots by setup.") {
                 if model.breakingDown { GateProgress(value: nil, agent: true).frame(width: 160) }
                 else { Button("Open Script") { model.go(.script) }.buttonStyle(.gate(.normal, .large)) }
             }
@@ -30,11 +30,15 @@ private struct BreakdownPage: View {
     @State private var selected: String?
     @State private var order: BreakdownOrder = .setup
     @State private var jump: String?
+    /// The scroll area's width: a wide window reads bigger (PrepMeasure).
+    @State private var available: CGFloat = 0
+    private var measure: PrepMeasure { PrepMeasure(available: available) }
 
     /// Worked out once a draw: every row and shot reads them.
     private let coverage: [String: ShotCoverage]
     private let script: AVScript
     private let rowNumber: [String: Int]
+    private let plays: PlaysAt
     private let shotsIn: [String: [BreakdownShot]]
 
     init(model: FilmModel, breakdown: Breakdown, preview: PrepPreview?) {
@@ -42,6 +46,7 @@ private struct BreakdownPage: View {
         coverage = ProjectStore.coverage(breakdown, dailies: model.dailies)
         script = model.script ?? AVScript()
         rowNumber = Dictionary(script.rows.enumerated().map { ($0.element.id, $0.offset + 1) }, uniquingKeysWith: { a, _ in a })
+        plays = PlaysAt(script)
         shotsIn = Dictionary(grouping: breakdown.shots, by: \.setupID).mapValues { $0.sorted { $0.code.localizedStandardCompare($1.code) == .orderedAscending } }
         _selected = State(initialValue: preview?.shot.flatMap { code in breakdown.shot(code: code)?.id } ?? breakdown.shots.first?.id)
     }
@@ -52,13 +57,14 @@ private struct BreakdownPage: View {
         HStack(spacing: 0) {
             nav.frame(width: 240)
             ScrollViewReader { proxy in
-                // Centered and kept to a width you can read across; the rows get their air from the space.
-                ScrollView { main.frame(maxWidth: 1120).padding(.horizontal, 32).padding(.vertical, 22).frame(maxWidth: .infinity) }
+                // Centered and kept to a width you can read across; a wide page reads a step bigger (PrepMeasure).
+                ScrollView { main.frame(maxWidth: PrepMeasure.cap).padding(.horizontal, PrepMeasure.margin).padding(.vertical, 22).frame(maxWidth: .infinity) }
+                    .measuringWidth($available)
                     .onChange(of: jump) { _, id in if let id { withAnimation(gateAnimation(Gate.Motion.glide)) { proxy.scrollTo(id, anchor: .top) }; jump = nil } }
             }
             .frame(maxWidth: .infinity).background(Gate.Surface.ground)
             if let shot = selected.flatMap({ breakdown.shot($0) }) {
-                ShotInspector(model: model, breakdown: breakdown, shot: shot, coverage: coverage[shot.id] ?? .planned, rowNumber: rowNumber).frame(width: 360).id(shot.id)
+                ShotInspector(model: model, breakdown: breakdown, shot: shot, coverage: coverage[shot.id] ?? .planned, rowNumber: rowNumber, plays: plays).frame(width: 360).id(shot.id)
             }
         }
     }
@@ -136,7 +142,7 @@ private struct BreakdownPage: View {
     private var editorSays: String? {
         if model.breakingDown {
             let covered = Set(breakdown.shots.flatMap(\.rowIDs)).count
-            return "Breaking down the script: shots for \(covered) of \(script.rows.count) rows so far."
+            return "Breaking down the script: \(covered) of its \(script.rows.count) moments have a shot so far."
         }
         let missing = breakdown.shots.filter { coverage[$0.id] == .missing }
         if breakdown.isOK, model.hasFootage, !missing.isEmpty {
@@ -185,15 +191,21 @@ private struct BreakdownPage: View {
 
     private func groupHead(_ s: BreakdownSetup) -> some View {
         let shots = shotsIn[s.id] ?? []
-        return HStack(spacing: 10) {
-            Text("\(s.number)").font(.system(size: 11.5, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
-                .frame(minWidth: 22, minHeight: 22).background(RoundedRectangle(cornerRadius: 6).fill(Gate.Surface.raised)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Gate.Line.subtle))
-            Text(s.name).font(.system(size: 13, weight: .semibold))
-            if let needs = s.needs { Text(needs).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1) }
-            Spacer()
-            Text(model.hasFootage && breakdown.isOK ? "\(shots.filter { coverage[$0.id]?.isIn == true }.count) of \(shots.count)" : shots.count == 1 ? "1 shot" : "\(shots.count) shots").font(Gate.Font.mono).foregroundStyle(Gate.Text.disabled)
+        // What the setup needs is the plan for the day, so it reads whole, under the name.
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Text("\(s.number)").font(.system(size: 11.5, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
+                    .frame(minWidth: 22, minHeight: 22).background(RoundedRectangle(cornerRadius: 6).fill(Gate.Surface.raised)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Gate.Line.subtle))
+                Text(s.name).font(.system(size: measure.text(13), weight: .semibold))
+                Spacer()
+                Text(model.hasFootage && breakdown.isOK ? "\(shots.filter { coverage[$0.id]?.isIn == true }.count) of \(shots.count)" : shots.count == 1 ? "1 shot" : "\(shots.count) shots").font(Gate.Font.mono).foregroundStyle(Gate.Text.disabled)
+            }
+            if let needs = s.needs {
+                Text(needs).font(.system(size: measure.caption(12.5))).foregroundStyle(Gate.Text.secondary).lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 980, alignment: .leading).padding(.leading, 32)
+            }
         }
-        .padding(.horizontal, 8).padding(.bottom, 9)
+        .padding(.horizontal, 8).padding(.bottom, 10)
         .overlay(alignment: .bottom) { Rectangle().fill(Gate.Line.strong).frame(height: 1) }
         .id(s.id)
     }
@@ -209,13 +221,15 @@ private struct BreakdownPage: View {
                         if shot.addedAfterOK == true || (breakdown.pass > 1 && shot.pass == breakdown.pass) { GemMark(size: 7, solid: true) }
                         Text(shot.code).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundStyle(Gate.Text.primary)
                     }.frame(width: 34, alignment: .leading)
-                    ShotPicture(model: model, shot: shot, coverage: c).frame(width: 96, height: 54)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(shot.what).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).lineLimit(2)
-                        Text(caption(shot, c)).font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
+                    ShotPicture(model: model, shot: shot, coverage: c).frame(width: measure.shot, height: measure.shot * 9 / 16)
+                    VStack(alignment: .leading, spacing: 3 + measure.step) {
+                        Text(shot.what).font(.system(size: measure.text(13))).foregroundStyle(Gate.Text.primary).lineLimit(measure.step > 0 ? 3 : 2)
+                        // How to get it on the day, under what we see; all of it is in the shot's panel.
+                        if let how = shot.how, !covering { Text(how).font(.system(size: measure.text(12))).foregroundStyle(Gate.Text.secondary).lineLimit(2) }
+                        Text(caption(shot, c)).font(.system(size: measure.caption(11))).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     if covering { takes(c).frame(width: 164, alignment: .leading) }
-                    else { playsUnder(shot).frame(width: 210, alignment: .leading) }
+                    else { playsUnder(shot).frame(width: 210 + 45 * measure.step, alignment: .leading) }
                     if !covering { Text(Timecode.duration(shot.seconds)).font(Gate.Font.mono).foregroundStyle(Gate.Text.secondary).frame(width: 40, alignment: .trailing) }
                     status(shot, c).frame(width: covering ? 110 : 86, alignment: .trailing)
                 }
@@ -223,14 +237,15 @@ private struct BreakdownPage: View {
                 if let q = shot.question, q.isOpen {
                     HStack(spacing: 9) {
                         GemMark()
-                        Text(q.text).font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
+                        Text(q.text).font(.system(size: measure.text(12.5))).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
                         Spacer(minLength: 8)
                         Text("Answer\u{2026}").font(.system(size: 12, weight: .medium)).foregroundStyle(Gate.Text.secondary)
                     }
-                    .padding(.leading, 158)
+                    // Under the words: past the code and the picture.
+                    .padding(.leading, 34 + 14 + measure.shot + 14)
                 }
             }
-            .padding(.horizontal, 8).padding(.vertical, 13)
+            .padding(.horizontal, 8).padding(.vertical, measure.rowPadding)
             .background(isSel ? RoundedRectangle(cornerRadius: 8).fill(Gate.Surface.panel) : nil)
             .overlay(isSel ? RoundedRectangle(cornerRadius: 8).strokeBorder(Gate.Line.subtle) : nil)
             .overlay(alignment: .bottom) { if !isSel { Rectangle().fill(Gate.Line.subtle).frame(height: 1) } }
@@ -250,16 +265,13 @@ private struct BreakdownPage: View {
         return [shot.source == .sound ? "Sound only" : nil, shot.size?.label, shot.move?.label].compactMap { $0 }.joined(separator: " \u{00B7} ")
     }
 
+    /// Where in the film it plays: the moments by name, then their times. Not row numbers, which only the
+    /// Script shows.
     private func playsUnder(_ shot: BreakdownShot) -> some View {
-        let numbers = shot.rowIDs.compactMap { rowNumber[$0] }
-        // A beat of a story is named by its title, or quoted from the story: what we hear there isn't words to quote.
-        let first = shot.rowIDs.first.flatMap { rowNumber[$0] }.map { n in
-            let row = script.rows[n - 1]
-            return row.story.map { let lead = ScriptImport.beatLead($0); return lead.title ?? lead.body } ?? row.sound.text
-        } ?? ""
-        return (Text(numbers.count == 1 ? "Row \(numbers[0])" : "Rows \(EditorJobs.rowList(numbers))").font(.system(size: 10.5, weight: .medium, design: .monospaced)).foregroundColor(Gate.Text.secondary)
-            + Text(first.isEmpty ? "" : " \u{00B7} \u{201C}\(first)\u{201D}").font(.system(size: 11.5)).foregroundColor(Gate.Text.tertiary))
-            .lineLimit(2)
+        VStack(alignment: .leading, spacing: 2) {
+            if let name = plays.name(shot.rowIDs) { Text(name).font(.system(size: measure.caption(11.5))).foregroundStyle(Gate.Text.secondary).lineLimit(2) }
+            Text(plays.times(shot.rowIDs)).font(.system(size: measure.caption(10.5), weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
+        }
     }
 
     private func takes(_ c: ShotCoverage) -> some View {
@@ -315,5 +327,48 @@ struct ShotPicture: View {
                 BoardView(kind: shot.board ?? (shot.source == .screen ? .screen : shot.source == .make ? .made : .medium), move: shot.move, label: label)
             }
         }
+    }
+}
+
+/// Where a shot plays, for a director who doesn't think in script rows: the moments it plays under, by a story
+/// beat's title or the words we hear there, and their times in the film. "Hold", "0:29–0:38".
+struct PlaysAt {
+    private let rows: [String: (index: Int, row: AVRow, start: Double)]
+
+    init(_ script: AVScript) {
+        var t = 0.0, out: [String: (Int, AVRow, Double)] = [:]
+        for (i, r) in script.rows.enumerated() { out[r.id] = (i, r, t); t += r.seconds }
+        rows = out
+    }
+
+    /// A story's beat by its title (or its words, when it has none); a script's line by what we hear, quoted.
+    static func name(_ r: AVRow) -> String? {
+        if let story = r.story { let lead = ScriptImport.beatLead(story); return (lead.title ?? lead.body).nilIfBlank }
+        return r.sound.text.nilIfBlank.map { "\u{201C}\($0)\u{201D}" } ?? r.sound.kind.label
+    }
+
+    /// "Hold"; "Assembly, Tighter"; "Tighter to Hold" past two. A script's lines: the first one's words.
+    func name(_ rowIDs: [String]) -> String? {
+        let found = rowIDs.compactMap { rows[$0] }.sorted { $0.index < $1.index }
+        guard found.first?.row.story != nil else { return found.first.flatMap { Self.name($0.row) } }
+        var names: [String] = []
+        for f in found { if let n = Self.name(f.row), names.last != n { names.append(n) } }
+        switch names.count {
+        case 0: return nil
+        case 1, 2: return names.joined(separator: ", ")
+        default: return "\(names[0]) to \(names[names.count - 1])"
+        }
+    }
+
+    /// "0:29–0:38", or "0:05–0:13 and 0:29–0:38" when they aren't together.
+    func times(_ rowIDs: [String]) -> String {
+        let found = rowIDs.compactMap { rows[$0] }.sorted { $0.index < $1.index }
+        var runs: [(Double, Double)] = [], last = -2
+        for f in found {
+            if f.index == last + 1, let r = runs.popLast() { runs.append((r.0, f.start + f.row.seconds)) } else { runs.append((f.start, f.start + f.row.seconds)) }
+            last = f.index
+        }
+        let text = runs.map { "\(Timecode.duration($0.0))\u{2013}\(Timecode.duration($0.1))" }
+        return text.count > 1 ? text.dropLast().joined(separator: ", ") + " and " + text.last! : text.first ?? ""
     }
 }

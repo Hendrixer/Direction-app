@@ -13,7 +13,7 @@ public enum HeardKind: String, Codable, CaseIterable, Sendable {
     case effect
     case music
     case silence
-    public var label: String { switch self { case .voice: "VO"; case .onCamera: "On camera"; case .effect: "Sound"; case .music: "Music"; case .silence: "Silence" } }
+    public var label: String { switch self { case .voice: "Voice-over"; case .onCamera: "On camera"; case .effect: "Sound"; case .music: "Music"; case .silence: "Silence" } }
 }
 
 public enum ShotSize: String, Codable, CaseIterable, Sendable {
@@ -23,7 +23,18 @@ public enum ShotSize: String, Codable, CaseIterable, Sendable {
 
 public enum ShotMove: String, Codable, CaseIterable, Sendable {
     case still, push, pull, pan, tilt, handheld, track
-    public var label: String { switch self { case .push: "Slow push"; case .pull: "Pull out"; default: rawValue.capitalized } }
+    /// In plain words, for a director who's never been on a set.
+    public var label: String {
+        switch self {
+        case .still: "Camera still"
+        case .push: "Moves in"
+        case .pull: "Moves back"
+        case .pan: "Turns side to side"
+        case .tilt: "Tilts up or down"
+        case .handheld: "Handheld"
+        case .track: "Moves alongside"
+        }
+    }
 }
 
 /// What a drawn board shows (the board style: line drawings, plainly not footage).
@@ -209,7 +220,13 @@ public struct BreakdownShot: Codable, Hashable, Sendable, Identifiable {
     public var code: String
     public var setupID: String
     public var rowIDs: [String]
+    /// What we see, in plain words: what the camera sees and what happens.
     public var what: String
+    /// How to get it on the day, for someone who's never been on a set: where the camera goes and whether it may move,
+    /// how long to record, what to get right. nil for a made shot, which has its makePlan.
+    public var how: String?
+    /// What it's for, in a line, when what we see doesn't say: "Direction freezes this at 3 s for Hold."
+    public var why: String?
     public var size: ShotSize?
     public var move: ShotMove?
     public var seconds: Double
