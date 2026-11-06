@@ -118,7 +118,7 @@ struct SceneContextMenu: View {
             .header("\(scene.label) · \(Timecode.range(scene.start, scene.end, fps: model.fps))"),
             .item("Play from Here", icon: "play.fill", key: "Space", shortcut: .init(.space, modifiers: [])) { FilmActions(model).play(from: scene.start) },
             .item("Mark Here", icon: "mark", key: "N", shortcut: .init("n", modifiers: []), disabled: model.duration <= 0) { model.pause(); model.seek(scene.start); model.mark() },
-            .item("Note on This Scene", icon: "text.bubble") { model.seek(scene.start); FilmActions(model).startNote(anchor: .scene) },
+            .item("Note on This Scene", icon: "film") { model.seek(scene.start); if model.room != .cut { model.go(.cut) }; model.noteWholeCut(scene: scene.id) },
             .separator,
             .item(scene.locked ? "Unlock Scene" : "Lock Scene", icon: scene.locked ? "lock.open" : "lock.fill", key: keys.combo(.lockScene)?.text, shortcut: keys.menuShortcut(.lockScene), disabled: dailiesScene == nil || model.isPictureLocked) { model.lockScene(scene.id, !scene.locked) },
             .item("Open in Dailies", icon: "square.grid.2x2", disabled: dailiesScene == nil) { model.selectedSceneID = scene.id; model.go(.dailies) },
@@ -147,8 +147,8 @@ struct NoteContextMenu: View {
             .item("Play from Note", icon: "play.fill", key: "Space", shortcut: .init(.space, modifiers: []), disabled: model.noteTime(note) == nil) { model.select(note); model.togglePlayback() },
         ]
         if editable || note.lifecycle == .turnedOver || note.inInbox {
-            out.append(.item("Edit Note", icon: "text.bubble", key: "↩", shortcut: .init(.return, modifiers: []), disabled: !editable) {
-                model.select(note); model.draftText = note.text; model.draftKind = note.kind; model.composerFocus += 1
+            out.append(.item(note.lifecycle == .draft ? "Write Note" : "Edit Note", icon: "text.bubble", key: "↩", shortcut: .init(.return, modifiers: []), disabled: !editable) {
+                model.beginWriting(note)
             })
         } else {
             out.append(.item("Reply", icon: "arrowshape.turn.up.left", key: "⌘R", disabled: note.lifecycle != .answered) {
@@ -156,10 +156,9 @@ struct NoteContextMenu: View {
             })
         }
         out += [
-            .item("Change Anchor\u{2026}", icon: "arrow.left.and.line.vertical.and.arrow.right", disabled: true) {},
             .submenu("Kind", icon: "slider.horizontal.3", key: note.kind?.label, disabled: !editable, kinds),
             .separator,
-            .item("Copy Timecode", icon: "clock", disabled: model.noteTime(note) == nil) { SystemSupport.copy(model.anchorText(note)) },
+            .item("Copy Time", icon: "clock", disabled: model.noteTime(note) == nil) { SystemSupport.copy(model.anchorText(note)) },
             .item(number.isEmpty ? "Copy Link to Note" : "Copy Link to Note \(number)", icon: "link", disabled: note.number == nil) {
                 SystemSupport.copy("direction://film/\(model.project?.id ?? "film")/note/\(number)")
             },
@@ -169,7 +168,8 @@ struct NoteContextMenu: View {
                 if let c = model.note(note.id) { model.selectAnswer(c) }
             },
             .separator,
-            .item("Drop Note", icon: "trash", key: "⌫", shortcut: .init(.delete, modifiers: []), destructive: true, disabled: !droppable) { model.dropNote(note.id) },
+            .item("Remove Box", icon: "viewfinder", disabled: note.region == nil || !editable) { model.removeBox(note) },
+            .item("Remove Note", icon: "trash", key: "⌫", shortcut: .init(.delete, modifiers: []), destructive: true, disabled: !droppable) { model.dropFromSheet(note) },
         ]
         return out
     }
@@ -187,19 +187,23 @@ struct PictureContextMenu: View {
         let take = Self.takeUnderPlayhead(model)
         return [
             .item("Mark This Frame", icon: "mark", key: "N", shortcut: .init("n", modifiers: []), disabled: model.duration <= 0) { model.mark() },
-            .item("Draw a Region", icon: "viewfinder", key: "R", shortcut: .init("r", modifiers: []), disabled: model.duration <= 0) {
-                model.pause(); model.anchorMode = .region; model.drawingRegion = true
+            .item("Draw a Box", icon: "viewfinder", key: "R", shortcut: .init("r", modifiers: []), disabled: model.duration <= 0) {
                 if model.room != .cut { model.go(.cut) }
+                model.beginRegion()
             },
-            .item("Note on the Whole Cut", icon: "text.bubble") { FilmActions(model).startNote(anchor: .wholeCut) },
+            .item("Mark a Stretch", icon: "arrow.left.and.right", disabled: model.duration <= 0) {
+                if model.room != .cut { model.go(.cut) }
+                model.beginStretch()
+            },
+            .item("Note on the Whole Cut", icon: "text.bubble") { if model.room != .cut { model.go(.cut) }; model.noteWholeCut() },
             .item("Look\u{2026}", icon: "camera.filters", key: "\u{2318}\u{2325}L", shortcut: .init("l", modifiers: [.command, .option]), disabled: model.duration <= 0) { model.openLook() },
             .separator,
-            .item("Copy Timecode", icon: "clock", key: keys.combo(.copyTimecode)?.text, shortcut: keys.menuShortcut(.copyTimecode)) { FilmActions(model).copyTimecode() },
+            .item("Copy Time", icon: "clock", key: keys.combo(.copyTimecode)?.text, shortcut: keys.menuShortcut(.copyTimecode)) { FilmActions(model).copyTimecode() },
             .item("Copy Frame as Image", icon: "film", disabled: model.runtime == nil) { copyFrame(model) },
             .item("Show This Take in Dailies", icon: "square.grid.2x2", disabled: take == nil) {
                 model.openTakeID = take; model.selectedSceneID = model.dailies.take(take ?? "").sceneID; model.go(.dailies)
             },
-        ]
+        ] + (model.boxEditable && model.visibleRegion != nil ? [.separator, .item("Remove Box", icon: "viewfinder") { if let c = model.selectedNote { model.removeBox(c) } }] : [])
     }
 
     /// The take on the story's layer under the playhead.

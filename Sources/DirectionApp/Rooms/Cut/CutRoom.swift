@@ -116,25 +116,23 @@ struct CutRoom: View {
         if state.ab != nil, model.comparingNoteID != nil || state.comparingCuts, let r = optionKey(char, mods: mods) { return r }
 
         if mods == .option, let digit = Self.optionDigit(press) {
-            model.setKind(NoteKind.allCases[digit - 1], composer: false)
+            model.setKind(NoteKind.allCases[digit - 1])
             return .handled
         }
         guard mods.isEmpty || mods == .shift else { return .ignored }
         let shift = mods == .shift
-        let regionKeys = model.anchorMode == .region && model.region != nil
         switch press.key {
         case .upArrow, .downArrow:
             let step = press.key == .upArrow ? -1 : 1
-            if regionKeys { model.nudgeRegion(dx: 0, dy: CGFloat(step) * (shift ? 0.1 : 0.01)) }
-            else if model.notesTab == .outside { selectOutside(step) }
+            if model.notesTab == .outside { selectOutside(step) }
             else if let q = waitingQuestion { model.moveChoice(q, step) }
             else { model.selectAdjacentNote(step) }
             return .handled
         case .leftArrow:
-            if regionKeys { model.nudgeRegion(dx: shift ? -0.1 : -0.01, dy: 0) } else { model.step(frames: shift ? -model.fps : -1) }
+            model.step(frames: shift ? -model.fps : -1)
             return .handled
         case .rightArrow:
-            if regionKeys { model.nudgeRegion(dx: shift ? 0.1 : 0.01, dy: 0) } else { model.step(frames: shift ? model.fps : 1) }
+            model.step(frames: shift ? model.fps : 1)
             return .handled
         case .space:
             if let ab = state.ab { ab.toggle() } else { model.togglePlayback() }
@@ -152,9 +150,8 @@ struct CutRoom: View {
         switch char {
         case "n":
             model.mark()
-            if let id = model.freshMarkID, let c = model.note(id) { model.notesTab = .sheet; model.showNote(c) }
             return .handled
-        // R replies to a selected answer; with a note selected it draws a region on the picture.
+        // R replies to a selected answer; otherwise it draws a box on the picture for a new note.
         case "r" where answer != nil && !model.isPictureLocked:
             model.replyToAnswer(answer?.id)
             return .handled
@@ -170,16 +167,16 @@ struct CutRoom: View {
         default:
             break
         }
-        // With a draft selected, typing starts writing it; other single keys are the room's.
-        if model.notesTab == .sheet, composerShown, model.selectedNote?.lifecycle == .draft, Self.printable(press.characters) {
+        // With a note with no words selected, typing starts writing it; other single keys are the room's.
+        if model.notesTab == .sheet, composerShown, let c = model.selectedNote, c.lifecycle == .draft, Self.printable(press.characters) {
+            model.beginWriting(c)
             model.draftText += press.characters
-            model.composerFocus += 1
             return .handled
         }
         switch char {
         case "w": model.watchThrough(); return .handled
-        case "i" where composerShown: setRange(in: true); return .handled
-        case "o" where composerShown: setRange(in: false); return .handled
+        case "i" where composerShown: model.setStretchEdge(start: true); return .handled
+        case "o" where composerShown: model.setStretchEdge(start: false); return .handled
         case "e" where model.notesTab == .outside:
             if let c = selectedOutside { model.editOutsideFirst(c) }
             return .handled
@@ -187,11 +184,6 @@ struct CutRoom: View {
         case "k": model.shuttle(0); return .handled
         case "l": model.shuttle(1); return .handled
         default:
-            if model.notesTab == .sheet, composerShown, model.selectedNote == nil, answer == nil, Self.printable(press.characters) {
-                model.draftText += press.characters
-                model.composerFocus += 1
-                return .handled
-            }
             return .ignored
         }
     }
@@ -240,7 +232,7 @@ struct CutRoom: View {
         return nil
     }
 
-    /// The sheet shows its composer: no turnover open, or you're writing notes for the next one.
+    /// The sheet takes new notes: no turnover open, or you're writing notes for the next one.
     private var composerShown: Bool { model.notesTurnover == nil || model.notesUI.cuttingSide == .notes }
     private var selectedOutside: ReviewComment? { model.inbox.first { $0.id == model.notesUI.selectedOutsideID } }
     /// The question the keyboard answers: the oldest in the Questions tab, the newest in the progress panel.
@@ -258,7 +250,7 @@ struct CutRoom: View {
     }
 
     private func delete() -> KeyPress.Result {
-        if model.anchorMode == .region, model.region != nil { model.cancelRegion(); return .handled }
+        if model.isDrawing { model.cancelDrawing(); return .handled }
         if model.notesTab == .outside, let c = selectedOutside {
             model.declineOutside(c.id)
             model.toast = Toast(title: "Declined \(c.person?.name ?? "their")\u{2019}s note")
@@ -279,7 +271,7 @@ struct CutRoom: View {
             return .ignored
         }
         guard model.notesTab == .sheet, composerShown, let c = model.selectedNote else { return .ignored }
-        if c.lifecycle == .draft { model.composerFocus += 1 } else { model.editInComposer(c) }
+        model.beginWriting(c)
         return .handled
     }
 
@@ -288,20 +280,12 @@ struct CutRoom: View {
         if state.replyingNoteID != nil { model.cancelReply(); return .handled }
         if state.comparingCuts { state.comparingCuts = false; return .handled }
         if model.comparingNoteID != nil { model.comparingNoteID = nil; return .handled }
-        if model.drawingRegion || model.anchorMode == .region { model.cancelRegion(); return .handled }
+        if model.isDrawing { model.cancelDrawing(); return .handled }
         if ui.correctingNoteID != nil { ui.correctingNoteID = nil; ui.correction = ""; return .handled }
-        if ui.editingNoteID != nil || ui.editingOutsideID != nil || !model.draftText.isEmpty { model.cancelComposer(); return .handled }
+        if ui.editingNoteID != nil { model.stopWriting(); return .handled }
         if model.notesTab != .sheet { model.notesTab = .sheet; return .handled }
         if model.watchedCutID != nil { model.watch(model.latestCut); return .handled }
         return .ignored
-    }
-
-    /// I / O: range in and out at the playhead.
-    private func setRange(in isIn: Bool) {
-        let t = model.position
-        let current = model.rangeSelection ?? t...min(model.duration, t + 2)
-        model.rangeSelection = isIn ? t...max(t, current.upperBound) : min(t, current.lowerBound)...t
-        model.anchorMode = .range
     }
 
     private static func printable(_ s: String) -> Bool {
@@ -359,7 +343,7 @@ extension FilmModel {
             return PrimaryAction(title: "Watch \(cut.name)", icon: "play.fill") { self.watchThrough() }
         }
         let n = readyNotes.count
-        if n > 0 { return PrimaryAction(title: "Turn over", icon: "arrow.right", count: String(n)) { self.sheet = .turnover } }
+        if n > 0 { return PrimaryAction(title: "Turn over", icon: "arrow.right", count: String(n)) { self.saveWriting(advance: false); self.sheet = .turnover } }
         let acceptable = acceptableRemaining.count
         if acceptable > 0 {
             return PrimaryAction(title: "Accept", icon: "checkmark", count: String(acceptable), help: "Accept every answer still to look at (\u{2318}\u{21A9})") { self.changes.confirmAcceptAll = true }

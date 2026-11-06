@@ -28,8 +28,8 @@ struct StripMark: Identifiable, Equatable {
     var fresh = false
 }
 
-/// The scene strip replaces the scrubber everywhere. Click seeks and drag scrubs; ⌥- or ⇧-drag
-/// selects a range for a note. Right-click a scene for its menu. Marks sit in a row underneath.
+/// The scene strip replaces the scrubber everywhere. Click seeks and drag scrubs. With Mark a stretch on (or
+/// ⌥- or ⇧-drag) a drag draws a stretch for a note. Right-click a scene for its menu. Marks sit underneath.
 struct SceneStrip<Menu: View>: View {
     var scenes: [StripScene]
     var duration: Double
@@ -40,6 +40,12 @@ struct SceneStrip<Menu: View>: View {
     var showsNames = true
     var onSeek: (Double) -> Void = { _ in }
     var onRange: ((Double, Double) -> Void)? = nil
+    /// The stretch shown can be pulled and moved (yours, not turned over yet).
+    var rangeEditable = true
+    /// A plain drag draws a stretch (Mark a stretch is on).
+    var drawsOnDrag = false
+    /// The drag let go of a stretch: true for one just drawn, false for one pulled or moved.
+    var onRangeEnd: ((Bool) -> Void)? = nil
     @ViewBuilder var menu: (StripScene) -> Menu
 
     @State private var dragStart: Double?
@@ -78,7 +84,7 @@ struct SceneStrip<Menu: View>: View {
                     RoundedRectangle(cornerRadius: 3).fill(Gate.Voice.directorWash).overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Gate.Voice.director, lineWidth: 1.5))
                         .overlay {
                             // Grips on both edges: the range can be pulled longer or shorter.
-                            if onRange != nil && w > 14 {
+                            if onRange != nil && rangeEditable && w > 14 {
                                 HStack {
                                     Capsule().fill(Gate.Voice.director).frame(width: 3, height: max(8, sceneHeight * 0.45))
                                     Spacer(minLength: 0)
@@ -112,7 +118,9 @@ struct SceneStrip<Menu: View>: View {
             .frame(width: width, height: height, alignment: .topLeading)
             .contentShape(Rectangle())
             .onContinuousHover { phase in
-                guard case .active(let p) = phase, onRange != nil, let range else { if case .ended = phase { NSCursor.arrow.set() }; return }
+                guard case .active(let p) = phase, onRange != nil else { if case .ended = phase { NSCursor.arrow.set() }; return }
+                if drawsOnDrag { NSCursor.crosshair.set(); return }
+                guard let range, rangeEditable else { NSCursor.arrow.set(); return }
                 switch grab(p.x, range: range, x: x) {
                 case .lower, .upper: NSCursor.resizeLeftRight.set()
                 case .move: NSCursor.openHand.set()
@@ -124,9 +132,9 @@ struct SceneStrip<Menu: View>: View {
                 if dragStart == nil {
                     let start = time(at: value.startLocation.x, scenes: scenes, total: total, usable: usable)
                     dragStart = start; moved = false
-                    if let range, onRange != nil { dragging = grab(value.startLocation.x, range: range, x: x) } else { dragging = .seek }
+                    if let range, onRange != nil, rangeEditable, !drawsOnDrag { dragging = grab(value.startLocation.x, range: range, x: x) } else { dragging = .seek }
                     if case .move(_, let length) = dragging, let range { dragging = .move(grab: start - range.lowerBound, length: length) }
-                    if case .seek = dragging, onRange != nil, !NSEvent.modifierFlags.intersection([.option, .shift]).isEmpty { dragging = .draw }
+                    if case .seek = dragging, onRange != nil, drawsOnDrag || !NSEvent.modifierFlags.intersection([.option, .shift]).isEmpty { dragging = .draw }
                     if case .move = dragging { NSCursor.closedHand.set() }
                 }
                 if abs(value.translation.width) > 3 { moved = true }
@@ -144,7 +152,8 @@ struct SceneStrip<Menu: View>: View {
                 }
             }.onEnded { value in
                 // A click on the range that didn't drag it moves the playhead there, like anywhere else.
-                if !moved, let start = dragStart { switch dragging { case .move, .lower, .upper: onSeek(start); default: break } }
+                if !moved, let start = dragStart { switch dragging { case .move, .lower, .upper, .draw: onSeek(start); default: break } }
+                if moved { switch dragging { case .draw: onRangeEnd?(true); case .move, .lower, .upper: onRangeEnd?(false); case .seek: break } }
                 if case .move = dragging { NSCursor.openHand.set() }
                 dragStart = nil; dragging = .seek; moved = false
             })
@@ -214,8 +223,8 @@ struct SceneStrip<Menu: View>: View {
 }
 
 extension SceneStrip where Menu == EmptyView {
-    init(scenes: [StripScene], duration: Double, playhead: Double?, marks: [StripMark] = [], range: ClosedRange<Double>? = nil, tall: Bool = false, showsNames: Bool = true, onSeek: @escaping (Double) -> Void = { _ in }, onRange: ((Double, Double) -> Void)? = nil) {
-        self.init(scenes: scenes, duration: duration, playhead: playhead, marks: marks, range: range, tall: tall, showsNames: showsNames, onSeek: onSeek, onRange: onRange, menu: { _ in EmptyView() })
+    init(scenes: [StripScene], duration: Double, playhead: Double?, marks: [StripMark] = [], range: ClosedRange<Double>? = nil, tall: Bool = false, showsNames: Bool = true, onSeek: @escaping (Double) -> Void = { _ in }, onRange: ((Double, Double) -> Void)? = nil, rangeEditable: Bool = true, drawsOnDrag: Bool = false, onRangeEnd: ((Bool) -> Void)? = nil) {
+        self.init(scenes: scenes, duration: duration, playhead: playhead, marks: marks, range: range, tall: tall, showsNames: showsNames, onSeek: onSeek, onRange: onRange, rangeEditable: rangeEditable, drawsOnDrag: drawsOnDrag, onRangeEnd: onRangeEnd, menu: { _ in EmptyView() })
     }
 }
 

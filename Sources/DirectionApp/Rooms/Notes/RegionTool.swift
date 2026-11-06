@@ -2,8 +2,9 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Drawn over the picture in the Cut room: the region tool (frame 19) and the picture's context menu.
-/// Regions are stored as fractions of the frame, never points. One region per note.
+/// Drawn over the picture in the Cut room: a box around what a note is about (frame 19). Draw a box (R, or the
+/// box under the picture) and the drag makes the note; the selected note's box moves and resizes. Boxes are
+/// stored as fractions of the frame, never points. One box per note.
 struct RegionLayer: View {
     @Bindable var model: FilmModel
     /// The picture's size in points.
@@ -14,12 +15,12 @@ struct RegionLayer: View {
     private enum Handle: CaseIterable { case topLeading, top, topTrailing, trailing, bottomTrailing, bottom, bottomLeading, leading }
     private enum Drag { case draw(CGPoint), move(CGRect), resize(CGRect, Handle) }
 
-    /// The composer owns the region: you can draw, move and resize it.
-    private var interactive: Bool { model.anchorMode == .region && model.notesTab == .sheet }
+    /// Drawing a new box, or the selected note's box can still be moved and resized.
+    private var interactive: Bool { model.notesTab == .sheet && (model.drawingRegion || (model.boxEditable && model.visibleRegion != nil)) }
     private var region: CGRect? { model.visibleRegion }
     private var label: String {
-        let number = interactive ? (model.composerNoteNumber ?? model.nextNoteNumber) : (model.selectedNote?.number ?? model.nextNoteNumber)
-        return "\(number) · region"
+        let number = model.drawingRegion ? model.nextNoteNumber : (model.selectedNote?.number ?? model.nextNoteNumber)
+        return "\(number) · box"
     }
 
     var body: some View {
@@ -31,6 +32,9 @@ struct RegionLayer: View {
                     .accessibilityElement()
                     .accessibilityLabel(spoken(region))
                 if interactive { handleCursors(region) }
+            }
+            if model.drawingStretch {
+                glassHint("Drag along the timeline to mark a stretch.").frame(maxWidth: .infinity).padding(.top, 14)
             }
             if model.drawingRegion {
                 hint.frame(maxWidth: .infinity).padding(.top, 14)
@@ -44,13 +48,13 @@ struct RegionLayer: View {
         .pointerStyle(model.drawingRegion ? .rectSelection : nil)
         .onHover { hovered = $0 }
         .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local).onChanged(changed).onEnded(ended), including: interactive ? .all : .subviews)
-        .contextMenu { pictureMenu }
         .animation(gateAnimation(Gate.Motion.snap), value: region == nil)
     }
 
-    private var hint: some View {
+    private var hint: some View { glassHint("Drag a box around what you mean.") }
+    private func glassHint(_ text: String) -> some View {
         HStack(spacing: 8) {
-            Text("Drag to draw what matters.")
+            Text(text)
             Kbd("esc")
             Text("cancels.")
         }
@@ -59,18 +63,6 @@ struct RegionLayer: View {
         .gateGlass(8)
         .fixedSize()
         .allowsHitTesting(false)
-    }
-
-    @ViewBuilder private var pictureMenu: some View {
-        Button("Mark This Frame") { model.mark(); if let id = model.freshMarkID, let c = model.note(id) { model.showNote(c) } }
-        Button("Draw a Region") { model.beginRegion() }
-        Button("Note on the Whole Cut") { model.notesTab = .sheet; model.anchorMode = .wholeCut; model.composerFocus += 1 }
-        Divider()
-        Button("Copy Timecode") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(Timecode.format(model.position, fps: model.fps), forType: .string) }
-        if model.anchorMode == .region, model.region != nil {
-            Divider()
-            Button("Remove Region") { model.cancelRegion() }
-        }
     }
 
     /// Resize cursors over the handles, a grab hand inside.
@@ -93,9 +85,11 @@ struct RegionLayer: View {
     private func changed(_ value: DragGesture.Value) {
         guard size.width > 0, size.height > 0 else { return }
         if drag == nil {
-            if !model.drawingRegion, let r = model.region, let h = handle(at: value.startLocation, in: rect(r)) { drag = .resize(r, h) }
-            else if !model.drawingRegion, let r = model.region, rect(r).contains(value.startLocation) { drag = .move(r) }
-            else { drag = .draw(value.startLocation); model.drawingRegion = true; model.pause() }
+            // The selected note's box takes a drag on it; anywhere else, a drag draws a new box and its note.
+            let shown = model.drawingRegion || !model.boxEditable ? nil : model.visibleRegion
+            if let r = shown, let h = handle(at: value.startLocation, in: rect(r)) { drag = .resize(r, h) }
+            else if let r = shown, rect(r).contains(value.startLocation) { drag = .move(r) }
+            else { drag = .draw(value.startLocation); model.region = nil; model.drawingRegion = true; model.pause() }
         }
         switch drag {
         case .draw(let start):
@@ -112,9 +106,12 @@ struct RegionLayer: View {
 
     private func ended(_ value: DragGesture.Value) {
         defer { drag = nil }
-        guard case .draw = drag else { return }
-        if let r = model.region, r.width > 0.01, r.height > 0.01 { model.drawingRegion = false }
-        else { model.region = nil }
+        switch drag {
+        case .draw:
+            if let r = model.region, r.width > 0.01, r.height > 0.01 { model.finishBox(new: true) } else { model.region = nil }
+        case .move, .resize: model.finishBox(new: false)
+        case nil: break
+        }
     }
 
     private func resized(_ r: CGRect, _ h: Handle, to p: CGPoint, keepAspect: Bool) -> CGRect {
@@ -176,11 +173,12 @@ struct RegionLayer: View {
 }
 
 extension FilmModel {
-    /// Arrow keys nudge the region 1% (⇧ 10%) while the picture is in region mode.
+    /// Arrow keys nudge the selected note's box 1% (⇧ 10%).
     func nudgeRegion(dx: CGFloat, dy: CGFloat) {
-        guard var r = region else { return }
+        guard boxEditable, var r = visibleRegion else { return }
         r.origin.x = min(max(0, r.minX + dx), 1 - r.width)
         r.origin.y = min(max(0, r.minY + dy), 1 - r.height)
         region = r
+        finishBox(new: false)
     }
 }

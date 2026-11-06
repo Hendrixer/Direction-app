@@ -46,10 +46,10 @@ public enum EditorActivityLog {
         case "direction_frame":
             if let asset = a["assetID"].string { return ActivityInput(verb: "Looking at", object: take(asset, c), tool: name) }
             let t = seconds(a["time"]) ?? 0
-            return ActivityInput(verb: "Watching", object: timecode(t, c.fps), mono: true, time: t, tool: name)
+            return ActivityInput(verb: "Watching", object: clock(t), mono: true, time: t, tool: name)
         case "direction_watch", "direction_preview":
             guard let (s, e) = range(a) else { return ActivityInput(verb: "Watching", object: "the cut", tool: name) }
-            return ActivityInput(verb: "Watching", object: timecode(s, c.fps) + "\u{2013}" + timecode(e, c.fps), mono: true, time: s, tool: name)
+            return ActivityInput(verb: "Watching", object: clock(s) + "\u{2013}" + clock(e), mono: true, time: s, tool: name)
         case "direction_contact_sheet":
             return ActivityInput(verb: "Looking at", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
         case "direction_measure_audio" where a["assetID"] == .null:
@@ -131,15 +131,53 @@ public enum EditorActivityLog {
     }
 
     /// Files and scripts the program touches in its own folder (Claude's Read/Write, Codex's file changes and commands).
+    /// The program's own steps in plain words, never its file names: "Reading how to reframe", "Looking at a
+    /// frame", "Writing a new effect".
     public static func programActivity(tool: String, path: String?) -> ActivityInput? {
-        let file = path.map { ($0 as NSString).lastPathComponent }
         switch tool {
-        case "Read", "NotebookRead": return ActivityInput(verb: "Reading", object: file ?? "its notes", tool: tool)
-        case "Write", "Edit", "MultiEdit", "NotebookEdit", "file_change": return ActivityInput(verb: "Writing", object: file ?? "a file", tool: tool)
-        case "Glob", "Grep", "LS": return ActivityInput(verb: "Reading", object: "its folder", tool: tool)
+        case "Read", "NotebookRead": return ActivityInput(verb: reads(path).verb, object: reads(path).object, tool: tool)
+        case "Write", "Edit", "MultiEdit", "NotebookEdit", "file_change": return ActivityInput(verb: "Writing", object: writes(path), tool: tool)
+        case "Glob", "Grep", "LS": return ActivityInput(verb: "Looking through", object: "its folder", tool: tool)
         case "Bash", "command_execution": return ActivityInput(verb: "Running", object: "a script", tool: tool)
         default: return nil
         }
+    }
+
+    /// What reading a file is, by what it is.
+    static func reads(_ path: String?) -> (verb: String, object: String) {
+        guard let path else { return ("Reading", "its notes") }
+        let url = URL(fileURLWithPath: path), name = url.lastPathComponent, ext = url.pathExtension.lowercased()
+        if name == "SKILL.md" { return ("Reading", "how to " + skillWords(url.deletingLastPathComponent().lastPathComponent)) }
+        if ["CLAUDE.md", "AGENTS.md"].contains(name) { return ("Reading", "what it\u{2019}s here to do") }
+        if ["png", "jpg", "jpeg", "heic", "tif", "tiff", "webp"].contains(ext) { return ("Looking at", "a frame") }
+        if ["mov", "mp4", "m4v"].contains(ext) { return ("Looking at", "footage") }
+        if ["wav", "m4a", "mp3", "aif", "aiff"].contains(ext) { return ("Listening to", "sound") }
+        return ("Reading", "its notes")
+    }
+    /// What writing a file is, by what it is.
+    static func writes(_ path: String?) -> String {
+        switch path.map({ URL(fileURLWithPath: $0).pathExtension.lowercased() }) {
+        case "metal": "a new effect"
+        case "js", "html", "svg": "a graphic"
+        case "py", "sh", "swift", "rb", "mjs": "a script"
+        case "md", "txt": "its notes"
+        default: "a file"
+        }
+    }
+    /// "reframe" → "reframe for the shape": a skill by what it teaches.
+    static func skillWords(_ name: String) -> String {
+        let known = ["assemble": "assemble a cut", "break-down": "break down the script", "edit-video": "edit", "finish": "finish the film",
+                     "learn-technique": "learn a technique", "make-graphic": "make a graphic", "make-shot": "make a shot", "make-style": "make a style",
+                     "propose-look": "propose a look", "reframe": "reframe for the shape", "review-feedback": "read your notes", "start-project": "start a film",
+                     "take-turnover": "take your notes", "transitions": "use transitions", "write-av-script": "write the script"]
+        return known[name] ?? name.replacingOccurrences(of: "-", with: " ")
+    }
+
+    /// "0:12", "1:02:03": a time in the cut the way the director reads it.
+    public static func clock(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds < 360_000 else { return "\u{2013}:\u{2013}\u{2013}" }
+        let total = Int(max(0, seconds)), h = total / 3600, m = (total % 3600) / 60, s = total % 60
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
     // MARK: Edits

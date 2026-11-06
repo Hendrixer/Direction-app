@@ -115,7 +115,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     // The editor's answers
     case playChanges, pickOption, acceptAnswer, reply, revert
     // Menu-only commands (not in the overlay)
-    case newFilm, openFilm, closeFilm, bringFootage, export, copyTimecode, find, brief, editor, lockPicture, newNote, history, goToTimecode, clearRange, loop, mute, films, help, previousCut
+    case newFilm, openFilm, closeFilm, bringFootage, export, copyTimecode, find, brief, editor, lockPicture, newNote, history, goToTimecode, loop, mute, films, help, previousCut
 
     var id: String { rawValue }
 
@@ -133,12 +133,12 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .frame: "One frame"
         case .second: "One second"
         case .scene: "Previous or next scene"
-        case .rangeInOut: "Range in and out"
+        case .rangeInOut: "Start and end a stretch"
         case .fullScreen: "Full screen"
         case .mark: "Mark this moment"
         case .startScreening: "Watch through"
         case .endScreening: "Back to notes"
-        case .region: "Draw a region"
+        case .region: "Draw a box"
         case .kinds: "Kind: Feeling … Sound"
         case .addNote: "Add note"
         case .dropDraft: "Drop draft"
@@ -167,7 +167,6 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .newNote: "New note"
         case .history: "History"
         case .goToTimecode: "Go to timecode"
-        case .clearRange: "Clear range"
         case .loop: "Loop playback"
         case .mute: "Mute"
         case .films: "Films"
@@ -243,7 +242,6 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .newNote: .cmd("n", option: true)
         case .history: .cmd("y")
         case .goToTimecode: .init("g", control: true)
-        case .clearRange: .init("x", option: true)
         case .loop: .init("l", option: true)
         case .mute: .init("m", option: true)
         case .films: .cmd("0", shift: true)

@@ -279,22 +279,21 @@ struct FilmActions {
         m.pause(); m.seek(scenes[target].start)
     }
 
-    func setRangeIn() { let end = m.rangeSelection.map { max($0.upperBound, m.position) } ?? min(m.duration, m.position + 1); m.rangeSelection = m.position...max(m.position, end); m.anchorMode = .range }
-    func setRangeOut() { let start = m.rangeSelection.map { min($0.lowerBound, m.position) } ?? max(0, m.position - 1); m.rangeSelection = start...max(start, m.position); m.anchorMode = .range }
-    func clearRange() { m.rangeSelection = nil; if m.anchorMode == .range { m.anchorMode = .moment } }
+    func setRangeIn() { if m.room != .cut { m.go(.cut) }; m.setStretchEdge(start: true) }
+    func setRangeOut() { if m.room != .cut { m.go(.cut) }; m.setStretchEdge(start: false) }
 
-    /// A new note at the playhead: the Cut room, composer focused, optionally pre-filled.
-    func startNote(text: String = "", anchor: NoteAnchorMode = .moment) {
-        m.anchorMode = anchor
-        if !text.isEmpty { m.draftText = text }
-        m.notesTab = .sheet
-        m.go(.cut); m.composerFocus += 1
+    /// New Note (⌥⌘N, or words typed in the command menu): a note on this moment in the Cut room, open to write in.
+    func startNote(text: String = "") {
+        guard m.isEnabled(.cut) else { return }
+        m.go(.cut); m.pause()
+        m.mark()
+        if !text.isEmpty, m.notesUI.editingNoteID != nil { m.draftText = text }
     }
 
     /// Go to Timecode… (⌃G): asks for MM:SS:FF and seeks.
     func askForTimecode() {
-        let alert = NSAlert(); alert.messageText = "Go to timecode"; alert.informativeText = "MM:SS:FF, or seconds."
-        let field = NSTextField(string: timecode); field.frame = NSRect(x: 0, y: 0, width: 200, height: 24); field.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        let alert = NSAlert(); alert.messageText = "Go to a time"; alert.informativeText = "Minutes and seconds (1:12), or seconds (72)."
+        let field = NSTextField(string: Timecode.format(m.position, fps: m.fps)); field.frame = NSRect(x: 0, y: 0, width: 200, height: 24); field.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
         alert.accessoryView = field; alert.addButton(withTitle: "Go"); alert.addButton(withTitle: "Cancel")
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn, let t = Self.parseTimecode(field.stringValue, fps: m.fps) else { return }

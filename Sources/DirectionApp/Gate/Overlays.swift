@@ -186,6 +186,8 @@ struct EditorPill: View {
                 // Open over its popover, Ready reads as `.agent.ready`: prism gem, text-1, line-2 ring (frame 41).
                 case .ready where open: GemMark(size: 7)
                 case .ready, .waiting, .notSetUp, .readyToCut: GemMark(size: 7, color: Gate.Text.disabled)
+                // Working: a spinner, so it reads as busy rather than stuck.
+                case .working, .assembling, .readingBack, .looking, .listening: GateSpinner().scaleEffect(0.8).frame(width: 12, height: 12)
                 default: GemMark(size: 7)
                 }
                 AgentIcon(program: program, size: 14)

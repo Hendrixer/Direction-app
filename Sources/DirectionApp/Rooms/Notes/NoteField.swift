@@ -17,6 +17,8 @@ struct NoteField: View {
     var maxHeight: CGFloat = 160
     /// Bump to put the caret in the field.
     var focusToken: Int = 0
+    /// Takes the caret as soon as it shows (a note's row opened to write in).
+    var focusOnAppear = false
     var onFocusChange: (Bool) -> Void = { _ in }
     var onSubmit: () -> Void = {}
     var onEscape: (() -> Void)? = nil
@@ -28,7 +30,7 @@ struct NoteField: View {
     @State private var contentHeight: CGFloat = 0
 
     var body: some View {
-        NoteTextViewRepresentable(text: $text, label: label, footage: footage, focusToken: focusToken, contentHeight: $contentHeight,
+        NoteTextViewRepresentable(text: $text, label: label, footage: footage, focusToken: focusToken, focusOnAppear: focusOnAppear, contentHeight: $contentHeight,
                                   onFocusChange: { focused = $0; onFocusChange($0) }, onSubmit: onSubmit, onEscape: onEscape, onTab: onTab, onOptionDigit: onOptionDigit)
             .frame(height: max(minHeight, min(maxHeight, contentHeight)))
             .overlay(alignment: .topLeading) {
@@ -111,6 +113,7 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
     var label: String
     var footage: [FootageName]
     var focusToken: Int
+    var focusOnAppear = false
     @Binding var contentHeight: CGFloat
     var onFocusChange: (Bool) -> Void
     var onSubmit: () -> Void
@@ -170,6 +173,13 @@ private struct NoteTextViewRepresentable: NSViewRepresentable {
         view.onOptionDigit = onOptionDigit.map { _ in { digit in context.coordinator.parent.onOptionDigit?(digit) } }
         scroll.documentView = view
         context.coordinator.focusToken = focusToken
+        if focusOnAppear {
+            DispatchQueue.main.async { [weak view] in
+                guard let view, let window = view.window, window.firstResponder !== view else { return }
+                window.makeFirstResponder(view)
+                view.setSelectedRange(NSRange(location: (view.string as NSString).length, length: 0))
+            }
+        }
         return scroll
     }
 

@@ -241,11 +241,10 @@ private struct PlaybackMenuItems: View {
         .disabled(off)
         Divider()
         Group {
-            Button("Set Range In") { actions?.setRangeIn() }
-            Button("Set Range Out") { actions?.setRangeOut() }
+            Button("Start a Stretch Here") { actions?.setRangeIn() }
+            Button("End the Stretch Here") { actions?.setRangeOut() }
         }
         .disabled(off)
-        Button("Clear Range") { actions?.clearRange() }.shortcut(.clearRange).disabled(film?.rangeSelection == nil)
         Divider()
         Group {
             Button("Go to Start") { film?.pause(); film?.seek(0) }

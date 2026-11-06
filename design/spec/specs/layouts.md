@@ -19,7 +19,7 @@ For a stretch of the cut where a screen recording and a camera are in sync (a sy
 
 **Screen framing**, for Screen and Screen and you: **Full**, or **Framed**, the screen smaller on a background (the style's background, or a color) with rounded corners and a shadow. Note 3 asked for this ("frame this with some padding and a background").
 
-**The bubble follows your face.** Apple's Vision finds the face in each camera take about once a second (`LayoutAnalysis.faceTrack`), once, kept in the film's cache. The bubble crops the camera to its shape around the face (about two fifths of its height, a little above the middle), one size for each stretch, and its middle eases after the face with a key at most every two seconds, only when it moved, so leaning back carries the bubble with you without it twitching. Vision runs on this Mac and ships with macOS; no Python or download is needed. On the director's 17-minute 4K camera take the first search took 41 s; every change after it, 0.1 s. The search starts when the Layout button first shows, so it's usually done before the first change.
+**The bubble follows your face.** Apple's Vision finds the face in each camera take about once a second (`LayoutAnalysis.faceTrack`), once, kept in the film's cache. The bubble crops the camera to its shape around the face (about two fifths of its height, a little above the middle), one size for each stretch, and its middle eases after the face with a key at most every two seconds, only when it moved, so leaning back carries the bubble with you without it twitching. Vision runs on this Mac and ships with macOS; no Python or download is needed. On the director's 17-minute 4K camera take the first search took 41 s; every change after it, 0.1 s. The search runs the first time the editor lays out a cut with a camera in it.
 
 **Which take is which.** A take named for a camera ("camera-…", "webcam") is the camera. Otherwise the camera is the take with the biggest face over five frames, and the rest are screens: a screen recording often shows the person too (a camera preview, a video of them). With no face anywhere, a name or shape that looks like a screen recording decides.
 
@@ -29,29 +29,20 @@ Layouts cut from one to the next. Animating between them (the bubble sliding and
 
 A style names its own layouts (styles.md › A style on disk): each one a layout above plus a name and, for the bubble, an `edge` color drawn solid so it reads as you, not as part of the screen. Desk + Screen has Talking (You), Showing (Screen and you, bottom right, M, rounded) and Detail (Screen); Reaction has Reacting and Corner clear (L, yellow edge). Its rules say when each is used. A style without layouts takes the house style's; with none anywhere, the four above.
 
-- The picker shows the film's style's layouts first, by name, and the corner, size, shape and screen rows under them; changing a part makes it the same layout without the name ("Screen and you · top left").
-- Dailies' **In the cut** lists them first and starts on the first one with you in it.
+- A style's page draws its layouts, by name.
 - The editor names them (`layout: "Showing"`); Direction looks the name up in the film's style before it runs.
 
-## Where the director sets it
+## The director's part
 
-**Under the picture** in the Cut room and Finish (the transport's last button, after Mark), when the film has a camera and a screen recording in sync: a drawing of the layout at the playhead. Click it for the picker:
+The director doesn't pick layouts. On 2026-11-05 the user took out the Layout button under the picture, its picker, and Dailies' **In the cut**: they were there for one way of shooting (a desk and a screen) and nobody used them. A layout changes the way everything else in the cut does: with a note ("put me bottom right here", "show only the screen while I type"), which the editor answers with a layout and the director watches. The style says which layouts a film uses and when, and its rules hold.
 
-- The four layouts, drawn from the same geometry the renderer uses.
-- For Screen and you: Corner (four dots), Size (S · M · L), Shape (Circle · Rounded · Wide).
-- Screen: Full · Framed.
-- **Apply to:** Scene (the scene at the playhead, the default), Selection (the range ⌥-dragged on the strip, offered when there is one), or Film.
-- Under them: "Changes the cut at once. ⌘Z undoes.", or why it can't now ("The editor is making the next cut.", "Picture is locked.", "Layouts change Cut 3. Watch it to change them.").
-
-Every choice applies at once: the director's own revision of the latest cut (`TimelineStore.directorEdit`), which the cut then plays, recorded as theirs (`EditResult.byDirector`). No editor run, no turnover. ⌘Z puts the cut back while nothing else has changed since (`undoDirectorEdit`); ⌘⇧Z lays it out again. While the editor is making the next cut, the latest cut can't change.
-
-**In Dailies**, a take in sync with others shows **In the cut** under Angles: the film's layout (the style's by name, then Screen and you in each corner, Side by side, You, Screen; the style's first with you in it, or Screen and you · bottom right, until chosen). The editor's job says it, and the assembly lays out the cut with it.
+Layouts the director set before then stay theirs (`layout_is_yours` below), and the director's own revisions with them still undo.
 
 ## The editor
 
 - One edit function, `layout(range, layout)`, with the style's name for one or its parts, instead of cutaways, crops and shaders, even where a style's rule describes a corner camera. "Put me bottom right" becomes one call, and the made-shot answer to note 2 ("the talking head becoming an overlay in the bottom right") is a layout change.
 - **A layout owns only where its clips sit.** The editor's own work on them stays when the layout changes: a zoom on the screen (its transform), masks and blurs over something private, filters, a freeze. What placed them goes: an earlier layout's place and card, and a bubble made by hand (a camera scaled under 1×, its shader).
-- A layout the director set is the director's. Where its clips sit can't change (`layout_is_yours`: a new layout over it, their place or card, a bubble's transform, moving or cutting them) unless a note asks, the same rule as words and looks. The editor can still zoom the screen, blur or mask what's private, and freeze it, as the style asks.
+- A layout the director set (before 2026-11-05) is the director's. Where its clips sit can't change (`layout_is_yours`: a new layout over it, their place or card, a bubble's transform, moving or cutting them) unless a note asks, the same rule as words and looks. The editor can still zoom the screen, blur or mask what's private, and freeze it, as the style asks.
 - `direction_timeline` lists layouts by range, so the editor reads them as layouts, not as the clips they make.
 
 ## How it's built

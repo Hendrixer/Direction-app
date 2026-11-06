@@ -81,7 +81,7 @@ struct TurnoverSheet: View {
         model.turnOver(latitude: latitude, waitForOK: waitForOK)
         model.notesTab = .sheet
         model.notesUI.cuttingSide = .progress
-        model.clearComposer()
+        model.stopWriting(); model.cancelDrawing()
         model.selectedNoteID = nil
     }
 }

@@ -160,10 +160,10 @@ struct EditorActivityTests {
     @Test func watchingAndLooking() {
         let watch = activity("direction_watch", ["start": .number(SampleFilm.tc(1, 12, 8)), "end": .number(SampleFilm.tc(1, 14))])
         #expect(watch?.verb == "Watching")
-        #expect(watch?.object == "01:12:08\u{2013}01:14:00")
+        #expect(watch?.object == "1:12\u{2013}1:14")
         #expect(watch?.mono == true && watch?.time == SampleFilm.tc(1, 12, 8))
         let frame = activity("direction_frame", ["time": .number(SampleFilm.tc(1, 12, 8))])
-        #expect(frame?.verb == "Watching" && frame?.object == "01:12:08" && frame?.time != nil)
+        #expect(frame?.verb == "Watching" && frame?.object == "1:12" && frame?.time != nil)
         let take = activity("direction_frame", ["assetID": .string("take-3b-t1")])
         #expect(take?.verb == "Looking at" && take?.object == "3B T1" && take?.time == nil)
         #expect(activity("direction_contact_sheet", ["assetID": .string("take-2a-t2")])?.object == "2A T2")
@@ -200,7 +200,12 @@ struct EditorActivityTests {
         #expect(activity("direction_turnovers", [:])?.object == "the notes")
         #expect(activity("direction_looks", [:]).map { "\($0.verb) \($0.object)" } == "Reading the looks")
         #expect(activity("direction_editor_status", ["phase": .string("x")]) == nil)
-        #expect(EditorActivityLog.programActivity(tool: "Write", path: "/f/Editor/Graphics/title.html")?.object == "title.html")
+        // The program's own steps say what they are, never a file's name.
+        #expect(EditorActivityLog.programActivity(tool: "Write", path: "/f/Editor/Graphics/title.html")?.object == "a graphic")
+        #expect(EditorActivityLog.programActivity(tool: "Write", path: "/f/Editor/rugProbe.metal")?.object == "a new effect")
+        #expect(EditorActivityLog.programActivity(tool: "Read", path: "/f/Editor/.claude/skills/reframe/SKILL.md").map { "\($0.verb) \($0.object)" } == "Reading how to reframe for the shape")
+        #expect(EditorActivityLog.programActivity(tool: "Read", path: "/f/Editor/zTR.png").map { "\($0.verb) \($0.object)" } == "Looking at a frame")
+        #expect(EditorActivityLog.programActivity(tool: "Read", path: "/f/Editor/NOTES.md")?.object == "its notes")
     }
 
     @Test func pastTenseForFinishedRows() {
@@ -464,7 +469,7 @@ struct EditorRunnerTests {
         #expect(mcp["mcpServers"]["direction"]["env"]["DIRECTION_RUN_ID"].string == run.id)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/.claude/skills/start-project/SKILL.md").path))
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/NOTES.md").path))
-        #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "NOTES.md" })
+        #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "its notes" })
     }
 
     @Test func endingWithoutTheFinishingToolFails() async throws {

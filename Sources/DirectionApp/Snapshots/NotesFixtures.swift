@@ -9,6 +9,8 @@ enum NotesFixtures {
             "17-notes-drafts": { .film(drafts()) },
             "18-notes-writing": { .film(writing()) },
             "19-notes-region": { .film(region()) },
+            "19b-notes-drawing-box": { .film(drawingBox()) },
+            "19c-notes-stretch": { .film(stretch()) },
             "20-notes-questions": { .film(questions()) },
             "21-notes-outside": { .film(outside()) },
             "22-turnover": { .film(turnover()) },
@@ -63,24 +65,43 @@ enum NotesFixtures {
         return m
     }
 
-    /// Draft 3 selected and being written; the editor suggests Picture.
+    /// Mark 3 open to write in, in its row; the editor suggests Picture.
     static func writing() -> FilmModel {
         let m = SampleFilm.make()
         m.position = tc(1, 12, 8)
         m.selectedNoteID = "note-3"
+        m.notesUI.editingNoteID = "note-3"
         m.draftText = "Tighter on her. The sky is winning"
-        m.composerFocus = 1
         return m
     }
 
-    /// Drawing a region for note 3, kind chosen.
+    /// Note 3 is a box drawn around her, being written, kind chosen.
     static func region() -> FilmModel {
         let m = writing()
+        if let i = m.notes.firstIndex(where: { $0.id == "note-3" }) { m.notes[i].region = FrameRegion(x: 0.31, y: 0.20, width: 0.24, height: 0.58) }
         m.draftText = "Tighter on her. The sky is winning."
         m.draftKind = .picture
-        m.anchorMode = .region
-        m.region = CGRect(x: 0.31, y: 0.20, width: 0.24, height: 0.58)
+        return m
+    }
+
+    /// Draw a box is on, the box half drawn: letting go makes its note.
+    static func drawingBox() -> FilmModel {
+        let m = drafts()
+        m.position = tc(1, 12, 8)
+        m.selectedNoteID = nil
         m.drawingRegion = true
+        m.region = CGRect(x: 0.31, y: 0.20, width: 0.24, height: 0.58)
+        return m
+    }
+
+    /// Note 4 is a stretch on the strip, selected: its grips pull it longer or shorter.
+    static func stretch() -> FilmModel {
+        let m = drafts()
+        if let i = m.notes.firstIndex(where: { $0.id == "note-4" }), let t = m.notes[i].time?.seconds {
+            m.notes[i].time = nil; m.notes[i].range = MediaRange(start: t, end: t + 6)
+            m.position = t
+        }
+        m.selectedNoteID = "note-4"
         return m
     }
 
@@ -179,8 +200,7 @@ enum NotesFixtures {
         if let i = m.turnovers[0].readBack.firstIndex(where: { $0.noteID == "note-2" }) {
             m.turnovers[0].readBack[i].conflict?.detail = "Between 00:25 and 00:46, note 2 wants more time on her and note 1 wants to get there sooner."
         }
-        m.anchorMode = .range
-        m.rangeSelection = 25...46
+        m.notesUI.stripHighlight = 25...46
         m.position = tc(0, 38, 20)
         return m
     }

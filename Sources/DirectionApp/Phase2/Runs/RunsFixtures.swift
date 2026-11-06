@@ -71,7 +71,7 @@ enum RunsFixtures {
             EditorActivity(id: id, runID: "run-cut-4", verb: verb, object: object, detail: detail, mono: mono, time: time, tool: "direction_edit", startedAt: t - ago, at: t - ago, count: 1, turnoverID: "turnover-3")
         }
         return [
-            a(5, 1, "Watching", "01:12:08\u{2013}01:14:00", mono: true, time: SampleFilm.tc(1, 12, 8)),
+            a(5, 1, "Watching", "1:12\u{2013}1:14", mono: true, time: SampleFilm.tc(1, 12, 8)),
             a(4, 12, "Reframing", "3B T2 to 1.6\u{00D7}", "note 3", time: SampleFilm.tc(1, 5)),
             a(3, 40, "Trimming", "scene 1", "\u{2212}4.2 s \u{00B7} note 1", time: SampleFilm.tc(0, 9, 12)),
             a(2, 75, "Listening to", "2A T5", "note 2"),

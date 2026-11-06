@@ -308,9 +308,8 @@ struct ConflictNotice: View {
 
     /// Shows the overlap on the strip while the pointer is over the notice.
     private func beginHighlight() {
-        guard let range, model.notesUI.stripHighlightRestore == nil else { return }
-        model.notesUI.stripHighlightRestore = (model.anchorMode, model.rangeSelection)
-        model.rangeSelection = range; model.anchorMode = .range
+        guard let range, model.notesUI.stripHighlight == nil else { return }
+        model.notesUI.stripHighlight = range
     }
     private func endHighlight() { model.endStripHighlight() }
 
@@ -373,12 +372,8 @@ struct ErrorNotice: View {
 }
 
 extension FilmModel {
-    /// Puts back the director's own range after a notice showed its passage on the strip.
-    func endStripHighlight() {
-        guard let (mode, selection) = notesUI.stripHighlightRestore else { return }
-        notesUI.stripHighlightRestore = nil
-        anchorMode = mode; rangeSelection = selection
-    }
+    /// The strip goes back to your own stretch after a notice showed its passage on it.
+    func endStripHighlight() { notesUI.stripHighlight = nil }
 
     /// VoiceOver hears what changed: blockers at once, progress at most every 10 s.
     func announceProgress(_ t: Turnover) {

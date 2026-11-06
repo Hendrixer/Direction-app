@@ -28,8 +28,11 @@ import DirectionCore
     #expect(m.playing)
     press(" ", 49)
     #expect(!m.playing)
-    // Writing a note: Space is a space.
+    // Writing a note, in its row: Space is a space.
     func find(_ v: NSView) -> NoteTextView? { (v as? NoteTextView) ?? v.subviews.lazy.compactMap(find).first }
+    #expect(find(host) == nil)
+    m.beginWriting(try #require(m.note("note-3")))
+    for _ in 0..<4 { settle() }
     let field = try #require(find(host))
     _ = window.makeFirstResponder(field)
     settle()
