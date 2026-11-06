@@ -192,11 +192,30 @@ enum SignInCheck: Equatable, Sendable {
 enum EditorDiscovery {
     static func find(_ program: EditorProgram) -> EditorInstall? {
         let fm = FileManager.default
-        var path = EditorProgram.searchFolders.map { "\($0)/\(program.command)" }.first { fm.isExecutableFile(atPath: $0) }
+        // The known folders, then Terminal's own PATH (.zshrc included: nvm, Volta and the like set it up there, and a
+        // login shell alone never reads it), then the version managers' folders in case the shell didn't answer.
+        let pathFolders = loginPath.split(separator: ":").map(String.init)
+        var path = firstExecutable(program.command, in: EditorProgram.searchFolders + pathFolders)
+        if path == nil { path = firstExecutable(program.command, in: versionManagerFolders()) }
         if path == nil, let prefix = shell("npm prefix -g")?.trimmingCharacters(in: .whitespacesAndNewlines), !prefix.isEmpty, fm.isExecutableFile(atPath: "\(prefix)/bin/\(program.command)") { path = "\(prefix)/bin/\(program.command)" }
         if path == nil, let found = shell("command -v \(program.command)")?.split(separator: "\n").last.map(String.init), found.hasPrefix("/"), fm.isExecutableFile(atPath: found) { path = found }
         guard let path else { return nil }
         return EditorInstall(program: program, path: path, version: version(of: path, environment: environment(adding: path)))
+    }
+
+    /// The first folder holding `command` as a program, in order.
+    static func firstExecutable(_ command: String, in folders: [String]) -> String? {
+        folders.lazy.filter { $0.hasPrefix("/") }.map { "\($0)/\(command)" }.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// Where Node version managers put the programs npm installs, newest Node first for nvm: npm's `-g` lands in
+    /// the Node that was current, and Terminal reaches it only through .zshrc.
+    static func versionManagerFolders(home: String = NSHomeDirectory()) -> [String] {
+        let nvm = "\(home)/.nvm/versions/node"
+        let versions = ((try? FileManager.default.contentsOfDirectory(atPath: nvm)) ?? []).filter { $0.hasPrefix("v") }
+            .sorted { $0.dropFirst().split(separator: ".").compactMap { Int($0) }.lexicographicallyPrecedes($1.dropFirst().split(separator: ".").compactMap { Int($0) }) }
+            .reversed()
+        return versions.map { "\(nvm)/\($0)/bin" } + ["\(home)/.volta/bin", "\(home)/.bun/bin", "\(home)/.asdf/shims", "\(home)/.local/share/mise/shims", "\(home)/.local/share/pnpm"]
     }
 
     /// "2.1.312 (Claude Code)" → "2.1.312"; "codex-cli 0.164.0" → "0.164.0".

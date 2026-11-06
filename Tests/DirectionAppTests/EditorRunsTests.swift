@@ -410,6 +410,22 @@ struct EditorJobTests {
         }
     }
 
+    /// A program npm put in an nvm Node is found from the Dock too: Terminal reaches it only through .zshrc, which a
+    /// login shell never reads, so the version managers' folders are looked in, newest Node first.
+    @Test func programsInstalledWithNvmAreFound() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("direction-nvm-" + UUID().uuidString).path
+        defer { try? FileManager.default.removeItem(atPath: home) }
+        for v in ["v9.11.2", "v24.3.0", "v20.18.1"] {
+            let bin = "\(home)/.nvm/versions/node/\(v)/bin"
+            try FileManager.default.createDirectory(atPath: bin, withIntermediateDirectories: true)
+            if v != "v20.18.1" { FileManager.default.createFile(atPath: "\(bin)/codex", contents: Data("#!/bin/sh\n".utf8), attributes: [.posixPermissions: 0o755]) }
+        }
+        let folders = EditorDiscovery.versionManagerFolders(home: home)
+        #expect(Array(folders.prefix(3)) == ["v24.3.0", "v20.18.1", "v9.11.2"].map { "\(home)/.nvm/versions/node/\($0)/bin" })
+        #expect(EditorDiscovery.firstExecutable("codex", in: folders) == "\(home)/.nvm/versions/node/v24.3.0/bin/codex")
+        #expect(EditorDiscovery.firstExecutable("codex", in: ["relative/bin", "\(home)/nowhere"]) == nil)
+    }
+
     @Test func versionsReadFromThePrograms() {
         #expect(EditorDiscovery.parseVersion("2.1.312 (Claude Code)") == "2.1.312")
         #expect(EditorDiscovery.parseVersion("codex-cli 0.164.0") == "0.164.0")
