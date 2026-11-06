@@ -404,6 +404,7 @@ enum EditorStopCopy {
         switch reason {
         case .notInstalled: return "The editor isn\u{2019}t installed."
         case .notSignedIn: return "\(name) isn\u{2019}t signed in."
+        case .outOfDate: return "\(name) needs updating."
         case .offline: return "The editor is offline."
         case .programQuit: return "The editor quit unexpectedly."
         case .stoppedWithoutFinishing: return "The editor stopped before finishing."

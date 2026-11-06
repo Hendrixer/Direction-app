@@ -10,6 +10,11 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     var name: String { self == .claudeCode ? "Claude Code" : "Codex" }
     var command: String { self == .claudeCode ? "claude" : "codex" }
     var installCommand: String { self == .claudeCode ? "curl -fsSL https://claude.ai/install.sh | bash" : "npm install -g @openai/codex" }
+    /// Brings the copy at `path` up to date: Claude Code updates itself; Codex the way it was installed.
+    func updateCommand(path: String?) -> String {
+        if self == .claudeCode { return "claude update" }
+        return path.map { $0.hasPrefix("/opt/homebrew/") || $0.hasPrefix("/usr/local/Cellar/") } == true ? "brew upgrade codex" : "npm install -g @openai/codex@latest"
+    }
 
     /// Versions offered in Settings › Engines; "Other…" takes any string the program accepts. Codex's
     /// are the ones its own model menu lists, read from its cache, so they follow the installed Codex.
@@ -309,12 +314,13 @@ enum EditorDiscovery {
         guard let r = run(install.path, install.program.readyArguments(version: version), environment: environment(adding: install.path, shellKey: shellKey), timeout: Double(seconds), directory: folder) else {
             return .couldNotCheck("\(install.program.name) didn\u{2019}t answer within \(seconds) seconds")
         }
-        return readyAnswer(install.program, output: r.output, error: r.error, status: r.status)
+        return readyAnswer(install.program, output: r.output, error: r.error, status: r.status, path: install.path)
     }
 
     /// What the ready job's output says. Its JSON is read, not searched, so a number or an id in a good
     /// answer never reads as an error.
-    static func readyAnswer(_ program: EditorProgram, output: String, error: String, status: Int32) -> SignInCheck {
+    static func readyAnswer(_ program: EditorProgram, output: String, error: String, status: Int32, path: String? = nil) -> SignInCheck {
+        if EditorFailure.isOutOfDate(output + "\n" + error) { return .couldNotCheck("\(program.name) is out of date for Direction. In Terminal, run \(program.updateCommand(path: path))") }
         var answered = false, said: [String] = []
         for line in output.split(separator: "\n") {
             guard let o = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any] else { continue }

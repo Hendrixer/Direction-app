@@ -11,7 +11,7 @@ Direction starts the editor itself whenever there's work: footage to log, an ass
 | Connection | What happens | Control |
 |---|---|---|
 | **Direction starts it** (default) | Direction runs Claude Code or Codex on this Mac for each job, with Direction's tools connected and a job written for it. | Start, pause, resume, stop, retry. Activity, spend. |
-| **Your own session** | You run Claude Code or Codex yourself and connect it over MCP (`./scripts/install-local.sh`). Direction shows what it does from its tool calls. | Activity only. Direction can't start, pause or stop it; the pill's popover says "Your own session" and shows the request to copy, as today. |
+| **Your own session** | You run Claude Code or Codex yourself and connect it over MCP: the sheet gives `claude mcp add direction -- "<the app's Helpers/direction>" mcp` and the same for `codex`, or, in a copy built from source, `./scripts/install-local.sh`. Direction shows what it does from its tool calls. | Activity only. Direction can't start, pause or stop it; the pill's popover says "Your own session" and shows the request to copy, as today. |
 
 Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex, Your own session.
 
@@ -26,6 +26,7 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 - **Signed in** is checked at setup, at every launch while the answer was no, after a sign-in failure, and on **Check again**. Direction runs the program with a job that only replies `ready` (no tools) and reads its answer (Claude Code's result JSON, Codex's events), never searching the reply for error words. It answers "ready": signed in. It says it isn't signed in (an invalid key, "run /login", a 401 status): "Not signed in" with the sign-in step; that answer is remembered. Anything else (no reply within 45 s, another error): "Couldn't check sign-in" with why and **Check again**, remembered as nothing, and the work can start anyway. A run that finishes means signed in. Each answer goes to Direction's log with its reason.
 - **The shell's settings.** An app opened from the Dock gets none of what the person's shell sets, so Direction reads it once from their interactive shell, started clean as a new Terminal window is (.zshrc included), through a file so nothing it starts can hold Direction up: its PATH, and the settings an editor reads for its sign-in and the network (`ANTHROPIC_*`, `CLAUDE_CODE_*`, `CLAUDE_CONFIG_DIR`, `CODEX_*`, `OPENAI_*`, Bedrock and Vertex, proxies and certificates). API keys (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `CODEX_API_KEY`) are billed per use, so they go only when the program isn't signed in without one and is with it; Settings then says "signed in with your shell's API key".
 - The program uses the director's own sign-in and plan. Direction never stores the program's credentials.
+- **Without Apple's developer tools**, `/usr/bin/python3`, `git` and the rest are placeholders that open an installer when run. Direction never runs them (`DeveloperTools`, from `xcode-select -p`), and the editor's role says not to, naming the commands macOS has instead.
 - Check every flag below against `claude --help` and `codex exec --help` when building; programs change. Keep the command lines in one file, `EditorPrograms.swift`, with a test that runs `--help` and fails if a flag disappears.
 
 ## How Direction runs a job
@@ -224,6 +225,7 @@ The Cut room after a run failed during Cut 4.
 |---|---|---|---|
 | Not installed | "The editor isn't installed." | "Direction couldn't find Claude Code on this Mac." | Copy install command · Choose another editor… |
 | Not signed in | "Claude Code isn't signed in." | as above | Open Terminal · Try again |
+| Out of date | "Claude Code needs updating." | "It's older than Direction needs. In Terminal, run claude update, then try again." (Codex: `npm install -g @openai/codex@latest`, or `brew upgrade codex` for Homebrew's.) Read from the program refusing an option ("unknown option '--effort'"); the sign-in check says the same as "couldn't check". | Copy update command · Open Terminal · Try again |
 | No internet | "The editor is offline." | "It will try again when this Mac is back online." | (retries automatically every 30 s) |
 | Program quit | "The editor quit unexpectedly." | The last line of its error output, in SF Mono 11.5. | Try again · Copy details |
 | Stopped without finishing | "The editor stopped before finishing." | "It ended without delivering Cut 4." | Try again · Take the turnover back |

@@ -38,6 +38,8 @@ public enum EditorRunState: String, Codable, Sendable {
 /// Why a run stopped or failed (frame 58's table).
 public enum EditorRunReason: String, Codable, Sendable {
     case notInstalled, notSignedIn, offline, programQuit, stoppedWithoutFinishing, spendCap, pausedByQuit, stoppedByYou
+    /// The program is older than the options Direction starts it with ("unknown option '--effort'").
+    case outOfDate
 }
 
 public struct EditorRun: Codable, Hashable, Sendable, Identifiable {

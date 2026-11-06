@@ -123,9 +123,15 @@ struct EditorSetupSheet: View {
     @ViewBuilder private var ownSessionPage: some View {
         SheetHeader(title: "Run your own session", subtitle: "Direction shows what your editor does, but can\u{2019}t start, pause or stop it.")
         VStack(alignment: .leading, spacing: 12) {
-            Text("Install Direction\u{2019}s tools for Claude Code or Codex, then ask your editor to open this film.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
-            CopyableCommand(text: "./scripts/install-local.sh")
-            CopyableCommand(text: EditorConnection.claudeCommand)
+            // The tools are inside the app; a copy built from a checkout links them with the checkout's script.
+            Text(EditorConnection.isBundled ? "Add Direction\u{2019}s tools to Claude Code or Codex in Terminal, then ask your editor to open this film." : "Install Direction\u{2019}s tools for Claude Code or Codex, then ask your editor to open this film.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+            if EditorConnection.isBundled {
+                CopyableCommand(text: EditorConnection.claudeCommand)
+                CopyableCommand(text: EditorConnection.codexCommand)
+            } else {
+                CopyableCommand(text: "./scripts/install-local.sh")
+                CopyableCommand(text: EditorConnection.claudeCommand)
+            }
             if model.url != nil {
                 Text("Then paste this into your editor to start:").font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary)
                 CopyableCommand(text: model.editorRequest, copyLabel: "Copy request for your editor")

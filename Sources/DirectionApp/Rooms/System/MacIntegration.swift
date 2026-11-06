@@ -215,6 +215,7 @@ enum EditorConnection {
     }
 
     static var claudeCommand: String { "claude mcp add direction -- \"\(cliPath)\" mcp" }
+    static var codexCommand: String { "codex mcp add direction -- \"\(cliPath)\" mcp" }
 
     /// Help › Connect an Editor… when no film window is showing the popover.
     @MainActor static func presentAlert() {

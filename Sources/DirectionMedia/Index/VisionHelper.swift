@@ -21,6 +21,8 @@ public enum VisionHelper {
             var seen = Set<String>()
             for dir in dirs where seen.insert(dir).inserted {
                 let candidate = URL(fileURLWithPath: dir).appendingPathComponent("python3")
+                // Without the developer tools /usr/bin/python3 opens an installer; it never has mlx_vlm anyway.
+                guard !DeveloperTools.isPlaceholder(candidate.path) else { continue }
                 if fm.isExecutableFile(atPath: candidate.path), canImport(candidate) { result = candidate; break }
             }
         }

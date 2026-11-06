@@ -61,6 +61,34 @@ struct EditorStreamTests {
         #expect(EditorFailure.reason("session 5b401 took 2401 ms for 401 tokens") == nil)
     }
 
+    /// An editor older than Direction's options says so plainly, with the command that updates it.
+    @Test func anOldEditorIsOutOfDateWithItsUpdateCommand() {
+        #expect(EditorFailure.reason("error: unknown option '--effort'") == .outOfDate)
+        #expect(EditorFailure.reason("error: unexpected argument '--ephemeral' found") == .outOfDate)
+        #expect(RunStateMachine.outcome(RunStateMachine.Exit(status: 1, failures: ["error: unknown option '--no-session-persistence'"])).reason == .outOfDate)
+        #expect(EditorFailure.reason("ffmpeg: unknown encoder 'libx265'") == nil)
+        #expect(EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "error: unknown option '--tools'", status: 1) == .couldNotCheck("Claude Code is out of date for Direction. In Terminal, run claude update"))
+        #expect(EditorProgram.codex.updateCommand(path: "/opt/homebrew/bin/codex") == "brew upgrade codex")
+        #expect(EditorProgram.codex.updateCommand(path: "/Users/you/.npm-global/bin/codex") == "npm install -g @openai/codex@latest")
+        #expect(EditorStopCopy.title(.outOfDate, run: nil) == "The editor needs updating.")
+    }
+
+    /// Without Apple's developer tools, /usr/bin/python3 and git are placeholders: Direction never runs them,
+    /// and the editor is told so.
+    @Test func placeholdersForTheDeveloperToolsAreNeverRun() {
+        #expect(DeveloperTools.isPlaceholder("/usr/bin/python3") == !DeveloperTools.installed)
+        #expect(!DeveloperTools.isPlaceholder("/opt/homebrew/bin/python3") && !DeveloperTools.isPlaceholder("/usr/bin/sips"))
+        #expect(EditorJobs.noDeveloperTools.contains("`python3`") && EditorJobs.noDeveloperTools.contains("`git`"))
+        #expect(EditorJobs.role.contains("developer tools") == !DeveloperTools.installed)
+    }
+
+    /// A downloaded copy opened from its disk image offers to move to Applications; one in place doesn't.
+    @MainActor @Test func aCopyOnTheDiskImageIsToldToMove() {
+        #expect(MoveToApplications.isFromDownload("/private/var/folders/xy/T/AppTranslocation/4F1E/d/Direction.app"))
+        #expect(MoveToApplications.isFromDownload("/Volumes/Direction/Direction.app"))
+        #expect(!MoveToApplications.isFromDownload("/Applications/Direction.app") && !MoveToApplications.isFromDownload("/Users/you/Code/direction/build/Direction.app"))
+    }
+
     /// From the shell: an editor's sign-in and network settings, never the nesting markers.
     @Test func theShellsSettingsAnEditorNeedsAreCarried() {
         #expect(EditorDiscovery.carried("CLAUDE_CONFIG_DIR") && EditorDiscovery.carried("ANTHROPIC_BASE_URL") && EditorDiscovery.carried("HTTPS_PROXY") && EditorDiscovery.carried("CODEX_HOME"))
