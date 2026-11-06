@@ -434,7 +434,7 @@ extension FilmModel {
     var loggingStartedAt: Double? { jobs.filter { ["index", "transcription", "sync"].contains($0.kind) }.map(\.createdAt).min() }
     var loggingFinishedAt: Double? { isLogging ? nil : runs.runs.filter { $0.job == .logFootage }.compactMap(\.endedAt).max() }
 
-    static func clock(_ seconds: Double) -> String { let s = max(0, Int(seconds.rounded())); return String(format: "%d:%02d", s / 60, s % 60) }
+    static func clock(_ seconds: Double) -> String { PlainTime.text(seconds.rounded()) }
 
     /// The stage line under the progress (footage-index.md › 05): the latest of Reading → Finding
     /// shots → Looking at footage → Listening → Sorting into scenes to have started. Counts in SF Mono.

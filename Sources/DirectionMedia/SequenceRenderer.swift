@@ -217,11 +217,25 @@ public enum SequenceRenderer {
         let generator = AVAssetImageGenerator(asset: compiled.composition)
         generator.videoComposition = compiled.videoComposition; generator.maximumSize = .init(width: maxDimension, height: maxDimension)
         generator.requestedTimeToleranceBefore = .zero; generator.requestedTimeToleranceAfter = .zero
-        let result = try await generator.image(at: time.cmTime)
+        // A frame never takes a minute. One that does is stuck (an effect that never finishes, a source that never
+        // answers): it's stopped, and the error says where, so the editor can fix it instead of waiting forever.
+        let box = GeneratorBox(generator), at = time
+        let result = try await Deadline.run(seconds: frameLimit, error: {
+            DirectionLog.error("The frame at \(String(format: "%.2f", at.seconds)) s didn\u{2019}t render in \(Int(frameLimit)) s and was stopped", "render")
+            return DirectionError("frame_stuck", "The frame at \(PlainTime.text(at.seconds)) didn\u{2019}t finish rendering in \(Int(frameLimit)) seconds and was stopped. Something on it never finishes: look at the effects, graphics and made shots there (a shader that never returns, a graphic that never draws), fix or take out the one you added last, and watch it again.")
+        }, onTimeout: { box.generator.cancelAllCGImageGeneration() }) {
+            let r = try await box.generator.image(at: at.cmTime)
+            return FrameBox(image: r.image, actualTime: r.actualTime)
+        }
         try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
         try MediaInspector.writePNG(result.image, to: output)
         return .object(["path": .string(output.path), "mimeType": .string("image/png"), "width": .number(Double(result.image.width)), "height": .number(Double(result.image.height)), "editRevision": .number(Double(compiled.revision)), "requestedTime": try .wrapping(time), "actualTime": try .wrapping(MediaTime(result.actualTime))])
     }
+
+    /// The longest one frame may take to render (`frame`).
+    nonisolated(unsafe) public static var frameLimit: Double = 60
+    private final class GeneratorBox: @unchecked Sendable { let generator: AVAssetImageGenerator; init(_ g: AVAssetImageGenerator) { generator = g } }
+    private struct FrameBox: @unchecked Sendable { var image: CGImage; var actualTime: CMTime }
 
     public static func export(_ compiled: CompiledSequence, to destination: URL, preset: String = "h264", range: MediaRange? = nil) async throws -> JSONValue {
         let presetName: String, type: AVFileType
@@ -273,13 +287,14 @@ public enum SequenceRenderer {
         let file = try AVAudioFile(forWriting: output, settings: format.settings, commonFormat: .pcmFormatInt16, interleaved: true)
         guard reader.startReading() else { throw reader.error ?? DirectionError("audio_preview_failed", "Cannot render audio preview.") }
         do {
-            while let sample = mix.copyNextSampleBuffer() {
+            while let sample = mix.nextSample(of: reader) {
                 try Task.checkCancellation()
                 guard let data = CMSampleBufferGetDataBuffer(sample), let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(CMSampleBufferGetNumSamples(sample))), let pointer = buffer.mutableAudioBufferList.pointee.mBuffers.mData else { continue }
                 buffer.frameLength = buffer.frameCapacity
                 guard CMBlockBufferCopyDataBytes(data, atOffset: 0, dataLength: Int(buffer.frameLength) * 2, destination: pointer) == kCMBlockBufferNoErr else { throw DirectionError("audio_preview_failed", "Invalid audio preview samples.") }
                 try file.write(from: buffer)
             }
+            try ReadStall.check(reader, "the cut\u{2019}s sound")
             guard reader.status == .completed else { throw reader.error ?? DirectionError("audio_preview_failed", "Audio preview failed.") }
             return .object(["path": .string(output.path), "mimeType": .string("audio/wav"), "editRevision": .number(Double(compiled.revision)), "range": try .wrapping(range)])
         } catch { reader.cancelReading(); try? FileManager.default.removeItem(at: output); throw error }
@@ -300,7 +315,7 @@ public enum SequenceRenderer {
         guard reader.startReading() else { throw reader.error ?? DirectionError("measure_failed", "Cannot read the cut\u{2019}s sound.") }
         var meter = LoudnessMeter(sampleRate: 48_000, channels: 2), samples: [Float] = []
         do {
-            while let sample = mix.copyNextSampleBuffer() {
+            while let sample = mix.nextSample(of: reader) {
                 try Task.checkCancellation()
                 guard let data = CMSampleBufferGetDataBuffer(sample) else { continue }
                 let n = CMSampleBufferGetNumSamples(sample) * 2
@@ -308,6 +323,7 @@ public enum SequenceRenderer {
                 guard samples.withUnsafeMutableBytes({ CMBlockBufferCopyDataBytes(data, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!) }) == kCMBlockBufferNoErr else { throw DirectionError("measure_failed", "The cut\u{2019}s sound came back unreadable.") }
                 samples.withUnsafeBufferPointer { meter.add($0) }
             }
+            try ReadStall.check(reader, "the cut\u{2019}s sound")
             guard reader.status == .completed else { throw reader.error ?? DirectionError("measure_failed", "Measuring the cut\u{2019}s sound stopped.") }
         } catch { reader.cancelReading(); throw error }
         func r(_ x: Double) -> JSONValue { .number((x * 100).rounded() / 100) }

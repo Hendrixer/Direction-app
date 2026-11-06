@@ -279,36 +279,40 @@ struct FilmActions {
         m.pause(); m.seek(scenes[target].start)
     }
 
-    func setRangeIn() { let end = m.rangeSelection.map { max($0.upperBound, m.position) } ?? min(m.duration, m.position + 1); m.rangeSelection = m.position...max(m.position, end); m.anchorMode = .range }
-    func setRangeOut() { let start = m.rangeSelection.map { min($0.lowerBound, m.position) } ?? max(0, m.position - 1); m.rangeSelection = start...max(start, m.position); m.anchorMode = .range }
-    func clearRange() { m.rangeSelection = nil; if m.anchorMode == .range { m.anchorMode = .moment } }
+    func setRangeIn() { if m.room != .cut { m.go(.cut) }; m.setStretchEdge(start: true) }
+    func setRangeOut() { if m.room != .cut { m.go(.cut) }; m.setStretchEdge(start: false) }
 
-    /// A new note at the playhead: the Cut room, composer focused, optionally pre-filled.
-    func startNote(text: String = "", anchor: NoteAnchorMode = .moment) {
-        m.anchorMode = anchor
-        if !text.isEmpty { m.draftText = text }
-        m.notesTab = .sheet
-        m.go(.cut); m.composerFocus += 1
+    /// New Note (⌥⌘N, or words typed in the command menu): a note on this moment in the Cut room, open to write in.
+    func startNote(text: String = "") {
+        guard m.isEnabled(.cut) else { return }
+        m.go(.cut); m.pause()
+        m.mark()
+        if !text.isEmpty, m.notesUI.editingNoteID != nil { m.draftText = text }
     }
 
-    /// Go to Timecode… (⌃G): asks for MM:SS:FF and seeks.
+    /// Go to a Time… (⌃G): asks for a time the way the app shows it (1:12, or 1:02:03 in a cut over an hour) and seeks.
     func askForTimecode() {
-        let alert = NSAlert(); alert.messageText = "Go to timecode"; alert.informativeText = "MM:SS:FF, or seconds."
-        let field = NSTextField(string: timecode); field.frame = NSRect(x: 0, y: 0, width: 200, height: 24); field.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        let hours = m.duration >= 3600
+        let alert = NSAlert(); alert.messageText = "Go to a time"
+        alert.informativeText = hours ? "Hours, minutes and seconds (1:02:03), minutes and seconds (12:04), or seconds (72)." : "Minutes and seconds (1:12), or seconds (72)."
+        let field = NSTextField(string: Timecode.format(m.position, fps: m.fps)); field.frame = NSRect(x: 0, y: 0, width: 200, height: 24); field.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
         alert.accessoryView = field; alert.addButton(withTitle: "Go"); alert.addButton(withTitle: "Cancel")
         alert.window.initialFirstResponder = field
-        guard alert.runModal() == .alertFirstButtonReturn, let t = Self.parseTimecode(field.stringValue, fps: m.fps) else { return }
+        guard alert.runModal() == .alertFirstButtonReturn, let t = Self.parseTimecode(field.stringValue, fps: m.fps, hours: hours) else { return }
         m.pause(); m.seek(t)
     }
 
-    static func parseTimecode(_ text: String, fps: Double) -> Double? {
+    /// "72" is seconds and "1:12" minutes and seconds. Three parts are hours, minutes and seconds (`hours`, a cut
+    /// over an hour, where times read that way: Timecode.format), otherwise minutes, seconds and frames as times
+    /// used to read. Four are hours, minutes, seconds and frames.
+    static func parseTimecode(_ text: String, fps: Double, hours: Bool = false) -> Double? {
         let parts = text.trimmingCharacters(in: .whitespaces).split(separator: ":").map(String.init)
         if parts.count == 1 { return Double(parts[0]).flatMap { $0.isFinite && $0 >= 0 ? $0 : nil } }
         let n = parts.compactMap(Int.init)
         guard n.count == parts.count, (2...4).contains(n.count), n.allSatisfy({ $0 >= 0 }) else { return nil }
         switch n.count {
         case 2: return Double(n[0] * 60 + n[1])
-        case 3: return Double(n[0] * 60 + n[1]) + Double(n[2]) / fps
+        case 3: return hours ? Double(n[0] * 3600 + n[1] * 60 + n[2]) : Double(n[0] * 60 + n[1]) + Double(n[2]) / fps
         default: return Double(n[0] * 3600 + n[1] * 60 + n[2]) + Double(n[3]) / fps
         }
     }

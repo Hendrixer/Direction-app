@@ -60,9 +60,10 @@ Suggested module layout: `Gate/Tokens.swift` (generated), `Gate/Materials.swift`
 
 | Component | CSS | data-c | Notes |
 |---|---|---|---|
-| Notes sheet | `.sheet` | `notes-sheet` | 380 pt right panel in the Cut room: head, tabs (Notes, Questions, Outside), the answered notes with each answer under its note, the notes for the next turnover, composer (`cut.md` › Answers on the sheet). |
+| Notes sheet | `.sheet` | `notes-sheet` | 380 pt right panel in the Cut room: head, tabs (Notes, Questions, Outside), the answered notes with each answer under its note, the notes for the next turnover, each written in its own row (`cut.md` › Answers on the sheet, Making a note). |
 | Note row | `.nt` | `note-row` | Number column 26 pt, amber mono number; meta row of chips (anchor, kind, script icon for script notes, region chip); text 13 pt. States: draft (italic, text-3) · written · selected (panel + 2 pt amber bar) · turned over (number gets a small diamond after it) · answered (reply line with diamond) · accepted (check chip) · reopened · dropped (strikethrough, text-4, only in "Show dropped"). |
-| Composer | `.sheet-foot` | `composer` | Anchor line (`At 00:46:12` chip + anchor select: Moment, Range, Region, Scene, Whole cut, Line), text area, kinds, Add (`↩`; `⇧↩` newline). |
+| Note tools | — | `note-tools` | Under the picture, after the strip: Mark this moment (amber pin, `N`), Mark a stretch, Draw a box (`R`), Note on the whole cut. Each makes a note at once; a tool that's on is amber on the amber wash (`cut.md` › Making a note). |
+| Writing a note | `.nt` open | `note-writing` | A note's row open to write in: the field, the kinds, Done (`↩`; `⇧↩` newline; esc closes it as it was). |
 | Outside note row | `.nt` + `.no.out` + avatar | `outside-note` | Initials avatar 20 pt steel, name, role, Accept / Edit / Decline. |
 
 ## Editor voice

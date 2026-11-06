@@ -26,9 +26,6 @@ enum ActiveSheet: String, Identifiable { case turnover, lockPicture, deliver, sh
 }
 
 enum NotesTab: String { case sheet, questions, outside }
-enum NoteAnchorMode: String, CaseIterable { case moment, range, region, scene, wholeCut
-    var label: String { switch self { case .moment: "Moment"; case .range: "Range"; case .region: "Region"; case .scene: "Scene"; case .wholeCut: "Whole cut" } }
-}
 enum OnboardingStep: Int, Comparable { case brief, footage
     static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
 }
@@ -94,17 +91,25 @@ final class FilmModel {
     var displayed: Project?
     var position = 0.0
     var playing = false
+    /// Stepping a frame at a time: the time shows the frame too.
+    var showsFrames = false
     var isPreparing = false
 
     // MARK: Notes
     var notesTab: NotesTab = .sheet
     var selectedNoteID: String?
+    /// The words and kind of the note being written in its row.
     var draftText = ""
     var draftKind: NoteKind?
-    var anchorMode: NoteAnchorMode = .moment
+    /// A stretch on the strip while it's drawn or pulled; the note keeps it once you let go.
     var rangeSelection: ClosedRange<Double>?
+    /// A box on the picture while it's drawn, moved or resized; the note keeps it once you let go.
     var region: CGRect?
+    /// Draw a box: the next drag on the picture makes a note with it.
     var drawingRegion = false
+    /// Mark a stretch: the next drag along the strip makes a note on it.
+    var drawingStretch = false
+    /// Bump to put the caret in the note being written.
     var composerFocus = 0
     var showDropped = false
 
@@ -197,7 +202,7 @@ final class FilmModel {
     }
 
     // Phase 2 areas, each refreshed with the film (Sources/DirectionApp/Phase2).
-    let runs = EditorRunsModel(), index = FootageIndexModel(), looks = LooksModel(), graphics = GraphicsModel(), made = MadeModel(), layouts = LayoutsModel()
+    let runs = EditorRunsModel(), index = FootageIndexModel(), looks = LooksModel(), graphics = GraphicsModel(), made = MadeModel()
 
     func startPolling() {
         guard pollTask == nil, !isPreview else { return }
@@ -623,7 +628,15 @@ final class FilmModel {
         if player.rate > 0 { player.pause(); playing = false } else { if position >= duration - 0.03 { seek(0) }; player.play(); playing = true }
     }
     func pause() { player.pause(); playing = false }
-    func step(frames: Double) { pause(); seek(position + frames / fps) }
+    /// ← / →: a frame at a time. The time under the picture says which frame for a few seconds after.
+    func step(frames: Double) {
+        pause(); seek(position + frames / fps)
+        guard abs(frames) < fps else { return }
+        showsFrames = true
+        framesHide?.cancel()
+        framesHide = Task { [weak self] in try? await Task.sleep(for: .seconds(4)); if !Task.isCancelled { self?.showsFrames = false } }
+    }
+    @ObservationIgnored private var framesHide: Task<Void, Never>?
     func shuttle(_ rate: Float) { guard !isPreview else { return }; if rate == 0 { pause() } else { player.rate = rate; playing = true } }
     /// Keeps the display awake while picture plays.
     private func keepAwake(_ on: Bool) {
@@ -647,13 +660,23 @@ final class FilmModel {
         if position >= duration - 0.5 { seek(0) }
         if !isPreview { player.play(); playing = true }
     }
-    /// Press N: drops a mark without stopping playback. Each mark becomes a numbered draft.
+    /// N: a note on this moment, with no words yet. Watching or playing, the picture never stops and the mark
+    /// waits to be written; paused in the Cut room, its row opens to write in. Anywhere the sheet isn't showing
+    /// (another room, Play changes) it waits to be written too, so no hidden row takes the keyboard.
     func mark() {
         guard duration > 0 else { return }
         let t = min(position, max(0, duration - 1 / fps))
         if let c = addNote(text: "", time: t, state: .draft) {
-            screeningMarkIDs.append(c.id); freshMarkID = c.id
-            toast = Toast(title: "Mark \(c.number ?? screeningMarkIDs.count) at \(Timecode.format(t, fps: fps))", detail: "Keep watching. Write it after.", glass: watchingCut)
+            // Only a watch's marks are written one after another (saveWriting).
+            if watchingCut { screeningMarkIDs.append(c.id) }
+            freshMarkID = c.id
+            // Watching through keeps its own undo for marks (WatchThrough.swift).
+            if !watchingCut { registerUndo("Mark") { $0.dropNote(c.id) } }
+            if watchingCut || playing || room != .cut || changes.reelOpen {
+                toast = Toast(title: "Mark \(c.number ?? screeningMarkIDs.count) at \(Timecode.format(t, fps: fps))", detail: "Keep watching. Write it after.", glass: watchingCut)
+            } else {
+                made(c)
+            }
             Task { try? await Task.sleep(for: .milliseconds(1200)); if freshMarkID == c.id { freshMarkID = nil } }
         }
     }
@@ -667,10 +690,7 @@ final class FilmModel {
         screeningStartedAt = nil
         guard writeUp, let first = marked.first else { return }
         notesTab = .sheet
-        selectedNoteID = first
-        selectedAnswerNoteID = nil
-        if let c = note(first), let t = noteTime(c) { seek(t) }
-        composerFocus += 1
+        if let c = note(first) { beginWriting(c) }
     }
 
     // MARK: Notes actions
@@ -687,33 +707,16 @@ final class FilmModel {
             return c
         } catch { self.error = error.localizedDescription; return nil }
     }
-    /// The composer's Add: writes up the selected draft, or adds a new note at the current anchor.
-    func submitComposer() {
-        let text = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        if let id = selectedNoteID, let c = note(id), c.lifecycle == .draft {
-            perform { try $0.editNote(id: id, text: text, kind: .some(self.draftKind), region: self.region.map { .some(FrameRegion(x: $0.minX, y: $0.minY, width: $0.width, height: $0.height)) }) }
-            selectedNoteID = draftNotes.first { $0.id != id }?.id
-        } else {
-            switch anchorMode {
-            case .moment: addNote(text: text, kind: draftKind, time: position)
-            case .range: addNote(text: text, kind: draftKind, range: rangeSelection ?? position...min(duration, position + 1))
-            case .region: addNote(text: text, kind: draftKind, time: position, region: region)
-            case .scene: addNote(text: text, kind: draftKind, sceneID: stripScene(at: position).flatMap { s in dailies.scenes.first { $0.id == s.id }?.id })
-            case .wholeCut: addNote(text: text, kind: draftKind)
-            }
-        }
-        draftText = ""; draftKind = nil; region = nil; drawingRegion = false; rangeSelection = nil; anchorMode = .moment
-    }
     func dropNote(_ id: String) { perform { try $0.dropNote(id: id) }; registerUndo("Drop Note") { $0.restoreNote(id) } }
     func restoreNote(_ id: String) { perform { try $0.restoreNote(id: id) }; registerUndo("Restore Note") { $0.dropNote(id) } }
     func editNote(_ id: String, text: String? = nil, kind: NoteKind?? = nil) { perform { _ = try $0.editNote(id: id, text: text, kind: kind) } }
+    /// Selects a note and seeks to it. Its stretch shows on the strip and its box on the picture.
     func select(_ c: ReviewComment) {
+        if notesUI.editingNoteID != nil, notesUI.editingNoteID != c.id { saveWriting(advance: false) }
         selectedNoteID = c.id
         selectedAnswerNoteID = nil
+        cancelDrawing()
         if let t = noteTime(c) { pause(); seek(t) }
-        region = c.region.map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
-        if c.lifecycle == .draft { draftText = ""; draftKind = nil; composerFocus += 1 }
     }
     func acceptOutside(_ id: String, text: String? = nil) { perform { try $0.acceptOutside(id: id, text: text) } }
     func declineOutside(_ id: String) { perform { try $0.declineOutside(id: id) } }

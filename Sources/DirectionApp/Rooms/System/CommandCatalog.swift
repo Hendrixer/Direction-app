@@ -106,9 +106,11 @@ struct CommandCatalog {
         }
         // Notes and the editor
         let turnReason: String? = m.openTurnover != nil ? "The editor is still on turnover \(m.openTurnover!.number)" : m.readyNotes.isEmpty ? "No written notes yet" : nil
-        add("turnOver", "arrow.right", "Turn over\u{2026}", sub: m.readyNotes.isEmpty ? nil : "\(m.readyNotes.count) notes", caps(.turnOver), synonyms: ["send", "editor", "hand"], disabled: turnReason) { m.go(.cut); m.sheet = .turnover }
+        add("turnOver", "arrow.right", "Turn over\u{2026}", sub: m.readyNotes.isEmpty ? nil : "\(m.readyNotes.count) notes", caps(.turnOver), synonyms: ["send", "editor", "hand"], disabled: turnReason) { m.go(.cut); m.showTurnoverSheet() }
         add("newNote", "text.bubble", "New note", caps(.newNote), synonyms: ["write", "add note"]) { actions.startNote() }
-        add("wholeCut", "text.bubble", "Note on the whole cut", synonyms: ["write"]) { actions.startNote(anchor: .wholeCut) }
+        add("wholeCut", "text.bubble", "Note on the whole cut", synonyms: ["write"]) { if m.room != .cut { m.go(.cut) }; m.noteWholeCut() }
+        add("stretch", "arrow.left.and.right", "Mark a stretch", synonyms: ["range", "section", "part"]) { if m.room != .cut { m.go(.cut) }; m.beginStretch() }
+        add("box", "viewfinder", "Draw a box", .keys(["R"]), synonyms: ["region", "circle", "area"]) { if m.room != .cut { m.go(.cut) }; m.beginRegion() }
         add("mark", "mappin", "Mark this moment", caps(.mark), synonyms: ["pin", "marker"], disabled: m.duration > 0 ? nil : "Nothing to watch yet", keepsOpen: true) { m.mark() }
         add("screening", "play.rectangle", "Watch through", caps(.startScreening), synonyms: ["watch", "play", "screen", "screening"], disabled: m.isEnabled(.cut) ? nil : "Nothing to watch yet") { m.watchThrough() }
         if let s = actions.currentScene {
@@ -159,11 +161,10 @@ struct CommandCatalog {
         add("nextScene", "chevron.down", "Next scene", .keys(["↓"]), keepsOpen: true) { actions.jumpScene(1) }
         add("start", "backward.end", "Go to start", .keys(["Home"]), keepsOpen: true) { m.pause(); m.seek(0) }
         add("end", "forward.end", "Go to end", .keys(["End"]), keepsOpen: true) { m.pause(); m.seek(max(0, m.duration - 1 / m.fps)) }
-        add("timecode", "clock", "Go to timecode\u{2026}", caps(.goToTimecode)) { actions.askForTimecode() }
-        add("copyTimecode", "clock", "Copy timecode", sub: actions.timecode, caps(.copyTimecode)) { actions.copyTimecode() }
-        add("rangeIn", "arrow.left.and.line.vertical.and.arrow.right", "Set range in", .keys(["I"]), keepsOpen: true) { actions.setRangeIn() }
-        add("rangeOut", "arrow.left.and.line.vertical.and.arrow.right", "Set range out", .keys(["O"]), keepsOpen: true) { actions.setRangeOut() }
-        add("clearRange", "xmark", "Clear range", caps(.clearRange), disabled: m.rangeSelection == nil ? "No range set" : nil) { actions.clearRange() }
+        add("timecode", "clock", "Go to a time\u{2026}", caps(.goToTimecode)) { actions.askForTimecode() }
+        add("copyTimecode", "clock", "Copy time", sub: actions.timecode, caps(.copyTimecode)) { actions.copyTimecode() }
+        add("rangeIn", "arrow.left.and.right", "Start a stretch here", .keys(["I"]), keepsOpen: true) { actions.setRangeIn() }
+        add("rangeOut", "arrow.left.and.right", "End the stretch here", .keys(["O"]), keepsOpen: true) { actions.setRangeOut() }
         add("mute", m.player.isMuted ? "speaker.wave.2" : "speaker.slash", m.player.isMuted ? "Unmute" : "Mute", caps(.mute), keepsOpen: true) { m.player.isMuted.toggle() }
         // App
         if let app {

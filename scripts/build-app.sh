@@ -22,6 +22,8 @@ cp "$direction_root/THIRD_PARTY_NOTICES.md" "$direction_app/Contents/Resources/T
 # The skills Direction hands the editor it starts (docs/editor-runs.md).
 cp -R "$direction_root/plugins/direction/skills" "$direction_app/Contents/Resources/Skills"
 mkdir -p "$direction_app/Contents/Resources/Licenses"
+# Libraries linked from a binary build have no checkout: their licenses are kept in Resources/Licenses.
+cp -R "$direction_root/Resources/Licenses/." "$direction_app/Contents/Resources/Licenses/"
 for direction_dependency in "$direction_root"/.build/checkouts/*; do
   if [ -d "$direction_dependency" ]; then
     direction_name="$(basename "$direction_dependency")"

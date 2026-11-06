@@ -77,8 +77,19 @@ public enum DirectionLog {
         return "\(name)[\(getpid())]"
     }()
 
+    /// Sees every line as it's written, keys already masked: crash reports keep them as what led up to a
+    /// report, and send errors (CrashReporting). Set while reports are on; the Settings switch changes it while
+    /// other threads write, so it's read and set under a lock.
+    public static var observer: (@Sendable (Level, String, String) -> Void)? {
+        get { observing.withLock { $0 } }
+        set { observing.withLock { $0 = newValue } }
+    }
+    private static let observing = OSAllocatedUnfairLock<(@Sendable (Level, String, String) -> Void)?>(initialState: nil)
+
     static func write(_ level: Level, _ category: String, _ message: String) {
         let text = redact(message)
+        // Called outside the lock: what it does may take a while, or log.
+        observer?(level, category, text)
         let logger = loggers.withLock { cache in
             if let l = cache[category] { return l }
             let l = Logger(subsystem: "dev.direction", category: category); cache[category] = l; return l

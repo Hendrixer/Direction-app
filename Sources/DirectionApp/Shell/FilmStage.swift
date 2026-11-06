@@ -3,14 +3,13 @@ import DirectionCore
 
 /// The picture with its transport: used by the Cut room, Finish and anywhere a cut plays
 /// beside a panel. Black stage, 28 pt padding, aspect-fit frame with a hairline at its edge (so black in the
-/// picture reads apart from the stage around it), HUD timecode and shape, then
-/// play · timecode · scene strip · mark, and in the Cut room Play changes and Watch through.
+/// picture reads apart from the stage around it), the shape's tag, then
+/// play · time · scene strip · the four ways to make a note, and in the Cut room Play changes and Watch through.
 struct FilmStage<Overlay: View>: View {
     @Bindable var model: FilmModel
     var marks: [StripMark]? = nil
     var showsMarkButton = true
     var tallStrip = false
-    var hudPrefix: String? = nil
     /// The Cut room's ways to watch: Play changes when the cut has any, and Watch through (W).
     var showsWatch = false
     /// Drawn over the picture, in picture coordinates (regions, A/B tags).
@@ -28,19 +27,18 @@ struct FilmStage<Overlay: View>: View {
                 .frame(width: size.width, height: size.height)
                 .overlay { Rectangle().strokeBorder(Gate.Line.strong, lineWidth: 1).padding(-1).allowsHitTesting(false) }
                 .contextMenu { PictureContextMenu(model: model) }
-                .overlay(alignment: .bottomLeading) { HUDTag(hud).padding(12).help("The cut is \(model.shapeLabel). Black inside the line is in the picture.") }
+                .overlay(alignment: .bottomLeading) {
+                    if let s = model.sequence, s.width > 0 {
+                        ShapeTag(width: s.width, height: s.height).padding(12)
+                            .help("The cut is \(model.shapeLabel), \(s.width) \u{00D7} \(s.height). Black inside the line is in the picture.")
+                    }
+                }
                 .overlay { if model.isPreparing { HStack(spacing: 8) { GateSpinner(); Text("Preparing picture").font(Gate.Font.small) }.padding(12).gateGlass(10) } }
                 .position(x: g.size.width / 2, y: 28 + avail.height / 2)
             }
             FilmTransport(model: model, marks: marks, showsMarkButton: showsMarkButton, tall: tallStrip, showsWatch: showsWatch)
         }
         .background(Gate.Surface.canvas)
-    }
-
-    /// "01:00:12:04 · 9:16": where the playhead is, and the cut's shape.
-    private var hud: String {
-        let time = hudPrefix.map { "\($0) \u{00B7} \(Timecode.format(model.position, fps: model.fps))" } ?? Timecode.format(model.position, fps: model.fps)
-        return model.shapeLabel.isEmpty ? time : "\(time) \u{00B7} \(model.shapeLabel)"
     }
 
     private func fit(_ aspect: CGFloat, in size: CGSize) -> CGSize {
@@ -50,8 +48,8 @@ struct FilmStage<Overlay: View>: View {
 }
 
 extension FilmStage where Overlay == EmptyView {
-    init(model: FilmModel, marks: [StripMark]? = nil, showsMarkButton: Bool = true, tallStrip: Bool = false, hudPrefix: String? = nil, showsWatch: Bool = false) {
-        self.init(model: model, marks: marks, showsMarkButton: showsMarkButton, tallStrip: tallStrip, hudPrefix: hudPrefix, showsWatch: showsWatch) { _ in EmptyView() }
+    init(model: FilmModel, marks: [StripMark]? = nil, showsMarkButton: Bool = true, tallStrip: Bool = false, showsWatch: Bool = false) {
+        self.init(model: model, marks: marks, showsMarkButton: showsMarkButton, tallStrip: tallStrip, showsWatch: showsWatch) { _ in EmptyView() }
     }
 }
 
@@ -66,20 +64,18 @@ struct FilmTransport: View {
         HStack(spacing: 12) {
             Button { model.togglePlayback() } label: { Image(systemName: model.playing ? "pause.fill" : "play.fill") }
                 .buttonStyle(.gate(.normal, icon: true)).help(model.playing ? "Pause (Space)" : "Play (Space)")
-            TimecodeLabel(time: model.position, total: model.duration, fps: model.fps)
+            TimecodeLabel(time: model.position, total: model.duration, fps: model.fps, showsFrames: model.showsFrames && !model.playing)
             // A notice showing its passage on the strip shows it, read-only; the pointer on the strip puts the
-            // director's own range back, to drag, pull longer or shorter, or draw again with ⌥ or ⇧.
-            let showing = model.notesUI.stripHighlightRestore != nil
-            SceneStrip(scenes: model.stripScenes, duration: model.duration, playhead: model.position, marks: marks ?? model.noteMarks, range: model.anchorMode == .range ? model.rangeSelection : nil, tall: tall,
+            // selected note's stretch back, to pull longer or shorter or move. Mark a stretch (or ⌥- or ⇧-drag)
+            // draws a new one, and letting go makes its note.
+            let showing = model.notesUI.stripHighlight != nil, notes = showsMarkButton && !model.looksBack
+            SceneStrip(scenes: model.stripScenes, duration: model.duration, playhead: model.position, marks: marks ?? model.noteMarks, range: model.stripRange, tall: tall,
                        onSeek: { model.pause(); model.seek($0) },
-                       onRange: showing ? nil : { a, b in model.rangeSelection = a...b; model.anchorMode = .range }) { scene in SceneContextMenu(model: model, scene: scene) }
+                       onRange: showing || !notes ? nil : { a, b in model.rangeSelection = a...b },
+                       rangeEditable: model.drawingStretch || model.stretchEditable, drawsOnDrag: model.drawingStretch,
+                       onRangeEnd: { new in model.finishStretch(new: new) }) { scene in SceneContextMenu(model: model, scene: scene) }
                 .onHover { if $0 && showing { model.endStripHighlight() } }
-            if showsMarkButton {
-                Button { model.mark() } label: { PinMark(size: 12) }
-                    .buttonStyle(.gate(.ghost, icon: true)).help("Mark this moment (N)").accessibilityLabel("Mark this moment")
-            }
-            // How the screen and the camera share the frame, when there are both (layouts.md).
-            if model.layouts.available(model) { LayoutButton(model: model) }
+            if showsMarkButton { NoteTools(model: model) }
             if showsWatch { watch }
         }
         .padding(.horizontal, 24).padding(.top, 6).padding(.bottom, 16)
@@ -98,5 +94,33 @@ extension FilmTransport {
         Button { model.watchThrough() } label: { Text("Watch through") }
             .buttonStyle(.gate(.ghost)).fixedSize()
             .help("Watch \(model.watchedCut?.name ?? "the cut") straight through, full screen. N marks a moment (W)")
+    }
+}
+
+/// The four ways to make a note, under the picture: a moment, a stretch of the strip, a box on the picture,
+/// and the whole cut. Each one is a note at once, with no words yet (specs/cut.md › Making a note).
+struct NoteTools: View {
+    @Bindable var model: FilmModel
+    var body: some View {
+        HStack(spacing: 2) {
+            Button { model.mark() } label: { PinMark(size: 12) }
+                .buttonStyle(.gate(.ghost, icon: true)).help("Mark this moment (N)").accessibilityLabel("Mark this moment")
+            tool("arrow.left.and.right", "Mark a stretch", help: "Mark a stretch: drag along the timeline", on: model.drawingStretch) {
+                if model.drawingStretch { model.cancelDrawing() } else { model.beginStretch() }
+            }
+            tool("viewfinder", "Draw a box", help: "Draw a box around something in the picture (R)", on: model.drawingRegion) {
+                if model.drawingRegion { model.cancelDrawing() } else { model.beginRegion() }
+            }
+            tool("text.bubble", "Note on the whole cut", help: "Note on the whole cut", on: false) { model.noteWholeCut() }
+        }
+        .disabled(model.duration <= 0 || model.looksBack)
+    }
+
+    private func tool(_ icon: String, _ label: String, help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: icon).font(.system(size: 12, weight: .medium)).foregroundStyle(on ? Gate.Voice.director : Gate.Text.secondary) }
+            .buttonStyle(.gate(.ghost, icon: true))
+            .background(RoundedRectangle(cornerRadius: 8).fill(on ? Gate.Voice.directorWash : .clear))
+            .help(on ? "\(help). esc stops." : help)
+            .accessibilityLabel(label).accessibilityAddTraits(on ? .isSelected : [])
     }
 }

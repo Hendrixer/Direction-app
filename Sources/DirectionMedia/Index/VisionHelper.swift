@@ -190,6 +190,7 @@ public enum VisionHelper {
         try Task.checkCancellation()
         guard process.terminationStatus == 0 else {
             let message = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?.split(separator: "\n").last.map(String.init) ?? ""
+            ChildProcesses.failed("Downloading \(detail.repo)", process, message)
             throw DirectionError("download_failed", "The download stopped. \(message)".trimmingCharacters(in: .whitespaces))
         }
         progress(1)

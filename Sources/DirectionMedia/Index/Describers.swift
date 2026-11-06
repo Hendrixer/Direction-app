@@ -98,12 +98,18 @@ public actor LocalVisionHelper {
         ChildProcesses.started(p)
         p.terminationHandler = { ChildProcesses.ended($0) }
         process = p; input = stdin.fileHandleForWriting; reader = lines
+        // Loading a model takes a minute or two, never ten: past that it's stuck, and it's stopped. Awake time: a Mac
+        // asleep isn't a model failing to load.
+        let loading = Task { try? await Task.sleep(for: .seconds(600), clock: .suspending); if !Task.isCancelled { tail.gaveUp(); p.terminate() } }
+        defer { loading.cancel() }
         let first = await withTaskCancellationHandler { await lines.next() } onCancel: { p.terminate() }
         try Task.checkCancellation()
         guard let first, let reply = try? JSONDecoder().decode(JSONValue.self, from: Data(first.utf8)), reply["ready"].bool == true else {
-            let reason = first.flatMap { try? JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }?["error"].string ?? tail.last
+            let said = first.flatMap { try? JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }?["error"].string ?? tail.last
+            let reason = !said.isEmpty ? said : tail.timedOut ? "It didn\u{2019}t finish loading in 10 minutes." : "It stopped before it was ready."
+            ChildProcesses.failed("The vision helper (mlx-vlm, \(repo))", p, reason)
             stop()
-            throw DirectionError("vision_helper_failed", "mlx-vlm couldn't load \(repo). \(reason)".trimmingCharacters(in: .whitespaces))
+            throw DirectionError("vision_helper_failed", "mlx-vlm couldn\u{2019}t load \(repo). \(reason)")
         }
     }
 
@@ -136,9 +142,11 @@ public actor LocalVisionHelper {
             let line = await withTaskCancellationHandler { await reader.next() } onCancel: { /* the reply is skipped by id next time */ }
             try Task.checkCancellation()
             guard let line else {
-                let reason = errors.last
+                let said = errors.last
+                let reason = !said.isEmpty ? said : "It stopped answering."
+                ChildProcesses.failed("The vision helper (mlx-vlm)", process, reason)
                 stop()
-                throw DirectionError("vision_helper_failed", "The vision helper stopped. \(reason)".trimmingCharacters(in: .whitespaces))
+                throw DirectionError("vision_helper_failed", "The vision helper stopped. \(reason)")
             }
             guard let reply = try? JSONDecoder().decode(JSONValue.self, from: Data(line.utf8)), reply["id"].int == id else { continue }
             if let error = reply["error"].string { throw DirectionError("vision_helper_failed", error) }
@@ -208,10 +216,15 @@ final class ErrorTail: @unchecked Sendable {
     private let lock = NSLock()
     private var text = ""
     func append(_ data: Data) { lock.lock(); text = String((text + String(decoding: data, as: UTF8.self)).suffix(4_000)); lock.unlock() }
+    /// The last line it wrote, or "" when it wrote nothing.
     var last: String {
         lock.lock(); defer { lock.unlock() }
         return text.split(separator: "\n").last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map(String.init) ?? ""
     }
+    /// Direction stopped it for taking too long to load.
+    private var stopped = false
+    func gaveUp() { lock.lock(); stopped = true; lock.unlock() }
+    var timedOut: Bool { lock.lock(); defer { lock.unlock() }; return stopped }
 }
 
 // MARK: OpenRouter

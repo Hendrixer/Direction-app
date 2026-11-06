@@ -73,7 +73,7 @@ enum EditorJobs {
             let circled = dailies.takes.values.filter(\.circled).count
             // Nothing circled: the director left the takes to the editor (dailies.md › Assemble).
             v["circles"] = circled == 0 ? "The director circled nothing and left the takes to you: use the ones you suggested while logging, and where a moment has none, the best take. Say in the summary that the takes are your picks." : "The director circled \(circled) take\(circled == 1 ? "" : "s")."
-            v["sync"] = syncRules(dailies, assets: p.assets, layout: try store.directingState().layout, styleLayouts: applied.layouts)
+            v["sync"] = syncRules(dailies, assets: p.assets, styleLayouts: applied.layouts)
             let included = t.noteIDs.compactMap { id in notes.first { $0.id == id } }.sorted { ($0.number ?? 0) < ($1.number ?? 0) }
             let library = LibraryCatalog.all()
             let footage = FootageMention(names: FootageNames.all(dailies, assets: p.assets), dailies: dailies, assets: p.assets, cut: try? p.sequence(nil))
@@ -157,7 +157,7 @@ enum EditorJobs {
 
     /// How to cut takes in sync, with the film's groups, or nothing when it has none
     /// (footage-index.md › Sync).
-    static func syncRules(_ dailies: Dailies, assets: [MediaAsset], layout: FrameLayout? = nil, styleLayouts: [FrameLayout] = []) -> String {
+    static func syncRules(_ dailies: Dailies, assets: [MediaAsset], styleLayouts: [FrameLayout] = []) -> String {
         let groups = dailies.syncGroups ?? []
         guard !groups.isEmpty else { return "" }
         func label(_ id: String) -> String {
@@ -175,16 +175,16 @@ enum EditorJobs {
         - A circle on any take in a group asks for that moment. Put one angle on V1, never two angles end to end.
         - Bring the other angles in over it with `cutaway` without `sourceRange` (give `at` and `seconds`): it plays the same moment, and Direction keeps it lined up as you edit.
         - The cut uses the group's sound take. If the angle on V1 isn't it, `syncSound` that clip so the sound take plays under it.
-        - A camera and a screen recording in sync share the frame with `layout` (\(layoutChoice(layout, styleLayouts))). Direction frames the camera on the face and keeps both in sync. Never build a corner camera by hand with cutaways, transforms or shaders, even where a rule describes one: use the layout. Lay out the whole cut with it. Zoom, blur and freeze the screen inside a layout as the style asks; changing the layout keeps them. A layout the director set in the app is theirs.
+        - A camera and a screen recording in sync share the frame with `layout` (\(layoutChoice(styleLayouts))). Direction frames the camera on the face and keeps both in sync. Never build a corner camera by hand with cutaways, transforms or shaders, even where a rule describes one: use the layout. Lay out the whole cut with it. Zoom, blur and freeze the screen inside a layout as the style asks; changing the layout keeps them. A note that asks for a layout is the director\u{2019}s choice: keep it until a note asks for another.
         """
     }
 
-    /// Which layout the editor starts from: the director's, else the style's by name, else the standard.
-    static func layoutChoice(_ layout: FrameLayout?, _ styleLayouts: [FrameLayout]) -> String {
-        if let layout { return "the director chose \(layout.label) for this film" }
+    /// Which layout the editor starts from: the style's by name, else the standard. The director changes one with
+    /// a note (layouts.md).
+    static func layoutChoice(_ styleLayouts: [FrameLayout]) -> String {
         let named = styleLayouts.filter { $0.name != nil }
         if !named.isEmpty { return "use the style\u{2019}s by name: " + named.map { "\($0.name!) (\($0.plainLabel))" }.joined(separator: ", ") + "; its rules say when" }
-        return "Screen and you, bottom right, unless the director chooses another; a scene that\u{2019}s only talk can be You"
+        return "Screen and you, bottom right, unless a note asks for another; a scene that\u{2019}s only talk can be You"
     }
 
     /// A continuation of the same session: an answer, an approval, Resume or Try again.
@@ -197,7 +197,7 @@ enum EditorJobs {
         var b: [String] = []
         if !brief.logline.isEmpty { b.append("- In one sentence: \(brief.logline)") }
         if !brief.feeling.isEmpty { b.append("- How it should feel: \(brief.feeling)") }
-        if let lo = brief.lengthMin, let hi = brief.lengthMax { b.append("- Length: \(minutes(lo))\u{2013}\(minutes(hi))") }
+        if let lo = brief.lengthMin, let hi = brief.lengthMax { b.append("- Length: \(PlainTime.text(lo))\u{2013}\(PlainTime.text(hi))") }
         if let a = brief.audience, !a.isEmpty { b.append("- Audience: \(a)") }
         // The shape is said once, here, for every job (FilmShape).
         if let shape = brief.shape { b.append("- Shape: \(shape.label). The cut is \(shape.label); frame every shot for it as you cut, and where the footage is another shape, follow the `reframe` skill (`.claude/skills/reframe/SKILL.md`).") }
@@ -229,7 +229,6 @@ enum EditorJobs {
     }
     /// Settings › Cutting › Music under dialogue, the default a note can override.
     static func ducking(_ db: Double) -> String { db > 0 ? "duck it \(Int(db)) dB (`duck`) where a note doesn\u{2019}t say otherwise" : "don\u{2019}t duck it unless a note asks" }
-    private static func minutes(_ s: Double) -> String { String(format: "%d:%02d", Int(s) / 60, Int(s) % 60) }
 
     /// What a note's "@Scene 2" or "@2A Take 3" needs to be explained.
     struct FootageMention {
@@ -366,5 +365,5 @@ enum LoggingDigest {
         }.joined(separator: "\n")
     }
 
-    static func clock(_ seconds: Double) -> String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
+    static func clock(_ seconds: Double) -> String { PlainTime.text(seconds) }
 }

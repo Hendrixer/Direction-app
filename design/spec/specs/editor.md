@@ -226,6 +226,7 @@ The Cut room after a run failed during Cut 4.
 | Not installed | "The editor isn't installed." | "Direction couldn't find Claude Code on this Mac." | Copy install command · Choose another editor… |
 | Not signed in | "Claude Code isn't signed in." | as above | Open Terminal · Try again |
 | Out of date | "Claude Code needs updating." | "It's older than Direction needs. In Terminal, run claude update, then try again." (Codex: `npm install -g @openai/codex@latest`, or `brew upgrade codex` for Homebrew's.) Read from the program refusing an option ("unknown option '--effort'"); the sign-in check says the same as "couldn't check". | Copy update command · Open Terminal · Try again |
+| Stuck | "The editor got stuck." | "It stopped answering twice, the last time while "Watching 0:15". Direction started it again once, and it got stuck again." plus the turnover's line. Fifteen quiet minutes the first time is a restart on the same session, not a stop (system.md › Hangs). | Try again · Take back (in a turnover) |
 | No internet | "The editor is offline." | "It will try again when this Mac is back online." | (retries automatically every 30 s) |
 | Program quit | "The editor quit unexpectedly." | The last line of its error output, in SF Mono 11.5. | Try again · Copy details |
 | Stopped without finishing | "The editor stopped before finishing." | "It ended without delivering Cut 4." | Try again · Take the turnover back |

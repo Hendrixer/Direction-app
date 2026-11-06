@@ -6,17 +6,15 @@ import DirectionCore
 struct EditorActivityPopover: View {
     @Bindable var model: FilmModel
     var run: EditorRun
-    /// Snapshots fix the clock so "12 s" reads the same every time.
-    var now: Date = Date()
+    /// Snapshots fix the clock so "12 s" reads the same every time; otherwise it ticks every second, so a long
+    /// step reads as still going rather than frozen.
+    var now: Date? = nil
     private var runs: EditorRunsModel { model.runs }
     private var paused: Bool { run.state == .paused }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            head
-            list
-            controls
-            footer
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            content(now ?? context.date)
         }
         .frame(width: 320)
         .background(Gate.Surface.panel)
@@ -40,7 +38,16 @@ struct EditorActivityPopover: View {
         }
     }
 
-    private var head: some View {
+    private func content(_ now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            head(now)
+            list(now)
+            controls
+            footer
+        }
+    }
+
+    private func head(_ now: Date) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 9) {
                 GemMark(size: 8, color: paused ? Gate.Text.disabled : nil)
@@ -58,15 +65,25 @@ struct EditorActivityPopover: View {
 
     private var rows: [EditorActivity] { runs.activity(of: run) }
 
-    @ViewBuilder private var list: some View {
+    /// The step it's on now, while it works.
+    private var working: Bool { !paused && run.state.isActive }
+
+    @ViewBuilder private func list(_ now: Date) -> some View {
         let all = rows, shown = runs.showsAllActivity ? all : Array(all.prefix(6))
         VStack(alignment: .leading, spacing: 0) {
             if shown.isEmpty {
                 Text(paused ? "Nothing yet. Resume to pick up where it stopped." : "Starting\u{2026}").font(.system(size: 12.5)).foregroundStyle(Gate.Text.tertiary).frame(height: 30).padding(.horizontal, 8)
             } else if runs.showsAllActivity {
-                ScrollView { rowStack(shown) }.frame(maxHeight: 300)
+                ScrollView { rowStack(shown, now: now) }.frame(maxHeight: 300)
             } else {
-                rowStack(shown)
+                rowStack(shown, now: now)
+            }
+            // One step for a long time: say so, plainly, with what to do.
+            if working, let current = all.first, now.timeIntervalSince1970 - current.at >= Self.longStep {
+                Text("This step has taken \(Self.ago(current.at, now: now)). If nothing moves in a few minutes, Stop and turn over again.")
+                    .font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary).lineHeight(11.5, 1.45)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 2)
             }
             if all.count > 6 && !runs.showsAllActivity {
                 Button("Show all") { runs.showsAllActivity = true }.buttonStyle(.gate(.ghost, .small)).padding(.leading, 2).padding(.top, 2)
@@ -77,13 +94,15 @@ struct EditorActivityPopover: View {
         .accessibilityElement(children: .contain).accessibilityLabel("What the editor did")
     }
 
-    private func rowStack(_ shown: [EditorActivity]) -> some View {
+    private func rowStack(_ shown: [EditorActivity], now: Date) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { i, a in
-                ActivityRow(activity: a, now: i == 0 && !paused && run.state.isActive, ago: Self.ago(a.at, now: now), suffix: suffix(a))
+                ActivityRow(activity: a, now: i == 0 && working, ago: Self.ago(a.at, now: now), suffix: suffix(a))
             }
         }
     }
+    /// Ten minutes on one step is longer than any step should take.
+    static let longStep: Double = 600
 
     /// "you said OK" after a read-back the director approved.
     private func suffix(_ a: EditorActivity) -> String? {
@@ -155,7 +174,12 @@ struct ActivityRow: View {
         let verb = now ? a.verb : EditorActivityWords.past(a.verb)
         let rest = [a.detail, suffix].compactMap { $0 }
         HStack(spacing: 8) {
-            Text(now ? "now" : ago).font(.system(size: 11, design: .monospaced)).foregroundStyle(Gate.Text.disabled).frame(width: 42, alignment: .leading)
+            // The step it's on: a spinner, and how long it's been on it once that's a while.
+            Group {
+                if now { HStack(spacing: 4) { GateSpinner().scaleEffect(0.75).frame(width: 11, height: 11); if ago != "now" { Text(ago) } } }
+                else { Text(ago) }
+            }
+            .font(.system(size: 11, design: .monospaced)).foregroundStyle(Gate.Text.disabled).frame(width: 52, alignment: .leading)
             let tail = rest.isEmpty ? "" : " \u{00B7} " + rest.joined(separator: " \u{00B7} ")
             Text("\(Text(verb).foregroundColor(Gate.Text.primary).fontWeight(.medium)) \(Text(a.object).font(a.mono ? .system(size: 11.5, design: .monospaced) : .system(size: 12.5)))\(Text(tail))")
                 .font(.system(size: 12.5)).foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail)
@@ -169,7 +193,7 @@ struct ActivityRow: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(now ? "Now" : ago + " ago"): \(verb) \(a.object)\(rest.isEmpty ? "" : ", " + rest.joined(separator: ", "))")
+        .accessibilityLabel("\(now ? (ago == "now" ? "Now" : "Now, for \(ago)") : ago + " ago"): \(verb) \(a.object)\(rest.isEmpty ? "" : ", " + rest.joined(separator: ", "))")
     }
 }
 

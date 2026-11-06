@@ -5,7 +5,7 @@ import SwiftUI
 enum Phase2Fixtures {
     static var frames: [String: () -> SnapshotScene] {
         var all: [String: () -> SnapshotScene] = [:]
-        for group in [RunsFixtures.frames, IndexFixtures.frames, LooksFixtures.frames, GraphicsFixtures.frames, MadeFixtures.frames, LayoutFixtures.frames, StyleFixtures.frames] { all.merge(group) { a, _ in a } }
+        for group in [RunsFixtures.frames, IndexFixtures.frames, LooksFixtures.frames, GraphicsFixtures.frames, MadeFixtures.frames, StyleFixtures.frames] { all.merge(group) { a, _ in a } }
         return all
     }
 }

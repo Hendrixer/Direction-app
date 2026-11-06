@@ -158,7 +158,8 @@ enum EditorFailure {
 /// What a run becomes when its program exits. Pure, so the whole table is testable.
 enum RunStateMachine {
     /// Why Direction ended it, if it did.
-    enum Intent: Equatable { case none, pause, stop, quit }
+    /// `restart`: it stopped answering and Direction starts it again on the same session. `stuck`: it did that again.
+    enum Intent: Equatable { case none, pause, stop, quit, restart, stuck(String) }
 
     struct Exit: Equatable {
         var status: Int32 = 0
@@ -186,6 +187,8 @@ enum RunStateMachine {
         case .pause: return .init(state: .paused)
         case .quit: return .init(state: .paused, reason: .pausedByQuit)
         case .stop: return .init(state: .stopped, reason: .stoppedByYou)
+        case .restart: return .init(state: .paused)
+        case .stuck(let step): return .init(state: .failed, reason: .stuck, detail: step)
         case .none: break
         }
         if e.finished { return .init(state: .done) }

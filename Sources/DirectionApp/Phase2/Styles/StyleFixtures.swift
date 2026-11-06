@@ -17,7 +17,6 @@ enum StyleFixtures {
             "settings-library-page": { SettingsKey.register(); return settingsPage(SettingsPage(id: "library", title: "Library") { LibraryPage(preview: true) }, tab: .library, height: 789) },
             "keep-rule": { keep() },
             "changes-keep-rule": { .film(answered()) },
-            "layout-picker-style": { picker() },
             "library": { library() },
             "library-sounds": { library(kind: "sounds") },
             "library-images": { library(kind: "images") },
@@ -130,17 +129,6 @@ enum StyleFixtures {
         return SnapshotScene(size: CGSize(width: 380, height: 260), ZStack(alignment: .top) {
             Gate.Surface.ground
             KeepRulePopover(model: m, note: note, suggestion: note.answers?.last?.rule) {}.background(SystemPopBackground())
-        })
-    }
-
-    /// The picker in a Desk + Screen film: its layouts by name.
-    private static func picker() -> SnapshotScene {
-        let m = ChangesFixtures.cut4()
-        m.brief.style = "desk-screen"
-        m.layouts.draft = m.appliedStyle.layouts[1]; m.layouts.scope = .scene
-        return SnapshotScene(size: CGSize(width: 400, height: 360), ZStack {
-            Gate.Surface.ground
-            LayoutPicker(model: m).background(SystemPopBackground())
         })
     }
 }

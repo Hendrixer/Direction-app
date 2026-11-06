@@ -1,3 +1,4 @@
+import os
 import Testing
 import Foundation
 import DirectionCore
@@ -160,10 +161,10 @@ struct EditorActivityTests {
     @Test func watchingAndLooking() {
         let watch = activity("direction_watch", ["start": .number(SampleFilm.tc(1, 12, 8)), "end": .number(SampleFilm.tc(1, 14))])
         #expect(watch?.verb == "Watching")
-        #expect(watch?.object == "01:12:08\u{2013}01:14:00")
+        #expect(watch?.object == "1:12\u{2013}1:14")
         #expect(watch?.mono == true && watch?.time == SampleFilm.tc(1, 12, 8))
         let frame = activity("direction_frame", ["time": .number(SampleFilm.tc(1, 12, 8))])
-        #expect(frame?.verb == "Watching" && frame?.object == "01:12:08" && frame?.time != nil)
+        #expect(frame?.verb == "Watching" && frame?.object == "1:12" && frame?.time != nil)
         let take = activity("direction_frame", ["assetID": .string("take-3b-t1")])
         #expect(take?.verb == "Looking at" && take?.object == "3B T1" && take?.time == nil)
         #expect(activity("direction_contact_sheet", ["assetID": .string("take-2a-t2")])?.object == "2A T2")
@@ -200,7 +201,12 @@ struct EditorActivityTests {
         #expect(activity("direction_turnovers", [:])?.object == "the notes")
         #expect(activity("direction_looks", [:]).map { "\($0.verb) \($0.object)" } == "Reading the looks")
         #expect(activity("direction_editor_status", ["phase": .string("x")]) == nil)
-        #expect(EditorActivityLog.programActivity(tool: "Write", path: "/f/Editor/Graphics/title.html")?.object == "title.html")
+        // The program's own steps say what they are, never a file's name.
+        #expect(EditorActivityLog.programActivity(tool: "Write", path: "/f/Editor/Graphics/title.html")?.object == "a graphic")
+        #expect(EditorActivityLog.programActivity(tool: "Write", path: "/f/Editor/rugProbe.metal")?.object == "a new effect")
+        #expect(EditorActivityLog.programActivity(tool: "Read", path: "/f/Editor/.claude/skills/reframe/SKILL.md").map { "\($0.verb) \($0.object)" } == "Reading how to reframe for the shape")
+        #expect(EditorActivityLog.programActivity(tool: "Read", path: "/f/Editor/zTR.png").map { "\($0.verb) \($0.object)" } == "Looking at a frame")
+        #expect(EditorActivityLog.programActivity(tool: "Read", path: "/f/Editor/NOTES.md")?.object == "its notes")
     }
 
     @Test func pastTenseForFinishedRows() {
@@ -464,7 +470,7 @@ struct EditorRunnerTests {
         #expect(mcp["mcpServers"]["direction"]["env"]["DIRECTION_RUN_ID"].string == run.id)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/.claude/skills/start-project/SKILL.md").path))
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/NOTES.md").path))
-        #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "NOTES.md" })
+        #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "its notes" })
     }
 
     @Test func endingWithoutTheFinishingToolFails() async throws {
@@ -511,6 +517,121 @@ struct EditorRunnerTests {
         let a = args(dir)
         #expect(a.suffix(2) == ["--resume", "fake-session-1"])
         #expect(a[1].hasPrefix("Continue where you stopped."))
+    }
+
+    /// Hang recovery: an editor that says nothing for too long is stopped and started again on its session, told which
+    /// step it was on; stuck again, the run ends as stuck with its step, for Try again.
+    @Test func aSilentEditorIsStartedAgainOnceThenStopsAsStuck() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        let before = EditorRunner.restartAfter
+        defer { EditorRunner.restartAfter = before }
+        try scenario("slow", dir)
+        let run = try start(.logFootage, store: store)
+        _ = try await wait(store, run.id) { $0.state == .working && $0.session != nil }
+        EditorRunner.restartAfter = 0
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + 1)
+        let again = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        #expect(again.session == "fake-session-1")
+        let a = args(dir)
+        #expect(a.suffix(2) == ["--resume", "fake-session-1"])
+        #expect(a[1].contains("Direction stopped you and started you again") && a[1].contains("Reading its notes"))
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + 1)
+        let stuck = try await ended(store, run.id)
+        #expect(stuck.state == .failed && stuck.reason == .stuck && stuck.detail == "Reading its notes" && stuck.invocations == 2)
+        #expect(EditorStopCopy.title(.stuck, run: stuck) == "The editor got stuck.")
+        // Try again is a fresh start: quiet again, it's started again once more, not stopped as stuck at once.
+        EditorRunner.shared.launch(stuck, store: store, continuation: EditorJobs.continuation("Try again. Continue where you stopped.", job: stuck.job))
+        _ = try await wait(store, run.id) { $0.invocations == 3 && $0.state == .working }
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + 1)
+        let restarted = try await wait(store, run.id) { $0.invocations == 4 && $0.state == .working }
+        #expect(restarted.reason != .stuck)
+        EditorRunner.restartAfter = before
+        EditorRunner.shared.stop(run.id, store: store)
+        _ = try await ended(store, run.id)
+    }
+
+    /// An import copies a whole file inside its call, so an editor waiting on one is quiet because the call is: it
+    /// isn't stuck until a much longer time. The director's own Stop is what they asked for, so it isn't logged as
+    /// an error (nor reported).
+    @Test func anImportInFlightIsntSilenceAndAStopIsntAnError() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        let before = EditorRunner.restartAfter
+        defer { EditorRunner.restartAfter = before; DirectionLog.observer = nil }
+        try scenario("slow", dir)
+        let run = try start(.logFootage, store: store)
+        _ = try await wait(store, run.id) { $0.state == .working && $0.session != nil }
+        let live = try #require(EditorRunner.shared.liveRun(run.id))
+        EditorRunner.shared.handle(live, .toolStarted(id: "import-1", name: "mcp__direction__direction_import", input: .object(["path": .string("/tmp/take.mov")])))
+        EditorRunner.restartAfter = 0
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + 60 * 60)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(try store.run(run.id)?.invocations == 1 && live.intent == .none, "an hour into an import isn't stuck")
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + EditorRunner.restartAfterLongCall + 1)
+        #expect(live.intent == .restart, "past the import's own time, it is")
+        _ = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        EditorRunner.restartAfter = before
+        let errors = OSAllocatedUnfairLock(initialState: [String]())
+        DirectionLog.observer = { level, _, text in if level == .error, text.contains(run.id) { errors.withLock { $0.append(text) } } }
+        EditorRunner.shared.stop(run.id, store: store)
+        let stopped = try await ended(store, run.id)
+        #expect(stopped.state == .stopped && stopped.reason == .stoppedByYou)
+        #expect(errors.withLock { $0 }.isEmpty, "\(errors.withLock { $0 })")
+    }
+
+    /// The restarted editor takes its own place back: a run queued behind it in the same film keeps waiting, so a
+    /// film never has two editors at once.
+    @Test func aRestartKeepsItsPlaceAheadOfTheQueue() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        let before = EditorRunner.restartAfter
+        defer { EditorRunner.restartAfter = before }
+        try scenario("slow", dir)
+        let run = try start(.logFootage, store: store)
+        _ = try await wait(store, run.id) { $0.state == .working && $0.session != nil }
+        let queued = EditorRun(job: .logFootage, program: "claudeCode", version: "claude-opus-5-5")
+        try store.saveRun(queued)
+        EditorRunner.restartAfter = 0
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + 1)
+        _ = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        let waiting = try store.run(queued.id)
+        #expect(!EditorRunner.shared.isLive(queued.id) && waiting?.state == .queued)
+        // Held, so stopping the first doesn't start it.
+        _ = try store.updateRun(queued.id) { $0.held = true }
+        EditorRunner.restartAfter = before
+        EditorRunner.shared.stop(run.id, store: store)
+        _ = try await ended(store, run.id)
+    }
+
+    /// Work that answers in time lets go at once of everything the deadline held for it (a frame's generator
+    /// mustn't wait out the minute).
+    @Test func aDeadlineLetsGoAsSoonAsTheWorkAnswers() async throws {
+        final class Held: Sendable {}
+        weak var held: Held?
+        do {
+            let h = Held(); held = h
+            let value = try await Deadline.run(seconds: 60, error: { DirectionError("too_long", "Too long.") }, onTimeout: { _ = h }) { 7 }
+            #expect(value == 7)
+        }
+        for _ in 0..<40 where held != nil { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(held == nil)
+    }
+
+    /// Nothing waits forever: work past its time is given up on at once, what it can cancel is cancelled, and work
+    /// that finishes in time is untouched.
+    @Test func workPastItsTimeIsGivenUpOn() async throws {
+        let cancelled = OSAllocatedUnfairLock(initialState: false)
+        let started = Date()
+        await #expect(throws: DirectionError.self) {
+            _ = try await Deadline.run(seconds: 0.2, error: { DirectionError("too_long", "Too long.") }, onTimeout: { cancelled.withLock { $0 = true } }) {
+                // Ignores cancellation, like a frame that never comes: nobody waits for it.
+                while true { usleep(20_000); if Date().timeIntervalSince(started) > 5 { break } }
+                return 1
+            }
+        }
+        #expect(Date().timeIntervalSince(started) < 2 && cancelled.withLock { $0 })
+        let quick = try await Deadline.run(seconds: 5, error: { DirectionError("too_long", "Too long.") }) { 7 }
+        #expect(quick == 7)
+        #expect(RunStateMachine.outcome(.init(status: 130, intent: .restart)) == .init(state: .paused))
+        #expect(RunStateMachine.outcome(.init(status: 130, intent: .stuck("Watching 0:15"))) == .init(state: .failed, reason: .stuck, detail: "Watching 0:15"))
     }
 
     /// The film finds the work itself: Ask me first holds it for Start, a run that ends without

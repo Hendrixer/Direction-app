@@ -8,13 +8,14 @@ The room bar is **Script · Breakdown · Dailies · Cut · Finish**, showing onl
 
 The window is split in two: the picture **stage** on `--canvas` (left, flexible) and the **sheet** on `--ground` (right, 380 wide, `--sheet-w`).
 
-- **Stage:** the picture fitted at its aspect, with a 1 pt `--line-2` hairline just outside its edge so black in the picture reads apart from the stage around it, and the HUD bottom-left with the timecode and the cut's shape ("01:00:12:04 · 9:16"; snapshot `17-tall-cut`). Then the transport. From the left: play, timecode, scene strip, mark, the layout button (when there's one), **Play changes** (when the cut on screen has changes) and **Watch through**. Both are ghost buttons; their keys (`⇧⌘P`, `W`) are in their tooltips.
+- **Stage:** the picture fitted at its aspect, with a 1 pt `--line-2` hairline just outside its edge so black in the picture reads apart from the stage around it, and the shape's tag bottom-left: a small frame drawn in the cut's shape and its name, **Vertical**, **Wide**, **Square**, **Portrait** or **Widescreen** (the ratio and size are in its tooltip; snapshot `17-tall-cut`). The shape is never a number beside a time: "9:16" next to "0:23" read as nine minutes sixteen. Then the transport. From the left: play, the time, scene strip, the four note tools (Making a note), **Play changes** (when the cut on screen has changes) and **Watch through**. Both are ghost buttons; their keys (`⇧⌘P`, `W`) are in their tooltips.
+- **Times** read the way a video player says them: "0:23 / 0:53", "1:12:08" past an hour. Frames show only where they mean something and say what they are: stepping with `←` `→`, the time reads "0:23 · frame 8 of 24" for a few seconds, and its tooltip always says "0:23 and 7 frames, at 24 frames a second". Copy Time and Go to a Time use minutes and seconds.
   - Marks on the strip: amber pins for your notes not yet answered, and prism diamonds for the editor's answers in the cut on screen. In the Outside tab, steel pins for outside notes. Every changed scene has a 2 pt prism top edge.
   - The stage changes for some answers. It shows two pictures for an answer with two options (30) or for Compare (33). It shows the lock bar once everything is accepted (34, `finish.md`), and a graphic answer's card (64).
-- **Sheet:** head, tabs, list, composer.
+- **Sheet:** head, tabs, list.
   - Head: "Notes on Cut 4" (the cut on screen) and one status line. When you're looking back at an older cut, a ghost **Back to Cut 5** sits before the More menu.
   - Tabs: **Notes · Questions · Outside**, each with a mono count (`⌥⌘1`–`⌥⌘3`).
-  - The Notes tab holds the answered notes, then the notes for the next turnover (below). The composer is its foot.
+  - The Notes tab holds the answered notes, then the notes for the next turnover (below). Each note is written in its own row.
 
 ## Answers on the sheet
 
@@ -80,23 +81,23 @@ Room keys never fire while a text field has focus.
 | `↑` / `↓` | Previous / next answer or note (seeks the picture) |
 | `←` / `→` | One frame; with `⇧`, one second |
 | `J` `K` `L` | Shuttle |
-| `↩` | Add or save the note in the composer; on an answer with two options, compare them |
-| `⇧↩` | New line in the composer |
+| `↩` | Write the selected note in its row; in the row, keep it; on an answer with two options, compare them |
+| `⇧↩` | New line in a note |
 | `⇥` | Accept the editor's suggested kind |
 | `⌥1`…`⌥5` | Kind: Feeling, Story, Pace, Picture, Sound |
 | `A` | Accept the selected answer; with two options, use A |
 | `B` | With two options, use B |
-| `R` | Reply to the selected answer; with a note selected, draw a region |
+| `R` | Reply to the selected answer; otherwise draw a box (a new note) |
 | `⌘R` | Reply to the selected answer |
-| `I` / `O` | Range in / out at the playhead |
-| `⌫` on a selected draft | Drop it. Its number is retired. |
+| `I` / `O` | The selected stretch starts / ends at the playhead; with none (or with the playhead past its other end), a new two-second stretch from (or up to) here, selected but not opened, so the other key ends (or starts) it |
+| `⌫` on a selected note | Remove it, with its stretch or box. Its number is retired. |
 | `⌘⌫` | Revert the selected answer's change |
 | `⇧⌘A` | Accept every answer that can be (asks first) |
 | `⌘↩` | The one button |
 | `⌘Y` | Every cut (the cuts list) |
 | `⌘L` | Lock the scene under the playhead |
 | `⌥⌘1/2/3` | Notes / Questions / Outside |
-| `esc` | Close a reply, a comparison or a region; clear the composer; back to the Notes tab; back to the latest cut |
+| `esc` | Close a reply or a comparison; stop drawing a stretch or a box; close the note being written as it was; back to the Notes tab; back to the latest cut |
 
 ## Older cuts
 
@@ -290,7 +291,7 @@ Snapshot `16-watch-back`
 - It's frame 17's room: the sheet, with the marks from this watch waiting as drafts.
 
 **Content:**
-- The marks are the sheet's drafts, "From screening", with the first one selected and the composer focused: "Note 1 at 00:18:04".
+- The marks are notes with no words yet, the first one open to write in its row. ↩ keeps it and opens the next mark from this watch.
 - The playhead sits on the first mark.
 - Without marks, the room is as you left it, the playhead where you stopped.
 
@@ -313,7 +314,26 @@ The sheet is the notes session. The director writes up marks as numbered notes, 
 
 **"@" names footage too** (Naming footage): the film's scenes, setups and takes are in the same list, by the names Dailies shows: "Scene 2" (its title under it), "2A" (what it is and its scene), "2A Take 3" (its caption, and Circled when it is). A take with no setup is "Scene 4 Take 2"; one not in a scene yet goes by its file's name ("MVI_0001", "Not logged yet"). With nothing typed after the "@" the library comes first; after that both are searched, names that start with what's typed first, and words in a caption find its take ("@laughs"). Their icons: `film` for a scene, `video` for a setup, `play.rectangle` for a take. Only whole names count, longest first, so "@2A Take 3" is the take, not the setup, and "@Scene 2" isn't found in "@Scene 20". The editor reads each named one with the note (the turnover's `footageNamed`, and under the note in its job): which take it is (its file and assetID), its scene and setup, its caption, circled or not usable, and where it is in the cut ("In the cut at 1:10–1:22", or "Not in the cut"); a setup or scene with its takes and the circled ones. It uses that take, not one that seems like it.
 
-Note anchors in the composer follow the playhead until you start typing. Then they're pinned, and moving the playhead doesn't change them.
+## Making a note
+
+A note starts by pointing at something, and it's a note at once: it's on the sheet straight away, with no words yet, and its row opens to write in. There's no separate place to type a note and no anchor to choose. On 2026-11-05 a director drew a box, took it away, drew another later in the cut and wrote a note on it; the note was saved at the first box's moment, because the composer kept the time it pinned for the first box. Notes made at once can't do that.
+
+The four tools sit under the picture, after the strip, each a ghost icon with its key and gesture in its tooltip. The same icon is on every note's chip, so a note says what it's on:
+
+| Tool | Icon | Makes |
+|---|---|---|
+| Mark this moment (`N`) | the amber pin | a note on this frame |
+| Mark a stretch | `arrow.left.and.right` | turns on; the next drag along the strip draws a stretch and letting go makes its note. `⌥`- or `⇧`-drag on the strip, and `I` / `O`, do the same without the tool. |
+| Draw a box (`R`) | `viewfinder` | turns on; the next drag on the picture draws a box and letting go makes its note, on this frame. |
+| Note on the whole cut | `text.bubble` | a note on the whole cut |
+
+A scene's menu on the strip has **Note on This Scene** (`film`). While a tool is on, its icon is amber on the amber wash, a glass hint sits at the top of the picture ("Drag along the timeline to mark a stretch. esc cancels." / "Drag a box around what you mean. esc cancels."), and `esc` or the tool again turns it off with nothing made. Turning one on pauses the picture.
+
+- **Writing it.** The new note's row opens: its chip, the field ("What should it feel like?"), the kinds, and **Done ↩** under them. `↩` keeps the words, `⇧↩` adds a line, `esc` closes it as it was. A note left with no words stays on the sheet, "Click to write this note.", and a click opens it. Making another note, or picking another, keeps what was typed in this one. Written notes open again with a double-click, `↩` or Edit Note.
+- **While it plays.** `N` while the cut plays, or while watching through, only drops the mark: the picture never stops and the mark waits to be written. Paused, its row opens; where the sheet isn't showing (another room, Play changes) it waits to be written too, with the toast.
+- **Many at once.** Each stretch, box or mark is its own note; there's no single one being made. The selected note's stretch shows on the strip with grips (pull either end, drag the middle to move it), and its box shows on the picture for ±12 frames around its moment with handles (drag to move, a handle to resize, `⇧` keeps its shape). Letting go keeps the change on the note; what it rests on in the footage and the words under it move with it. A drag on the picture away from the box draws a new box, and a new note.
+- **Taking it away.** A note's hover shows **✕** (Remove, `⌫`) beside its More menu; it goes with its stretch or box, and `⌘Z` puts it back. **Remove Box** (the note's menu, or the picture's) takes only the box away and leaves the note on its moment.
+- Turned-over notes, outside notes and an older cut's notes show their stretch and box but can't be moved.
 
 Shared layout (frames 17–24, in pt):
 - **Titlebar:** 0, 0, 1440 × 52.
@@ -322,56 +342,48 @@ Shared layout (frames 17–24, in pt):
   - Right side: editor pill, Share (ghost icon), then the primary.
 - **Stage:** 0, 52, 1060 × 848.
   - Viewer padding 28/28/8. The picture fits width at its aspect: 1004 × 565 at 28, 171 for 16:9.
-  - HUD timecode glass: bottom-left, 12 inset.
+  - The shape's tag (glass): bottom-left, 12 inset.
 - **Transport:** 0, 834, 1060 × 66.
-  - Play (28 icon btn), timecode, scene strip, a mark button (ghost icon with an amber pin glyph), then Play changes and Watch through.
-  - All note anchors show in the strip: pins for moments, `.range` bands for ranges. Outside people's marks use `.mk.pin.out` (steel).
+  - Play (28 icon btn), the time, scene strip, the four note tools (ghost icons: the amber pin, stretch, box, whole cut), then Play changes and Watch through.
+  - Note pins show in the strip, and the selected note's stretch as a `.range` band with grips. Outside people's marks use `.mk.pin.out` (steel).
 - **Sheet:** 1060, 52, 380 × 848. It's a grid with four rows: head, tabs, list (scrolls), foot.
   - Head: `.brand-m` title and a 12 pt status line.
   - Tabs: Notes, Questions, Outside, each with a mono count.
   - Note rows (`.nt`): 26 number column, about 69 tall for one line of text. Selected rows get a `--panel` background and a 2 pt amber left bar.
-- **Composer** (`.sheet-foot`), from the top:
-  - Anchor row: icon, "Note N at", anchor chip, and on the right the anchor select (Moment, Range, Region, Line, Scene, Whole cut).
-  - A 64-tall text field.
-  - The kinds row with **Add ↩** on the right.
+- No foot: notes are written in their rows.
 
 ## 17 · Notes, drafts after watching through
 Frame: `screens/17-notes-drafts.html` · Render: `renders/17-notes-drafts@2x.png`
 
 **Arrives from / leads to:**
 - Arrives from frame 16, or the Cut tab (`⌘4`).
-- Leads to frame 18 (start typing on a draft), frame 19 (`R`) and frame 22 (**Turn over**).
+- Leads to frame 18 (click a note with no words, or start typing on it), frame 19 (`R`) and frame 22 (**Turn over**).
 
 **Layout:**
 - Picture: 28, 171, 1004 × 565.
 - Strip: 187, 840 (809 × 44).
 - Sheet tabs: 1061, 129 (379 × 49). Note rows from y 178, each about 69 tall.
-- Composer: 1061, 733 (379 × 167). Anchor select: 1340, 746 (84 × 28). Add: 1361, 858 (63 × 28).
 - Primary: 1304, 12 (124 × 28).
 
 **Content:**
-- Title "Notes on Cut 3". Status line "2 written · 2 from your screening, waiting for words".
+- Title "Notes on Cut 3". Status line "2 written · 2 waiting for words".
 - Tabs "Sheet 4 · Questions 0 · Outside 0".
-- Notes 1 and 2 are written: chips "00:18:04" Pace and "00:46:00–00:58:12" Feeling, with their text from story.md.
-- Notes 3 and 4 are drafts: chips "01:12:08" and "01:43:20" plus "From screening". The italic `--text-3` placeholder reads "Add a note, or press ⌫ to drop this mark."
-- Composer:
-  - Anchor row: "At 00:46:12" (follows the playhead) and the select "Moment".
-  - Field placeholder: "What should it feel like?"
-  - Kinds unselected. **Add** disabled.
+- Notes 1 and 2 are written: chips "0:18" Pace and "0:46–0:58" Feeling, each with its tool's icon (the pin, the stretch), with their text from story.md.
+- Notes 3 and 4 have no words yet: chips "1:12" and "1:43", each with the pin. The italic `--text-3` line reads "Click to write this note."
 - Primary: "Turn over 2". It counts written notes only.
 - Note text wraps to any number of lines. Chips never wrap inside themselves; the meta row wraps between chips.
 
 **States and variants:**
 - Drawn: drafts present, note 2 selected.
-- Empty sheet: the list shows the empty state, "No notes on Cut 3 yet." with "Screen it first, or press N anywhere." and a ghost **Screen Cut 3** button. The primary is disabled and reads "Turn over".
-- Hover on a row: `--panel` background and a ghost `more` icon at the right. Its menu: Edit, Change kind, Copy timecode, Drop note.
+- Empty sheet: the list shows the empty state, "No notes on Cut 3 yet." with "Press N to mark a moment, or point at something with the tools under the picture." and a ghost **Watch Cut 3** button. The primary is disabled and reads "Turn over".
+- Hover on a row: `--panel` background, a ghost **✕** (Remove, `⌫`) and a ghost `more` icon at the right. Its menu: Play from Note, Write / Edit Note, Kind, Copy Time, Copy Link, Show Its Answer, Remove Box (a box note), Remove Note.
 - Drafts in a locked scene: an extra `.chip.ui` with a lock icon and "Locked scene", and the tooltip "The editor can't change this scene. Unlock it, or keep the note for later."
-- Written notes are editable inline on double-click until turnover.
+- Written notes open in their row on double-click until turnover.
 
 **Interactions:**
-- Click a row to select it and seek the picture to its anchor (a range starts at its in point and loops while selected and playing).
-- Click a strip pin to select that note. Drag a pin to move its time. Hold `⌥` while dragging to make a range.
-- Type with a draft selected to fill the composer (see frame 18).
+- Click a written note to select it and seek the picture to it (a stretch starts at its in point). Click a note with no words to open it.
+- Click a strip pin to select that note.
+- Type with a note with no words selected to start writing it (see frame 18).
 - **Turn over** opens frame 22. It's disabled while drafts are the only notes.
 - Drafts don't block turnover; they stay behind as drafts.
 
@@ -382,8 +394,8 @@ Frame: `screens/17-notes-drafts.html` · Render: `renders/17-notes-drafts@2x.png
 
 **Accessibility:**
 - The list is a table named "Notes on Cut 3". Each row reads "Note 2, Feeling, 46 seconds to 58 seconds: I want to feel how tired she was here. Let it sit."
-- Drafts read "Note 3, draft from screening, 1 minute 12".
-- Focus order: titlebar, picture controls, tabs, list, composer.
+- Notes with no words read "Note 3, mark, 1 minute 12, no words yet".
+- Focus order: titlebar, picture controls, tabs, list.
 
 **Acceptance:**
 - [ ] Note numbers are amber SF Mono 14 semibold and never change.
@@ -393,96 +405,55 @@ Frame: `screens/17-notes-drafts.html` · Render: `renders/17-notes-drafts@2x.png
 - [ ] The sheet is exactly 380 wide at every window width.
 
 ## 18 · Writing a note
-Frame: `screens/18-notes-writing.html` · Render: `renders/18-notes-writing@2x.png`
+Snapshot `18-notes-writing`
 
 **Arrives from / leads to:**
-- Arrives from frame 17 (select draft 3 and start typing, or double-click it).
-- **Add ↩** saves and selects the next draft (note 4). `R` leads to frame 19.
+- Arrives from frame 17 (click note 3, start typing on it, or make a new note), or from any of the four tools.
+- **Done ↩** keeps it; a mark from this watch opens the next one.
 
-**Layout:**
-- As frame 17. Draft row 3 is selected and reads "Writing…".
-- Composer field has `.field.focus`. The kinds row has one `.kind.sug` (Picture) carrying a small solid diamond.
-- Under the kinds row is a hint line (11 pt).
+**Layout:** as frame 17. Row 3 is open: its chip, then the field (`.field.focus`, 44 tall, growing to 160), the kinds row, and a line with the suggestion hint on the left and **Done ↩** (small, regular) on the right. The row never grows past the sheet's width.
 
 **Content:**
-- Anchor row: "Note 3 at 01:12:08". It's pinned, no longer following the playhead.
 - Field: "Tighter on her. The sky is winning", with the caret at the end.
-- The kind suggestion appears once the text is at least 3 words. Hint: "Editor suggests Picture. Press ⇥ to take it, or pick another." Only "Editor suggests Picture." is in `--agent`.
-- **Add** is enabled (regular, not steel).
-- Primary still reads "Turn over 2". It updates once the note is added.
+- The kind suggestion appears once the text is at least 3 words: "Editor suggests Picture. Press ⇥ to take it." Only "Editor suggests Picture." is in `--agent`.
+- Primary still reads "Turn over 2". Turn over keeps what's being written first.
 
 **States and variants:**
-- Drawn: kind suggested, not chosen.
-- Kind chosen: that kind is `.kind.on`, the suggestion styling is removed, and the hint hides. See frame 19.
-- No suggestion yet (under 3 words): no `.sug` and no hint.
-- Kind left empty on Add: the note saves without a kind. The editor proposes one at read-back, shown as a `.chip.a` on the row ("Picture?").
-- Editing an existing written note: the anchor row reads "Editing note 1". The buttons are **Cancel** (ghost) and **Save ↩**.
+- Kind chosen: that kind is `.kind.on`, the suggestion styling is removed, and the hint hides.
+- Kind left empty: the note saves without a kind. The editor proposes one at read-back ("Picture?").
 
 **Interactions:**
-- `⇥` accepts the suggestion. Click any kind to set it; click again to clear.
-- `esc` cancels writing and keeps the draft.
-- Changing the anchor select to Region enters the region tool (frame 19). Range uses the strip: drag across scenes or press `I` / `O`.
-- The kind suggestion runs on-device. It isn't a turnover; the editor doesn't see the note's text.
+- `⇥` accepts the suggestion. Click any kind to set it; click again to clear. `⌥1`…`⌥5` pick one.
+- `esc` closes it as it was; a note with no words stays a mark.
+- The kind suggestion runs on-device; the editor doesn't see the note's text until turnover.
 
-**Motion:** The suggestion's `.sug` border and the hint fade in with Settle, at most once per note.
-
-**Accessibility:**
-- The field is labeled "Note 3 text".
-- The suggestion is announced as "Suggested kind: Picture. Press Tab to accept."
-- Kinds form a radio group, "Kind", that can be empty.
+**Accessibility:** the field is labeled "Note 3 words". Kinds form a radio group, "Kind", that can be empty.
 
 **Acceptance:**
-- [ ] The suggested kind uses ion blue and the diamond. It's never amber and never preselected.
-- [ ] `⇥` sets it.
-- [ ] The anchor stays at 01:12:08 even if the playhead moves while you type.
-- [ ] Add saves and advances to the next draft.
+- [ ] The suggested kind uses ion blue and the diamond, never amber and never preselected.
+- [ ] Moving the playhead while writing never moves the note.
+- [ ] Making another note keeps these words.
 
-## 19 · Drawing a region
-Frame: `screens/19-notes-region.html` · Render: `renders/19-notes-region@2x.png`
+## 19 · A box
+Snapshots `19-notes-region` (note 3's box, being written), `19b-notes-drawing-box` (Draw a box on, half drawn), `19c-notes-stretch` (note 4's stretch selected on the strip)
 
-**Arrives from / leads to:**
-- Arrives from frame 18 (`R`, or the anchor select set to Region).
-- Back to frame 18 on mouse-up, with the region attached. `esc` cancels the region.
+**Arrives from / leads to:** Draw a box (`R`, the box under the picture, or the picture's menu), then a drag on the picture: letting go makes the note and opens frame 18 on it. `esc` while drawing makes nothing.
 
 **Layout:**
-- The region (`.region`) is drawn on the picture: 1.5 pt amber border, radius 2, and outside it a 35% black dim.
-  - A tab label "3 · region" sits above its top-left corner.
-  - Eight 7 × 7 amber handles: four corners and four edge midpoints.
-- A glass hint sits centered 14 from the picture's top. A size HUD (glass) sits bottom-right.
-- Composer anchor row: region icon, "Note 3, region at 01:12:08", select "Region".
-- Row 3's meta shows a Region chip.
-- The kind is chosen (`.kind.on` Picture).
-
-**Content:**
-- Hint: "Drag to draw what matters. esc cancels." (with an `esc` keycap).
-- Size HUD: "24 × 58%" (width × height as a percentage of the frame).
-- Field: "Tighter on her. The sky is winning."
+- The box (`.region`): 1.5 pt amber border, radius 2, and outside it a 35% black dim. A tab label "3 · box" sits above its top-left corner. Eight 7 × 7 amber handles while it's drawn or hovered.
+- While drawing: a glass hint centered 14 from the picture's top, "Drag a box around what you mean. esc cancels.", and a size HUD bottom-right ("24 × 58%").
 
 **States and variants:**
-- Drawing (drawn): the crosshair cursor, with handles live.
-- Region set: the hint and size HUD are hidden, and the handles show only on hover.
-- Multiple regions aren't allowed: one region per note. Drawing again replaces it.
-- Playback pauses while drawing. The region is tied to its frame and shows for ±12 frames when the note is selected.
+- One box per note. A drag on the picture away from the selected note's box draws a new box and a new note.
+- The selected note's box shows for ±12 frames around its moment, and moves and resizes until it's turned over.
+- Playback pauses while drawing.
 
-**Interactions:**
-- Drag on the picture to draw. Drag handles to resize; `⇧` keeps the aspect.
-- Drag inside to move.
-- Arrow keys nudge 1%; `⇧` nudges 10%.
-- `⌫` removes the region and the anchor reverts to Moment.
-
-**Motion:**
-- The outside dim fades in with Snap.
-- Handles don't animate.
-
-**Accessibility:**
-- The region is announced as "Region, 24 by 58 percent, at left 31, top 20".
-- Arrow keys work while the picture has focus in region mode.
+**Accessibility:** the box is announced as "Region, 24 by 58 percent, at left 31, top 20".
 
 **Acceptance:**
-- [ ] Region color is `--director` only.
-- [ ] Coordinates are stored as fractions of the frame, not points.
-- [ ] `esc` restores the Moment anchor.
-- [ ] The label tab reads "<note number> · region".
+- [ ] Box color is `--director` only; coordinates are fractions of the frame.
+- [ ] A box drawn after another was taken away is on its own frame (the 2026-11-05 bug).
+- [ ] The label tab reads "<note number> · box".
 
 ## 20 · The editor's questions
 Frame: `screens/20-notes-questions.html` · Render: `renders/20-notes-questions@2x.png`
@@ -550,7 +521,7 @@ Frame: `screens/21-notes-outside.html` · Render: `renders/21-notes-outside@2x.p
 
 **Arrives from / leads to:**
 - Arrives from someone with a screening link leaving notes (see share.md). The toast "Priya left a note on Cut 3" or the Outside tab gets here.
-- **Accept** turns the item into a numbered note on the Sheet, with the next number and the person's initials. **Edit first** opens it in the composer prefilled. **Decline** removes it.
+- **Accept** turns the item into a numbered note on the Sheet, with the next number and the person's initials. **Edit first** accepts it and opens it in its row to write. **Decline** removes it.
 
 **Layout:**
 - The Outside tab is active.

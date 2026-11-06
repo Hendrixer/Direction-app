@@ -1,18 +1,29 @@
 import SwiftUI
 import AppKit
 import AVKit
+import DirectionCore
 
 // MARK: Timecode
 
 enum Timecode {
-    /// MM:SS:FF under an hour, H:MM:SS:FF over. Frames at the sequence rate.
-    static func format(_ seconds: Double, fps: Double = 24) -> String {
-        guard seconds.isFinite, seconds < 360_000 else { return "--:--:--" }
+    /// "0:12", "12:04", "1:02:03": a time the way a video player says it. Frames show only where they mean
+    /// something: stepping a frame at a time, and in a tooltip (`withFrames`).
+    static func format(_ seconds: Double, fps: Double = 24) -> String { PlainTime.text(seconds) }
+    /// The frame within its second: 23 at 0:12 and 23 frames.
+    static func frame(_ seconds: Double, fps: Double = 24) -> Int { split(seconds, fps: fps).frames }
+    /// "0:12 and 23 frames" (or "0:12 exactly").
+    static func withFrames(_ seconds: Double, fps: Double = 24) -> String {
+        let f = frame(seconds, fps: fps)
+        return "\(format(seconds, fps: fps)) \(f == 0 ? "exactly" : f == 1 ? "and 1 frame" : "and \(f) frames")"
+    }
+    /// Whole seconds, and frames past them at the sequence rate.
+    private static func split(_ seconds: Double, fps: Double) -> (seconds: Int, frames: Int) {
+        guard seconds.isFinite, seconds < 360_000 else { return (0, 0) }
         let s = max(0, seconds), rate = fps.isFinite ? max(1, fps.rounded()) : 24
         let total = Int(s), frames = min(Int(rate) - 1, Int(((s - Double(total)) * rate + 1e-6).rounded(.down)))
-        let h = total / 3600, m = (total % 3600) / 60, sec = total % 60
-        return h > 0 ? String(format: "%d:%02d:%02d:%02d", h, m, sec, frames) : String(format: "%02d:%02d:%02d", m, sec, frames)
+        return (total, frames)
     }
+    static func rate(_ fps: Double) -> Int { fps.isFinite ? max(1, Int(fps.rounded())) : 24 }
     /// 3:40, 0:46.
     static func duration(_ seconds: Double) -> String {
         guard seconds.isFinite, seconds < 360_000 else { return "–:––" }
@@ -26,16 +37,45 @@ enum Timecode {
     }
 }
 
-/// Timecode with a dim total: "01:12:08 / 3:40".
+/// The time with a dim total: "1:12 / 3:40". Stepping a frame at a time shows which frame of the second it is
+/// ("frame 8 of 24"); the tooltip always says it.
 struct TimecodeLabel: View {
     var time: Double
     var total: Double?
     var fps: Double = 24
+    var showsFrames = false
     var body: some View {
         HStack(spacing: 4) {
             Text(Timecode.format(time, fps: fps)).foregroundStyle(Gate.Text.primary)
+            if showsFrames { Text("\u{00B7} frame \(Timecode.frame(time, fps: fps) + 1) of \(Timecode.rate(fps))").foregroundStyle(Gate.Text.secondary) }
             if let total { Text("/ \(Timecode.duration(total))").foregroundStyle(Gate.Text.disabled) }
-        }.font(Gate.Font.timecode).lineLimit(1).fixedSize()
+        }
+        .font(Gate.Font.timecode).lineLimit(1).fixedSize()
+        .help("\(Timecode.withFrames(time, fps: fps)), at \(Timecode.rate(fps)) frames a second. \u{2190} and \u{2192} step one frame.")
+    }
+}
+
+/// The cut's shape as a word and a frame drawn in it: "Vertical", "Wide", "Square", "Portrait".
+struct ShapeTag: View {
+    var width: Int
+    var height: Int
+    var body: some View {
+        let r = CGFloat(max(1, width)) / CGFloat(max(1, height))
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 1.5).strokeBorder(Gate.Text.secondary, lineWidth: 1.2)
+                .frame(width: r >= 1 ? 13 : max(5, 13 * r), height: r >= 1 ? max(5, 13 / r) : 13)
+            Text(Self.name(r)).font(Gate.Font.small).foregroundStyle(Gate.Text.primary)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5).gateGlass(6)
+    }
+    static func name(_ r: CGFloat) -> String {
+        switch r {
+        case ..<0.7: "Vertical"
+        case ..<0.95: "Portrait"
+        case ..<1.05: "Square"
+        case ..<2.05: "Wide"
+        default: "Widescreen"
+        }
     }
 }
 

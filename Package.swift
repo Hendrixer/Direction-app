@@ -21,10 +21,16 @@ let package = Package(
         .target(name: "DirectionCore", dependencies: [.product(name: "GRDB", package: "GRDB.swift")]),
         .target(name: "DirectionMedia", dependencies: ["DirectionCore"], resources: [.copy("Graphics/Web")]),
         .target(name: "DirectionTools", dependencies: ["DirectionCore", "DirectionMedia", .product(name: "MCP", package: "swift-sdk")]),
-        .executableTarget(name: "DirectionApp", dependencies: ["DirectionTools", .product(name: "Sparkle", package: "Sparkle")], resources: [.process("Resources")],
+        // Crash and error reports, only when the person turns them on (system.md › Crash reports): Sentry 9.33.0's
+        // static build, by its release checksum. The sentry-cocoa package itself would fetch every one of its builds
+        // (3.3 GB); its Sentry product is this framework plus libc++.
+        .binaryTarget(name: "Sentry", url: "https://github.com/getsentry/sentry-cocoa/releases/download/9.33.0/Sentry.xcframework.zip",
+                      checksum: "ede8d9a33a43f70d33e2f24752a681dc9dcb4a7b6245bd6bca2fa7b30e2c63f5"),
+        .target(name: "DirectionReports", dependencies: ["DirectionCore", "Sentry"], linkerSettings: [.linkedLibrary("c++")]),
+        .executableTarget(name: "DirectionApp", dependencies: ["DirectionTools", "DirectionReports", .product(name: "Sparkle", package: "Sparkle")], resources: [.process("Resources")],
                           // Sparkle.framework sits in Contents/Frameworks of the app (scripts/build-app.sh).
                           linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]),
-        .executableTarget(name: "DirectionCLI", dependencies: ["DirectionTools", .product(name: "ArgumentParser", package: "swift-argument-parser")]),
+        .executableTarget(name: "DirectionCLI", dependencies: ["DirectionTools", "DirectionReports", .product(name: "ArgumentParser", package: "swift-argument-parser")]),
         .testTarget(name: "DirectionCoreTests", dependencies: ["DirectionCore"]),
         .testTarget(name: "DirectionMediaTests", dependencies: ["DirectionTools"]),
         .testTarget(name: "DirectionAppTests", dependencies: ["DirectionApp", "DirectionCore", "DirectionTools"]),

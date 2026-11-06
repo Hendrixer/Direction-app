@@ -14,6 +14,8 @@ import DirectionCore
         _ = AppUpdates.shared
         // Opened straight from the disk image: offer to move to Applications, where it can update itself.
         DispatchQueue.main.async { MoveToApplications.offerIfNeeded() }
+        // Crash reports, once the person said yes; after a crash, it asks once (system.md › Crash reports).
+        CrashReportsLaunch.start()
         // The log keeps 30 days: trimmed now and once a day while Direction stays open.
         DispatchQueue.global(qos: .utility).async { DirectionLog.prune() }
         logPruning = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) { _ in DispatchQueue.global(qos: .utility).async { DirectionLog.prune() } }
@@ -37,7 +39,12 @@ import DirectionCore
     @NSApplicationDelegateAdaptor(DirectionAppDelegate.self) var delegate
     @State private var app = AppModel()
 
-    init() { Snapshots.runIfRequested() }
+    init() {
+        Snapshots.runIfRequested()
+        #if DEBUG
+        CrashReportsLaunch.runTestIfRequested()
+        #endif
+    }
 
     var body: some Scene {
         Window("Direction", id: "main") {

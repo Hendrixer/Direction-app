@@ -93,14 +93,14 @@ struct NotesSheet: View {
             Button("Write Notes for the Next Turnover") { show(.notes) }.disabled(side == .notes)
             if [.waiting, .readBack].contains(t.state) && !t.readBackApproved {
                 Divider()
-                Button("Take Notes Back") { model.takeNotesBack(); model.clearComposer() }
+                Button("Take Notes Back") { model.saveWriting(advance: false); model.takeNotesBack(); model.cancelDrawing() }
             }
             if !model.runs.startsEditor {
                 Divider()
                 Button("Copy Request for Your Editor") { model.copyEditorRequest() }
             }
         } else {
-            Button("Turn Over…") { model.sheet = .turnover }.disabled(model.readyNotes.isEmpty)
+            Button("Turn Over…") { model.showTurnoverSheet() }.disabled(model.readyNotes.isEmpty)
             if !model.acceptableRemaining.isEmpty && !model.looksBack {
                 Button("Accept All Remaining\u{2026}") { model.changes.confirmAcceptAll = true }.disabled(model.isPictureLocked)
             }
@@ -135,7 +135,7 @@ struct NotesSheet: View {
     @ViewBuilder private var foot: some View {
         switch mode {
         case .notes:
-            NotesComposer(model: model, onLeave: onLeave)
+            EmptyView()
         case .questions:
             if let t = waitingReadBack { ReadBackFoot(model: model, turnover: t) }
             else if let t = model.notesTurnover, model.isCutting(t) { CuttingStatusFoot(model: model, turnover: t) }
@@ -207,7 +207,7 @@ struct NoteList: View {
         let answers = model.sheetAnswers, notes = model.sheetNotesBelow
         let answered = !model.reviewAnswers.isEmpty
         if !answered && notes.isEmpty {
-            EmptyStateView(title: "No notes on \(model.notesCutName) yet.", message: "Watch it through first, or press N anywhere.") {
+            EmptyStateView(title: "No notes on \(model.notesCutName) yet.", message: "Press N to mark a moment, or point at something with the tools under the picture.") {
                 Button("Watch \(model.notesCutName)") { model.watchThrough() }.buttonStyle(.gate(.ghost)).disabled(!model.isEnabled(.cut))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -223,7 +223,7 @@ struct NoteList: View {
                             if !notes.isEmpty { NotesBelowHeader(title: model.looksBack ? "Your notes" : "Notes on \(model.notesCutName)") }
                         }
                         ForEach(notes) { c in
-                            NoteRow(model: model, note: c, onSelect: { model.showNote(c); onLeave() })
+                            NoteRow(model: model, note: c, onSelect: { model.showNote(c); onLeave() }, onLeave: onLeave)
                                 .id(c.id)
                                 .transition(.opacity)
                         }
@@ -245,12 +245,14 @@ struct NoteRow: View {
     @Bindable var model: FilmModel
     var note: ReviewComment
     var onSelect: () -> Void
+    /// Gives keyboard focus back to the room once writing ends.
+    var onLeave: () -> Void = {}
     @State private var hovered = false
 
     private var selected: Bool { model.selectedNoteID == note.id }
     private var isDraft: Bool { note.lifecycle == .draft }
-    private var writingHere: Bool { selected && isDraft && (model.notesUI.composerFocused || !model.draftText.isEmpty) }
-    private var regionHere: Bool { note.region != nil || (selected && isDraft && model.anchorMode == .region) }
+    /// Open to write in, right here in its row.
+    private var writing: Bool { model.notesUI.editingNoteID == note.id }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -262,7 +264,7 @@ struct NoteRow: View {
             .frame(width: 26, alignment: .leading)
             VStack(alignment: .leading, spacing: 5) {
                 FlowLayout(spacing: 5, lineSpacing: 5) { chips }
-                words
+                if writing { NoteWriting(model: model, note: note, onLeave: onLeave) } else { words }
                 if note.lifecycle == .answered, let answer = note.latestAnswer {
                     HStack(alignment: .top, spacing: 8) {
                         GemMark(size: 6).padding(.top, 4)
@@ -277,34 +279,39 @@ struct NoteRow: View {
         .background(selected || hovered ? Gate.Surface.panel : Color.clear)
         .overlay(alignment: .leading) { if selected { Gate.Voice.director.frame(width: 2) } }
         .overlay(alignment: .topTrailing) {
-            if hovered && !model.playing {
-                MoreMenu(label: "Note \(note.number.map(String.init) ?? "") actions") { NoteContextMenu(model: model, note: note) }
-                    .padding(.top, 9).padding(.trailing, 10)
+            if hovered && !model.playing && !writing {
+                HStack(spacing: 2) {
+                    if model.isBeforeTurnover(note) && !model.looksBack {
+                        Button { model.dropFromSheet(note) } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
+                            .buttonStyle(.gate(.ghost, .small, icon: true))
+                            .help("Remove this \(isDraft ? NoteAnchor(note).unwritten : "note") (\u{232B})")
+                            .accessibilityLabel("Remove note \(note.number.map(String.init) ?? "")")
+                    }
+                    MoreMenu(label: "Note \(note.number.map(String.init) ?? "") actions") { NoteContextMenu(model: model, note: note) }
+                }
+                .padding(.top, 9).padding(.trailing, 10)
             }
         }
         .hairlineBorder(.bottom)
         .contentShape(Rectangle())
         .onHover { hovered = $0 }
-        .onTapGesture(perform: onSelect)
-        .simultaneousGesture(TapGesture(count: 2).onEnded { model.editInComposer(note) })
+        // A click opens a note with no words to write in; a written one opens with a double-click or ↩.
+        .onTapGesture { if writing { return }; if isDraft { model.beginWriting(note) } else { onSelect() } }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { model.beginWriting(note) })
         .contextMenu { NoteContextMenu(model: model, note: note) }
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: writing ? .contain : .ignore)
         .accessibilityLabel(model.spokenNote(note))
         .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
         .accessibilityAction { onSelect() }
-        .accessibilityAction(named: "Edit") { model.editInComposer(note) }
+        .accessibilityAction(named: "Edit") { model.beginWriting(note) }
         .accessibilityAction(named: "Drop") { model.dropFromSheet(note) }
     }
 
     @ViewBuilder private var chips: some View {
-        if note.isOutside { Chip(model.anchorText(note), icon: model.anchorIcon(note)) }
-        else { Chip(model.anchorText(note), style: .director, icon: model.anchorIcon(note)) }
-        if regionHere { Chip("Region", icon: "viewfinder") }
-        if isDraft {
-            if !regionHere { LabelChip("From screening") }
-        } else if let kind = note.kind {
-            LabelChip(kind.label)
-        }
+        // What it's on, with the icon of the tool that makes it: a mark, a stretch, a box, a scene, the whole cut.
+        if note.isOutside { Chip(model.anchorText(note), icon: model.anchorIcon(note)).help(NoteAnchor(note).label) }
+        else { Chip(model.anchorText(note), style: .director, icon: model.anchorIcon(note)).help(NoteAnchor(note).label) }
+        if !isDraft, let kind = note.kind { LabelChip(kind.label) }
         if note.lifecycle == .reopened { LabelChip("Reopened") }
         if model.isBeforeTurnover(note) && model.isInLockedScene(note) {
             Chip("Locked scene", icon: "lock.fill", mono: false)
@@ -315,13 +322,54 @@ struct NoteRow: View {
 
     @ViewBuilder private var words: some View {
         if isDraft {
-            Text(writingHere ? "Writing\u{2026}" : "Add a note, or press \u{232B} to drop this mark.")
+            Text("Click to write this note.")
                 .font(.system(size: 13)).italic().foregroundStyle(Gate.Text.tertiary).lineHeight(13, 1.45)
         } else if note.lifecycle == .dropped {
             Text(note.text).font(.system(size: 13)).strikethrough().foregroundStyle(Gate.Text.disabled).lineHeight(13, 1.45)
         } else {
             Mentions.text(note.text, footage: model.footageNames).font(.system(size: 13)).foregroundStyle(Gate.Text.primary).lineHeight(13, 1.45)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// A note open to write in, in its own row: the words, then the kinds and Done (↩). esc closes it as it was.
+struct NoteWriting: View {
+    @Bindable var model: FilmModel
+    var note: ReviewComment
+    var onLeave: () -> Void
+    private var suggestion: NoteKind? { model.draftKind == nil ? KindSuggester.suggest(model.draftText) : nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            NoteField(text: $model.draftText, placeholder: "What should it feel like?", label: "Note \(note.number.map(String.init) ?? "") words", footage: model.footageNames,
+                      minHeight: 44, focusToken: model.composerFocus, focusOnAppear: true,
+                      onSubmit: { model.saveWriting(); if model.notesUI.editingNoteID == nil { onLeave() } },
+                      onEscape: { model.stopWriting(); onLeave() },
+                      onTab: { guard let suggestion else { return false }; model.draftKind = suggestion; return true },
+                      onOptionDigit: { model.setKind(NoteKind.allCases[$0 - 1]) })
+            KindPicker(kind: $model.draftKind, suggested: suggestion).fixedSize()
+                .accessibilityElement(children: .contain).accessibilityLabel("Kind")
+            HStack(alignment: .top, spacing: 8) {
+                if let suggestion {
+                    Text("\(Text("Editor suggests \(suggestion.label).").foregroundStyle(Gate.Voice.agent)) Press \u{21E5} to take it.").foregroundStyle(Gate.Text.tertiary)
+                        .font(Gate.Font.caption).lineHeight(11, 1.45)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                }
+                Spacer(minLength: 0)
+                Button { model.saveWriting(); if model.notesUI.editingNoteID == nil { onLeave() } } label: { HStack(spacing: 6) { Text("Done"); KeyHint("\u{21A9}") } }
+                    .buttonStyle(.gate(.normal, .small)).fixedSize()
+                    .help("Keep the note (\u{21A9}). \u{21E7}\u{21A9} adds a line; esc closes it as it was.")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 2)
+        .animation(gateAnimation(Gate.Motion.settle), value: suggestion)
+        // VoiceOver hears the suggestion as it appears, not only when it finds the line.
+        .onChange(of: suggestion) { _, kind in
+            guard let kind else { return }
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [.announcement: "Suggested kind: \(kind.label). Press Tab to take it.", .priority: NSAccessibilityPriorityLevel.low.rawValue])
         }
     }
 }

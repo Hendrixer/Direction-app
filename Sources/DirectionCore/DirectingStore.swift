@@ -429,8 +429,17 @@ extension ProjectStore {
     }
 
     /// Notes can be rewritten until they're turned over; after that they can only be replied to.
-    public func editNote(id: String, text: String? = nil, kind: NoteKind?? = nil, region: FrameRegion?? = nil) throws -> ReviewComment {
-        try modifyNote(id) { c, _ in
+    /// `range`: a stretch pulled longer, shorter or along the cut. What it rests on in the footage, and the words
+    /// under it, move with it.
+    public func editNote(id: String, text: String? = nil, kind: NoteKind?? = nil, region: FrameRegion?? = nil, range: MediaRange? = nil) throws -> ReviewComment {
+        var moved: (anchors: [SourceAnchor], words: [TimelineWord])?
+        if let range {
+            let note = try comment(id), p = try read(revision: note.editRevision), s = try p.sequence(note.sequenceID)
+            guard note.range != nil else { throw DirectionError("invalid_range", "Only a note on a stretch of the cut has a stretch to move.") }
+            guard range.isValid && range.end <= s.duration else { throw DirectionError("invalid_range", "Feedback range must be inside the reviewed cut.") }
+            moved = try restsOn(p, s, range: range, time: nil)
+        }
+        return try modifyNote(id) { c, _ in
             guard [.draft, .written, .reopened].contains(c.lifecycle) || c.inInbox else { throw DirectionError("note_turned_over", "This note was turned over. Reply to it instead.") }
             if let text {
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -440,6 +449,7 @@ extension ProjectStore {
             }
             if let kind { c.kind = kind }
             if let region { c.region = region }
+            if let range, let moved { c.range = range; c.anchors = moved.anchors; c.transcriptContext = moved.words }
         }
     }
     public func dropNote(id: String) throws {

@@ -409,7 +409,7 @@ struct LibraryPartRow: View {
                 TimelineView(.animation(paused: !on)) { _ in LibraryWaveform(levels: levels, progress: library.progress(item)) }.frame(height: 16)
             } else { Spacer(minLength: 0) }
             if let seconds = item.measured?.seconds {
-                Text(String(format: "%d:%02d", Int(seconds.rounded()) / 60, Int(seconds.rounded()) % 60)).font(Gate.Font.caption).monospacedDigit().foregroundStyle(Gate.Text.tertiary)
+                Text(PlainTime.text(seconds.rounded())).font(Gate.Font.caption).monospacedDigit().foregroundStyle(Gate.Text.tertiary)
             }
         }
         .padding(.horizontal, 4).frame(height: 30)

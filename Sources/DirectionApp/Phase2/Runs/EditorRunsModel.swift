@@ -118,10 +118,11 @@ import DirectionTools
         staleTask = Task { [weak self] in try? await Task.sleep(for: .seconds(max(0.1, left))); if !Task.isCancelled { self?.tick += 1 } }
     }
 
-    /// "Watching 01:12", "Cutting scene 2": the pill's words while the editor works without other progress.
+    /// "Watching 1:12–1:14", "Cutting scene 2": the pill's words while the editor works without other progress.
+    /// A time reads whole: times have no frames to drop now (Timecode.format).
     var activityText: String? {
         guard let a = active.map({ r in activity.first { $0.runID == r.id } }) ?? ownSession else { return nil }
-        let object = a.mono ? String(a.object.prefix(5)) : a.object
+        let object = a.object
         return "\(a.verb) \(object.count > 18 ? String(object.prefix(17)) + "\u{2026}" : object)"
     }
 

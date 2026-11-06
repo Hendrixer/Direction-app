@@ -102,6 +102,7 @@ public enum WhisperTranscriber {
         } onCancel: { process.terminate() }
         try Task.checkCancellation()
         guard process.terminationStatus == 0 else {
+            ChildProcesses.failed("Whisper", process, tail.last)
             throw DirectionError("whisper_failed", "Whisper stopped before finishing. \(tail.last)".trimmingCharacters(in: .whitespaces))
         }
         let timed = try self.words(fromWhisperJSON: try Data(contentsOf: words), duration: asset.duration)
