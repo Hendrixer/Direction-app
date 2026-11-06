@@ -6,14 +6,14 @@ import Foundation
 /// what's in it and when may not change. After picture lock the same holds for the whole film, except
 /// the graphics over the picture (captions, titles, lower thirds, credits), which finishing places.
 enum TimelineLocks {
-    static let afterPictureLock: Set<String> = ["balance", "matchBalance", "cameraLUT", "color", "gain", "fade", "duck", "audio", "placeMusic", "parts", "syncSound"]
+    static let afterPictureLock: Set<String> = ["balance", "matchBalance", "cameraLUT", "color", "gain", "fade", "duck", "audio", "placeMusic", "parts", "syncSound", "loudness"]
 
     static func gate(_ op: EditOperation, _ w: EditWork, _ c: EditContext) throws {
         guard c.state.pictureLocked, !afterPictureLock.contains(op.type) else { return }
         if ["placeMade", "overwrite"].contains(op.type), op.track?.hasPrefix("A") == true { return }
         // Sound on a track of its own (music, effects) still moves, trims and splits; check keeps the picture.
         if ["remove", "move", "slip", "trim", "split"].contains(op.type), let id = op.clipID, w.s.clips.first(where: { $0.id == id })?.kind == .audio { return }
-        if ["placeGraphic", "title"].contains(op.type) { return }
+        if ["placeGraphic", "title", "captions", "credits"].contains(op.type) { return }
         if ["move", "remove"].contains(op.type), let id = op.clipID, let clip = w.s.clips.first(where: { $0.id == id }), isGraphic(clip, graphics(w.project)) { return }
         throw DirectionError("picture_locked", "Picture is locked. After picture lock only color, sound and the graphics over the picture change; the director can unlock picture from the Film menu.")
     }
@@ -116,5 +116,33 @@ enum TimelineLocks {
             rows.append(json(["track": name, "fx": json((t.effects ?? []).map { [$0.name, json($0.params), json(($0.keys ?? [:]).mapValues { windowed($0, nil) })] }), "above": "\(t.aboveLook ?? false)"]))
         }
         return rows.sorted()
+    }
+}
+
+/// A locked scene as the editor reads it before cutting: where it plays in the cut (the story, V1 and A1), so
+/// no edit has to fail with scene_locked to find it. start and end are nil when none of it is in the cut.
+public struct LockedScene: Codable, Hashable, Sendable {
+    public var number: Int
+    public var title: String
+    public var start: Double?
+    public var end: Double?
+    /// "Scene 2 Kitchen (0:12–0:40)".
+    public var line: String {
+        let place = start.flatMap { s in end.map { e in " (\(PlainTime.text(s))\u{2013}\(PlainTime.text(e)))" } } ?? ", not in the cut"
+        return "Scene \(number) \(title)" + place
+    }
+}
+
+public enum SceneLocks {
+    /// Every locked scene, each stretch of it in the cut a row of its own, in cut order; scenes not in the cut last.
+    public static func inCut(_ s: Sequence, dailies: Dailies) -> [LockedScene] {
+        var out: [LockedScene] = [], missing: [LockedScene] = []
+        for scene in dailies.scenes.filter(\.locked).sorted(by: { $0.number < $1.number }) {
+            let takes = Set(dailies.takes.values.filter { $0.sceneID == scene.id }.map(\.assetID))
+            let spans = TimelineLocks.spans(s, takes)
+            if spans.isEmpty { missing.append(.init(number: scene.number, title: scene.title)) }
+            for span in spans { out.append(.init(number: scene.number, title: scene.title, start: TimelineLocks.r(span.start), end: TimelineLocks.r(span.end))) }
+        }
+        return out.sorted { ($0.start ?? 0) < ($1.start ?? 0) } + missing
     }
 }

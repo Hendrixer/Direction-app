@@ -268,18 +268,18 @@ struct CameraLUTFile: @unchecked Sendable {
 }
 
 /// A clip's volume over time (agent-timeline.md › What Direction renders): stream gain, clip gain and
-/// keys, track gain and keys, ducking, then fades, as ramps AVFoundation can play.
+/// keys, track gain and keys, ducking, the mix's gain, then fades, as ramps AVFoundation can play.
 enum AudioEnvelope {
     struct Point { var t: Double; var gain: Float }
 
-    static func points(clip: Clip, streamDB: Double, streamFadeIn: Double, streamFadeOut: Double, track: TrackSettings?, from a: Double, to b: Double) -> [Point] {
+    static func points(clip: Clip, streamDB: Double, streamFadeIn: Double, streamFadeOut: Double, track: TrackSettings?, mixDB: Double = 0, from a: Double, to b: Double) -> [Point] {
         guard b > a else { return [] }
         let fadeIn = min(max(clip.fadeIn ?? 0, streamFadeIn), (b - a) / 2), fadeOut = min(max(clip.fadeOut ?? 0, streamFadeOut), (b - a) / 2)
         func source(_ t: Double) -> Double { clip.sourceRange.start.seconds + (t - clip.start.seconds) * clip.speed }
         func cut(_ s: Double) -> Double { clip.start.seconds + (s - clip.sourceRange.start.seconds) / clip.speed }
         func dB(_ t: Double) -> Double {
             streamDB + (clip.gainDB ?? 0) + (clip.gainKeys.flatMap { Keyframe.value($0, at: source(t)) } ?? 0) + (clip.duckKeys.flatMap { Keyframe.value($0, at: source(t)) } ?? 0)
-                + (track?.gainDB ?? 0) + (track?.gainKeys.flatMap { Keyframe.value($0, at: t) } ?? 0)
+                + (track?.gainDB ?? 0) + (track?.gainKeys.flatMap { Keyframe.value($0, at: t) } ?? 0) + mixDB
         }
         func amplitude(_ t: Double) -> Float {
             var g = pow(10, dB(t) / 20)

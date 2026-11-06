@@ -59,9 +59,10 @@ struct Cut: AsyncParsableCommand {
     @Option var key: String?
     func run() async throws {
         let runtime = try options.runtime()
-        var a: [String: JSONValue] = ["start": .number(start), "end": .number(end), "baseEditRevision": .number(Double(try baseRevision ?? runtime.store.revision()))]
+        let op: JSONValue = .object(["op": .string("removeRange"), "range": .object(["start": .number(start), "end": .number(end)]), "ripple": .bool(true)])
+        var a: [String: JSONValue] = ["baseEditRevision": .number(Double(try baseRevision ?? runtime.store.revision())), "summary": .string("Removed \(start)\u{2013}\(end)"), "operations": .array([op])]
         if let sequenceID { a["sequenceID"] = .string(sequenceID) }; if let key { a["idempotencyKey"] = .string(key) }
-        try await execute(runtime, "direction_remove_range", a)
+        try await execute(runtime, "direction_edit", a)
     }
 }
 
@@ -105,9 +106,11 @@ struct Audio: AsyncParsableCommand {
     @Option var baseRevision: Int?
     func run() async throws {
         let runtime = try options.runtime()
-        var a: [String: JSONValue] = ["assetID": .string(assetID), "trackID": .number(Double(track)), "baseEditRevision": .number(Double(try baseRevision ?? runtime.store.revision()))]
-        if let muted { a["muted"] = .bool(muted) }; if let gain { a["gainDB"] = .number(gain) }; if let clipID { a["clipID"] = .string(clipID) }
-        try await execute(runtime, "direction_audio", a)
+        var changes: [String: JSONValue] = [:]
+        if let muted { changes["muted"] = .bool(muted) }; if let gain { changes["gainDB"] = .number(gain) }
+        var op: [String: JSONValue] = ["op": .string("audio"), "assetID": .string(assetID), "audioTrackID": .number(Double(track)), "audio": .object(changes)]
+        if let clipID { op["clipID"] = .string(clipID) }
+        try await execute(runtime, "direction_edit", ["baseEditRevision": .number(Double(try baseRevision ?? runtime.store.revision())), "summary": .string("Changed a sound track"), "operations": .array([.object(op)])])
     }
 }
 
@@ -191,7 +194,12 @@ struct Tools: AsyncParsableCommand {
 struct API: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "api", abstract: "Serve newline-delimited local JSON requests on stdin/stdout. Request: {id,method,params}.")
     @OptionGroup var options: OptionalProjectOptions
+    @Option(help: "The job Direction started the editor for (assemble, turnover, finish…): only its tools are listed, with direction_more_tools for the rest.") var job: String?
     func run() async throws {
+        let job = try job.map { name in
+            guard let job = EditorJob(rawValue: name) else { throw ValidationError("Unknown job \(name): use one of \(EditorJob.allCases.map(\.rawValue).joined(separator: ", ")).") }
+            return job
+        }
         stopsItsProgramsWhenStopped()
         let runtime = try options.router()
         while let line = readLine() {
@@ -213,12 +221,17 @@ struct API: AsyncParsableCommand {
 struct MCP: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "mcp", abstract: "Serve the official MCP stdio transport for an external agent.")
     @OptionGroup var options: OptionalProjectOptions
+    @Option(help: "The job Direction started the editor for (assemble, turnover, finish…): only its tools are listed, with direction_more_tools for the rest.") var job: String?
     func run() async throws {
+        let job = try job.map { name in
+            guard let job = EditorJob(rawValue: name) else { throw ValidationError("Unknown job \(name): use one of \(EditorJob.allCases.map(\.rawValue).joined(separator: ", ")).") }
+            return job
+        }
         stopsItsProgramsWhenStopped()
         // Crash reports, when the person turned them on: the editor's tools run here.
         Reports.startIfAllowed(process: "helper")
         DirectionMCPServer.onStuck = { name, minutes in Reports.stuck("Tool \(name)", minutes: minutes, tags: ["tool": name]) }
-        try await DirectionMCPServer.run(router: options.router())
+        try await DirectionMCPServer.run(router: options.router(), job: job)
         ChildProcesses.stopAll()
     }
 }

@@ -98,6 +98,11 @@ public struct EditOperation: Hashable, Sendable {
     public var transitionName: String?
     /// `technique`: one of its named variants.
     public var variant: String?
+    /// `loudness`: the target in LUFS and the true-peak ceiling in dBTP (Settings › Cutting's, unless given).
+    public var lufs: Double?
+    public var truePeak: Double?
+    /// `captions`: the most words on screen at once.
+    public var wordsAtATime: Int?
     /// What Direction's tools measured before the batch runs: face keys, a matched balance, a checked
     /// shader, quiet stretches, a graphic's render. Never taken from the editor.
     public var resolved: ResolvedValues?
@@ -128,11 +133,35 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
     public var sound: MediaAsset?
     public var soundDB: Double?
     public var warnings: [String]?
+    /// `loudness`: the mix as Direction measured it, with the mix gain it had then.
+    public var loudness: MixLoudness?
+    /// `captions` and `credits`: the graphics Direction made and checked, where each goes.
+    public var placed: [PlacedGraphic]?
     public init(keys: [String: [Keyframe]]? = nil, grade: ColorGrade? = nil, source: String? = nil, quiet: [MediaRange]? = nil, assetID: String? = nil, layout: LayoutMeasure? = nil, faces: [String: FaceTrack]? = nil, warnings: [String]? = nil) { self.keys = keys; self.grade = grade; self.source = source; self.quiet = quiet; self.assetID = assetID; self.layout = layout; self.faces = faces; self.warnings = warnings }
 }
 
+/// The whole mix measured once (SequenceRenderer.loudness), for the loudness step to work out its gain.
+public struct MixLoudness: Codable, Hashable, Sendable {
+    public var integratedLUFS: Double?
+    public var truePeakDBTP: Double
+    /// The mix gain it was measured with, in dB.
+    public var mixGainDB: Double
+    /// Where the loudest peak is, in cut seconds.
+    public var peakAt: Double?
+    public init(integratedLUFS: Double?, truePeakDBTP: Double, mixGainDB: Double, peakAt: Double?) { self.integratedLUFS = integratedLUFS; self.truePeakDBTP = truePeakDBTP; self.mixGainDB = mixGainDB; self.peakAt = peakAt }
+}
+
+/// A graphic Direction made for a step (a stretch of captions, the credits), and where it goes in the cut.
+public struct PlacedGraphic: Codable, Hashable, Sendable {
+    public var graphic: String
+    public var assetID: String
+    public var at: Double
+    public var seconds: Double
+    public init(graphic: String, assetID: String, at: Double, seconds: Double) { self.graphic = graphic; self.assetID = assetID; self.at = at; self.seconds = seconds }
+}
+
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "parts", "from", "heard", "corners", "layout", "scales", "focus", "name", "variant", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "parts", "from", "heard", "corners", "layout", "scales", "focus", "name", "variant", "lufs", "truePeak", "wordsAtATime", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -158,7 +187,7 @@ extension EditOperation: Codable {
         grade = try decoded("grade", ColorGrade.self, "a full balance {exposure, contrast, saturation, temperature, tint}")
         framing = try decoded("framing", Framing.self, "a full framing {fit, scale, offsetX, offsetY, opacity}")
         audioTrackID = try int("audioTrackID").flatMap(Int32.init(exactly:))
-        audio = try decoded("audio", AudioSettings.self, "full audio settings, as direction_inspect shows them")
+        audio = try decoded("audio", AudioSettings.self, "audio settings: {muted, gainDB, fadeIn, fadeOut, effects}")
         text = try str("text"); width = try int("width"); height = try int("height")
         frameRate = try decoded("frameRate", FrameRate.self, "{numerator, denominator}")
         to = value("to"); edge = try str("edge"); frames = try int("frames"); editPoint = try str("editPoint"); lead = try str("lead")
@@ -190,6 +219,7 @@ extension EditOperation: Codable {
         focus = value("focus")
         if let f = focus { guard f.string == "action" || (f["x"].double != nil && f["y"].double != nil) || f["text"].string?.isEmpty == false else { throw bad("focus", "\"action\", {x, y} or {text}") } }
         transitionName = try str("name"); variant = try str("variant")
+        lufs = try num("lufs"); truePeak = try num("truePeak"); wordsAtATime = try int("wordsAtATime")
         resolved = try decoded("resolved", ResolvedValues.self, "Direction's own measurements")
     }
 
@@ -209,7 +239,7 @@ extension EditOperation: Codable {
         put("toClipID", toClipID); put("lut", lut); put("target", target); put("effect", effect); if let params { f["params"] = .object(params) }; put("keys", any: keys); put("effectID", effectID)
         if !legacy { put("type", transitionType) }
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
-        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("parts", any: parts); put("from", from); put("heard", any: heard); put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("variant", variant); put("resolved", any: resolved)
+        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("parts", any: parts); put("from", from); put("heard", any: heard); put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("variant", variant); put("lufs", lufs); put("truePeak", truePeak); put("wordsAtATime", wordsAtATime); put("resolved", any: resolved)
         return .object(f)
     }
 
@@ -703,6 +733,8 @@ struct EditWork {
         case "placeGraphic": return try placeGraphic(op)
         case "placeMade": return try placeMade(op)
         case "gain": return try gain(op)
+        case "loudness": return try loudness(op)
+        case "captions", "credits": return try placeMade(graphics: op)
         case "fade": return try fade(op)
         case "duck": return try duck(op)
         case "placeMusic": return try placeMusic(op)
@@ -1265,13 +1297,23 @@ struct EditWork {
         guard let value, !value.isEmpty else { throw bad("target is a clip id or a track (V2).") }
         if let i = s.clips.firstIndex(where: { $0.id == value }) { return .clip(i) }
         if let t = try? parseTrack(value) { guard !t.audio else { throw bad("Sound tracks take gain and duck, not picture effects.") }; return .track(name(t)) }
-        throw bad("There's no clip or track \(value). Read direction_timeline for ids.")
+        throw noTarget(value)
+    }
+    /// target is a clip's id or a track; the words "clip" and "track" point at clipID and track.
+    func targetName(_ op: EditOperation) -> String? {
+        switch op.target { case "clip"?: op.clipID; case "track"?: op.track; case nil: op.clipID ?? op.track; default: op.target }
+    }
+    /// A target that's neither: a clip an operation before it in the batch replaced, or not a name at all.
+    func noTarget(_ value: String) -> DirectionError {
+        value.hasPrefix("clip-")
+            ? bad("There\u{2019}s no clip \(value) in the cut now. If an operation before this one in the batch split, swapped or removed it, send this one in its own batch after reading direction_timeline again.")
+            : bad("target is a clip\u{2019}s id from direction_timeline, or a track: V1, V2\u{2026} for picture, A1, A2\u{2026} for sound. Not \u{201C}\(value)\u{201D}.")
     }
 
     mutating func addEffect(_ op: EditOperation) throws -> Outcome {
         guard let effect = op.effect, !effect.isEmpty else { throw bad("effect names the effect: transform, blend, mask, blur, sharpen, stabilize, filter.<kind> or shader.") }
         if effect == "look" || effect == "lut" { throw DirectionError("look_is_yours", "The look is the director's. Propose one instead.") }
-        let target = try effectTarget(op.target ?? op.clipID)
+        let target = try effectTarget(targetName(op))
         if effect == "blend" {
             guard case .clip(let i) = target else { throw bad("blend goes on a clip on V2 or above.") }
             guard s.clips[i].layer > 0, s.clips[i].kind != .audio else { throw bad("Only clips on V2 and above blend into what's under them.") }
@@ -1587,6 +1629,31 @@ struct EditWork {
         return .init(summary: "Placed the graphic “\(graphic)” at \(tc(at))–\(tc(clip.end))", changes: [.init(before: (at.seconds, clip.end.seconds), after: (at.seconds, clip.end.seconds), tracks: [clip.trackName])], clipIDs: [clip.id])
     }
 
+    /// captions and credits: the graphics Direction made, placed where it worked out, in place of the ones the
+    /// same step placed before (captions-…, credits).
+    mutating func placeMade(graphics op: EditOperation) throws -> Outcome {
+        guard let placed = op.resolved?.placed else { throw bad("\(op.type) is laid out and checked by Direction\u{2019}s tools; send it through direction_edit.") }
+        let mine: (String) -> Bool = op.type == "captions" ? { $0.hasPrefix("captions-") } : { $0 == "credits" }
+        let range = op.range.map { ($0.start.seconds, $0.end.seconds) }
+        var changes: [LocalChange] = [], ids: [String] = []
+        let old = s.clips.filter { c in
+            guard c.layer > 0, c.assetID.flatMap({ id in project.assets.first { $0.id == id }?.graphic }).map(mine) == true else { return false }
+            if let (a, b) = range, c.end.seconds <= a || c.start.seconds >= b { return false }
+            return true
+        }
+        for c in old { changes.append(.init(before: (c.start.seconds, c.end.seconds), after: (c.start.seconds, c.end.seconds), tracks: [c.trackName])) }
+        let gone = Set(old.map(\.id))
+        s.clips.removeAll { gone.contains($0.id) }
+        for p in placed {
+            var place = EditOperation(op: "placeGraphic"); place.graphic = p.graphic; place.at = MediaTime(seconds: p.at); place.seconds = p.seconds
+            place.resolved = ResolvedValues(assetID: p.assetID)
+            let o = try placeGraphic(place)
+            changes += o.changes; ids += o.clipIDs
+        }
+        let what = op.type == "captions" ? "Laid captions from the words in \(placed.count == 1 ? "1 graphic" : "\(placed.count) graphics")" : "Rolled the credits at \(tc(MediaTime(seconds: placed.first?.at ?? 0)))"
+        return .init(summary: what, changes: changes, clipIDs: ids)
+    }
+
     mutating func placeMade(_ op: EditOperation) throws -> Outcome {
         let a = try asset(op.madeID ?? op.assetID, "madeID")
         guard let tn = op.track else { throw bad("track is where the made clip goes: V2, A2…") }
@@ -1603,7 +1670,7 @@ struct EditWork {
     // MARK: Sound
 
     mutating func gain(_ op: EditOperation) throws -> Outcome {
-        guard let target = op.target ?? op.clipID else { throw bad("target is a clip id or a sound track (A2).") }
+        guard let target = targetName(op) else { throw bad("target is a clip id or a sound track (A2).") }
         guard let dB = op.dB, (-96...24).contains(dB) else { throw bad("dB is −96 to 24.") }
         let given = op.keys?["dB"] ?? op.keys?["gain"]
         if let given { guard given.allSatisfy({ $0.t.isFinite && (-96...24).contains($0.v) }) else { throw bad("Gain keys are {t, v}: t in cut seconds, v in dB from −96 to 24.") } }
@@ -1617,12 +1684,31 @@ struct EditWork {
             let what = pieces.count > 1 || song(of: c) != nil ? "\(song(of: c) ?? label(c))\u{2019}s \(partName(c))" : "\(label(c))’s sound"
             return .init(summary: "Set \(what) to \(dbText(dB))", changes: pieces.map { k in .init(before: (s.clips[k].start.seconds, s.clips[k].end.seconds), after: (s.clips[k].start.seconds, s.clips[k].end.seconds), tracks: [c.kind == .audio ? s.clips[k].trackName : "A1"]) })
         }
-        let t = try parseTrack(target)
+        guard let t = try? parseTrack(target) else { throw noTarget(target) }
         guard t.audio else { throw bad("Gain goes on a clip with sound or an A track.") }
         var settings = s.track(name(t)); settings.gainDB = dB == 0 ? nil : dB
         if let given { settings.gainKeys = given.sorted { $0.t < $1.t } }
         s.tracks = (s.tracks ?? [:]).merging([name(t): settings]) { _, b in b }
         return .init(summary: "Set \(name(t)) to \(dbText(dB))", changes: [.init(before: (0, s.duration.seconds), after: (0, s.duration.seconds), tracks: [name(t)])])
+    }
+
+    /// loudness: the whole mix to the target, as far as the true-peak ceiling lets it go, from what Direction
+    /// measured. The gain is worked out here from the measurement, so the record says exactly what it did.
+    mutating func loudness(_ op: EditOperation) throws -> Outcome {
+        guard let m = op.resolved?.loudness, let target = op.lufs, let ceiling = op.truePeak else { throw bad("loudness is measured by Direction\u{2019}s tools; send it through direction_edit.") }
+        guard (-40 ... -5).contains(target), (-9 ... 0).contains(ceiling) else { throw bad("lufs is \u{2212}40 to \u{2212}5 and truePeak \u{2212}9 to 0.") }
+        guard let integrated = m.integratedLUFS else { throw bad("There\u{2019}s no sound to bring to a loudness: the cut is silent.") }
+        let wanted = target - integrated, room = ceiling - m.truePeakDBTP, change = min(wanted, room)
+        let gain = ((m.mixGainDB + change) * 100).rounded() / 100
+        guard (-40...24).contains(gain) else { throw bad("Reaching \(LoudnessCheck.lufsText(target)) needs the mix \(LoudnessCheck.dBText(gain)), past what Direction will set (\u{2212}40 to +24 dB).") }
+        s.mixGainDB = abs(gain) < 0.005 ? nil : gain
+        let reached = integrated + change, peak = m.truePeakDBTP + change
+        var outcome = Outcome(summary: "Set the mix to \(LoudnessCheck.lufsText(reached)) (\(LoudnessCheck.dBText(gain)) on the whole mix); its loudest peak is \(LoudnessCheck.peakText(peak))",
+                              changes: [.init(before: (0, s.duration.seconds), after: (0, s.duration.seconds), tracks: ["Mix"])])
+        if wanted - change > 0.05 {
+            outcome.warnings.append("The peaks hold the mix at \(LoudnessCheck.lufsText(reached)), under the \(LoudnessCheck.lufsText(target)) target: the loudest\(m.peakAt.map { " (at \(tc(MediaTime(seconds: $0))))" } ?? "") would pass \(LoudnessCheck.peakText(ceiling)). Turn on the limiter on that sound (audio, effects.limiter) or lower it there with gain keys, then run loudness again.")
+        }
+        return outcome
     }
 
     mutating func fade(_ op: EditOperation) throws -> Outcome {
@@ -1742,7 +1828,7 @@ struct EditWork {
     }
 
     mutating func audio(_ op: EditOperation) throws -> Outcome {
-        guard let track = op.audioTrackID, let settings = op.audio else { throw bad("audio takes audioTrackID and full audio settings.") }
+        guard let track = op.audioTrackID, let settings = op.audio else { throw bad("audio takes audioTrackID and audio, the settings to change.") }
         if let id = op.clipID {
             let i = try clipIndex(id)
             let a = try asset(s.clips[i].assetID ?? "")

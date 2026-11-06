@@ -10,6 +10,7 @@ public enum SharedSettings {
     public enum Key {
         public static let transcriptionEngine = "transcriptionEngine"
         public static let whisperModel = "whisperModel"
+        public static let loudnessTarget = "loudnessTarget"
     }
 
     public enum TranscriptionEngine: String, CaseIterable, Sendable { case apple, whisper }
@@ -25,5 +26,17 @@ public enum SharedSettings {
     }
     public static var whisperModel: String {
         defaults.string(forKey: Key.whisperModel) ?? whisperModels[0].id
+    }
+    /// Settings › Cutting › Loudness target, in LUFS: the mix is brought to it, and a delivery is checked against it.
+    public static var loudnessTarget: Double { defaults.object(forKey: Key.loudnessTarget) as? Double ?? -14 }
+    /// No peak goes over this, in dBTP (true peak): what the streaming services ask for.
+    public static let truePeakCeiling = -1.0
+    /// How far from the target still counts as on it, in LU.
+    public static let loudnessTolerance = 1.0
+
+    /// Settings written before a setting was shared move to the shared suite once, so the tools read the
+    /// director's choice and not the default.
+    public static func adopt(_ keys: [String], from old: UserDefaults) {
+        for key in keys where defaults.object(forKey: key) == nil { if let value = old.object(forKey: key) { defaults.set(value, forKey: key) } }
     }
 }

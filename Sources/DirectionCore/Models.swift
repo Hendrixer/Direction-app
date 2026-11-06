@@ -265,6 +265,9 @@ public struct Sequence: Codable, Hashable, Sendable, Identifiable {
     public var clips: [Clip]
     /// Per-track settings by name ("V2", "A2"). nil until the editor sets one.
     public var tracks: [String: TrackSettings]? = nil
+    /// The whole mix's gain in dB, over every track: what the loudness step sets to bring the cut to its target.
+    /// nil is 0 dB.
+    public var mixGainDB: Double? = nil
     public init(id: String = newID("sequence"), name: String = "Main edit", width: Int = 1920, height: Int = 1080, frameRate: FrameRate = .init(), clips: [Clip] = []) {
         self.id = id; self.name = name; self.width = width; self.height = height; self.frameRate = frameRate; self.clips = clips
     }

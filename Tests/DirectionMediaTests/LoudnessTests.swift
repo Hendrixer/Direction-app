@@ -94,5 +94,34 @@ struct LoudnessTests {
                                                                      "operations": .array([.object(["op": .string("gain"), "target": .string(clipID), "dB": .number(-6)])])]))
         let lower = try await runtime.invoke("direction_measure_audio", arguments: .object([:])).value
         #expect(abs(try #require(lower["integratedLUFS"].double) + 29.17) < 0.03, "\(lower)")
+        // And up: gain over 0 dB is heard as louder, not held at the take's own level.
+        _ = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString), "summary": .string("Up 6 dB"),
+                                                                     "operations": .array([.object(["op": .string("gain"), "target": .string(clipID), "dB": .number(6)])])]))
+        let louder = try await runtime.invoke("direction_measure_audio", arguments: .object([:])).value
+        #expect(abs(try #require(louder["integratedLUFS"].double) + 17.17) < 0.03, "\(louder)")
+        // One call says how it moves: short-term loudness each second, the loudest stretch, the peaks.
+        let profile = louder["profile"]
+        #expect(profile["shortTermLUFS"].array?.count == 4 && profile["loudest"].array?.first?["end"].double ?? 0 <= 4.05 && profile["peaks"].array?.first?["truePeakDBTP"].double ?? 0 > -14.2, "\(profile)")
+        #expect(louder["target"]["ready"] != .null)
+
+        // The loudness step: the whole mix to the target in one operation, worked out from Direction's own measurement.
+        func edit(_ op: JSONValue) async throws -> JSONValue {
+            try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString), "operations": .array([op])])).value
+        }
+        _ = try await edit(.object(["op": .string("loudness"), "lufs": .number(-14)]))
+        #expect(abs((try store.read().sequences[0].mixGainDB ?? 0) - 3.17) < 0.05)
+        let leveled = try await runtime.invoke("direction_measure_audio", arguments: .object([:])).value
+        #expect(abs(try #require(leveled["integratedLUFS"].double) + 14) < 0.05, "\(leveled)")
+        // Again: nothing more to do. With a ceiling the peaks reach first, it stops there and says where.
+        _ = try await edit(.object(["op": .string("loudness"), "lufs": .number(-14)]))
+        #expect(abs((try store.read().sequences[0].mixGainDB ?? 0) - 3.17) < 0.05)
+        let held = try await edit(.object(["op": .string("loudness"), "lufs": .number(-8), "truePeak": .number(-9)]))
+        let warnings = held["operations"].array?.first?["warnings"].array?.compactMap(\.string) ?? held["warnings"].array?.compactMap(\.string) ?? []
+        #expect(warnings.contains { $0.contains("The peaks hold the mix") }, "\(held)")
+        let capped = try await runtime.invoke("direction_measure_audio", arguments: .object([:])).value
+        #expect(abs(try #require(capped["truePeakDBTP"].double) + 9) < 0.15, "\(capped)")
+        // The mix gain is the cut's, so the outline says it.
+        let outline = try await runtime.invoke("direction_timeline").value["outline"].string ?? ""
+        #expect(outline.contains("mix +"), "\(outline)")
     }
 }

@@ -94,6 +94,8 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
         var film: URL
         var runID: String
         var scripts: Bool
+        /// The job's tools only, with direction_more_tools for the rest.
+        var kind: EditorJob? = nil
     }
 
     /// The arguments after the program's path.
@@ -125,7 +127,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             if !i.effort.isEmpty { shared += ["--config", "model_reasoning_effort=\(toml(i.effort))"] }
             shared += [
                 "--config", "mcp_servers.direction.command=\(toml(i.helper))",
-                "--config", "mcp_servers.direction.args=[\(toml("mcp")),\(toml("--project")),\(toml(i.film.path))]",
+                "--config", "mcp_servers.direction.args=[\((EditorProgram.serverArguments(film: i.film, job: i.kind)).map(toml).joined(separator: ","))]",
                 "--config", "mcp_servers.direction.env.DIRECTION_RUN_ID=\(toml(i.runID))",
                 // Codex strips a tool's field descriptions, then its nested shapes, past 5,000 bytes of schema; direction_edit's is bigger.
                 "--config", "mcp_servers.direction.tool_input_schema_max_bytes=32768",
@@ -154,13 +156,16 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     }
 
     /// The Claude Code MCP config for one run: only Direction, pointed at this film.
-    static func mcpConfig(helper: String, film: URL, runID: String) -> JSONValue {
+    static func mcpConfig(helper: String, film: URL, runID: String, job: EditorJob? = nil) -> JSONValue {
         .object(["mcpServers": .object(["direction": .object([
             "type": .string("stdio"), "command": .string(helper),
-            "args": .array([.string("mcp"), .string("--project"), .string(film.path)]),
+            "args": .array(serverArguments(film: film, job: job).map(JSONValue.string)),
             "env": .object(["DIRECTION_RUN_ID": .string(runID)]),
         ])])])
     }
+
+    /// `direction mcp` for one film, and for one job when there is one.
+    static func serverArguments(film: URL, job: EditorJob?) -> [String] { ["mcp", "--project", film.path] + (job.map { ["--job", $0.rawValue] } ?? []) }
 
     /// The shape every job's final message must match (specs/editor.md › The result).
     static let resultSchema: JSONValue = .object([

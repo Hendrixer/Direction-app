@@ -9,7 +9,7 @@ import DirectionCore
 struct ToolSchemaTests {
     /// Objects whose fields are the editor's own to choose: an effect's or a transition's settings, keyframes, a style's tokens.
     static let freeForm: Set<String> = [
-        "direction_edit.operations[].params", "direction_edit.operations[].keys", "direction_edit.batch.operations[].params", "direction_edit.batch.operations[].keys",
+        "direction_edit.operations[].params", "direction_edit.operations[].keys", "direction_edit.batch",
         "direction_save_style.tokens", "direction_save_technique.transition.params", "direction_save_technique.effect.params", "direction_save_technique.variants[].params",
     ]
 
@@ -28,6 +28,15 @@ struct ToolSchemaTests {
             if schema["items"] == .null { out.append(path + "[]") } else { out += shapeless(schema["items"], path + "[]") }
         }
         return out
+    }
+
+    /// Every edit argument says what it is on the argument itself: a gain's target is a clip or a track, not "clip".
+    @Test func everyEditArgumentHasWords() throws {
+        let edit = try #require(ToolCatalog.definitions.first { $0.name == "direction_edit" })
+        guard case .object(let fields) = edit.inputSchema["properties"]["operations"]["items"]["properties"] else { Issue.record("no operation fields"); return }
+        let bare = fields.filter { $0.value["description"] == .null }.map(\.key).sorted()
+        #expect(bare.isEmpty, "\(bare)")
+        #expect(fields["target"]?["description"].string?.contains("Not the word clip") == true)
     }
 
     @Test func everyArgumentSaysItsShape() {

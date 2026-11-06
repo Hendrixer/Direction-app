@@ -76,7 +76,7 @@ private func expectRefused(_ code: String, _ body: () async throws -> Void) asyn
     #expect(moment.transcriptExcerpt(limit: 4) == "\u{2026}word198 word199 word200 word201\u{2026}")
 }
 
-@Test func olderToolsAndRestoreHoldToTheLocks() async throws {
+@Test func editsAndRestoreHoldToTheLocks() async throws {
     let (store, runtime) = try oneTakeFilm()
     defer { try? FileManager.default.removeItem(at: store.url) }
     func call(_ name: String, _ args: [String: JSONValue]) async throws -> JSONValue { try await runtime.invoke(name, arguments: .object(args)).value }
@@ -84,7 +84,7 @@ private func expectRefused(_ code: String, _ body: () async throws -> Void) asyn
         _ = try await call("direction_edit", ["baseEditRevision": .number(Double(try store.revision())), "operations": .array([try JSONDecoder().decode(JSONValue.self, from: Data(op.utf8))])])
     }
     let whole = Double(try store.revision())
-    _ = try await call("direction_remove_range", ["start": .number(1), "end": .number(2), "baseEditRevision": .number(whole)])
+    try await edit(#"{"op":"removeRange","range":{"start":1,"end":2},"ripple":true}"#)
     let trimmed = Double(try store.revision())
     let id = try #require(try store.read().sequences[0].clips.min { $0.start < $1.start }).id
     try await edit(#"{"op":"addEffect","target":"\#(id)","effect":"blur","params":{"radius":3}}"#)
@@ -93,7 +93,7 @@ private func expectRefused(_ code: String, _ body: () async throws -> Void) asyn
     let warm = Double(try store.revision())
     // After picture lock: no timing and no taking the blur off, but the color can go back.
     try store.lockPicture(cutID: nil, locked: true)
-    await expectRefused("picture_locked") { _ = try await call("direction_remove_range", ["start": .number(3), "end": .number(4), "baseEditRevision": .number(warm)]) }
+    await expectRefused("picture_locked") { try await edit(#"{"op":"removeRange","range":{"start":3,"end":4},"ripple":true}"#) }
     await expectRefused("picture_locked") { _ = try await call("direction_restore", ["revision": .number(whole), "baseEditRevision": .number(warm)]) }
     await expectRefused("picture_locked") { _ = try await call("direction_restore", ["revision": .number(trimmed), "baseEditRevision": .number(warm)]) }
     _ = try await call("direction_restore", ["revision": .number(blurred), "baseEditRevision": .number(warm)])
@@ -107,14 +107,14 @@ private func expectRefused(_ code: String, _ body: () async throws -> Void) asyn
     await expectRefused("scene_locked") { _ = try await call("direction_restore", ["revision": .number(trimmed), "baseEditRevision": .number(Double(try store.revision()))]) }
 }
 
-@Test func olderToolsSayWhichNoteTheyAnswer() async throws {
+@Test func anEditSaysWhichNoteItAnswers() async throws {
     let (store, runtime) = try oneTakeFilm()
     defer { try? FileManager.default.removeItem(at: store.url) }
     let note = try store.addComment(text: "Lose the pause.", sequenceID: nil, revision: try store.revision(), time: .init(seconds: 1), extra: NoteFields(kind: .pace))
     _ = try store.turnOver(noteIDs: [note.id], latitude: .faithful, waitForOK: false, cutID: nil, sequenceID: nil)
-    let args: [String: JSONValue] = ["start": .number(5), "end": .number(6), "baseEditRevision": .number(Double(try store.revision()))]
-    await expectRefused("bad_argument") { _ = try await runtime.invoke("direction_remove_range", arguments: .object(args)) }
-    _ = try await runtime.invoke("direction_remove_range", arguments: .object(args.merging(["notes": .array([.number(Double(note.number ?? 0))])]) { _, b in b }))
+    let args: [String: JSONValue] = ["baseEditRevision": .number(Double(try store.revision())), "operations": .array([.object(["op": .string("removeRange"), "range": .object(["start": .number(5), "end": .number(6)]), "ripple": .bool(true)])])]
+    await expectRefused("bad_argument") { _ = try await runtime.invoke("direction_edit", arguments: .object(args)) }
+    _ = try await runtime.invoke("direction_edit", arguments: .object(args.merging(["notes": .array([.number(Double(note.number ?? 0))])]) { _, b in b }))
     let record = try store.editRecords().last
     #expect(try store.read().sequences[0].duration == MediaTime(seconds: 9) && record?.notes == [note.number ?? 0])
 }

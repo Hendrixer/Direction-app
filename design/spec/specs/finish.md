@@ -122,6 +122,15 @@ Also:
 
 **Accessibility:** Items are a list, "Finishing, 3 of 6 done". Each reads as "Captions, editor and you, needs you: 41 English captions…, Check 2 names button."
 
+**What Direction does itself.** Before the editor starts finishing, Direction runs the steps that come out the same every time, each an edit of its own (agent-timeline.md › Finishing), and writes what it did into the item's description:
+- **Captions** (unless the style turns them off): from the cut's words, a caption ending at a sentence, a pause, or when it holds as many words as fit (the style's, or 7 in a wide frame and 4 in a tall one). They're graphics, `captions-1`, `captions-2`… of at most 110 s each, from the style's captions graphic or Captions style; in a tall frame they sit above the bottom fifth. The item goes to Editor working: the editor checks line breaks and names.
+- **Credits**, once written: rolled on black after the last shot, word for word, for as long as they take to read.
+- **Loudness**: the whole mix to the target in Settings › Cutting, with no true peak over −1 dBTP. If the peaks hold it under the target, the item says where the loudest is.
+
+The editor's part is what needs an eye and an ear: color, the balance of the mix, titles, and checking the rest. It runs a step again after changing what it depends on.
+
+**Checks.** `direction_check` looks at the cut as it delivers: the sound against the target and the ceiling, and the framing, frame by frame at each shot and each stretch of captions: a crop that loses a face its take has or cuts down through it, words in a tall or feed frame where the phone apps put their buttons (the bottom fifth, the right eighth), words over a face. The editor can't mark Sound mix done until the sound is ready; framing problems it fixes or names for the director. The Deliver sheet shows the same (37).
+
 **Acceptance:**
 - [ ] Finish is unavailable until picture lock. It shows a disabled room segment with the tooltip "Lock picture first".
 - [ ] No finishing action changes picture timing.

@@ -55,7 +55,9 @@ import DirectionTools
         init(runID: String, store: ProjectStore, program: EditorProgram, process: Process) { self.runID = runID; self.store = store; self.program = program; self.process = process }
     }
 
-    func isLive(_ runID: String) -> Bool { live[runID] != nil }
+    /// Finishing runs while Direction does its own steps first (FinishingPass), before the program starts.
+    private var preparing: Set<String> = []
+    func isLive(_ runID: String) -> Bool { live[runID] != nil || preparing.contains(runID) }
     /// Tests hold it weakly to see it let go once the run is over.
     func liveRun(_ runID: String) -> LiveRun? { live[runID] }
     var liveCount: Int { live.count }
@@ -80,7 +82,7 @@ import DirectionTools
     // MARK: Launch
 
     /// Starts the program for a run: its first job text, or `continuation` on the saved session.
-    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false) {
+    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false, prepared: Bool = false) {
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
@@ -92,7 +94,7 @@ import DirectionTools
                 run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = version; $0.effort = effort }) ?? run
             }
         }
-        guard live[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
+        guard live[run.id] == nil, !preparing.contains(run.id), let program = EditorProgram(rawValue: run.program) else { return }
         offlineRetries[run.id]?.cancel(); offlineRetries[run.id] = nil
         // Try again, Resume or back online: a fresh start, with its one restart to come.
         if !restartingStuck { restarted.remove(run.id) }
@@ -102,10 +104,25 @@ import DirectionTools
         guard let helper = helperOverride ?? EditorJobs.helperPath else {
             end(run.id, store: store, outcome: .init(state: .failed, reason: .programQuit, detail: "Direction\u{2019}s tools aren\u{2019}t in this copy of the app. Build it with scripts/build-app.sh.")); return
         }
+        // Finishing: Direction's own steps first, then the editor on what's left.
+        if run.job == .finish, run.invocations == 0, continuation == nil, !prepared {
+            preparing.insert(run.id)
+            _ = try? store.updateRun(run.id) { $0.state = .starting }
+            onChange?(store.url)
+            let runID = run.id
+            Task { @MainActor in
+                await FinishingPass.run(store: store, runID: runID)
+                self.preparing.remove(runID)
+                // Stopped meanwhile: it stays stopped.
+                guard let again = try? store.run(runID), again.state == .starting || again.state == .queued else { self.onChange?(store.url); self.pump(); return }
+                self.launch(again, store: store, restartingStuck: restartingStuck, prepared: true)
+            }
+            return
+        }
         do {
             let folder = try EditorJobs.prepareFolder(film: store.url, job: run.job)
             let mcp = folder.appendingPathComponent(".mcp.json"), schema = folder.appendingPathComponent(".direction/result.schema.json")
-            try EditorProgram.mcpConfig(helper: helper, film: store.url, runID: run.id).data(pretty: true).write(to: mcp, options: .atomic)
+            try EditorProgram.mcpConfig(helper: helper, film: store.url, runID: run.id, job: run.job).data(pretty: true).write(to: mcp, options: .atomic)
             try EditorProgram.resultSchema.data(pretty: true).write(to: schema, options: .atomic)
             // A continuation without a saved session starts over with the whole job, then the answer.
             let session = continuation == nil ? nil : run.session
@@ -113,7 +130,7 @@ import DirectionTools
             if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
             // The run's own, once it has started; an older run without one reads its job's.
             let effort = run.effort ?? EditorSetup.effort(program, for: run.job)
-            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts)
+            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts, kind: run.job)
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = program.arguments(invocation)

@@ -223,6 +223,10 @@ struct DeliverSheet: View {
     @State private var finderAlias = false
     /// "footage" or "cut": which size to deliver at, when the footage is bigger than the cut.
     @State private var sizeChoice = "footage"
+    /// The delivery check (finish.md › Checks): the sound against the target, and the framing. Warnings only.
+    @State private var check: JSONValue?
+    @State private var checking = false
+    @State private var leveling = false
     @AppStorage("deliveryRecentFolders") private var recentFolders = ""
 
     private var cut: ReviewCut? { model.deliveryCut }
@@ -290,6 +294,26 @@ struct DeliverSheet: View {
         }
         .accessibilityAddTraits(.isModal)
         .accessibilityLabel("Deliver \(cut?.name ?? "")")
+        .task { await runCheck() }
+    }
+
+    private func runCheck() async {
+        guard !model.isPreview, let runtime = model.runtime else { return }
+        checking = true; defer { checking = false }
+        check = try? await runtime.deliveryCheck(revision: cut.map { model.revision(of: $0) })
+    }
+
+    /// The loudness step, from here: the same edit the editor would make.
+    private func level() {
+        guard let runtime = model.runtime, let store = model.store else { return }
+        leveling = true
+        Task {
+            defer { leveling = false }
+            _ = try? await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString),
+                                                                             "summary": .string("Set the mix to the loudness target"), "operations": .array([.object(["op": .string("loudness")])])]))
+            model.refresh(force: true)
+            await runCheck()
+        }
     }
 
     private var formatLine: String {
@@ -429,6 +453,26 @@ struct DeliverSheet: View {
         if !working.isEmpty {
             Text("The editor is still on \(working.map { $0.title.lowercased() }.joined(separator: " and ")). These files use it as it is now.")
                 .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+        }
+        if let check, check["loudness"]["ready"].bool == false, let says = check["loudness"]["says"].string {
+            HStack(spacing: 10) {
+                Text(Image(systemName: "speaker.wave.2")).font(.system(size: 13, weight: .medium)).foregroundStyle(Gate.State.alert)
+                Text(says + " You can deliver, but it won\u{2019}t play at the level you chose.").font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary)
+                Spacer(minLength: 0)
+                Button("Set to \(LoudnessCheck.lufsText(check["loudness"]["target"].double ?? SharedSettings.loudnessTarget))") { level() }
+                    .buttonStyle(.gate(.normal)).disabled(leveling || checking)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: Gate.Radius.card).fill(Gate.Surface.panel).overlay(RoundedRectangle(cornerRadius: Gate.Radius.card).strokeBorder(Gate.State.alert.opacity(0.45), lineWidth: 1)))
+            .accessibilityElement(children: .combine)
+        }
+        if let problems = check?["framing"].array, !problems.isEmpty {
+            let said = problems.prefix(2).compactMap { $0["says"].string }.joined(separator: " ")
+            Text("Look before you publish: \(said)\(problems.count > 2 ? " And \(problems.count - 2) more." : "")")
+                .font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        if checking || leveling {
+            Text(leveling ? "Setting the mix\u{2026}" : "Checking the sound and the framing\u{2026}").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
         }
     }
 

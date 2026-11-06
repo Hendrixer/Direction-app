@@ -6,8 +6,8 @@ import DirectionMedia
 // OpenTimelineIO and changes it only through direction_edit; no tool takes a timeline document.
 extension ToolCatalog {
     static var timelineDefinitions: [ToolDefinition] { [
-        definition("direction_timeline", "Read the cut as OpenTimelineIO JSON (read-only) plus a compact outline. Every item carries its id in metadata.direction.id; edit functions refer to those ids, and an edit point is \"<left clip>|<right clip>\". V1 is the story, V2+ overlays (graphics, cutaways, made shots); A1 is V1's own sound, A2 music, A3 effects. Effect params are in metadata.direction.params and keys (cut seconds) in metadata.direction.keys. Markers carry scenes and notes. cut names a saved cut (\"Cut 3\" or its id); revision pins one; range limits the items to those overlapping {start, end} seconds. You may save the document and analyze it in a script, but changes go only through direction_edit.", ["cut": string, "revision": integer, "sequenceID": string, "range": record(["start": number, "end": number], required: ["start", "end"]), "outlineOnly": bool]),
-        definition("direction_edit_catalog", "Every edit function with its arguments, every effect and transition with its parameters' ranges and defaults, the error codes, and the custom shader effects in the film's Effects folder that compile."),
+        definition("direction_timeline", "Read the cut: a compact outline, a row per clip with its id (edit functions refer to those ids, and an edit point is \"<left clip>|<right clip>\"), its times, take and effects, plus locks: whether picture is locked and every locked scene with where it plays, so you know before editing what you can't recut. V1 is the story, V2+ overlays (graphics, cutaways, made shots); A1 is V1's own sound, A2 music, A3 effects. otio: true adds the cut as OpenTimelineIO JSON (read-only): every item's id in metadata.direction.id, effect params in metadata.direction.params and keys (cut seconds) in metadata.direction.keys, markers for scenes and notes. cut names a saved cut (\"Cut 3\" or its id); revision pins one; range limits the items to those overlapping {start, end} seconds. You may save the document and analyze it in a script, but changes go only through direction_edit.", ["cut": string, "revision": integer, "sequenceID": string, "range": record(["start": number, "end": number], required: ["start", "end"]), "otio": bool, "outlineOnly": noted(bool, "Older: the outline is all you get unless otio is true.")]),
+        definition("direction_edit_catalog", "Every edit function with its arguments, every effect and transition with its parameters' ranges and defaults, the error codes, and the custom shader effects in the film's Effects folder that compile. op narrows it to what you're about to use: names of edit functions, effects or transitions, like \"gain\" or \"addEffect, blur, dissolve\".", ["op": noted(string, "One name, or several separated by commas: edit functions (gain), effects (blur, filter.grain) or transitions (dissolve).")]),
     ] }
 }
 
@@ -32,8 +32,12 @@ extension ToolRuntime {
                 range = MediaRange(start: start, end: end)
             }
             let doc = TimelineExport.document(.init(project: p, sequence: s, cutName: cutName, dailies: try store.dailies(), notes: try store.notes(), looks: try? store.lookContext(), range: range))
-            var value: [String: JSONValue] = ["cut": .string(cutName), "editRevision": .number(Double(p.editRevision)), "sequenceID": .string(s.id), "outline": .string(doc.outline)]
-            if a["outlineOnly"].bool != true { value["otio"] = doc.otio }
+            let locks = try lockValue(s)
+            var outline = doc.outline
+            if let line = locks["line"].string { outline += "\n" + line }
+            var value: [String: JSONValue] = ["cut": .string(cutName), "editRevision": .number(Double(p.editRevision)), "sequenceID": .string(s.id), "outline": .string(outline), "locks": locks]
+            // The whole document only when asked: it's nine tenths of the answer, and the outline has the ids.
+            if a["otio"].bool == true && a["outlineOnly"].bool != true { value["otio"] = doc.otio }
             return ToolResponse(.object(value))
 
         case "direction_edit_catalog":
@@ -60,6 +64,15 @@ extension ToolRuntime {
                 fields["transitionsMeaning"] = .string("Settings › Cutting › Transitions: “hard” means hard cuts unless a note asks for a dissolve or a dip; “editor” lets you choose them, still within latitude.")
                 fields["latitude"] = .string(state.latitude.rawValue)
                 fields["pictureLocked"] = .bool(state.pictureLocked)
+                // Only what was asked for, by name.
+                if let asked = a["op"].string {
+                    let names = Set(asked.split(whereSeparator: { $0 == "," || $0 == " " }).map { String($0) })
+                    func only(_ key: String, _ field: String) { if case .array(let list) = fields[key] ?? .null { fields[key] = .array(list.filter { names.contains($0[field].string ?? "") }) } }
+                    only("operations", "op"); only("effects", "name"); only("transitions", "type"); only("customEffects", "file"); only("customTransitions", "file")
+                    for key in ["blendModes", "customEffectProblems", "transitionsMeaning"] { fields[key] = nil }
+                    let found = ["operations", "effects", "transitions"].reduce(0) { $0 + (fields[$1]?.array?.count ?? 0) }
+                    if found == 0 { throw DirectionError("bad_argument", "Nothing in the catalog is called \(asked). Call direction_edit_catalog without op for every name.") }
+                }
                 value = .object(fields)
             }
             return ToolResponse(value)
@@ -76,8 +89,9 @@ extension ToolRuntime {
         guard let base = b["baseEditRevision"].int, base >= 0 else { throw DirectionError("bad_argument", "baseEditRevision is the editRevision you read from direction_timeline.") }
         guard let list = b["operations"].array, !list.isEmpty else { throw DirectionError("bad_argument", "operations lists the edit functions to run, in order.") }
         var ops: [EditOperation] = []
+        let start = try store.read()
         for (i, value) in list.enumerated() {
-            do { var op = try EditOperation(json: value); op.resolved = nil; ops.append(op) }
+            do { var op = try EditOperation(json: Self.withWholeAudio(value, start, b["sequenceID"].string)); op.resolved = nil; ops.append(op) }
             catch let e as DirectionError { throw DirectionError(e.code, e.message, index: i) }
         }
         if case .array(let notes) = b["notes"] { guard notes.allSatisfy({ $0.int != nil }) else { throw DirectionError("bad_argument", "notes lists note numbers, like [1, 4].") } }
@@ -91,22 +105,63 @@ extension ToolRuntime {
         // range), worked out here as the store will, and only when a measured one follows others; the
         // batch still commits as one.
         _ = try p.sequence(batch.sequenceID)
-        var cut = p, through = 0, context: EditContext?
+        // made: the revision the graphics Direction made for captions or credits left the film at.
+        var cut = p, through = 0, context: EditContext?, made: Int?, remade = false
         for i in batch.operations.indices {
-            if i > through, Self.measured.contains(batch.operations[i].type) {
+            if i > through || remade, Self.measured.contains(batch.operations[i].type) {
+                // The graphics just made are in the film now: measure on it, with every operation before.
+                if remade { cut = try store.read(); through = 0; remade = false }
                 if context == nil { context = try store.editContext() }
                 do { cut = try EditReducer.run(EditBatch(baseEditRevision: base, sequenceID: batch.sequenceID, notes: batch.notes, operations: Array(batch.operations[through..<i])), on: cut, context: context).project }
                 catch let e as DirectionError { throw DirectionError(e.code, e.message, index: through + (e.index ?? 0)) }
                 through = i
             }
-            do { try await resolve(&batch.operations[i], cut, try cut.sequence(batch.sequenceID)) }
-            catch let e as DirectionError { throw DirectionError(e.code, e.message, index: i) }
+            do {
+                let sequence = try cut.sequence(batch.sequenceID)
+                switch batch.operations[i].type {
+                case "loudness": try await resolveLoudness(&batch.operations[i], cut, sequence)
+                case "captions": made = try await resolveCaptions(&batch.operations[i], cut, sequence) ?? made; remade = true
+                case "credits": made = try await resolveCredits(&batch.operations[i], cut, sequence) ?? made; remade = true
+                default: try await resolve(&batch.operations[i], cut, sequence)
+                }
+            } catch let e as DirectionError { throw DirectionError(e.code, e.message, index: i) }
+        }
+        // Making a graphic is a revision of its own; the batch goes in on top of it, unless someone else
+        // changed the film meanwhile.
+        if let made {
+            guard try store.revision() == made else { throw DirectionError("stale_revision", "The film changed while Direction made the graphics. Read direction_timeline again and send the batch again.") }
+            batch.baseEditRevision = made
         }
         return ToolResponse(try .wrapping(store.edit(batch, validateOnly: validateOnly, asked: asked)))
     }
 
+    /// What's locked, for the editor's reads: picture lock, and each locked scene with where it plays.
+    func lockValue(_ s: DirectionCore.Sequence) throws -> JSONValue {
+        let state = try store.directingState(), scenes = SceneLocks.inCut(s, dailies: try store.dailies())
+        var value: [String: JSONValue] = ["pictureLocked": .bool(state.pictureLocked), "scenes": try .wrapping(scenes)]
+        if state.pictureLocked { value["line"] = .string("Picture is locked: only color, sound and the graphics over the picture change.") }
+        else if !scenes.isEmpty { value["line"] = .string("Locked (recut nothing in them; their color and sound stay open): " + scenes.map(\.line).joined(separator: "; ") + ".") }
+        return .object(value)
+    }
+
+    /// audio names only what changes ({muted: true}); the rest comes from the clip's own settings, or the take's
+    /// track, as they are when the batch starts.
+    static func withWholeAudio(_ value: JSONValue, _ p: Project, _ sequenceID: String?) -> JSONValue {
+        guard value["op"].string == "audio", case .object(var op) = value, case .object(let changes) = value["audio"], let track = value["audioTrackID"].int else { return value }
+        let clip = value["clipID"].string.flatMap { id in (try? p.sequence(sequenceID))?.clips.first { $0.id == id } }
+        let asset = (clip?.assetID ?? value["assetID"].string).flatMap { id in p.assets.first { $0.id == id } }
+        let current = clip?.audioOverrides[String(track)] ?? asset?.audio.first { $0.id == Int32(track) }?.settings ?? AudioSettings()
+        guard case .object(var whole) = (try? JSONValue.wrapping(current)) ?? .null else { return value }
+        for (key, change) in changes {
+            if key == "effects", case .object(let effects) = change, case .object(var now) = whole["effects"] ?? .null { now.merge(effects) { _, b in b }; whole[key] = .object(now) }
+            else { whole[key] = change }
+        }
+        op["audio"] = .object(whole)
+        return .object(op)
+    }
+
     /// The operations `resolve` measures the cut for.
-    static let measured: Set<String> = ["technique", "reframe", "matchBalance", "addEffect", "setEffect", "transition", "pin", "zoomThrough", "tightenPauses", "layout", "autoZoom", "zoomTo", "punchIn", "emphasisPunch", "slowPush"]
+    static let measured: Set<String> = ["loudness", "captions", "credits", "technique", "reframe", "matchBalance", "addEffect", "setEffect", "transition", "pin", "zoomThrough", "tightenPauses", "layout", "autoZoom", "zoomTo", "punchIn", "emphasisPunch", "slowPush"]
 
     private func resolve(_ op: inout EditOperation, _ p: Project, _ s: DirectionCore.Sequence) async throws {
         func clip(_ id: String?) -> Clip? { id.flatMap { id in s.clips.first { $0.id == id } } }

@@ -8,7 +8,7 @@ Code: `Sources/DirectionCore/Editing.swift` (the operations), `Sources/Direction
 
 ## Reading
 
-`direction_timeline` takes `cut?` (a saved cut's name, "Cut 3", or its id), `revision?`, `range?` (`{start, end}` seconds; only items overlapping it) and `outlineOnly?`. It returns `{cut, editRevision, sequenceID, outline, otio}`.
+`direction_timeline` takes `cut?` (a saved cut's name, "Cut 3", or its id), `revision?`, `range?` (`{start, end}` seconds; only items overlapping it) and `otio?`. It returns `{cut, editRevision, sequenceID, outline, locks}`, plus `otio` when `otio` is true: the outline has every clip's id, and the document is nine tenths of the answer. `locks` is `{pictureLocked, scenes: [{number, title, start, end}]}`, every locked scene with where it plays in the cut, so the editor knows before editing what it can't recut; the outline ends with the same in a line. `direction_turnovers` and `direction_brief` carry it too, and the job text lists locked scenes under the brief.
 
 | OTIO | Direction |
 |---|---|
@@ -64,7 +64,7 @@ Each change is placed in the new cut (through every later operation in the batch
 | Code | When |
 |---|---|
 | `scene_locked` | Anything that would change what plays over a locked scene, on any track: its clips, overlays and sound over it, transitions and J/L cuts reaching into it, its takes' camera LUTs and stream settings. Changes earlier in the cut may move it whole. |
-| `picture_locked` | After picture lock, anything but `balance`, `matchBalance`, `cameraLUT`, `color`, `gain`, `fade`, `duck`, `audio`, `placeMusic`, `parts`, `placeMade` or `overwrite` on an A track, moving, slipping, trimming, splitting or removing a sound clip, and the graphics over the picture: `placeGraphic` and `title` on V2 and up, and `move` or `remove` of those. Every other clip and its timing stays exactly as locked, over locked scenes too (picture lock locks them all, and unlocking picture opens again the ones it locked; a scene the director locked on its own stays locked). Before picture lock, a locked scene still refuses graphics over it. |
+| `picture_locked` | After picture lock, anything but `balance`, `matchBalance`, `cameraLUT`, `color`, `gain`, `fade`, `duck`, `audio`, `placeMusic`, `parts`, `placeMade` or `overwrite` on an A track, moving, slipping, trimming, splitting or removing a sound clip, `loudness`, and the graphics over the picture: `placeGraphic`, `title`, `captions` and `credits` on V2 and up, and `move` or `remove` of those. Every other clip and its timing stays exactly as locked, over locked scenes too (picture lock locks them all, and unlocking picture opens again the ones it locked; a scene the director locked on its own stays locked). Before picture lock, a locked scene still refuses graphics over it. |
 | `stale_revision` | `baseEditRevision` isn't current. |
 | `overlap` | Two clips on one track would overlap. |
 | `unknown_op` / `bad_argument` | Not in the catalog / a value out of range, a missing argument, an unknown argument, an id that isn't in the cut, not enough handle. |
@@ -108,7 +108,7 @@ Story operations keep every layer in sync; overlays and sound-only clips move on
 | `cutaway` | `assetID, sourceRange \| seconds, at \| cover` | First free layer at V2 or above; its own sound is muted. `cover` (a clip or edit point) centers it over that cut. With `seconds` and no `sourceRange`, a take in `direction_dailies › syncGroups` plays the same moment as V1 under it, and stays in sync (below). |
 | `placeGraphic` | `graphic, at, seconds?, aboveLook?` (default true) | First free layer at V2 or above. |
 | `placeMade` | `madeID, at, track, sourceRange?` | Places a made clip like footage; the track must be free. |
-| `gain` | `target (clip or A track), dB, keys?: {dB: [{t, v}]}` | |
+| `gain` | `target (a clip id or an A track; "clip" means clipID), dB, keys?: {dB: [{t, v}]}` | It sets the level; it doesn't add to it. |
 | `fade` | `clipID, in?, out?` (frames) | |
 | `duck` | `track, under? (A1), dB, attack? (0.25), release? (0.5)` | Words less than 0.6 s apart are one line; keys go on every clip of `track` (and every part of a song on it, on their own tracks), and redoing it replaces them. |
 | `syncSound` | `clipID, assetID?` | A take in sync with a V1 clip plays its sound under it, lined up, in place of the clip's own: the group's `soundAssetID` by default. For the screen on V1 with the camera's mic, or a camera with a separate recorder. Naming the clip's own take puts its own sound back. |
@@ -153,7 +153,19 @@ The first argument is `coreimage::sample_h` (one pixel, premultiplied) or `corei
 
 Per frame: each clip's camera LUT and balance, crop and placement (framing, then the transform), its other effects in order (blur, sharpen, `filter.<kind>` through `LookPipeline.filter`, shaders), limited to the union of its masks, then opacity and its transitions → its track's effects → tracks composited bottom to top with their blend modes → the director's look (`LookPipeline.apply`, with the V1 take at that frame) → clips marked above the look (graphics by default; a track's `aboveLook` applies to clips that don't say) → output. Stabilize corrects the take's own pixels first. A dissolve draws both clips from their handles; dips mix the clip toward black or white where it has alpha. ProRes 4444 alpha composites as alpha. Frame, preview and export all render through the same compositor.
 
-Sound: stream gain and fades, clip gain and gain keys, track gain and keys, duck keys and clip fades, as volume ramps in the mix (dB keys are linear in dB, so long changes get more points). J- and L-cuts move where each clip's sound starts and ends. A freeze has no sound. The mix isn't normalized to a loudness target yet.
+Sound: stream gain and fades, clip gain and gain keys, track gain and keys, duck keys and clip fades, as volume ramps in the mix (dB keys are linear in dB, so long changes get more points). J- and L-cuts move where each clip's sound starts and ends. A freeze has no sound. Last, the whole mix's gain (`mixGainDB`, set by `loudness`), the same in preview, export and measurement.
+
+## Finishing
+
+Three edit functions do finishing's mechanical steps exactly; Direction runs them itself before a finishing run, and the editor runs them again after a change (finish.md › What Direction does itself).
+
+| Operation | Arguments | |
+|---|---|---|
+| `loudness` | `lufs?` (Settings › Cutting's target), `truePeak?` (−1 dBTP) | Direction measures the mix as the operations before it leave it, and sets the whole mix's gain by target − integrated, or less if a peak would pass the ceiling (it then warns with where the loudest peak is). The measurement is recorded with the edit. |
+| `captions` | `range?`, `wordsAtATime?` | From the cut's words: a caption ends at a sentence, a pause of 0.4 s, or when full (the style's words at a time, else 7 wide and 4 tall; 42 or 24 letters), and stays until the next. Graphics `captions-1`… of at most 110 s, each broken at the longest pause, made from the style's captions graphic (one that reads `captions.js`) or Captions style, checked, rendered and placed in place of the ones `captions` placed before over that range. |
+| `credits` | `at?`, `seconds?` | The director's credits, word for word, from Credits roll (or the style's `credits` graphic), after the last shot, for 0.9 s a line plus 3 (8–60 s). |
+
+Making a graphic is a revision of its own: the batch goes in on top of it, or fails with `stale_revision` if anything else changed the film meanwhile. `no_words` when there's nothing to caption; `bad_argument` when there are no credits.
 
 ## For the other areas
 

@@ -138,6 +138,7 @@ public enum TimelineExport {
         let filmLook = input.looks?.look.film
         var meta: [String: JSONValue] = ["cut": .string(input.cutName), "editRevision": .number(Double(input.project.editRevision)), "sequenceID": .string(s.id), "width": .number(Double(s.width)), "height": .number(Double(s.height)), "rate": .number(rate), "look": filmLook.map { l in .object(["name": .string(l.name), "strength": .number(l.strength), "by": .string(l.by), "lut": l.lut.map(JSONValue.string) ?? .null]) } ?? .null]
         if let r = input.range { meta["range"] = .object(["start": .number(r.start.seconds), "end": .number(r.end.seconds)]) }
+        if let g = s.mixGainDB { meta["mixGainDB"] = .number(g) }
         let otio: JSONValue = .object(["OTIO_SCHEMA": .string("Timeline.1"), "name": .string(input.cutName), "global_start_time": rt(0), "metadata": .object(["direction": .object(meta)]), "tracks": .object(["OTIO_SCHEMA": .string("Stack.1"), "name": .string("tracks"), "children": .array(tracks), "source_range": .null, "effects": .array([]), "markers": .array(noteMarkers), "enabled": .bool(true), "metadata": .object([:])])])
 
         // The outline: one row per clip, top layer first, then sound.
@@ -193,7 +194,7 @@ public enum TimelineExport {
         if let l = filmLook { lookText = "look \"\(l.name)\" (film)" }
         else if let (id, l) = input.looks?.look.scenes.first, let n = input.dailies.scenes.first(where: { $0.id == id })?.number { lookText = "look \"\(l.name)\" (scene \(n))" }
         else { lookText = "no look" }
-        var lines = ["\(input.cutName) · \(CutTimecode.length(s.duration.seconds, rate: rate)) · \(s.width)×\(s.height) · \(CutTimecode.rate(rate)) · \(lookText)"]
+        var lines = ["\(input.cutName) · \(CutTimecode.length(s.duration.seconds, rate: rate)) · \(s.width)×\(s.height) · \(CutTimecode.rate(rate)) · \(lookText)" + (s.mixGainDB.map { " · mix \(LoudnessCheck.dBText($0))" } ?? "")]
         // Layouts read as layouts, not as the clips they place (layouts.md).
         for span in s.layoutSpans { lines.append("Layout  \(tc(span.start))–\(tc(span.end))  \(span.layout.label)\(span.byDirector ? "  (the director\u{2019}s)" : "")") }
         for layer in pictureLayers.reversed() { lines += s.clips.filter { $0.kind != .audio && $0.layer == layer }.sorted { $0.start < $1.start }.compactMap(row) }

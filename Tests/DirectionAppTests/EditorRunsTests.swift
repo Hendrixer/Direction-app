@@ -363,8 +363,8 @@ struct EditorJobTests {
         try Data("license".utf8).write(to: license); defer { try? FileManager.default.removeItem(at: license) }
         let file = try store.addLicense(from: license)
         let text = try EditorJobs.text(for: run, store: store)
-        #expect(text.contains("> Featuring\n> Maya Chen\n>\n> Camera\n> Sam Ortiz") && text.contains("credits-roll") && text.contains(file.path))
-        #expect(text.contains("direction_measure_audio") && !text.contains("{{"))
+        #expect(text.contains("> Featuring\n> Maya Chen\n>\n> Camera\n> Sam Ortiz") && text.contains("{op: \"credits\"}") && text.contains(file.path))
+        #expect(text.contains("direction_measure_audio") && text.contains("direction_check") && text.contains("{op: \"loudness\"}") && !text.contains("{{"))
     }
 
     @Test func commandLinesUseOnlyTheCheckedFlags() {
@@ -380,6 +380,8 @@ struct EditorJobTests {
         #expect(codex.first == "exec" && codex.last == "Do the job.")
         for flag in codex where flag.hasPrefix("--") { #expect(EditorProgram.codexExecFlags.contains(flag), "\(flag) isn't in codexExecFlags") }
         #expect(codex.contains("mcp_servers.direction.args=[\"mcp\",\"--project\",\"/f\"]"))
+        var finishing = i; finishing.kind = .finish
+        #expect(EditorProgram.codex.arguments(finishing).contains("mcp_servers.direction.args=[\"mcp\",\"--project\",\"/f\",\"--job\",\"finish\"]"))
         #expect(codex.contains("mcp_servers.direction.tool_input_schema_max_bytes=32768"))
         let codexAgain = EditorProgram.codex.arguments(resumed)
         #expect(Array(codexAgain.prefix(2)) == ["exec", "resume"] && codexAgain.suffix(2) == ["s-1", "Do the job."])
@@ -482,7 +484,8 @@ struct EditorRunnerTests {
         #expect(a.first == "--print" && a.contains("stream-json") && a.contains("--strict-mcp-config") && a.contains("claude-opus-5-5"))
         #expect((try? String(contentsOf: dir.appendingPathComponent("Editor/.fake-run-id"), encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) == run.id)
         let mcp = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: dir.appendingPathComponent("Editor/.mcp.json")))
-        #expect(mcp["mcpServers"]["direction"]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path)]))
+        // Started for this job: its own tools, with direction_more_tools for the rest.
+        #expect(mcp["mcpServers"]["direction"]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
         #expect(mcp["mcpServers"]["direction"]["env"]["DIRECTION_RUN_ID"].string == run.id)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/.claude/skills/start-project/SKILL.md").path))
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/NOTES.md").path))

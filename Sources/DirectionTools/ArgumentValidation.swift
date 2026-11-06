@@ -13,7 +13,7 @@ extension ToolCatalog {
         guard problems.isEmpty else { throw DirectionError("invalid_arguments", problems.joined(separator: " ") + " Nothing was changed; call \(name) again with \(problems.count == 1 ? "that" : "these") put right.") }
     }
 
-    private static func check(_ value: JSONValue, schema: JSONValue, path: String, into problems: inout [String]) {
+    static func check(_ value: JSONValue, schema: JSONValue, path: String, into problems: inout [String]) {
         func invalid(_ reason: String) { problems.append("\(path): \(reason)") }
         // One of several typed shapes: it fits if any of them takes it.
         if let shapes = schema["anyOf"].array {
