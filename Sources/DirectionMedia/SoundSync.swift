@@ -52,7 +52,7 @@ public enum SoundSync {
         reader.add(output)
         guard reader.startReading() else { throw reader.error ?? DirectionError("audio_decode_failed", "Cannot decode audio.") }
         var sums: [Float] = [], counts: [Int] = []
-        while let sample = output.copyNextSampleBuffer() {
+        while let sample = output.nextSample(of: reader) {
             try Task.checkCancellation()
             guard let block = CMSampleBufferGetDataBuffer(sample) else { continue }
             let n = CMSampleBufferGetNumSamples(sample)
@@ -67,6 +67,7 @@ public enum SoundSync {
                 for i in 0..<samples { let bin = (first + i) / hop; sums[bin] += abs(p[i]); counts[bin] += 1 }
             }
         }
+        try ReadStall.check(reader, source.url.lastPathComponent)
         if reader.status == .failed { throw reader.error ?? DirectionError("audio_decode_failed", "Cannot decode audio.") }
         return zip(sums, counts).map { $1 > 0 ? $0 / Float($1) : 0 }
     }

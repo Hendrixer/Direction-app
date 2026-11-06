@@ -34,6 +34,7 @@ extension EditorRunsModel {
             return body
         case .spendCap: return run.detail ?? "Services can\u{2019}t make anything more this month."
         case .pausedByQuit, .stoppedByYou: return ""
+        case .stuck: body = "It stopped answering twice\(run.detail.map { ", the last time while \u{201C}\($0)\u{201D}" } ?? ""). Direction started it again once, and it got stuck again."
         }
         if let tail, run.reason != .notInstalled { body += " " + tail }
         return body
@@ -90,6 +91,9 @@ struct EditorStopActions: View {
                 Button("Not now") { model.runs.dismissQuitBanner(model) }.buttonStyle(.gate(.ghost, size))
             case .stoppedByYou:
                 Button("Start") { model.runs.start(model) }.buttonStyle(.gate(.normal, size))
+            case .stuck:
+                tryAgain(size)
+                if inTurnover { takeBack(size) }
             }
         }
     }

@@ -63,6 +63,7 @@ public enum SeekableCopy {
             let copying = Copying(writer: writer, streams: streams)
             try await withTaskCancellationHandler { try await copying.run() } onCancel: { copying.cancel() }
             try Task.checkCancellation()
+            for stream in streams { try ReadStall.check(stream.reader, "the footage") }
             guard streams.allSatisfy({ $0.reader.status == .completed }) else { throw failed() }
             await writer.finishWriting()
             guard writer.status == .completed else { throw failed() }
@@ -149,7 +150,7 @@ private final class Stream {
     init(reader: AVAssetReader, output: AVAssetReaderTrackOutput, input: AVAssetWriterInput, video: Bool) { self.reader = reader; self.output = output; self.input = input; self.video = video }
 
     func next() -> CMSampleBuffer? {
-        while waiting.isEmpty, let sample = output.copyNextSampleBuffer() {
+        while waiting.isEmpty, let sample = output.nextSample(of: reader) {
             guard video else { return sample }
             if let keyframe = held {
                 if sample.presentationTimeStamp < keyframe.presentationTimeStamp { Self.markPartial(keyframe) }

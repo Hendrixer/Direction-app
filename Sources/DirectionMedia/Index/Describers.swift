@@ -98,6 +98,9 @@ public actor LocalVisionHelper {
         ChildProcesses.started(p)
         p.terminationHandler = { ChildProcesses.ended($0) }
         process = p; input = stdin.fileHandleForWriting; reader = lines
+        // Loading a model takes a minute or two, never ten: past that it's stuck, and it's stopped.
+        let loading = Task { try? await Task.sleep(for: .seconds(600)); if !Task.isCancelled { p.terminate() } }
+        defer { loading.cancel() }
         let first = await withTaskCancellationHandler { await lines.next() } onCancel: { p.terminate() }
         try Task.checkCancellation()
         guard let first, let reply = try? JSONDecoder().decode(JSONValue.self, from: Data(first.utf8)), reply["ready"].bool == true else {

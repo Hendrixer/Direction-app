@@ -1,3 +1,4 @@
+import os
 import Testing
 import Foundation
 import DirectionCore
@@ -516,6 +517,47 @@ struct EditorRunnerTests {
         let a = args(dir)
         #expect(a.suffix(2) == ["--resume", "fake-session-1"])
         #expect(a[1].hasPrefix("Continue where you stopped."))
+    }
+
+    /// Hang recovery: an editor that says nothing for too long is stopped and started again on its session, told which
+    /// step it was on; stuck again, the run ends as stuck with its step, for Try again.
+    @Test func aSilentEditorIsStartedAgainOnceThenStopsAsStuck() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        let before = EditorRunner.restartAfter
+        defer { EditorRunner.restartAfter = before }
+        try scenario("slow", dir)
+        let run = try start(.logFootage, store: store)
+        _ = try await wait(store, run.id) { $0.state == .working && $0.session != nil }
+        EditorRunner.restartAfter = 0
+        EditorRunner.shared.checkSilence(now: Date().addingTimeInterval(1))
+        let again = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        #expect(again.session == "fake-session-1")
+        let a = args(dir)
+        #expect(a.suffix(2) == ["--resume", "fake-session-1"])
+        #expect(a[1].contains("Direction stopped you and started you again") && a[1].contains("Reading its notes"))
+        EditorRunner.shared.checkSilence(now: Date().addingTimeInterval(1))
+        let stuck = try await ended(store, run.id)
+        #expect(stuck.state == .failed && stuck.reason == .stuck && stuck.detail == "Reading its notes" && stuck.invocations == 2)
+        #expect(EditorStopCopy.title(.stuck, run: stuck) == "The editor got stuck.")
+    }
+
+    /// Nothing waits forever: work past its time is given up on at once, what it can cancel is cancelled, and work
+    /// that finishes in time is untouched.
+    @Test func workPastItsTimeIsGivenUpOn() async throws {
+        let cancelled = OSAllocatedUnfairLock(initialState: false)
+        let started = Date()
+        await #expect(throws: DirectionError.self) {
+            _ = try await Deadline.run(seconds: 0.2, error: { DirectionError("too_long", "Too long.") }, onTimeout: { cancelled.withLock { $0 = true } }) {
+                // Ignores cancellation, like a frame that never comes: nobody waits for it.
+                while true { usleep(20_000); if Date().timeIntervalSince(started) > 5 { break } }
+                return 1
+            }
+        }
+        #expect(Date().timeIntervalSince(started) < 2 && cancelled.withLock { $0 })
+        let quick = try await Deadline.run(seconds: 5, error: { DirectionError("too_long", "Too long.") }) { 7 }
+        #expect(quick == 7)
+        #expect(RunStateMachine.outcome(.init(status: 130, intent: .restart)) == .init(state: .paused))
+        #expect(RunStateMachine.outcome(.init(status: 130, intent: .stuck("Watching 0:15"))) == .init(state: .failed, reason: .stuck, detail: "Watching 0:15"))
     }
 
     /// The film finds the work itself: Ask me first holds it for Start, a run that ends without

@@ -47,6 +47,8 @@ import DirectionTools
         /// The last time the program said anything, and the longest silence already logged (in minutes).
         var lastHeard = Date()
         var quietLogged = 0
+        /// The step it was stuck on, when Direction stopped it to start it again.
+        var stuckStep: String?
         init(runID: String, store: ProjectStore, program: EditorProgram, process: Process) { self.runID = runID; self.store = store; self.program = program; self.process = process }
     }
 
@@ -217,6 +219,10 @@ import DirectionTools
         let result = l.result.flatMap(EditorResult.parse)
         live[l.runID] = nil
         end(l.runID, store: l.store, outcome: RunStateMachine.outcome(exit), cost: l.cost, tokens: l.tokens, result: result, asked: (l.askedAt ?? l.began, forOK))
+        // Stopped because it was stuck: started again at once on its session, told where it was.
+        if l.intent == .restart, let run = try? l.store.run(l.runID), run.state == .paused {
+            launch(run, store: l.store, continuation: EditorJobs.continuation(Self.restartNote(l.stuckStep ?? "unknown"), job: run.job))
+        }
     }
 
     /// Records how a run ended, and what that means for its turnover.
@@ -251,6 +257,10 @@ import DirectionTools
     /// each time, with its last step: Direction's log shows it, and with crash reports on it's a report
     /// (system.md › Crash reports). Thinking is quiet too, but not for ten minutes.
     static let silences = [10, 20, 40]
+    /// Quiet this long, it's stuck: Direction stops it and starts it again on its session, once a run, telling it
+    /// which step it was on. Stuck again, the run stops and says so (hang recovery).
+    nonisolated(unsafe) static var restartAfter: Double = 15 * 60
+    private var restarted: Set<String> = []
     private var silenceTimer: Timer?
     private func watchForSilence() {
         guard silenceTimer == nil else { return }
@@ -259,13 +269,40 @@ import DirectionTools
     func checkSilence(now: Date = Date()) {
         if live.isEmpty { silenceTimer?.invalidate(); silenceTimer = nil; return }
         for l in live.values where l.intent == .none && !l.finished && l.askedAt == nil {
-            let quiet = Int(now.timeIntervalSince(l.lastHeard) / 60)
-            guard let mark = Self.silences.last(where: { quiet >= $0 }), mark > l.quietLogged else { continue }
+            let quiet = now.timeIntervalSince(l.lastHeard), minutes = Int(quiet / 60)
+            let step = lastStep(l)
+            if quiet >= Self.restartAfter {
+                recover(l, step: step, minutes: minutes)
+                continue
+            }
+            guard let mark = Self.silences.last(where: { minutes >= $0 }), mark > l.quietLogged else { continue }
             l.quietLogged = mark
             let job = (try? l.store.run(l.runID))?.job.rawValue ?? "run"
-            let step = (try? l.store.activity(runID: l.runID))?.max { $0.at < $1.at }.map { "\($0.verb) \($0.object)" } ?? "none yet"
             DirectionLog.error("\(l.program.name) has said nothing for \(mark) min in run \(l.runID) (\(job)); tool calls open: \(l.pending.count); last step: \(step)", "editor")
         }
+    }
+    /// "Watching 0:15": what the run was last seen doing.
+    private func lastStep(_ l: LiveRun) -> String {
+        (try? l.store.activity(runID: l.runID))?.max { $0.at < $1.at }.map { "\($0.verb) \($0.object)" } ?? "starting"
+    }
+    /// Stops a stuck program (SIGINT, then SIGTERM, then SIGKILL, with everything it started) and either starts it
+    /// again on its session or, the second time, ends the run as stuck.
+    private func recover(_ l: LiveRun, step: String, minutes: Int) {
+        if restarted.contains(l.runID) {
+            DirectionLog.error("\(l.program.name) got stuck again in run \(l.runID) after \(minutes) min on: \(step). Stopping the run.", "editor")
+            l.intent = .stuck(step)
+        } else {
+            restarted.insert(l.runID)
+            DirectionLog.error("\(l.program.name) said nothing for \(minutes) min in run \(l.runID) on: \(step). Starting it again on its session.", "editor")
+            l.intent = .restart
+            l.stuckStep = step
+        }
+        interrupt(l)
+        stayAwake(); onChange?(l.store.url)
+    }
+    /// What the program hears when it's started again after getting stuck.
+    static func restartNote(_ step: String) -> String {
+        "Direction stopped you and started you again: you\u{2019}d said nothing for 15 minutes, and your last step was \u{201C}\(step)\u{201D}. Don\u{2019}t do it the same way again. If it was one of Direction\u{2019}s tools, it may get stuck on the same thing: try a shorter passage or fewer frames, or look at what you added there last (an effect or a graphic that never finishes). If it was a command you ran, give it a time limit. Then carry on where you were."
     }
 
     // MARK: Control
@@ -439,6 +476,7 @@ enum EditorStopCopy {
         case .spendCap: return "You\u{2019}ve reached this month\u{2019}s limit."
         case .pausedByQuit: return "The editor was paused when Direction quit."
         case .stoppedByYou: return "You stopped the editor."
+        case .stuck: return "The editor got stuck."
         }
     }
 }

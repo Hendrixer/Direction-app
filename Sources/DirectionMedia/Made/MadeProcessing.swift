@@ -47,7 +47,7 @@ public enum MadeProcessing {
         let keys = Set(frames.map { source.ticks($0.time) })
         var writer: Writer?
         do {
-            while let sample = reader.output.copyNextSampleBuffer() {
+            while let sample = reader.output.nextSample(of: reader.reader) {
                 try Task.checkCancellation()
                 guard let decoded = sample.imageBuffer, keys.contains(source.ticks(sample.presentationTimeStamp)) else { continue }
                 if writer == nil {
@@ -195,7 +195,7 @@ public enum MadeProcessing {
         }
         do {
             var previous: (buffer: CVPixelBuffer, ticks: Int64)?
-            while let sample = reader.output.copyNextSampleBuffer() {
+            while let sample = reader.output.nextSample(of: reader.reader) {
                 try Task.checkCancellation()
                 guard let decoded = sample.imageBuffer else { continue }
                 let time = sample.presentationTimeStamp, t = ticks(time)
@@ -322,11 +322,12 @@ private struct Source {
         reader.add(output)
         guard reader.startReading() else { throw DirectionError("media_unreadable", "Couldn't read \(asset.url.lastPathComponent): \(reader.error?.localizedDescription ?? "unknown error").") }
         var all: [Frame] = []
-        while let sample = output.copyNextSampleBuffer() {
+        while let sample = output.nextSample(of: reader) {
             for timing in (try? sample.sampleTimingInfos()) ?? [] where timing.presentationTimeStamp.isNumeric {
                 all.append(.init(time: timing.presentationTimeStamp, duration: timing.duration.isNumeric && timing.duration > .zero ? timing.duration : frameDuration))
             }
         }
+        try ReadStall.check(reader, asset.url.lastPathComponent)
         guard reader.status == .completed else { throw DirectionError("media_unreadable", "Couldn't read \(asset.url.lastPathComponent): \(reader.error?.localizedDescription ?? "unknown error").") }
         all.sort { $0.time < $1.time }
         let slack = frameDuration.seconds / 4
@@ -345,7 +346,7 @@ private struct Source {
         reader.add(output)
         let name = asset.url.lastPathComponent
         guard reader.startReading() else { throw DirectionError("media_unreadable", "Couldn't read \(name): \(reader.error?.localizedDescription ?? "unknown error").") }
-        return (reader, output, { guard reader.status == .completed else { throw DirectionError("media_unreadable", "Couldn't read all of \(name): \(reader.error?.localizedDescription ?? "unknown error").") } })
+        return (reader, output, { try ReadStall.check(reader, name); guard reader.status == .completed else { throw DirectionError("media_unreadable", "Couldn't read all of \(name): \(reader.error?.localizedDescription ?? "unknown error").") } })
     }
 }
 
@@ -567,7 +568,8 @@ private final class Writer {
         var moved = false
         for i in sounds.indices where !sounds[i].done {
             while sounds[i].input.isReadyForMoreMediaData {
-                guard let sample = sounds[i].output.copyNextSampleBuffer() else {
+                guard let sample = sounds[i].output.nextSample(of: sounds[i].reader) else {
+                    try ReadStall.check(sounds[i].reader, "the sound")
                     if sounds[i].reader.status == .failed { throw DirectionError("media_unreadable", "Couldn't read the sound: \(sounds[i].reader.error?.localizedDescription ?? "unknown error").") }
                     sounds[i].input.markAsFinished(); sounds[i].done = true; break
                 }

@@ -7,6 +7,9 @@ public enum DirectionMCPServer {
     /// report shows where it's stuck. The call itself is logged either way.
     nonisolated(unsafe) public static var onStuck: (@Sendable (String, Int) -> Void)?
     static let stuckMarks = [5, 15, 30]
+    /// No tool call waits longer than this: long work runs as jobs and returns at once, so a call still going after
+    /// ten minutes is stuck. The editor is told, and carries on (hang recovery).
+    nonisolated(unsafe) public static var callLimit: Double = 600
 
     public static func run(runtime: ToolRuntime) async throws { try await run(router: ProjectRouter(runtime: runtime)) }
     public static func run(router: ProjectRouter) async throws {
@@ -31,7 +34,11 @@ public enum DirectionMCPServer {
                     }
                 }
                 defer { watch.cancel() }
-                let response = try await router.invoke(params.name, arguments: arguments)
+                let limit = callLimit
+                let response = try await Deadline.run(seconds: limit, error: {
+                    DirectionLog.error("\(name) didn\u{2019}t finish in \(Int(limit / 60)) min and was stopped", "tools")
+                    return DirectionError("tool_stuck", "\(name) didn\u{2019}t finish in \(Int(limit / 60)) minutes and was stopped. Don\u{2019}t call it the same way again: try a shorter passage or fewer frames, or look at what you changed there last (an effect or graphic that never finishes). Then carry on.")
+                }) { try await router.invoke(name, arguments: arguments) }
                 var content: [Tool.Content] = [.text(text: String(decoding: try response.value.data(pretty: true), as: UTF8.self), annotations: nil, _meta: nil)]
                 for path in response.imagePaths { content.append(.image(data: try Data(contentsOf: URL(fileURLWithPath: path)).base64EncodedString(), mimeType: "image/png", annotations: nil, _meta: nil)) }
                 for path in response.audioPaths { content.append(.audio(data: try Data(contentsOf: URL(fileURLWithPath: path)).base64EncodedString(), mimeType: "audio/wav", annotations: nil, _meta: nil)) }

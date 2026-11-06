@@ -40,6 +40,8 @@ public enum EditorRunReason: String, Codable, Sendable {
     case notInstalled, notSignedIn, offline, programQuit, stoppedWithoutFinishing, spendCap, pausedByQuit, stoppedByYou
     /// The program is older than the options Direction starts it with ("unknown option '--effort'").
     case outOfDate
+    /// It stopped answering twice: Direction started it again once on the same session, and it got stuck again.
+    case stuck
 }
 
 public struct EditorRun: Codable, Hashable, Sendable, Identifiable {

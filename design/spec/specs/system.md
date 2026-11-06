@@ -196,6 +196,18 @@ Off until the person says yes. A crash, a freeze or one of Direction's errors th
   - **Stuck work:** a tool call the editor made that has run 5, 15 and 30 minutes (with every thread's stack, to show where it's stuck), and an editor that has said nothing for 10, 20 and 40 minutes while working (with its last step). Both are in Direction's log either way.
 - **Turning it off** stops reports at once, in the app and in the helper's next run.
 
+## Hangs
+
+Nothing Direction or the editor does may wait forever. On 2026-11-05 a friend's run sat 19 minutes on one step ("Watching 0:15", just after the editor wrote a new effect) and Stop then crashed, and the tests froze the same week with 17 video reads waiting at once. Each kind of wait now has a time past which it's stuck, and what's stuck is stopped and recovered from, then reported (Crash reports).
+
+| What waits | Stuck after | Then |
+|---|---|---|
+| One frame of the cut (watching, a frame, a contact sheet) | 60 s | The render is cancelled and the editor hears which moment didn't render and that an effect, graphic or made shot on it may never finish. |
+| One tool call the editor makes | 10 min (long work runs as jobs and returns at once) | The call returns an error naming the tool and what to try instead; the editor carries on. Logged at 5, 15 and 30 minutes too, with every thread's stack in a report. |
+| The editor saying anything at all | 15 min | Direction stops it (with everything it started) and starts it again on its session, told its last step and not to repeat it the same way. Once a run: stuck again, the run ends as **Stuck** (editor.md › stop reasons) with Try again. Logged at 10 minutes first. |
+| One sample from a video or sound file | 30 s | The read is cancelled and says which file stopped answering, instead of a read that never ends. |
+| The footage index's vision model loading | 10 min | The helper is stopped, logged, and the index says why. Each request already had its own limit. |
+
 ## Deleting a film
 
 **Move to Trash** (Films, ⌘⌫), or leaving a new film you never put anything into, moves the film's `.direction` package to the Trash. Finder's Put Back brings it back.
