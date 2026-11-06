@@ -248,8 +248,8 @@ struct FilmModelTests {
     d.syncGroups = [SyncGroup(id: "g", soundAssetID: "cam", takes: [.init(assetID: "cam", offset: 0, match: 1), .init(assetID: "screen", offset: 0.089, match: 0.97)], method: "sound", createdAt: 0)]
     let rules = EditorJobs.syncRules(d, assets: [])
     #expect(rules.contains("- 1A T1 (its sound) \u{00B7} 1B T1, circled") && rules.contains("never two angles end to end") && rules.contains("`syncSound`"))
-    #expect(rules.contains("Screen and you, bottom right, unless the director chooses another"))
-    #expect(EditorJobs.syncRules(d, assets: [], layout: FrameLayout(kind: .screenAndYou, corner: .topLeft)).contains("the director chose Screen and you \u{00B7} top left for this film"))
+    // Layouts are the editor's; a director changes one with a note, never with a setting the editor reads.
+    #expect(rules.contains("Screen and you, bottom right, unless a note asks for another") && !rules.contains("the director chose"))
     for job in ["assemble", "turnover"] { #expect(EditorJobs.template(job)?.contains("{{sync}}") == true, "\(job)") }
 }
 

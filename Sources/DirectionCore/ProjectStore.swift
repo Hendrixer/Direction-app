@@ -182,6 +182,14 @@ public final class ProjectStore: Sendable {
         }
     }
 
+    /// What a note on `range` or at `time` rests on in the footage, and the words under it (3 s either side of a
+    /// moment): made with the note, and again when its stretch moves (editNote).
+    func restsOn(_ p: Project, _ s: Sequence, range: MediaRange?, time: MediaTime?) throws -> (anchors: [SourceAnchor], words: [TimelineWord]) {
+        let around = range ?? time.map { MediaRange(start: max(.zero, $0 - MediaTime(seconds: 3)), duration: MediaTime(seconds: 6)) }
+        let words = TranscriptEditing.words(in: s, transcripts: try transcripts()).filter { w in around.map { w.range.intersection($0) != nil } ?? true }
+        return (ReviewAnchoring.anchors(project: p, sequence: s, range: range, time: time), Array(words.prefix(500)))
+    }
+
     public func addComment(text: String, author: String = "Director", sequenceID: String?, revision: Int, cutID: String? = nil, range: MediaRange? = nil, time: MediaTime? = nil, region: FrameRegion? = nil, extra: NoteFields? = nil, answers: [NoteAnswer]? = nil) throws -> ReviewComment {
         let p = try read(revision: revision), s = try p.sequence(sequenceID)
         guard (extra?.noteState == .draft || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && text.count <= 20_000 else { throw DirectionError("invalid_comment", "Feedback must contain 1–20,000 characters.") }
@@ -190,9 +198,8 @@ public final class ProjectStore: Sendable {
         if let t = time { guard t.isValid && t >= .zero && t < s.duration else { throw DirectionError("invalid_time", "Feedback moment must be inside the reviewed cut.") } }
         if let region { guard region.isValid && (time != nil || range != nil) else { throw DirectionError("invalid_region", "Frame regions use normalized top-left coordinates and require a moment or range.") } }
         if let cutID { guard try cuts().contains(where: { $0.id == cutID && $0.editRevision == revision && $0.sequenceID == s.id }) else { throw DirectionError("cut_mismatch", "The comment revision/sequence does not match its review cut.") } }
-        let contextRange = range ?? time.map { MediaRange(start: max(.zero, $0 - MediaTime(seconds: 3)), duration: MediaTime(seconds: 6)) }
-        let contextWords = TranscriptEditing.words(in: s, transcripts: try transcripts()).filter { contextRange == nil || $0.range.intersection(contextRange!) != nil }
-        var comment = ReviewComment(id: newID("feedback"), cutID: cutID, editRevision: revision, sequenceID: s.id, scope: range != nil ? "range" : time != nil ? "moment" : "cut", range: range, time: time, region: region, text: text, author: author, status: "open", anchors: ReviewAnchoring.anchors(project: p, sequence: s, range: range, time: time), transcriptContext: Array(contextWords.prefix(500)), replies: [], createdAt: Date().timeIntervalSince1970, cursor: 0)
+        let rests = try restsOn(p, s, range: range, time: time)
+        var comment = ReviewComment(id: newID("feedback"), cutID: cutID, editRevision: revision, sequenceID: s.id, scope: range != nil ? "range" : time != nil ? "moment" : "cut", range: range, time: time, region: region, text: text, author: author, status: "open", anchors: rests.anchors, transcriptContext: rests.words, replies: [], createdAt: Date().timeIntervalSince1970, cursor: 0)
         if let extra {
             comment.kind = extra.kind; comment.noteState = extra.noteState ?? .written; comment.authorRole = extra.authorRole; comment.person = extra.person
             comment.outsideState = extra.authorRole == "outside" ? (extra.outsideState ?? "inbox") : nil

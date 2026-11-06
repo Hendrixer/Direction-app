@@ -14,8 +14,6 @@ enum CuttingSide { case progress, readBack, notes }
 /// One per film, so the titlebar's primary and the snapshot fixtures can see it too.
 @MainActor @Observable
 final class NotesUI {
-    /// The caret is in the note being written.
-    var composerFocused = false
     /// The note whose row is open to write in.
     var editingNoteID: String?
     /// The card selected in the Outside tab.
@@ -127,16 +125,22 @@ extension FilmModel {
     /// A note just made: selected, and its row opened to write in unless the picture is playing.
     func made(_ c: ReviewComment) {
         notesTab = .sheet
-        region = nil; rangeSelection = nil; drawingRegion = false; drawingStretch = false
+        cancelDrawing()
         if playing || watchingCut { return }
         beginWriting(c)
     }
-    /// A note on a stretch of the cut.
-    func markStretch(_ r: ClosedRange<Double>) {
+    /// A note on a stretch of the cut. `open: false` (I and O): it's selected, so the other key moves its other
+    /// end, but its row doesn't open, so the keyboard stays with the picture, playing or not.
+    func markStretch(_ r: ClosedRange<Double>, open: Bool = true) {
         let lower = max(0, r.lowerBound), upper = min(duration, r.upperBound)
         guard upper - lower >= 1 / fps, let c = addNote(text: "", range: lower...upper, state: .draft) else { return }
         registerUndo("Mark a Stretch") { $0.dropNote(c.id) }
-        made(c)
+        guard !open else { made(c); return }
+        if notesUI.editingNoteID != nil { saveWriting(advance: false) }
+        notesTab = .sheet
+        cancelDrawing()
+        selectedNoteID = c.id
+        selectedAnswerNoteID = nil
     }
     /// A note on a box drawn on the picture, at this moment.
     func markBox(_ r: CGRect) {
@@ -157,7 +161,7 @@ extension FilmModel {
         saveWriting(advance: false)
         pause()
         notesTab = .sheet
-        region = nil; drawingStretch = false; rangeSelection = nil
+        cancelDrawing()
         drawingRegion = true
     }
     /// Mark a stretch (the stretch under the picture): the next drag along the strip makes its note.
@@ -165,10 +169,11 @@ extension FilmModel {
         saveWriting(advance: false)
         pause()
         notesTab = .sheet
-        rangeSelection = nil; drawingRegion = false; region = nil
+        cancelDrawing()
         drawingStretch = true
     }
-    /// esc while drawing: nothing is made.
+    /// esc while drawing, or anything that starts something else: nothing is made, and no box or stretch is left
+    /// half drawn.
     func cancelDrawing() {
         region = nil; rangeSelection = nil; drawingRegion = false; drawingStretch = false
     }
@@ -194,24 +199,28 @@ extension FilmModel {
         guard let r = rangeSelection else { return }
         if new || drawingStretch || !stretchEditable { markStretch(r); return }
         rangeSelection = nil
-        guard let c = selectedNote, let old = c.range, r.upperBound - r.lowerBound >= 1 / fps else { return }
-        let moved = MediaRange(start: r.lowerBound, end: min(duration, r.upperBound))
-        guard moved != old else { return }
+        if let c = selectedNote { moveStretch(c, to: r) }
+    }
+    /// The selected note's stretch, pulled or moved: what it rests on in the footage, and the words under it, move
+    /// with it. Never shorter than a frame.
+    private func moveStretch(_ c: ReviewComment, to r: ClosedRange<Double>) {
+        guard let old = c.range else { return }
+        let moved = MediaRange(start: max(0, r.lowerBound), end: min(duration, r.upperBound))
+        guard moved.end.seconds - moved.start.seconds >= 1 / fps - 1e-9, moved != old else { return }
         perform { _ = try $0.editNote(id: c.id, range: moved) }
         registerUndo("Move Stretch") { m in m.perform { _ = try $0.editNote(id: c.id, range: old) } }
     }
 
-    /// I / O: a stretch starts or ends at the playhead. The selected note's stretch moves; otherwise it's a new
-    /// note on the two seconds from (or up to) here.
+    /// I / O: a stretch starts or ends at the playhead. The selected note's stretch moves; otherwise (or with the
+    /// playhead past its other end) it's a new note on the two seconds from (or up to) here, selected so the other
+    /// key ends (or starts) it.
     func setStretchEdge(start: Bool) {
         let t = min(max(0, position), duration)
-        if stretchEditable, let r = selectedNote?.range {
-            let a = r.start.seconds, b = r.end.seconds
-            rangeSelection = start ? min(t, b - 1 / fps)...b : a...max(t, a + 1 / fps)
-            finishStretch(new: false)
-        } else {
-            markStretch(start ? t...min(duration, t + 2) : max(0, t - 2)...t)
+        if stretchEditable, let c = selectedNote, let r = c.range {
+            let a = r.start.seconds, b = r.end.seconds, length = start ? b - t : t - a
+            if length >= 1 / fps - 1e-9 { moveStretch(c, to: start ? t...b : a...t); return }
         }
+        markStretch(start ? t...min(duration, t + 2) : max(0, t - 2)...t, open: false)
     }
 
     /// The box on the picture: the one being drawn, or the selected note's (±12 frames around its moment).
@@ -241,12 +250,16 @@ extension FilmModel {
 
     // MARK: Writing a note
 
-    /// Opens a note's row to write in: its words, its kind, the caret at the end.
+    /// Opens a note's row to write in: its words, its kind, the caret at the end. A row that's already open keeps
+    /// what's being written in it and only gets the caret back.
     func beginWriting(_ c: ReviewComment) {
-        guard isBeforeTurnover(c), !looksBack else { return }
-        if notesUI.editingNoteID != c.id { saveWriting(advance: false) }
-        if selectedNoteID != c.id { select(c) }
+        guard isBeforeTurnover(c) else { return }
+        // An older cut's notes aren't written there, but clicking one still selects it and finds its moment.
+        guard !looksBack else { if selectedNoteID != c.id { select(c) }; return }
         notesTab = .sheet
+        guard notesUI.editingNoteID != c.id else { composerFocus += 1; return }
+        saveWriting(advance: false)
+        if selectedNoteID != c.id { select(c) }
         notesUI.editingNoteID = c.id
         draftText = c.text; draftKind = c.kind
         composerFocus += 1
@@ -261,12 +274,17 @@ extension FilmModel {
         let old = (c.text, c.kind)
         editNote(c.id, text: text, kind: .some(kind))
         if !wasDraft { registerUndo("Edit Note") { $0.editNote(c.id, text: old.0, kind: .some(old.1)) } }
-        guard advance, wasDraft else { return }
+        guard advance, wasDraft, screeningMarkIDs.contains(c.id) else { return }
         if let next = draftNotes.first(where: { $0.id != c.id && screeningMarkIDs.contains($0.id) }) { beginWriting(next) }
+    }
+    /// Turn over…, however it's reached: the words open in a row are kept first, so they go over as written.
+    func showTurnoverSheet() {
+        saveWriting(advance: false)
+        sheet = .turnover
     }
     /// esc in a note's row: it closes as it was.
     func stopWriting() {
-        notesUI.editingNoteID = nil; notesUI.composerFocused = false
+        notesUI.editingNoteID = nil
         draftText = ""; draftKind = nil
     }
     /// An outside note's Edit first: it joins your notes, open to write in.
@@ -448,6 +466,16 @@ enum NoteAnchor: CaseIterable {
         case .box: "Box"
         case .scene: "Scene"
         case .wholeCut: "Whole cut"
+        }
+    }
+    /// What a note with no words yet is, in "Remove this …": a mark, a stretch, a box, or a note (on a scene or
+    /// the whole cut).
+    var unwritten: String {
+        switch self {
+        case .moment: "mark"
+        case .stretch: "stretch"
+        case .box: "box"
+        case .scene, .wholeCut: "note"
         }
     }
 }

@@ -118,7 +118,12 @@ struct SceneContextMenu: View {
             .header("\(scene.label) · \(Timecode.range(scene.start, scene.end, fps: model.fps))"),
             .item("Play from Here", icon: "play.fill", key: "Space", shortcut: .init(.space, modifiers: [])) { FilmActions(model).play(from: scene.start) },
             .item("Mark Here", icon: "mark", key: "N", shortcut: .init("n", modifiers: []), disabled: model.duration <= 0) { model.pause(); model.seek(scene.start); model.mark() },
-            .item("Note on This Scene", icon: "film") { model.seek(scene.start); if model.room != .cut { model.go(.cut) }; model.noteWholeCut(scene: scene.id) },
+            // A Dailies scene gets a note on the scene; a stretch of the strip with no scene behind it (a take in no
+            // scene, a passage) gets a note on that stretch, never a scene id that names nothing.
+            .item("Note on This Scene", icon: "film") {
+                model.seek(scene.start); if model.room != .cut { model.go(.cut) }
+                if let id = dailiesScene?.id { model.noteWholeCut(scene: id) } else { model.markStretch(scene.start...scene.end) }
+            },
             .separator,
             .item(scene.locked ? "Unlock Scene" : "Lock Scene", icon: scene.locked ? "lock.open" : "lock.fill", key: keys.combo(.lockScene)?.text, shortcut: keys.menuShortcut(.lockScene), disabled: dailiesScene == nil || model.isPictureLocked) { model.lockScene(scene.id, !scene.locked) },
             .item("Open in Dailies", icon: "square.grid.2x2", disabled: dailiesScene == nil) { model.selectedSceneID = scene.id; model.go(.dailies) },
@@ -139,9 +144,13 @@ struct NoteContextMenu: View {
         let editable = [.draft, .written, .reopened].contains(note.lifecycle) && !note.inInbox
         // A turned-over note belongs to the editor until it's answered; take the turnover back first.
         let droppable = ![.answered, .accepted, .dropped, .turnedOver].contains(note.lifecycle)
+        // A note open to write in keeps its kind with its words until it's saved; saving would put the old one back.
+        let writing = model.notesUI.editingNoteID == note.id
+        let kind = writing ? model.draftKind : note.kind
+        let pick = { (k: NoteKind?) in if writing { model.draftKind = k } else { model.editNote(note.id, kind: .some(k)) } }
         let kinds: [GateMenuEntry] = NoteKind.allCases.map { k in
-            .item(k.label, icon: nil, checked: note.kind == k) { model.editNote(note.id, kind: .some(k)) }
-        } + [.item("None", icon: nil, checked: note.kind == nil) { model.editNote(note.id, kind: .some(nil)) }]
+            .item(k.label, icon: nil, checked: kind == k) { pick(k) }
+        } + [.item("None", icon: nil, checked: kind == nil) { pick(nil) }]
         let number = note.number.map(String.init) ?? ""
         var out: [GateMenuEntry] = [
             .item("Play from Note", icon: "play.fill", key: "Space", shortcut: .init(.space, modifiers: []), disabled: model.noteTime(note) == nil) { model.select(note); model.togglePlayback() },
@@ -156,7 +165,7 @@ struct NoteContextMenu: View {
             })
         }
         out += [
-            .submenu("Kind", icon: "slider.horizontal.3", key: note.kind?.label, disabled: !editable, kinds),
+            .submenu("Kind", icon: "slider.horizontal.3", key: kind?.label, disabled: !editable, kinds),
             .separator,
             .item("Copy Time", icon: "clock", disabled: model.noteTime(note) == nil) { SystemSupport.copy(model.anchorText(note)) },
             .item(number.isEmpty ? "Copy Link to Note" : "Copy Link to Note \(number)", icon: "link", disabled: note.number == nil) {

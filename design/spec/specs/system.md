@@ -185,7 +185,7 @@ A downloaded copy opened straight from its disk image runs from a read-only plac
 
 Off until the person says yes. A crash, a freeze or one of Direction's errors then goes to Direction's developer (Sentry), so it can be fixed; nothing goes before.
 
-- **Saying yes.** Settings › General › Reports › **Send crash reports**, or once, the first time Direction opens after it closed unexpectedly: "Direction closed unexpectedly." with **Send Report** and **Not Now**. Send Report sends that crash (macOS's own report of it) and turns reports on. Not Now never asks about that crash again. Only signed copies people download ask or send; a copy built from source never does.
+- **Saying yes.** Settings › General › Reports › **Send crash reports**, or once, the first time Direction opens after it closed unexpectedly: "Direction closed unexpectedly." with **Send Report** and **Not Now**. Send Report sends that crash (macOS's own report of it) and nothing else, and turns reports on. Not Now never asks about that crash again. A program Direction started crashing isn't Direction closing: it never asks about one. Crash files are read off the main thread, and nothing the switch or Send Report does makes the window wait. Only signed copies people download ask or send; a copy built from source never does.
 - **What's in a report.**
   - What Direction was doing (the last 100 lines of its log) and its error messages, the Mac's model and macOS version.
   - Never footage, the person's name or the Mac's name. Their home folder becomes `~`, anyone's `/Users/<name>` becomes `/Users/[you]`, and their name becomes `[you]` everywhere: in messages, stacks, file paths and the attached crash file. No IP address (`sendDefaultPii` off).
@@ -193,18 +193,19 @@ Off until the person says yes. A crash, a freeze or one of Direction's errors th
   - **Direction and its helper:** crashes, and the main thread stuck for 5 s.
   - **Errors:** each kind of error in Direction's log, once per run of the program and at most 20 (a loop of one failure is one report).
   - **Programs Direction starts** (the editor's Claude Code or Codex, Python for the footage index, Whisper, yt-dlp): their failures are in Direction's log, so they're reported the same way, and when one crashes, macOS's crash file for it is attached. Only crashes of Direction's own processes and of programs they started are ever picked up, never another app's or a program the person ran.
-  - **Stuck work:** a tool call the editor made that has run 5, 15 and 30 minutes (with every thread's stack, to show where it's stuck), and an editor that has said nothing for 10, 20 and 40 minutes while working (with its last step). Both are in Direction's log either way.
+  - **Stuck work:** a tool call the editor made that has run 5 minutes, half its limit (with every thread's stack, to show where it's stuck), and an editor that has said nothing for 10 minutes while working (with its last step). Both are in Direction's log either way, and so is what happened next (Hangs).
+  - **Never:** the director's own Stop, Pause or Quit. They're in the log, not reported.
 - **Turning it off** stops reports at once, in the app and in the helper's next run.
 
 ## Hangs
 
-Nothing Direction or the editor does may wait forever. On 2026-11-05 a friend's run sat 19 minutes on one step ("Watching 0:15", just after the editor wrote a new effect) and Stop then crashed, and the tests froze the same week with 17 video reads waiting at once. Each kind of wait now has a time past which it's stuck, and what's stuck is stopped and recovered from, then reported (Crash reports).
+Nothing Direction or the editor does may wait forever. On 2026-11-05 a friend's run sat 19 minutes on one step ("Watching 0:15", just after the editor wrote a new effect) and Stop then crashed, and the tests froze the same week with 17 video reads waiting at once. Each kind of wait now has a time past which it's stuck, and what's stuck is stopped and recovered from, then reported (Crash reports). The times are awake time: a Mac asleep isn't work that's stuck.
 
 | What waits | Stuck after | Then |
 |---|---|---|
 | One frame of the cut (watching, a frame, a contact sheet) | 60 s | The render is cancelled and the editor hears which moment didn't render and that an effect, graphic or made shot on it may never finish. |
-| One tool call the editor makes | 10 min (long work runs as jobs and returns at once) | The call returns an error naming the tool and what to try instead; the editor carries on. Logged at 5, 15 and 30 minutes too, with every thread's stack in a report. |
-| The editor saying anything at all | 15 min | Direction stops it (with everything it started) and starts it again on its session, told its last step and not to repeat it the same way. Once a run: stuck again, the run ends as **Stuck** (editor.md › stop reasons) with Try again. Logged at 10 minutes first. |
+| One tool call the editor makes | 10 min (long work runs as jobs and returns at once; an import, which copies a whole file inside the call, has no limit of its own) | The call returns an error naming the tool and what to try instead; the editor carries on. Logged at 5 minutes too, with every thread's stack in a report. |
+| The editor saying anything at all | 15 min; 2 hours while it waits on an import | Direction stops it (with everything it started) and starts it again on its session, told its last step and not to repeat it the same way. Once a run: stuck again, the run ends as **Stuck** (editor.md › stop reasons) with Try again, which starts it with its one restart to come again. Logged at 10 minutes first. |
 | One sample from a video or sound file | 30 s | The read is cancelled and says which file stopped answering, instead of a read that never ends. |
 | The footage index's vision model loading | 10 min | The helper is stopped, logged, and the index says why. Each request already had its own limit. |
 
@@ -237,7 +238,7 @@ The frame shows three right-click menus over the Cut room at once, only for refe
 | Draw a region | R | Enters region drawing at this frame (frame 19). |
 | Note on the whole cut | — | The composer opens with the Whole cut anchor. |
 | — | | |
-| Copy timecode | ⌘⇧C | Copies `00:46:12`. |
+| Copy Time | ⌘⇧C | Copies the time as it reads, `0:46`. |
 | Copy frame as image | — | PNG at source resolution. |
 | Show this take in Dailies | — | Opens Dailies with that take selected. |
 
@@ -321,7 +322,7 @@ Every command is listed with its key equivalent. Room-scoped commands are disabl
 | Redo | ⇧⌘Z | |
 | — | | |
 | Cut / Copy / Paste | ⌘X / ⌘C / ⌘V | Text fields, notes and timecode. |
-| Copy Timecode | ⌘⇧C | |
+| Copy Time | ⌘⇧C | |
 | Select All | ⌘A | |
 | — | | |
 | Find… | ⌘F | Searches the current room: notes, takes, script. |
@@ -398,7 +399,7 @@ Every command is listed with its key equivalent. Room-scoped commands are disabl
 | Clear Range | ⌥X |
 | — | |
 | Go to Start / End | Home / End |
-| Go to Timecode… | ⌃G |
+| Go to a Time… | ⌃G |
 | — | |
 | Loop Playback | ⌥L |
 | Mute | ⌥M |

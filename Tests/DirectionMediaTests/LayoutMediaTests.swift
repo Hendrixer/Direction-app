@@ -48,7 +48,7 @@ import DirectionTools
         #expect(edge[0] > 0.95 && edge[1] > 0.5 && edge[2] < 0.3 && inside[1] < 0.05)
     }
 
-    @Test func theDirectorLaysOutTheCutWithTheScreenAndTheCameraInSync() async throws {
+    @Test func theEditorLaysOutTheCutWithTheScreenAndTheCameraInSync() async throws {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         // The fixture shows no face, so the name decides: a screen recording and the take on V1 as the camera.
         let copy = f.directory.appendingPathComponent("Screen Recording 2026-10-31.mov")
@@ -62,15 +62,14 @@ import DirectionTools
         // Faces found once are kept: the second look reads the cache.
         #expect(FileManager.default.fileExists(atPath: LayoutAnalysis.cache(story, "faces", f.runtime.cacheDirectory).path))
 
-        // No cut yet: nothing to lay out.
-        await #expect(throws: DirectionError.self) { _ = try await f.runtime.setLayout(.standard, range: nil) }
-        let cut = try f.store.createCut(name: "Cut 1", sequenceID: nil, revision: nil)
-        let made = try await f.runtime.setLayout(FrameLayout(kind: .screenAndYou, corner: .topRight, shape: .rounded), range: nil)
-        #expect(made.byDirector == true && made.operations.first?.op == "layout")
+        // Layouts are the editor's: it lays out the cut with an edit, and a director changes one with a note.
+        let op: JSONValue = .object(["op": .string("layout"), "range": .object(["start": .number(0), "end": .number(3)]),
+                                     "layout": .object(["kind": .string("screenAndYou"), "corner": .string("topRight"), "shape": .string("rounded")])])
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(p.editRevision)), "summary": .string("Screen and you"), "operations": .array([op])]))
         let after = try f.store.read()
-        #expect(try f.store.cuts().first { $0.id == cut.id }?.editRevision == after.editRevision)
+        #expect(after.editRevision == p.editRevision + 1)
         let laid = after.sequences[0].clips.filter { $0.layout != nil }
-        #expect(laid.compactMap(\.assetID).sorted() == [story.id, screen.id].sorted() && laid.allSatisfy { $0.layout?.byDirector == true })
+        #expect(laid.compactMap(\.assetID).sorted() == [story.id, screen.id].sorted() && laid.allSatisfy { $0.layout?.byDirector == nil })
         // It renders: the frame at 1 s has the bubble in the top right over the screen.
         let frame = try await f.runtime.invoke("direction_frame", arguments: .object(["time": .number(1)]))
         #expect(frame.value["path"].string != nil || frame.value["image"] != .null)

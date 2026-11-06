@@ -89,7 +89,7 @@ Room keys never fire while a text field has focus.
 | `B` | With two options, use B |
 | `R` | Reply to the selected answer; otherwise draw a box (a new note) |
 | `⌘R` | Reply to the selected answer |
-| `I` / `O` | The selected stretch starts / ends at the playhead; with none, a new two-second stretch from (or up to) here |
+| `I` / `O` | The selected stretch starts / ends at the playhead; with none (or with the playhead past its other end), a new two-second stretch from (or up to) here, selected but not opened, so the other key ends (or starts) it |
 | `⌫` on a selected note | Remove it, with its stretch or box. Its number is retired. |
 | `⌘⌫` | Revert the selected answer's change |
 | `⇧⌘A` | Accept every answer that can be (asks first) |
@@ -330,7 +330,7 @@ The four tools sit under the picture, after the strip, each a ghost icon with it
 A scene's menu on the strip has **Note on This Scene** (`film`). While a tool is on, its icon is amber on the amber wash, a glass hint sits at the top of the picture ("Drag along the timeline to mark a stretch. esc cancels." / "Drag a box around what you mean. esc cancels."), and `esc` or the tool again turns it off with nothing made. Turning one on pauses the picture.
 
 - **Writing it.** The new note's row opens: its chip, the field ("What should it feel like?"), the kinds, and **Done ↩** under them. `↩` keeps the words, `⇧↩` adds a line, `esc` closes it as it was. A note left with no words stays on the sheet, "Click to write this note.", and a click opens it. Making another note, or picking another, keeps what was typed in this one. Written notes open again with a double-click, `↩` or Edit Note.
-- **While it plays.** `N` while the cut plays, or while watching through, only drops the mark: the picture never stops and the mark waits to be written. Paused, its row opens.
+- **While it plays.** `N` while the cut plays, or while watching through, only drops the mark: the picture never stops and the mark waits to be written. Paused, its row opens; where the sheet isn't showing (another room, Play changes) it waits to be written too, with the toast.
 - **Many at once.** Each stretch, box or mark is its own note; there's no single one being made. The selected note's stretch shows on the strip with grips (pull either end, drag the middle to move it), and its box shows on the picture for ±12 frames around its moment with handles (drag to move, a handle to resize, `⇧` keeps its shape). Letting go keeps the change on the note; what it rests on in the footage and the words under it move with it. A drag on the picture away from the box draws a new box, and a new note.
 - **Taking it away.** A note's hover shows **✕** (Remove, `⌫`) beside its More menu; it goes with its stretch or box, and `⌘Z` puts it back. **Remove Box** (the note's menu, or the picture's) takes only the box away and leaves the note on its moment.
 - Turned-over notes, outside notes and an older cut's notes show their stretch and box but can't be moved.

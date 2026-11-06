@@ -287,26 +287,6 @@ extension ToolRuntime {
         }
     }
 
-    // MARK: Layouts the director sets (layouts.md)
-
-    /// Lays out `range` of the latest cut (all of it when nil) the director's way, at once: measured here,
-    /// carried out as the director's own revision, and played by the cut. Returns the revision it made.
-    public func setLayout(_ layout: FrameLayout, range: MediaRange?) async throws -> EditResult {
-        let p = try store.read()
-        guard let cut = try store.cuts().first else { throw DirectionError("no_cut", "There\u{2019}s no cut yet. Layouts change a cut once the editor has made one.") }
-        let s = try p.sequence(cut.sequenceID)
-        let r = range ?? MediaRange(start: .zero, duration: s.duration)
-        var op = EditOperation(op: "layout"); op.layout = layout; op.range = r
-        op.resolved = .init(layout: try await LayoutAnalysis.measure(project: p, sequence: s, dailies: try store.dailies(), range: r, cacheDirectory: cacheDirectory))
-        return try store.directorEdit([op], summary: "Layout: \(layout.label)", expectedRevision: p.editRevision)
-    }
-
-    /// Finds the faces and sorts the takes ahead of time, so the first layout doesn't wait on Vision.
-    public func prepareLayouts() async {
-        guard let p = try? store.read(), let cut = try? store.cuts().first, let s = try? p.sequence(cut.sequenceID), let d = try? store.dailies() else { return }
-        _ = try? await LayoutAnalysis.measure(project: p, sequence: s, dailies: d, range: nil, cacheDirectory: cacheDirectory)
-    }
-
     /// `Effects/<name>.metal` or `Transitions/<name>.metal` in the editor's folder (`<film>/Editor/`,
     /// where it works), or in the film itself for films from before, and nowhere else.
     private func editorSource(_ file: String, folder: String) throws -> String {

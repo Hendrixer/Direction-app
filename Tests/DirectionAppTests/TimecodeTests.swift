@@ -15,6 +15,12 @@ struct TimecodeTests {
         #expect(Timecode.duration(220) == "3:40")
         #expect(Timecode.duration(46) == "0:46")
     }
+    /// Go to a time lands where a time reads: past an hour, three parts are hours, minutes and seconds.
+    @MainActor @Test func aTimeTypedBackLandsWhereItReads() {
+        #expect(FilmActions.parseTimecode(Timecode.format(3723, fps: 24), fps: 24, hours: true) == 3723)
+        #expect(FilmActions.parseTimecode("1:12", fps: 24) == 72 && FilmActions.parseTimecode("72", fps: 24) == 72)
+        #expect(FilmActions.parseTimecode("00:01:12", fps: 24) == 1.5)
+    }
     /// Frames, where they show, say what they are and use the sequence rate.
     @Test func framesSayWhatTheyAre() {
         #expect(Timecode.frame(1.5, fps: 24) == 12 && Timecode.frame(1.5, fps: 30) == 15)

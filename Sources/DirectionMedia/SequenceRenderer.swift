@@ -222,7 +222,7 @@ public enum SequenceRenderer {
         let box = GeneratorBox(generator), at = time
         let result = try await Deadline.run(seconds: frameLimit, error: {
             DirectionLog.error("The frame at \(String(format: "%.2f", at.seconds)) s didn\u{2019}t render in \(Int(frameLimit)) s and was stopped", "render")
-            return DirectionError("frame_stuck", "The frame at \(Self.clock(at.seconds)) didn\u{2019}t finish rendering in \(Int(frameLimit)) seconds and was stopped. Something on it never finishes: look at the effects, graphics and made shots there (a shader that never returns, a graphic that never draws), fix or take out the one you added last, and watch it again.")
+            return DirectionError("frame_stuck", "The frame at \(PlainTime.text(at.seconds)) didn\u{2019}t finish rendering in \(Int(frameLimit)) seconds and was stopped. Something on it never finishes: look at the effects, graphics and made shots there (a shader that never returns, a graphic that never draws), fix or take out the one you added last, and watch it again.")
         }, onTimeout: { box.generator.cancelAllCGImageGeneration() }) {
             let r = try await box.generator.image(at: at.cmTime)
             return FrameBox(image: r.image, actualTime: r.actualTime)
@@ -236,11 +236,6 @@ public enum SequenceRenderer {
     nonisolated(unsafe) public static var frameLimit: Double = 60
     private final class GeneratorBox: @unchecked Sendable { let generator: AVAssetImageGenerator; init(_ g: AVAssetImageGenerator) { generator = g } }
     private struct FrameBox: @unchecked Sendable { var image: CGImage; var actualTime: CMTime }
-    /// "0:15", "1:02:03".
-    static func clock(_ s: Double) -> String {
-        let t = Int(max(0, s)), h = t / 3600, m = (t % 3600) / 60, sec = t % 60
-        return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
-    }
 
     public static func export(_ compiled: CompiledSequence, to destination: URL, preset: String = "h264", range: MediaRange? = nil) async throws -> JSONValue {
         let presetName: String, type: AVFileType

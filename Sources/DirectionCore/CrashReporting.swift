@@ -28,8 +28,12 @@ public enum CrashReporting {
         var out = DirectionLog.redact(text)
         if home.count > 1 { out = out.replacingOccurrences(of: home, with: "~") }
         out = out.replacingOccurrences(of: #"/Users/[^/\s"':]+"#, with: "/Users/[you]", options: .regularExpression)
-        // Longest first, so a full name goes whole before its first name does.
-        for n in Set(names).sorted(by: { $0.count > $1.count }) where n.count >= 3 { out = out.replacingOccurrences(of: n, with: "[you]", options: .caseInsensitive) }
+        // Longest first, so a full name goes whole before its first name does. Only as a word of its own: "ann"
+        // stays in "planning".
+        for n in Set(names).sorted(by: { $0.count > $1.count }) where n.count >= 3 {
+            let word = #"(?<![\p{L}\p{N}])"# + NSRegularExpression.escapedPattern(for: n) + #"(?![\p{L}\p{N}])"#
+            out = out.replacingOccurrences(of: word, with: "[you]", options: [.regularExpression, .caseInsensitive])
+        }
         return out
     }
 
@@ -66,7 +70,9 @@ public enum CrashReporting {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DiagnosticReports")
     }
     /// Direction's own processes, by the name macOS gives them.
-    public static let directionProcesses: Set<String> = ["Direction", "DirectionApp", "direction"]
+    public static let directionProcesses: Set<String> = appProcesses.union(["direction"])
+    /// The app, by the names macOS gives it (a build from source is DirectionApp); "direction" is its helper.
+    public static let appProcesses: Set<String> = ["Direction", "DirectionApp"]
 
     /// One crash report macOS kept, read from its two JSON parts.
     public struct CrashFile: Equatable, Sendable {
@@ -78,6 +84,8 @@ public enum CrashReporting {
         public var parent: String?
         /// Direction crashed, as opposed to a program it started.
         public var isDirection: Bool { CrashReporting.directionProcesses.contains(process) }
+        /// The app itself closed, not its helper or a program either one started.
+        public var isApp: Bool { CrashReporting.appProcesses.contains(process) }
     }
 
     /// The crashes macOS kept that are Direction's: Direction itself, its helper, and any program either one started

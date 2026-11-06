@@ -167,8 +167,10 @@ struct CutRoom: View {
         default:
             break
         }
-        // With a note with no words selected, typing starts writing it; other single keys are the room's.
-        if model.notesTab == .sheet, composerShown, let c = model.selectedNote, c.lifecycle == .draft, Self.printable(press.characters) {
+        // With a note with no words selected, typing starts writing it; other single keys are the room's. A
+        // selected stretch keeps I and O for its ends, and an older cut's notes aren't written there.
+        if model.notesTab == .sheet, composerShown, !model.looksBack, let c = model.selectedNote, c.lifecycle == .draft, Self.printable(press.characters),
+           !(model.stretchEditable && (char == "i" || char == "o")) {
             model.beginWriting(c)
             model.draftText += press.characters
             return .handled
@@ -343,7 +345,7 @@ extension FilmModel {
             return PrimaryAction(title: "Watch \(cut.name)", icon: "play.fill") { self.watchThrough() }
         }
         let n = readyNotes.count
-        if n > 0 { return PrimaryAction(title: "Turn over", icon: "arrow.right", count: String(n)) { self.saveWriting(advance: false); self.sheet = .turnover } }
+        if n > 0 { return PrimaryAction(title: "Turn over", icon: "arrow.right", count: String(n)) { self.showTurnoverSheet() } }
         let acceptable = acceptableRemaining.count
         if acceptable > 0 {
             return PrimaryAction(title: "Accept", icon: "checkmark", count: String(acceptable), help: "Accept every answer still to look at (\u{2318}\u{21A9})") { self.changes.confirmAcceptAll = true }

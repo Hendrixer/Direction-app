@@ -19,7 +19,16 @@ public enum Reports {
         return release != nil || ProcessInfo.processInfo.environment["DIRECTION_REPORTS"] == "1"
     }
 
+    /// Starting waits for a stop still closing (`lifecycle`), so turning the switch off and on again quickly
+    /// leaves reports on.
     public static func start(process: String) {
+        lifecycle.sync { startNow(process: process) }
+    }
+
+    /// Starts and stops happen one at a time, in order; a stop closes here, off the main thread.
+    private static let lifecycle = DispatchQueue(label: "dev.direction.reports")
+
+    private static func startNow(process: String) {
         guard !SentrySDK.isEnabled else { return }
         let gate = CrashReporting.ErrorGate()
         SentrySDK.start { o in
@@ -61,14 +70,15 @@ public enum Reports {
     /// Waits up to `timeout` for reports still being sent.
     public static func flush(timeout: TimeInterval = 10) { if SentrySDK.isEnabled { SentrySDK.flush(timeout: timeout) } }
 
-    /// Turning the box off stops reporting at once.
+    /// Turning the box off stops reporting at once: nothing more from the log, and Sentry closes (sending what it
+    /// already had, for up to 2 s) off the main thread.
     public static func stop() {
         DirectionLog.observer = nil
-        if SentrySDK.isEnabled { SentrySDK.flush(timeout: 2); SentrySDK.close() }
+        lifecycle.async { if SentrySDK.isEnabled { SentrySDK.close() } }
     }
 
     /// Crashes macOS kept from before reports were on, or from a program Direction started: each sent once, as a
-    /// report with the crash file attached, scrubbed.
+    /// report with the crash file attached, scrubbed. Reads the files, so call it off the main thread.
     public static func send(_ crashes: [CrashReporting.CrashFile]) {
         guard SentrySDK.isEnabled else { return }
         for crash in crashes {
@@ -82,7 +92,7 @@ public enum Reports {
                 scope.addAttachment(Attachment(data: Data(CrashReporting.scrub(text).utf8), filename: "\(crash.process).ips", contentType: "application/json"))
             }
         }
-        SentrySDK.flush(timeout: 10)
+        // No waiting: Sentry keeps each report on disk until it's sent, this run or the next.
     }
 
     /// A tool call or a step that has gone on far longer than any should: one report with every thread's stack, so

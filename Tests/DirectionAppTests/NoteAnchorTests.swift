@@ -140,4 +140,65 @@ struct NoteAnchorTests {
         m.markStretch(20...24)
         #expect(m.note(id)?.text == "Hold on her longer." && m.selectedNote?.range != nil)
     }
+
+    /// A row that's already open keeps what's being written when something opens it again (↩ or a letter in the
+    /// room, a double-click on the row, its menu's Write Note).
+    @Test func aRowOpenedAgainKeepsItsWords() throws {
+        let (m, dir) = try Self.film(); defer { try? FileManager.default.removeItem(at: dir) }
+        m.position = 8
+        m.mark()
+        let mark = try #require(m.selectedNote)
+        m.draftText = "Hold on her"
+        m.beginWriting(mark)
+        #expect(m.draftText == "Hold on her" && m.notesUI.editingNoteID == mark.id)
+        m.saveWriting()
+        #expect(m.note(mark.id)?.text == "Hold on her")
+    }
+
+    /// I then O make one stretch from I to O, playing or not, and the keyboard stays with the picture. I past the
+    /// selected stretch's end starts a new one rather than squeezing it to a frame.
+    @Test func iThenOMakeOneStretch() throws {
+        let (m, dir) = try Self.film(); defer { try? FileManager.default.removeItem(at: dir) }
+        let count = m.notes.count
+        m.playing = true
+        m.position = 10
+        m.setStretchEdge(start: true)
+        m.position = 15
+        m.setStretchEdge(start: false)
+        m.playing = false
+        #expect(m.notes.count == count + 1 && m.selectedNote?.range == MediaRange(start: 10, end: 15) && m.notesUI.editingNoteID == nil)
+        m.position = 30
+        m.setStretchEdge(start: true)
+        #expect(m.notes.count == count + 2 && m.selectedNote?.range == MediaRange(start: 30, end: 32) && m.notesUI.editingNoteID == nil)
+    }
+
+    /// Writing a note goes on to the next one only from a watch's marks: after a mark made with N, it stays put.
+    @Test func onlyAWatchsMarksGoOnToTheNext() throws {
+        let (m, dir) = try Self.film(); defer { try? FileManager.default.removeItem(at: dir) }
+        m.position = 10
+        m.mark()
+        m.stopWriting()
+        m.position = 40
+        m.mark()
+        m.draftText = "Brighter."
+        m.saveWriting()
+        #expect(m.notesUI.editingNoteID == nil && m.position == 40)
+    }
+
+    /// Turn over, from any of its menus, keeps the words being written; a mark in Play changes opens no hidden row.
+    @Test func turningOverKeepsTheWordsBeingWritten() throws {
+        let (m, dir) = try Self.film(); defer { try? FileManager.default.removeItem(at: dir) }
+        m.position = 8
+        m.mark()
+        let id = try #require(m.selectedNote?.id)
+        m.draftText = "Hold on her."
+        m.showTurnoverSheet()
+        #expect(m.note(id)?.text == "Hold on her." && m.sheet == .turnover && m.notesUI.editingNoteID == nil)
+        m.sheet = nil
+        m.changes.reelOpen = true
+        m.position = 20
+        m.mark()
+        #expect(m.notesUI.editingNoteID == nil)
+        m.changes.reelOpen = false
+    }
 }

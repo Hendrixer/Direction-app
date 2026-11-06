@@ -408,7 +408,7 @@ struct StyleEditor: View {
 
     /// "0:00–2:15", "from 2:15", "about 8 s": where a part of the film usually sits.
     static func sectionTime(_ part: StyleSection) -> String? {
-        func clock(_ t: Double) -> String { String(format: "%d:%02d", Int(t) / 60, Int(t) % 60) }
+        let clock = PlainTime.text
         switch (part.at, part.length) {
         case let (at?, length?): return "\(clock(at))\u{2013}\(clock(at + length))"
         case let (at?, nil): return "from \(clock(at))"

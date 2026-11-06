@@ -437,8 +437,7 @@ extension ProjectStore {
             let note = try comment(id), p = try read(revision: note.editRevision), s = try p.sequence(note.sequenceID)
             guard note.range != nil else { throw DirectionError("invalid_range", "Only a note on a stretch of the cut has a stretch to move.") }
             guard range.isValid && range.end <= s.duration else { throw DirectionError("invalid_range", "Feedback range must be inside the reviewed cut.") }
-            let words = TranscriptEditing.words(in: s, transcripts: try transcripts()).filter { $0.range.intersection(range) != nil }
-            moved = (ReviewAnchoring.anchors(project: p, sequence: s, range: range, time: nil), Array(words.prefix(500)))
+            moved = try restsOn(p, s, range: range, time: nil)
         }
         return try modifyNote(id) { c, _ in
             guard [.draft, .written, .reopened].contains(c.lifecycle) || c.inInbox else { throw DirectionError("note_turned_over", "This note was turned over. Reply to it instead.") }

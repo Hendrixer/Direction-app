@@ -191,7 +191,7 @@ struct EditorWaitingNotice: View {
                        small: "Turned over at \(model.clockTime(turnover.createdAt)) \u{00B7} \(turnover.latitude.label)")
             HStack(spacing: 8) {
                 if held { Button("Start the editor") { model.runs.start(model) }.buttonStyle(.gate) }
-                Button("Take notes back") { model.runs.takeTurnoverBack(model); model.stopWriting(); model.cancelDrawing() }.buttonStyle(.gate(.ghost))
+                Button("Take notes back") { model.saveWriting(advance: false); model.runs.takeTurnoverBack(model); model.cancelDrawing() }.buttonStyle(.gate(.ghost))
                     .help("Return these notes to written so you can change them")
             }
         }

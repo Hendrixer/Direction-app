@@ -93,14 +93,14 @@ struct NotesSheet: View {
             Button("Write Notes for the Next Turnover") { show(.notes) }.disabled(side == .notes)
             if [.waiting, .readBack].contains(t.state) && !t.readBackApproved {
                 Divider()
-                Button("Take Notes Back") { model.takeNotesBack(); model.stopWriting(); model.cancelDrawing() }
+                Button("Take Notes Back") { model.saveWriting(advance: false); model.takeNotesBack(); model.cancelDrawing() }
             }
             if !model.runs.startsEditor {
                 Divider()
                 Button("Copy Request for Your Editor") { model.copyEditorRequest() }
             }
         } else {
-            Button("Turn Over…") { model.sheet = .turnover }.disabled(model.readyNotes.isEmpty)
+            Button("Turn Over…") { model.showTurnoverSheet() }.disabled(model.readyNotes.isEmpty)
             if !model.acceptableRemaining.isEmpty && !model.looksBack {
                 Button("Accept All Remaining\u{2026}") { model.changes.confirmAcceptAll = true }.disabled(model.isPictureLocked)
             }
@@ -284,7 +284,7 @@ struct NoteRow: View {
                     if model.isBeforeTurnover(note) && !model.looksBack {
                         Button { model.dropFromSheet(note) } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
                             .buttonStyle(.gate(.ghost, .small, icon: true))
-                            .help(isDraft ? "Remove this \(NoteAnchor(note).label.lowercased()) (\u{232B})" : "Remove this note (\u{232B})")
+                            .help("Remove this \(isDraft ? NoteAnchor(note).unwritten : "note") (\u{232B})")
                             .accessibilityLabel("Remove note \(note.number.map(String.init) ?? "")")
                     }
                     MoreMenu(label: "Note \(note.number.map(String.init) ?? "") actions") { NoteContextMenu(model: model, note: note) }
@@ -344,7 +344,6 @@ struct NoteWriting: View {
         VStack(alignment: .leading, spacing: 8) {
             NoteField(text: $model.draftText, placeholder: "What should it feel like?", label: "Note \(note.number.map(String.init) ?? "") words", footage: model.footageNames,
                       minHeight: 44, focusToken: model.composerFocus, focusOnAppear: true,
-                      onFocusChange: { model.notesUI.composerFocused = $0 },
                       onSubmit: { model.saveWriting(); if model.notesUI.editingNoteID == nil { onLeave() } },
                       onEscape: { model.stopWriting(); onLeave() },
                       onTab: { guard let suggestion else { return false }; model.draftKind = suggestion; return true },
@@ -367,6 +366,11 @@ struct NoteWriting: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 2)
         .animation(gateAnimation(Gate.Motion.settle), value: suggestion)
+        // VoiceOver hears the suggestion as it appears, not only when it finds the line.
+        .onChange(of: suggestion) { _, kind in
+            guard let kind else { return }
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [.announcement: "Suggested kind: \(kind.label). Press Tab to take it.", .priority: NSAccessibilityPriorityLevel.low.rawValue])
+        }
     }
 }
 

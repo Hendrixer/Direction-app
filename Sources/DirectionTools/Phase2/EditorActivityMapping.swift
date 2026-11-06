@@ -46,10 +46,10 @@ public enum EditorActivityLog {
         case "direction_frame":
             if let asset = a["assetID"].string { return ActivityInput(verb: "Looking at", object: take(asset, c), tool: name) }
             let t = seconds(a["time"]) ?? 0
-            return ActivityInput(verb: "Watching", object: clock(t), mono: true, time: t, tool: name)
+            return ActivityInput(verb: "Watching", object: PlainTime.text(t), mono: true, time: t, tool: name)
         case "direction_watch", "direction_preview":
             guard let (s, e) = range(a) else { return ActivityInput(verb: "Watching", object: "the cut", tool: name) }
-            return ActivityInput(verb: "Watching", object: clock(s) + "\u{2013}" + clock(e), mono: true, time: s, tool: name)
+            return ActivityInput(verb: "Watching", object: PlainTime.text(s) + "\u{2013}" + PlainTime.text(e), mono: true, time: s, tool: name)
         case "direction_contact_sheet":
             return ActivityInput(verb: "Looking at", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
         case "direction_measure_audio" where a["assetID"] == .null:
@@ -171,13 +171,6 @@ public enum EditorActivityLog {
                      "propose-look": "propose a look", "reframe": "reframe for the shape", "review-feedback": "read your notes", "start-project": "start a film",
                      "take-turnover": "take your notes", "transitions": "use transitions", "write-av-script": "write the script"]
         return known[name] ?? name.replacingOccurrences(of: "-", with: " ")
-    }
-
-    /// "0:12", "1:02:03": a time in the cut the way the director reads it.
-    public static func clock(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds < 360_000 else { return "\u{2013}:\u{2013}\u{2013}" }
-        let total = Int(max(0, seconds)), h = total / 3600, m = (total % 3600) / 60, s = total % 60
-        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
     // MARK: Edits

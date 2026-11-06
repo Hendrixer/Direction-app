@@ -259,7 +259,7 @@ struct WaitingBody: View {
                                small: "Turned over at \(model.clockTime(turnover.createdAt)) · \(turnover.latitude.label)")
                     HStack(spacing: 8) {
                         Button { model.copyEditorRequest() } label: { Label("Copy request for your editor", systemImage: "doc.on.doc") }.buttonStyle(.gate)
-                        Button("Take notes back") { model.takeNotesBack(); model.stopWriting(); model.cancelDrawing() }.buttonStyle(.gate(.ghost))
+                        Button("Take notes back") { model.saveWriting(advance: false); model.takeNotesBack(); model.cancelDrawing() }.buttonStyle(.gate(.ghost))
                             .help("Return these notes to written so you can change them")
                     }
                 }

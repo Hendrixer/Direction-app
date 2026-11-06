@@ -13,18 +13,26 @@ import DirectionReports
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { lookAtLastRun() }
     }
 
-    /// Crashes macOS kept since the last look (a week back the first time): with reports on, the ones Sentry can't
-    /// see itself (programs Direction started) go now; with them off and Direction itself crashed, it asks once.
+    /// Crashes macOS kept since the last look (a week back the first time), read off the main thread: with reports
+    /// on, the ones Sentry can't see itself (programs Direction started) go now; with them off and the app itself
+    /// closed unexpectedly, it asks once, and a yes sends only that.
     static func lookAtLastRun() {
         let since = CrashReporting.handledThrough ?? Date().addingTimeInterval(-7 * 86_400)
-        let crashes = CrashReporting.crashFiles(since: since)
-        guard let newest = crashes.last else { return }
-        CrashReporting.handledThrough = newest.date
-        if CrashReporting.sends {
-            Reports.send(crashes.filter { !$0.isDirection })
-            return
+        Task.detached(priority: .utility) {
+            let crashes = CrashReporting.crashFiles(since: since)
+            guard let newest = crashes.last else { return }
+            CrashReporting.handledThrough = newest.date
+            if CrashReporting.sends {
+                Reports.send(crashes.filter { !$0.isDirection })
+                return
+            }
+            let closed = crashes.filter(\.isApp)
+            guard !closed.isEmpty else { return }
+            await ask(sending: closed)
         }
-        guard crashes.contains(where: \.isDirection) else { return }
+    }
+
+    private static func ask(sending closed: [CrashReporting.CrashFile]) {
         let alert = NSAlert()
         alert.messageText = "Direction closed unexpectedly."
         alert.informativeText = "Send a report of what happened to Direction\u{2019}s developer, and turn on reports for next time? A report has what Direction was doing and its error messages, with your name taken out of file paths. It never has your footage. You can turn reports off in Settings \u{203A} General."
@@ -32,7 +40,7 @@ import DirectionReports
         alert.addButton(withTitle: "Not Now")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         setSends(true)
-        Reports.send(crashes)
+        Task.detached(priority: .utility) { Reports.send(closed) }
     }
 
     #if DEBUG

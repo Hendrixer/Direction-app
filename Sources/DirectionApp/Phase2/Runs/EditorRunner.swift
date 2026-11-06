@@ -27,7 +27,8 @@ import DirectionTools
         let runID: String, store: ProjectStore, program: EditorProgram, process: Process
         var claude = ClaudeStreamParser(), codex = CodexStreamParser()
         var buffer = Data()
-        var pending: Set<String> = []
+        /// Tool calls it has made that haven't answered yet, by id, with the tool's name.
+        var pending: [String: String] = [:]
         var intent: RunStateMachine.Intent = .none
         var pauseWhenIdle = false
         var stderrTail: [String] = []
@@ -44,11 +45,13 @@ import DirectionTools
         let began = Date().timeIntervalSince1970
         var askedAt: Double?
         var waitsForOK = false
-        /// The last time the program said anything, and the longest silence already logged (in minutes).
-        var lastHeard = Date()
-        var quietLogged = 0
-        /// The step it was stuck on, when Direction stopped it to start it again.
+        /// The last time the program said anything, in awake time (a Mac asleep isn't a program saying nothing),
+        /// and whether this silence was logged yet.
+        var lastHeard = ProcessInfo.processInfo.systemUptime { didSet { quietLogged = false } }
+        var quietLogged = false
+        /// The step it was stuck on, and for how long, when Direction stopped it to start it again.
         var stuckStep: String?
+        var stuckMinutes = 0
         init(runID: String, store: ProjectStore, program: EditorProgram, process: Process) { self.runID = runID; self.store = store; self.program = program; self.process = process }
     }
 
@@ -77,7 +80,7 @@ import DirectionTools
     // MARK: Launch
 
     /// Starts the program for a run: its first job text, or `continuation` on the saved session.
-    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil) {
+    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false) {
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
@@ -91,6 +94,8 @@ import DirectionTools
         }
         guard live[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
         offlineRetries[run.id]?.cancel(); offlineRetries[run.id] = nil
+        // Try again, Resume or back online: a fresh start, with its one restart to come.
+        if !restartingStuck { restarted.remove(run.id) }
         guard let path = programOverride[program] ?? EditorPrograms.shared.install(program)?.path else {
             end(run.id, store: store, outcome: .init(state: .failed, reason: .notInstalled)); return
         }
@@ -160,7 +165,7 @@ import DirectionTools
 
     private func output(_ l: LiveRun, _ data: Data) {
         guard !l.finished else { return }
-        l.lastHeard = Date()
+        l.lastHeard = ProcessInfo.processInfo.systemUptime
         if data.isEmpty { l.outputClosed = true; maybeFinish(l); return }
         l.buffer.append(data)
         while let nl = l.buffer.firstIndex(of: 0x0A) {
@@ -175,7 +180,7 @@ import DirectionTools
         switch e {
         case .session(let s): _ = try? l.store.updateRun(l.runID) { if $0.session != s { $0.session = s } }
         case .toolStarted(let id, let name, let input):
-            l.pending.insert(id)
+            l.pending[id] = name
             if let r = try? l.store.run(l.runID), r.state == .starting { _ = try? l.store.updateRun(l.runID) { $0.state = .working } }
             // Asking: anything the director does from here on answers it, even before the program exits.
             let tool = name.hasPrefix("mcp__direction__") ? String(name.dropFirst("mcp__direction__".count)) : name
@@ -188,7 +193,7 @@ import DirectionTools
                 _ = try? l.store.recordActivity(a, runID: l.runID)
             }
         case .toolFinished(let id, let isError, let text):
-            l.pending.remove(id)
+            l.pending[id] = nil
             if isError { DirectionLog.warning("A tool call in run \(l.runID) failed: \(text.prefix(600))", "editor") }
             if isError, EditorFailure.isSpendCap(text) { l.spendCap = EditorFailure.amount(text).map { "\($0) spent on services this month." } ?? "This month\u{2019}s limit for services is reached." }
             if l.pauseWhenIdle, l.pending.isEmpty { l.pauseWhenIdle = false; interrupt(l) }
@@ -213,20 +218,26 @@ import DirectionTools
         let answered = Self.answered(run, store: l.store, since: l.began, waitedForOK: forOK)
         var exit = RunStateMachine.Exit(status: status, intent: l.intent, finished: Self.finished(run, store: l.store), waitingForYou: Self.waitingForYou(run, store: l.store) || answered, failures: l.failures, spendCap: l.spendCap, lastErrorLine: l.stderrTail.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }))
         if status != 0 { exit.failures += l.stderrTail }
+        // A stop, pause, quit or stuck restart asked for the exit: logged, but it isn't an error (and isn't reported).
         if status != 0 || !l.failures.isEmpty {
-            DirectionLog.error("\(l.program.name) exited with status \(status) in run \(l.runID). Failures: \(l.failures.joined(separator: " | ").prefix(1_500)). Last stderr: \(l.stderrTail.suffix(8).joined(separator: " | "))", "editor")
+            (l.intent == .none ? DirectionLog.error : DirectionLog.info)("\(l.program.name) exited with status \(status) in run \(l.runID). Failures: \(l.failures.joined(separator: " | ").prefix(1_500)). Last stderr: \(l.stderrTail.suffix(8).joined(separator: " | "))", "editor")
         }
         let result = l.result.flatMap(EditorResult.parse)
         live[l.runID] = nil
-        end(l.runID, store: l.store, outcome: RunStateMachine.outcome(exit), cost: l.cost, tokens: l.tokens, result: result, asked: (l.askedAt ?? l.began, forOK))
-        // Stopped because it was stuck: started again at once on its session, told where it was.
-        if l.intent == .restart, let run = try? l.store.run(l.runID), run.state == .paused {
-            launch(run, store: l.store, continuation: EditorJobs.continuation(Self.restartNote(l.stuckStep ?? "unknown"), job: run.job))
+        // Stopped because it was stuck: started again at once on its session, told where it was, before the queue
+        // is looked at, so nothing queued takes its place (one run per film, two films at once).
+        let restarting = l.intent == .restart
+        end(l.runID, store: l.store, outcome: RunStateMachine.outcome(exit), cost: l.cost, tokens: l.tokens, result: result, asked: (l.askedAt ?? l.began, forOK), pumps: !restarting)
+        if restarting {
+            if let run = try? l.store.run(l.runID), run.state == .paused {
+                launch(run, store: l.store, continuation: EditorJobs.continuation(Self.restartNote(l.stuckStep ?? "unknown", minutes: l.stuckMinutes), job: run.job), restartingStuck: true)
+            }
+            pump()
         }
     }
 
-    /// Records how a run ended, and what that means for its turnover.
-    private func end(_ runID: String, store: ProjectStore, outcome o: RunStateMachine.Outcome, cost: Double? = nil, tokens: Int? = nil, result: EditorResult? = nil, asked: (at: Double, forOK: Bool)? = nil) {
+    /// Records how a run ended, and what that means for its turnover. `pumps`: the next queued run may start.
+    private func end(_ runID: String, store: ProjectStore, outcome o: RunStateMachine.Outcome, cost: Double? = nil, tokens: Int? = nil, result: EditorResult? = nil, asked: (at: Double, forOK: Bool)? = nil, pumps: Bool = true) {
         guard let run = try? store.updateRun(runID, { r in
             // A pause the director asked for stays a pause even if the program exits on its own.
             if r.state == .paused && o.state != .done && o.reason != .pausedByQuit { r.endedAt = Date().timeIntervalSince1970 }
@@ -238,7 +249,8 @@ import DirectionTools
             r.pid = nil
         }) else { return }
         let ended = "Run \(run.id) (\(run.job.rawValue)) ended \(run.state.rawValue)\(run.reason.map { ": \($0.rawValue)" } ?? "")\(run.detail.map { " \u{2014} \($0)" } ?? "")"
-        if run.state == .failed || run.state == .stopped { DirectionLog.error(ended, "editor") } else { DirectionLog.info(ended + (run.summary.map { ". \($0)" } ?? ""), "editor") }
+        // The director's own Stop is what they asked for, not something that went wrong.
+        if run.state == .failed || (run.state == .stopped && run.reason != .stoppedByYou) { DirectionLog.error(ended, "editor") } else { DirectionLog.info(ended + (run.summary.map { ". \($0)" } ?? ""), "editor") }
         // A run that finished is proof the program is signed in, whatever an earlier check said.
         if run.state == .done || run.state == .waitingForYou, let p = EditorProgram(rawValue: run.program), EditorSetup.signedIn(p) != true { EditorSetup.setSignedIn(p, true) }
         if run.state == .failed, let reason = run.reason {
@@ -248,38 +260,48 @@ import DirectionTools
         }
         stayAwake()
         onChange?(store.url)
-        pump()
+        if pumps { pump() }
     }
 
     // MARK: Silence
 
-    /// A program that says nothing for 10, 20 and 40 minutes while it's meant to be working is logged as an error
-    /// each time, with its last step: Direction's log shows it, and with crash reports on it's a report
-    /// (system.md › Crash reports). Thinking is quiet too, but not for ten minutes.
-    static let silences = [10, 20, 40]
+    /// A program that says nothing for 10 minutes while it's meant to be working is logged as an error, with its last
+    /// step: Direction's log shows it, and with crash reports on it's a report (system.md › Crash reports). Thinking
+    /// is quiet too, but not for ten minutes.
+    static let warnAfter: Double = 10 * 60
     /// Quiet this long, it's stuck: Direction stops it and starts it again on its session, once a run, telling it
     /// which step it was on. Stuck again, the run stops and says so (hang recovery).
     nonisolated(unsafe) static var restartAfter: Double = 15 * 60
+    /// While it waits on a call that does its long work inside the call (an import copying a whole file), the
+    /// program is quiet because the call is, so it has this long instead.
+    nonisolated(unsafe) static var restartAfterLongCall: Double = 2 * 60 * 60
     private var restarted: Set<String> = []
     private var silenceTimer: Timer?
     private func watchForSilence() {
         guard silenceTimer == nil else { return }
         silenceTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.checkSilence() } }
     }
-    func checkSilence(now: Date = Date()) {
+    /// `now` in awake time (ProcessInfo.systemUptime), like `lastHeard`.
+    func checkSilence(now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         if live.isEmpty { silenceTimer?.invalidate(); silenceTimer = nil; return }
-        for l in live.values where l.intent == .none && !l.finished && l.askedAt == nil {
-            let quiet = now.timeIntervalSince(l.lastHeard), minutes = Int(quiet / 60)
-            let step = lastStep(l)
-            if quiet >= Self.restartAfter {
-                recover(l, step: step, minutes: minutes)
+        for l in live.values where l.intent == .none && !l.finished && !waitsForReadBackOK(l) {
+            let quiet = now - l.lastHeard, minutes = Int(quiet / 60)
+            let longCall = l.pending.values.contains { name in DirectionMCPServer.unlimited.contains { name.hasSuffix($0) } }
+            if quiet >= (longCall ? Self.restartAfterLongCall : Self.restartAfter) {
+                recover(l, step: lastStep(l), minutes: minutes)
                 continue
             }
-            guard let mark = Self.silences.last(where: { minutes >= $0 }), mark > l.quietLogged else { continue }
-            l.quietLogged = mark
+            guard !longCall, quiet >= Self.warnAfter, !l.quietLogged else { continue }
+            l.quietLogged = true
             let job = (try? l.store.run(l.runID))?.job.rawValue ?? "run"
-            DirectionLog.error("\(l.program.name) has said nothing for \(mark) min in run \(l.runID) (\(job)); tool calls open: \(l.pending.count); last step: \(step)", "editor")
+            DirectionLog.error("\(l.program.name) has said nothing for \(minutes) min in run \(l.runID) (\(job)); tool calls open: \(l.pending.count); last step: \(lastStep(l))", "editor")
         }
+    }
+    /// It posted a read-back for a turnover that waits for the director's OK, and the OK hasn't come: waiting for
+    /// it isn't being stuck. Asking a question doesn't count: the editor keeps cutting what it doesn't hold up.
+    private func waitsForReadBackOK(_ l: LiveRun) -> Bool {
+        guard l.waitsForOK, let id = (try? l.store.run(l.runID))?.turnoverID, let t = try? l.store.turnover(id) else { return false }
+        return t.waitForOK && t.state == .readBack && !t.readBackApproved
     }
     /// "Watching 0:15": what the run was last seen doing.
     private func lastStep(_ l: LiveRun) -> String {
@@ -296,13 +318,15 @@ import DirectionTools
             DirectionLog.error("\(l.program.name) said nothing for \(minutes) min in run \(l.runID) on: \(step). Starting it again on its session.", "editor")
             l.intent = .restart
             l.stuckStep = step
+            l.stuckMinutes = minutes
         }
         interrupt(l)
         stayAwake(); onChange?(l.store.url)
     }
     /// What the program hears when it's started again after getting stuck.
-    static func restartNote(_ step: String) -> String {
-        "Direction stopped you and started you again: you\u{2019}d said nothing for 15 minutes, and your last step was \u{201C}\(step)\u{201D}. Don\u{2019}t do it the same way again. If it was one of Direction\u{2019}s tools, it may get stuck on the same thing: try a shorter passage or fewer frames, or look at what you added there last (an effect or a graphic that never finishes). If it was a command you ran, give it a time limit. Then carry on where you were."
+    static func restartNote(_ step: String, minutes: Int) -> String {
+        let m = max(minutes, 1)
+        return "Direction stopped you and started you again: you\u{2019}d said nothing for \(m == 1 ? "a minute" : "\(m) minutes"), and your last step was \u{201C}\(step)\u{201D}. Don\u{2019}t do it the same way again. If it was one of Direction\u{2019}s tools, it may get stuck on the same thing: try a shorter passage or fewer frames, or look at what you added there last (an effect or a graphic that never finishes). If it was a command you ran, give it a time limit. Then carry on where you were."
     }
 
     // MARK: Control

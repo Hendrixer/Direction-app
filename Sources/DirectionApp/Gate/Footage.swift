@@ -1,18 +1,14 @@
 import SwiftUI
 import AppKit
 import AVKit
+import DirectionCore
 
 // MARK: Timecode
 
 enum Timecode {
     /// "0:12", "12:04", "1:02:03": a time the way a video player says it. Frames show only where they mean
     /// something: stepping a frame at a time, and in a tooltip (`withFrames`).
-    static func format(_ seconds: Double, fps: Double = 24) -> String {
-        guard seconds.isFinite, seconds < 360_000 else { return "\u{2013}:\u{2013}\u{2013}" }
-        let (total, _) = split(seconds, fps: fps)
-        let h = total / 3600, m = (total % 3600) / 60, sec = total % 60
-        return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
-    }
+    static func format(_ seconds: Double, fps: Double = 24) -> String { PlainTime.text(seconds) }
     /// The frame within its second: 23 at 0:12 and 23 frames.
     static func frame(_ seconds: Double, fps: Double = 24) -> Int { split(seconds, fps: fps).frames }
     /// "0:12 and 23 frames" (or "0:12 exactly").

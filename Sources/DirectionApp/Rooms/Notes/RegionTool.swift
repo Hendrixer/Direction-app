@@ -13,7 +13,8 @@ struct RegionLayer: View {
     @State private var hovered = false
 
     private enum Handle: CaseIterable { case topLeading, top, topTrailing, trailing, bottomTrailing, bottom, bottomLeading, leading }
-    private enum Drag { case draw(CGPoint), move(CGRect), resize(CGRect, Handle) }
+    /// `draw`'s `toolWasOn`: Draw a box was on when the drag began (a drag away from a selected box turns it on).
+    private enum Drag { case draw(CGPoint, toolWasOn: Bool), move(CGRect), resize(CGRect, Handle) }
 
     /// Drawing a new box, or the selected note's box can still be moved and resized.
     private var interactive: Bool { model.notesTab == .sheet && (model.drawingRegion || (model.boxEditable && model.visibleRegion != nil)) }
@@ -85,14 +86,18 @@ struct RegionLayer: View {
     private func changed(_ value: DragGesture.Value) {
         guard size.width > 0, size.height > 0 else { return }
         if drag == nil {
-            // The selected note's box takes a drag on it; anywhere else, a drag draws a new box and its note.
+            // The selected note's box takes a drag on it; anywhere else, a drag draws a new box and its note. A click
+            // away from it does nothing: it neither turns Draw a box on nor pauses the picture.
             let shown = model.drawingRegion || !model.boxEditable ? nil : model.visibleRegion
             if let r = shown, let h = handle(at: value.startLocation, in: rect(r)) { drag = .resize(r, h) }
             else if let r = shown, rect(r).contains(value.startLocation) { drag = .move(r) }
-            else { drag = .draw(value.startLocation); model.region = nil; model.drawingRegion = true; model.pause() }
+            else {
+                guard model.drawingRegion || hypot(value.translation.width, value.translation.height) > 3 else { return }
+                drag = .draw(value.startLocation, toolWasOn: model.drawingRegion); model.region = nil; model.drawingRegion = true; model.pause()
+            }
         }
         switch drag {
-        case .draw(let start):
+        case .draw(let start, _):
             let a = normalized(start), b = normalized(value.location)
             model.region = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
         case .move(let r):
@@ -107,8 +112,9 @@ struct RegionLayer: View {
     private func ended(_ value: DragGesture.Value) {
         defer { drag = nil }
         switch drag {
-        case .draw:
-            if let r = model.region, r.width > 0.01, r.height > 0.01 { model.finishBox(new: true) } else { model.region = nil }
+        case .draw(_, let toolWasOn):
+            if let r = model.region, r.width > 0.01, r.height > 0.01 { model.finishBox(new: true) }
+            else { model.region = nil; if !toolWasOn { model.drawingRegion = false } }
         case .move, .resize: model.finishBox(new: false)
         case nil: break
         }
@@ -172,13 +178,3 @@ struct RegionLayer: View {
     private func spoken(_ r: CGRect) -> String { "Region, \(percent(r.width)) by \(percent(r.height)) percent, at left \(percent(r.minX)), top \(percent(r.minY))" }
 }
 
-extension FilmModel {
-    /// Arrow keys nudge the selected note's box 1% (⇧ 10%).
-    func nudgeRegion(dx: CGFloat, dy: CGFloat) {
-        guard boxEditable, var r = visibleRegion else { return }
-        r.origin.x = min(max(0, r.minX + dx), 1 - r.width)
-        r.origin.y = min(max(0, r.minY + dy), 1 - r.height)
-        region = r
-        finishBox(new: false)
-    }
-}

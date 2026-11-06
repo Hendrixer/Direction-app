@@ -9,8 +9,9 @@ struct CrashReportingTests {
         let text = "Couldn't read /Users/kaelyn/Movies/Direction/Haul.direction/cut.mov for Kaelyn Smith (kaelyn); also /Users/other/x and sk-or-v1-abcdefghijklmnop"
         let out = CrashReporting.scrub(text, home: "/Users/kaelyn", names: ["kaelyn", "Kaelyn Smith"])
         #expect(out == "Couldn't read ~/Movies/Direction/Haul.direction/cut.mov for [you] ([you]); also /Users/[you]/x and •••")
-        // Short names aren't replaced inside other words.
-        #expect(CrashReporting.scrub("ok at 0:12", home: "/Users/ab", names: ["ab"]) == "ok at 0:12")
+        // A name is replaced only as a word of its own, and one too short to tell apart isn't replaced at all.
+        #expect(CrashReporting.scrub("Ann is planning; ann_cut.mov, Ann's take", home: "/Users/ann", names: ["Ann"]) == "[you] is planning; [you]_cut.mov, [you]'s take")
+        #expect(CrashReporting.scrub("ok at 0:12 ab", home: "/Users/ab", names: ["ab"]) == "ok at 0:12 ab")
     }
 
     @Test func oneKindOfErrorIsOneReport() {
@@ -42,6 +43,7 @@ struct CrashReportingTests {
         let found = CrashReporting.crashFiles(since: Date().addingTimeInterval(-7 * 86_400), in: dir)
         #expect(found.map(\.url.lastPathComponent) == ["Python-2026-11-05-190000.ips", "Direction-2026-11-05-200000.ips"])
         #expect(found.map(\.isDirection) == [false, true] && found.first?.parent == "direction")
+        #expect(found.map(\.isApp) == [false, true], "a program Direction started isn't Direction closing")
     }
 
     @Test func reportsAreOffUntilSomeoneSaysYes() {

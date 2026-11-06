@@ -109,7 +109,7 @@ private struct EditMenuItems: View {
     var app: AppModel
     var body: some View {
         let film = app.film
-        Button("Copy Timecode") { if let film { FilmActions(film).copyTimecode() } }.shortcut(.copyTimecode).disabled(film == nil || film?.duration == 0)
+        Button("Copy Time") { if let film { FilmActions(film).copyTimecode() } }.shortcut(.copyTimecode).disabled(film == nil || film?.duration == 0)
         Divider()
         Button("Find\u{2026}") {
             guard let film else { return }
@@ -198,7 +198,7 @@ private struct CutMenuItems: View {
         Divider()
         Button("Mark This Moment") { film?.mark() }.disabled(!canWatch)
         Button("New Note") { if let film { FilmActions(film).startNote() } }.shortcut(.newNote).disabled(film == nil || film?.onboardingStep != nil)
-        Button("Turn Over\u{2026}") { film?.sheet = .turnover }
+        Button("Turn Over\u{2026}") { film?.showTurnoverSheet() }
             .keyboardShortcut(film?.room == .cut ? ShortcutStore.shared.menuShortcut(.turnOver) : nil)
             .disabled(film.map { $0.readyNotes.isEmpty || $0.openTurnover != nil || $0.sheet != nil } ?? true)
         Divider()
@@ -249,7 +249,7 @@ private struct PlaybackMenuItems: View {
         Group {
             Button("Go to Start") { film?.pause(); film?.seek(0) }
             Button("Go to End") { if let film { film.pause(); film.seek(max(0, film.duration - 1 / film.fps)) } }
-            Button("Go to Timecode\u{2026}") { actions?.askForTimecode() }.shortcut(.goToTimecode)
+            Button("Go to a Time\u{2026}") { actions?.askForTimecode() }.shortcut(.goToTimecode)
         }
         .disabled(off)
         Divider()

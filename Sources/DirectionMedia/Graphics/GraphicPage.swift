@@ -314,29 +314,8 @@ final class GraphicScheme: NSObject, WKURLSchemeHandler {
 }
 
 /// Resumes once: with the body's result, or with `failure` after `seconds`. A body that never
-/// returns (a page stuck in a loop) is abandoned rather than awaited.
+/// returns (a page stuck in a loop) is abandoned rather than awaited (Deadline).
 @MainActor
 func withTimeout<T: Sendable>(_ seconds: Double, _ failure: DirectionError, _ body: @escaping @MainActor @Sendable () async throws -> T) async throws -> T {
-    let once = Once<T>()
-    return try await withCheckedThrowingContinuation { (c: CheckedContinuation<T, Error>) in
-        once.continuation = c
-        let work = Task { @MainActor in
-            do { once.resume(.success(try await body())) } catch { once.resume(.failure(error)) }
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(seconds))
-            if once.resume(.failure(failure)) { work.cancel() }
-        }
-    }
-}
-
-@MainActor
-private final class Once<T: Sendable> {
-    var continuation: CheckedContinuation<T, Error>?
-    @discardableResult func resume(_ result: Result<T, Error>) -> Bool {
-        guard let c = continuation else { return false }
-        continuation = nil
-        c.resume(with: result)
-        return true
-    }
+    try await Deadline.run(seconds: seconds, error: { failure }, body)
 }

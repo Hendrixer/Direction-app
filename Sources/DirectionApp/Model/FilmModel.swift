@@ -660,17 +660,19 @@ final class FilmModel {
         if position >= duration - 0.5 { seek(0) }
         if !isPreview { player.play(); playing = true }
     }
-    /// Press N: drops a mark without stopping playback. Each mark becomes a numbered draft.
     /// N: a note on this moment, with no words yet. Watching or playing, the picture never stops and the mark
-    /// waits to be written; paused, its row opens to write in.
+    /// waits to be written; paused in the Cut room, its row opens to write in. Anywhere the sheet isn't showing
+    /// (another room, Play changes) it waits to be written too, so no hidden row takes the keyboard.
     func mark() {
         guard duration > 0 else { return }
         let t = min(position, max(0, duration - 1 / fps))
         if let c = addNote(text: "", time: t, state: .draft) {
-            screeningMarkIDs.append(c.id); freshMarkID = c.id
+            // Only a watch's marks are written one after another (saveWriting).
+            if watchingCut { screeningMarkIDs.append(c.id) }
+            freshMarkID = c.id
             // Watching through keeps its own undo for marks (WatchThrough.swift).
             if !watchingCut { registerUndo("Mark") { $0.dropNote(c.id) } }
-            if watchingCut || playing {
+            if watchingCut || playing || room != .cut || changes.reelOpen {
                 toast = Toast(title: "Mark \(c.number ?? screeningMarkIDs.count) at \(Timecode.format(t, fps: fps))", detail: "Keep watching. Write it after.", glass: watchingCut)
             } else {
                 made(c)
@@ -713,7 +715,7 @@ final class FilmModel {
         if notesUI.editingNoteID != nil, notesUI.editingNoteID != c.id { saveWriting(advance: false) }
         selectedNoteID = c.id
         selectedAnswerNoteID = nil
-        region = nil; rangeSelection = nil; drawingRegion = false; drawingStretch = false
+        cancelDrawing()
         if let t = noteTime(c) { pause(); seek(t) }
     }
     func acceptOutside(_ id: String, text: String? = nil) { perform { try $0.acceptOutside(id: id, text: text) } }

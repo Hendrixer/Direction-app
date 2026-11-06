@@ -59,7 +59,7 @@ public enum FootageNames {
     /// where it is in the cut.
     public static func explain(_ found: [FootageName], dailies d: Dailies, assets: [MediaAsset], cut: Sequence?) -> String {
         let files = Dictionary(assets.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
-        func clock(_ t: Double) -> String { String(format: "%d:%02d", Int(t) / 60, Int(t) % 60) }
+        let clock = PlainTime.text
         func inCut(_ ids: Set<String>) -> String? {
             let clips = (cut?.clips ?? []).filter { $0.kind == .video && $0.assetID.map(ids.contains) == true }
             guard let a = clips.map(\.start.seconds).min(), let b = clips.map(\.end.seconds).max() else { return ids.count == 1 ? "Not in the cut." : "None of it is in the cut." }

@@ -3,7 +3,8 @@ import os
 
 /// Work that mustn't wait forever (hang recovery, system.md › Crash reports). Past its time, `onTimeout` cancels what it
 /// can and the caller gets `error` at once, so whoever is waiting (the editor, a tool call) carries on. Work that ignores
-/// cancellation is left to finish on its own; nobody waits for it any more.
+/// cancellation is left to finish on its own; nobody waits for it any more. The time is awake time: a Mac asleep isn't
+/// work taking too long.
 public enum Deadline {
     public static func run<T: Sendable>(seconds: Double, error: @escaping @Sendable () -> Error, onTimeout: @escaping @Sendable () -> Void = {},
                                         _ work: @escaping @Sendable () async throws -> T) async throws -> T {
@@ -12,17 +13,20 @@ public enum Deadline {
         let box = TaskBox()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (done: CheckedContinuation<T, Error>) in
-                let task = Task {
-                    do { let value = try await work(); if claim() { done.resume(returning: value) } }
-                    catch { if claim() { done.resume(throwing: error) } }
-                }
-                box.set(task)
-                Task {
-                    try? await Task.sleep(for: .seconds(seconds))
+                let timer = Task {
+                    do { try await Task.sleep(for: .seconds(seconds), clock: .suspending) } catch { return }
                     guard claim() else { return }
-                    onTimeout(); task.cancel()
+                    onTimeout(); box.cancel()
                     done.resume(throwing: error())
                 }
+                let task = Task {
+                    let result: Result<T, Error>
+                    do { result = .success(try await work()) } catch { result = .failure(error) }
+                    // Answered in time: the timer stops now, and lets go of what it holds (a frame's generator).
+                    timer.cancel()
+                    if claim() { done.resume(with: result) }
+                }
+                box.set(task)
             }
         } onCancel: { box.cancel() }
     }
