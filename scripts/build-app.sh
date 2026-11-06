@@ -36,8 +36,13 @@ done
 for direction_bundle in "$direction_bin"/*.bundle; do
   if [ -d "$direction_bundle" ]; then cp -R "$direction_bundle" "$direction_app/Contents/Resources/"; fi
 done
-# Sparkle, for updates to the copies we sign (docs/releasing.md). ditto keeps the framework's symlinks.
-ditto "$direction_bin/Sparkle.framework" "$direction_app/Contents/Frameworks/Sparkle.framework"
+# Sparkle, for updates to the copies we sign (docs/releasing.md). ditto keeps the framework's symlinks. The build
+# copies it next to the app, but a release build doesn't always (0.3.2's didn't); the package's own copy of the pinned
+# version is the same framework.
+direction_sparkle="$direction_bin/Sparkle.framework"
+[ -d "$direction_sparkle" ] || direction_sparkle="$direction_root/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+[ -d "$direction_sparkle" ] || { printf '%s\n' 'Packaging failed: no Sparkle.framework. Run: swift package resolve' >&2; exit 1; }
+ditto "$direction_sparkle" "$direction_app/Contents/Frameworks/Sparkle.framework"
 # SwiftPM leaves search paths into this checkout's build folder; the app finds Sparkle in Contents/Frameworks.
 for direction_executable in "$direction_app/Contents/MacOS/Direction" "$direction_app/Contents/Helpers/direction"; do
   for direction_rpath in $(otool -l "$direction_executable" | awk '/LC_RPATH/ { getline; getline; print $2 }' | grep "^$direction_root/" || true); do
