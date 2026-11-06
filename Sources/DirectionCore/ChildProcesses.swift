@@ -69,6 +69,16 @@ public enum ChildProcesses {
 
     private static func tell(_ reaper: FileHandle?, _ line: String) { try? reaper?.write(contentsOf: Data((line + "\n").utf8)) }
 
+    /// A program Direction started that failed: its name, how it ended (an exit status, or the signal that killed
+    /// it) and the end of what it said, in Direction's log, where crash reports pick it up (system.md › Crash reports).
+    public static func failed(_ program: String, _ process: Process?, _ detail: String) {
+        var how = "failed"
+        if let p = process, !p.isRunning {
+            how = p.terminationReason == .uncaughtSignal ? "was killed by signal \(p.terminationStatus)" : "exited with status \(p.terminationStatus)"
+        }
+        DirectionLog.error("\(program) \(how): \(detail.suffix(800))", "programs")
+    }
+
     /// The folder a process is working in, or nil if it's gone or not ours to read. The editor runs
     /// in its film's Editor folder, which is how a run left by an earlier Direction is recognized.
     public static func workingDirectory(_ pid: pid_t) -> String? {

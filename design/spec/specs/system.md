@@ -181,6 +181,21 @@ Frame: `screens/52-media-missing.html` · Render: `renders/52-media-missing@2x.p
 
 A downloaded copy opened straight from its disk image runs from a read-only place macOS picks (App Translocation, or the mounted image): it can't update itself and it's gone when the image is ejected. At launch a signed copy there asks "Move Direction to Applications?" (Move to Applications · Not Now). Moving copies it to /Applications (an older Direction there goes to the Trash; one as new or newer is opened as it is), opens that copy and quits. When it can't (no permission), it says to drag Direction to Applications. A copy built from source never asks.
 
+## Crash reports
+
+Off until the person says yes. A crash, a freeze or one of Direction's errors then goes to Direction's developer (Sentry), so it can be fixed; nothing goes before.
+
+- **Saying yes.** Settings › General › Reports › **Send crash reports**, or once, the first time Direction opens after it closed unexpectedly: "Direction closed unexpectedly." with **Send Report** and **Not Now**. Send Report sends that crash (macOS's own report of it) and turns reports on. Not Now never asks about that crash again. Only signed copies people download ask or send; a copy built from source never does.
+- **What's in a report.**
+  - What Direction was doing (the last 100 lines of its log) and its error messages, the Mac's model and macOS version.
+  - Never footage, the person's name or the Mac's name. Their home folder becomes `~`, anyone's `/Users/<name>` becomes `/Users/[you]`, and their name becomes `[you]` everywhere: in messages, stacks, file paths and the attached crash file. No IP address (`sendDefaultPii` off).
+- **What's reported.**
+  - **Direction and its helper:** crashes, and the main thread stuck for 5 s.
+  - **Errors:** each kind of error in Direction's log, once per run of the program and at most 20 (a loop of one failure is one report).
+  - **Programs Direction starts** (the editor's Claude Code or Codex, Python for the footage index, Whisper, yt-dlp): their failures are in Direction's log, so they're reported the same way, and when one crashes, macOS's crash file for it is attached. Only crashes of Direction's own processes and of programs they started are ever picked up, never another app's or a program the person ran.
+  - **Stuck work:** a tool call the editor made that has run 5, 15 and 30 minutes (with every thread's stack, to show where it's stuck), and an editor that has said nothing for 10, 20 and 40 minutes while working (with its last step). Both are in Direction's log either way.
+- **Turning it off** stops reports at once, in the app and in the helper's next run.
+
 ## Deleting a film
 
 **Move to Trash** (Films, ⌘⌫), or leaving a new film you never put anything into, moves the film's `.direction` package to the Trash. Finder's Put Back brings it back.

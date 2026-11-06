@@ -3,6 +3,7 @@ import ArgumentParser
 import DirectionCore
 import DirectionMedia
 import DirectionTools
+import DirectionReports
 
 @main
 struct DirectionCommand: AsyncParsableCommand {
@@ -214,6 +215,9 @@ struct MCP: AsyncParsableCommand {
     @OptionGroup var options: OptionalProjectOptions
     func run() async throws {
         stopsItsProgramsWhenStopped()
+        // Crash reports, when the person turned them on: the editor's tools run here.
+        Reports.startIfAllowed(process: "helper")
+        DirectionMCPServer.onStuck = { name, minutes in Reports.stuck("Tool \(name)", minutes: minutes, tags: ["tool": name]) }
         try await DirectionMCPServer.run(router: options.router())
         ChildProcesses.stopAll()
     }

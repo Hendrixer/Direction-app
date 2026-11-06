@@ -3,6 +3,7 @@ import AppKit
 import CoreAudio
 import UserNotifications
 import DirectionCore
+import DirectionReports
 import DirectionMedia
 
 // MARK: 42 · General
@@ -18,6 +19,7 @@ struct GeneralPane: View {
     @AppStorage(SettingsKey.reduceMotion) private var reduceMotion = "system"
     @State private var outputs: [AudioOutputDevice] = []
     @State private var checksForUpdates = AppUpdates.shared.checksAutomatically
+    @State private var sendsReports = CrashReporting.sends
 
     var body: some View {
         SettingsPane {
@@ -39,6 +41,13 @@ struct GeneralPane: View {
                 }
                 SettingsRow(label: "Audio output") {
                     GateSelect(options: [("", "System default")] + outputs.map { ($0.uid, $0.name) }, selection: $audioOutput)
+                }
+            }
+            if preview || Reports.allowedHere {
+                SettingsGroup(label: "Reports") {
+                    SettingsRow(label: "Send crash reports", detail: "When Direction crashes, freezes or hits an error, a report goes to its developer so it can be fixed. It has what Direction was doing and its error messages, with your name taken out of file paths. Never your footage.", first: true) {
+                        GateSwitch(isOn: Binding(get: { sendsReports }, set: { sendsReports = $0; CrashReportsLaunch.setSends($0) }))
+                    }
                 }
             }
             SettingsGroup(label: "Look") {

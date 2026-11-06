@@ -44,6 +44,9 @@ import DirectionTools
         let began = Date().timeIntervalSince1970
         var askedAt: Double?
         var waitsForOK = false
+        /// The last time the program said anything, and the longest silence already logged (in minutes).
+        var lastHeard = Date()
+        var quietLogged = 0
         init(runID: String, store: ProjectStore, program: EditorProgram, process: Process) { self.runID = runID; self.store = store; self.program = program; self.process = process }
     }
 
@@ -135,6 +138,7 @@ import DirectionTools
             ChildProcesses.started(p)
             DirectionLog.info("Started \(program.name) for \(run.job.rawValue) (run \(run.id), \(run.version.isEmpty ? "default version" : run.version), \(effort.isEmpty ? "default effort" : effort + " effort"), session \(session ?? "new"), pid \(p.processIdentifier)) in \(store.url.lastPathComponent)", "editor")
             live[run.id] = l
+            watchForSilence()
             try store.updateRun(run.id) { r in
                 r.state = .starting; r.reason = nil; r.detail = nil; r.held = false; r.pausedByQuit = false
                 r.pid = p.processIdentifier; r.ownerPID = getpid(); r.startedAt = r.startedAt ?? Date().timeIntervalSince1970; r.endedAt = nil; r.invocations += 1
@@ -154,6 +158,7 @@ import DirectionTools
 
     private func output(_ l: LiveRun, _ data: Data) {
         guard !l.finished else { return }
+        l.lastHeard = Date()
         if data.isEmpty { l.outputClosed = true; maybeFinish(l); return }
         l.buffer.append(data)
         while let nl = l.buffer.firstIndex(of: 0x0A) {
@@ -238,6 +243,29 @@ import DirectionTools
         stayAwake()
         onChange?(store.url)
         pump()
+    }
+
+    // MARK: Silence
+
+    /// A program that says nothing for 10, 20 and 40 minutes while it's meant to be working is logged as an error
+    /// each time, with its last step: Direction's log shows it, and with crash reports on it's a report
+    /// (system.md › Crash reports). Thinking is quiet too, but not for ten minutes.
+    static let silences = [10, 20, 40]
+    private var silenceTimer: Timer?
+    private func watchForSilence() {
+        guard silenceTimer == nil else { return }
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.checkSilence() } }
+    }
+    func checkSilence(now: Date = Date()) {
+        if live.isEmpty { silenceTimer?.invalidate(); silenceTimer = nil; return }
+        for l in live.values where l.intent == .none && !l.finished && l.askedAt == nil {
+            let quiet = Int(now.timeIntervalSince(l.lastHeard) / 60)
+            guard let mark = Self.silences.last(where: { quiet >= $0 }), mark > l.quietLogged else { continue }
+            l.quietLogged = mark
+            let job = (try? l.store.run(l.runID))?.job.rawValue ?? "run"
+            let step = (try? l.store.activity(runID: l.runID))?.max { $0.at < $1.at }.map { "\($0.verb) \($0.object)" } ?? "none yet"
+            DirectionLog.error("\(l.program.name) has said nothing for \(mark) min in run \(l.runID) (\(job)); tool calls open: \(l.pending.count); last step: \(step)", "editor")
+        }
     }
 
     // MARK: Control

@@ -102,6 +102,7 @@ public actor LocalVisionHelper {
         try Task.checkCancellation()
         guard let first, let reply = try? JSONDecoder().decode(JSONValue.self, from: Data(first.utf8)), reply["ready"].bool == true else {
             let reason = first.flatMap { try? JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }?["error"].string ?? tail.last
+            ChildProcesses.failed("The vision helper (mlx-vlm, \(repo))", p, reason ?? "no reply")
             stop()
             throw DirectionError("vision_helper_failed", "mlx-vlm couldn't load \(repo). \(reason)".trimmingCharacters(in: .whitespaces))
         }
@@ -137,6 +138,7 @@ public actor LocalVisionHelper {
             try Task.checkCancellation()
             guard let line else {
                 let reason = errors.last
+                ChildProcesses.failed("The vision helper (mlx-vlm)", process, reason ?? "it stopped answering")
                 stop()
                 throw DirectionError("vision_helper_failed", "The vision helper stopped. \(reason)".trimmingCharacters(in: .whitespaces))
             }

@@ -77,8 +77,13 @@ public enum DirectionLog {
         return "\(name)[\(getpid())]"
     }()
 
+    /// Sees every line as it's written, keys already masked: crash reports keep them as what led up to a
+    /// report, and send errors (CrashReporting). Set once at launch, only when reports are on.
+    nonisolated(unsafe) public static var observer: (@Sendable (Level, String, String) -> Void)?
+
     static func write(_ level: Level, _ category: String, _ message: String) {
         let text = redact(message)
+        observer?(level, category, text)
         let logger = loggers.withLock { cache in
             if let l = cache[category] { return l }
             let l = Logger(subsystem: "dev.direction", category: category); cache[category] = l; return l
