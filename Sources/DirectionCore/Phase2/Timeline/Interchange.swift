@@ -190,6 +190,8 @@ public enum Interchange {
             return Set(playing.map { [$0.gainDB, $0.fadeIn, $0.fadeOut] }).count > 1
         }
         if !uneven.isEmpty { notes.append("\(uneven.count == 1 ? "One clip has" : "\(uneven.count) clips have") sound tracks at different levels; the timeline sets them all to the first one\u{2019}s. The sound stems have them as the cut plays them.") }
+        let joined = Set(s.clips.filter { $0.joined == true }.map(\.trackName)).sorted()
+        if !joined.isEmpty { notes.append("The music on \(listed(joined)) is joined at its bars to fit its length. The sound files have each join exactly; the timeline puts them on the nearest frame, with a crossfade of a frame.") }
         let ducked = (s.tracks ?? [:]).filter { $0.value.ducked != nil }.map(\.key).sorted()
         if !ducked.isEmpty { notes.append("Ducking on \(listed(ducked)) is in each clip\u{2019}s volume keys.") }
         if let film = looks?.look.film, !film.isNone, !film.active.isEmpty {
@@ -477,8 +479,9 @@ public enum Interchange {
             let v = element("adjust-volume", [("amount", decibels(level))])
             if !inside.isEmpty || fadeIn > 0 || fadeOut > 0 {
                 let pm = element("param", [("name", "amount")])
-                if fadeIn > 0 { pm.addChild(element("fadeIn", [("type", "linear"), ("duration", Rational.on(fadeIn, rate).description)])) }
-                if fadeOut > 0 { pm.addChild(element("fadeOut", [("type", "linear"), ("duration", Rational.on(fadeOut, rate).description)])) }
+                // At least a frame: a fitted song's 10 ms crossfade at a join would round to none, and click.
+                if fadeIn > 0 { pm.addChild(element("fadeIn", [("type", "linear"), ("duration", Rational.covering(fadeIn, rate).description)])) }
+                if fadeOut > 0 { pm.addChild(element("fadeOut", [("type", "linear"), ("duration", Rational.covering(fadeOut, rate).description)])) }
                 if !inside.isEmpty {
                     let anim = XMLElement(name: "keyframeAnimation")
                     for t in [from] + inside + [to] { anim.addChild(element("keyframe", [("time", localTime(t).description), ("value", decibels(dB(t)))])) }

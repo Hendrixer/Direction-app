@@ -197,6 +197,23 @@ struct InterchangeTests {
         #expect(keys.compactMap { $0.attribute(forName: "value")?.stringValue } == ["0", "0.6", "0.6", "1"])
     }
 
+    @Test func aFittedSongsJoinsKeepACrossfadeOfAFrame() throws {
+        var c = TimelineCut.make()
+        var s = c.project.sequences[0]
+        // The music fitted: bars 1–4 then from bar 9, joined at 6 s with a 10 ms crossfade and a sub-frame J-cut.
+        var a = s.clips[3], b = s.clips[3]
+        a.sourceRange = .init(start: 0, end: 6); a.fadeOut = 0.01; a.soundTail = 0.004; a.joined = true
+        b.id = "m2"; b.start = .init(seconds: 6); b.sourceRange = .init(start: 12, end: 19); b.fadeIn = 0.01; b.soundLead = 0.006; b.joined = true
+        s.clips[3] = a; s.clips.append(b)
+        c.project.sequences[0] = s
+        let (plan, xml) = try timeline(c)
+        #expect(plan.notes.contains { $0.hasPrefix("The music on A2 is joined at its bars") })
+        let clips = try Self.read(xml).clips.filter { $0.file == "music.mov" }
+        #expect(clips.count == 2)
+        let fades = try clips.flatMap { try $0.element.nodes(forXPath: "adjust-volume/param/*[self::fadeIn or self::fadeOut]") }.compactMap { ($0 as? XMLElement)?.attribute(forName: "duration")?.stringValue }
+        #expect(fades == ["1/30s", "1/30s"], "\(fades)")
+    }
+
     @Test func timesAreExact() {
         typealias R = Interchange.Rational
         let ntsc = FrameRate(30000, 1001)
