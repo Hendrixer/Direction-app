@@ -66,8 +66,8 @@ The editor reads the cut as OpenTimelineIO and changes it only through named edi
 
 | Tool | Purpose |
 |---|---|
-| `direction_timeline` | The cut as OTIO JSON (read-only) plus a one-row-per-clip outline. `cut` (a saved cut's name or id), `revision`, `range` `{start,end}`, `outlineOnly`. Items carry their ids in `metadata.direction.id`. |
-| `direction_edit_catalog` | Every edit function with its arguments, every effect and transition with ranges and defaults, the error codes, and the custom shaders in the film's `Effects/` folder that compile. |
+| `direction_timeline` | A one-row-per-clip outline of the cut, with each clip's id, and `locks`: picture lock and every locked scene with where it plays. `otio: true` adds the cut as OTIO JSON (read-only), items carrying their ids in `metadata.direction.id`. `cut` (a saved cut's name or id), `revision`, `range` `{start,end}`. |
+| `direction_edit_catalog` | Every edit function with its arguments, every effect and transition with ranges and defaults, the error codes, and the custom shaders in the film's `Effects/` folder that compile. `op` narrows it to the names given (`"gain"`, `"addEffect, blur"`). |
 | `direction_edit` | A batch of edit functions, committed as one revision or not at all. |
 
 ```json
@@ -84,46 +84,25 @@ Times are cut seconds unless an argument says source (`sourceRange` is in the ta
 
 V1 is the story; V2 and up are overlays (cutaways, graphics, made shots); A1 is V1's own sound plus any sound-only clips on A1, A2 music, A3 effects. Story operations keep every layer in sync. Same-track clips cannot overlap. Operations that need the footage itself (`reframe` with `follow`, `matchBalance`, `stabilize`, the quiet in `tightenPauses`, a shader's compile and speed check) are measured by Direction before the batch runs, each on the cut as the operations before it in the batch leave it.
 
-Batches written before edit functions still work: send them as `{"batch": {…}}` with `type` naming each operation, `{value,timescale}` times, and the old shapes (insert places without rippling, trim takes a source `range`, move takes `at` and `layer`). `direction_remove_range`, `direction_audio` and `direction_edit_transcript` remain as shorthands for `removeRange`, `audio` and `removeWords`. They go in as `direction_edit` batches do, checked against locks and notes, and take `notes` for the note numbers they answer; they report `revision_conflict` on a stale revision as before.
-
-Convenience range removal:
-
-```json
-{"start":12.0,"end":13.5,"baseEditRevision":4,"idempotencyKey":"request-42-tighten"}
-```
-
-Send to `direction_remove_range`.
+Batches written before edit functions still work: send them as `{"batch": {…}}` with `type` naming each operation, `{value,timescale}` times, and the old shapes (insert places without rippling, trim takes a source `range`, move takes `at` and `layer`). The single-purpose tools that came before edit functions (`direction_remove_range`, `direction_audio`, `direction_edit_transcript`) are gone: `removeRange`, `audio` and `removeWords` do the same in `direction_edit`.
 
 ## Embedded audio streams
 
-Use the actual stream ID from `direction_inspect`, not a presumed 0/1 index:
+Use the actual stream ID from `direction_inspect`, not a presumed 0/1 index, and name only what changes:
 
 ```json
-{
-  "assetID":"asset-from-inspect",
-  "trackID":3,
-  "baseEditRevision":5,
-  "muted":true
-}
+{ "op": "audio", "assetID": "asset-from-inspect", "audioTrackID": 3, "audio": { "muted": true } }
 ```
 
-Send to `direction_audio`. With no `clipID`, it changes that source stream everywhere. With `clipID`, it sets an override for that occurrence. Partial parameters include gainDB, fadeIn/fadeOut seconds, highPassHz, bassDB, trebleDB, compressor, thresholdDB, and limiter. Every source stream is independent. `direction_measure_audio` with `assetID` provides a source track's sample peak/RMS/waveform data; do not interpret those fields as LUFS. Without `assetID` it measures the cut's mix as it plays and delivers, over the whole cut or `start`/`end`: `integratedLUFS` (ITU-R BS.1770-4, gated), `samplePeakDBFS` and `truePeakDBTP`.
+With no `clipID`, it changes that source stream everywhere. With `clipID`, it sets an override for that occurrence, starting from the stream's own settings. `audio` takes muted, gainDB, fadeIn/fadeOut seconds and `effects` (highPassHz, bassDB, trebleDB, compressor, thresholdDB, limiter); the rest stays as it is. Every source stream is independent.
 
 ## Local transcript and text cuts
 
 `direction_transcribe` takes assetID, optional trackID, and language (default en-US). It uses the engine the director chose in Settings › Engines: `apple` (SpeechAnalyzer) or `whisper` (mlx-whisper, with Whisper's own word times). Pass `engine` and optionally `model` to override. If Whisper is chosen but mlx_whisper or ffmpeg is missing, Apple is used and the job result carries a `note`. It returns a job. On-device recognition may require Apple's first-use language download. Re-transcribing another track selects it for that source's text editing. Timed transcripts may also be supplied through `direction_import_transcript` using its full schema.
 
-`direction_transcript` projects timed words onto the requested cut, including clip-instance IDs. It is paginated with offset/limit; continue through nextOffset. With `assetID` it returns that take's own words in source seconds, plus the page as plain `text`, so logging can read every take before there's a cut. Direction transcribes every take with sound itself when footage arrives, before the logging run starts. The cut's words are what's heard on the story track: V1 pictures that play their own sound (or have sound in sync under them) and sound-only clips on A1, such as a narration, together. B-roll laid on V1 with its sound off has none.
+`direction_transcript` projects timed words onto the requested cut: each word's id (with its clip instance), text, and start and end in cut seconds. It is paginated with offset/limit (300 by default); continue through nextOffset. With `assetID` it returns that take's own words in source seconds, plus the page as plain `text`, so logging can read every take before there's a cut. Direction transcribes every take with sound itself when footage arrives, before the logging run starts. The cut's words are what's heard on the story track: V1 pictures that play their own sound (or have sound in sync under them) and sound-only clips on A1, such as a narration, together. B-roll laid on V1 with its sound off has none.
 
-```json
-{
-  "baseEditRevision":6,
-  "deleteWordIDs":["clip-id:word-id"],
-  "idempotencyKey":"request-42-remove-word"
-}
-```
-
-Send to `direction_edit_transcript`. Alternatively supply `editedText` with only deletions. Word selection is more precise when the same phrase occurs multiple times. New or rewritten speech is rejected. Deletions remove exact recognized intervals, including their synchronized footage; they do not automatically remove surrounding pauses or synthesize smooth audio transitions.
+Cut words with `removeWords` in `direction_edit`, naming the word ids from `direction_transcript` (`"clip-id:word-id"`), so a phrase said twice is cut exactly where you mean. New or rewritten speech is rejected. Deletions remove exact recognized intervals, including their synchronized footage; they do not automatically remove surrounding pauses or synthesize smooth audio transitions.
 
 ## Feedback and original context
 
@@ -157,7 +136,7 @@ After editing, use `direction_feedback_reply` with text, resulting revision, and
 
 ## Export, previews, and jobs
 
-`direction_export` accepts path, optional revision/sequenceID, and preset `h264`, `hevc`, or `prores`. The snapshot is pinned before work begins. Existing paths are refused. `direction_preview` renders a bounded range to the project cache; `direction_frame` returns an actual edited PNG immediately.
+`direction_export` accepts path, optional revision/sequenceID, and preset `h264`, `hevc`, `prores`, or `timeline`: a new folder at path with the cut as FCPXML 1.10 for Final Cut Pro and DaVinci Resolve, ProRes renders of what only Direction draws, each sound track as WAV and the look as LUTs (`design/spec/specs/finish.md › Timeline for another editing app`). The snapshot is pinned before work begins. Existing paths are refused. `direction_preview` renders a bounded range to the project cache; `direction_frame` returns an actual edited PNG immediately.
 
 Transcription/export/preview return job records with ID, owner PID, revision, status, phase, result/error, and timestamps. Poll `direction_job`; `direction_jobs` lists records. CLI commands wait automatically. A persistent API/MCP process must remain open. Cancellation is performed in the job's owning process. If it exits, jobs are reported interrupted; they are not silently resumed elsewhere.
 

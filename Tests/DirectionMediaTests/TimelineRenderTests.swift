@@ -316,9 +316,11 @@ struct TimelineRenderTests {
     let first = try f.store.revision()
     _ = try await f.runtime.invoke("direction_create_cut", arguments: .object(["name": .string("Assembly")]))
     _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(first)), "notes": .array([]), "operations": .array([.object(["op": .string("removeRange"), "range": .object(["start": .number(0), "end": .number(1)])])])]))
-    let saved = try await f.runtime.invoke("direction_timeline", arguments: .object(["cut": .string("Assembly")])).value
+    let saved = try await f.runtime.invoke("direction_timeline", arguments: .object(["cut": .string("Assembly"), "otio": .bool(true)])).value
     #expect(saved["editRevision"].int == first && saved["cut"].string == "Assembly" && saved["otio"]["OTIO_SCHEMA"].string == "Timeline.1")
     let working = try await f.runtime.invoke("direction_timeline").value
+    // The outline alone unless the document is asked for, with what's locked.
+    #expect(working["otio"] == .null && working["locks"]["pictureLocked"].bool == false && working["locks"]["scenes"].array?.isEmpty == true)
     #expect(working["cut"].string == "Cut 2 (working)" && working["editRevision"].int == first + 1)
     // Errors point at the operation that failed.
     do {

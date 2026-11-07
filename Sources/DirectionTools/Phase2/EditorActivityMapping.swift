@@ -58,16 +58,19 @@ public enum EditorActivityLog {
             return ActivityInput(verb: "Listening to", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
         case "direction_sync_takes":
             return ActivityInput(verb: "Matching", object: "the takes\u{2019} sound", tool: name)
-        case "direction_audio":
-            let asset = a["assetID"].string.map { take($0, c) } ?? "the sound"
-            let changes = ["muted", "gainDB", "fadeIn", "fadeOut", "highPassHz", "bassDB", "trebleDB", "compressor", "thresholdDB", "limiter"].contains { a[$0] != .null }
-            return changes ? ActivityInput(verb: "Mixing", object: asset, tool: name) : ActivityInput(verb: "Listening to", object: asset, tool: name)
+        case "direction_check":
+            if let asked = a["checks"].array?.compactMap(\.string), asked == ["cuts"] { return ActivityInput(verb: "Checking", object: "the cuts for jumps", tool: name) }
+            return ActivityInput(verb: "Checking", object: "the cut as it delivers", tool: name)
+        case "direction_cut_points":
+            if let asset = a["assetID"].string { return ActivityInput(verb: "Finding where to cut in", object: take(asset, c), tool: name) }
+            if let t = seconds(a["at"]) { return ActivityInput(verb: "Finding where to cut near", object: PlainTime.text(t), mono: true, time: t, tool: name) }
+            return ActivityInput(verb: "Finding where to cut", object: "the shots", tool: name)
         case "direction_screen_text":
             return ActivityInput(verb: "Reading the screen in", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
         case "direction_search_footage":
             let q = a["query"].string ?? a["text"].string ?? ""
             return ActivityInput(verb: "Searching footage for", object: "\u{201C}\(q)\u{201D}", tool: name)
-        case "direction_edit", "direction_remove_range", "direction_edit_transcript":
+        case "direction_edit":
             return edit(name, a, c)
         case "direction_make":
             if a["estimateOnly"].bool == true { return ActivityInput(verb: "Pricing", object: madeKind(a["kind"].string), tool: name) }
@@ -185,14 +188,12 @@ public enum EditorActivityLog {
         "addEffect": "Adding an effect to", "setEffect": "Adjusting an effect in", "removeEffect": "Removing an effect from",
         "transition": "Adding a transition to", "removeTransition": "Removing a transition from", "cutaway": "Cutting away in",
         "placeGraphic": "Placing a graphic in", "placeMade": "Placing a made clip in", "gain": "Mixing", "fade": "Fading", "duck": "Ducking",
-        "placeMusic": "Placing music in", "audio": "Mixing", "syncSound": "Syncing sound in", "title": "Titling", "format": "Changing the format of", "rename": "Renaming", "duplicateSequence": "Copying",
+        "placeMusic": "Placing music in", "audio": "Mixing", "loudness": "Setting the loudness of", "captions": "Captioning", "credits": "Rolling the credits in", "syncSound": "Syncing sound in", "title": "Titling", "format": "Changing the format of", "rename": "Renaming", "duplicateSequence": "Copying",
     ]
 
     private static func edit(_ name: String, _ a: JSONValue, _ c: Context) -> ActivityInput {
         let batch = a["batch"] == .null ? a : a["batch"]
-        var ops = batch["operations"].array ?? []
-        if name == "direction_remove_range" { ops = [.object(["op": .string("removeRange"), "range": .object(["start": a["start"], "end": a["end"]])])] }
-        if name == "direction_edit_transcript" { ops = [.object(["op": .string("removeWords")])] }
+        let ops = batch["operations"].array ?? []
         let first = ops.first ?? .null
         let op = first["op"].string ?? first["type"].string ?? ""
         let verb = editVerbs[op] ?? "Editing"

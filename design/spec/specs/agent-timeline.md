@@ -2,7 +2,7 @@
 
 No frames. This is the contract between the editor and Direction's renderer. Read `product-model.md` first.
 
-The director never sees a timeline: they see scenes on a strip, answers and choices. The editor sees everything: every layer, effect, keyframe, graphic and made clip. Direction doesn't hand off to another editing app; it renders everything itself.
+The director never sees a timeline: they see scenes on a strip, answers and choices. The editor sees everything: every layer, effect, keyframe, graphic and made clip. Direction renders everything itself; another editing app gets a copy of the cut only through File › Export for an Editing App… (`finish.md › Timeline for another editing app`), and nothing comes back; it renders everything itself.
 
 **The editor reads the timeline as data and changes it only through Direction's edit functions.** It never writes the timeline itself. Each function is one editorial act ("trim", "swap the take", "duck the music"), carried out by Direction's own code: the frame math, keeping picture and sound in sync, locks, and which note the change answers. The editor decides what to do; Direction does it exactly.
 
@@ -80,9 +80,9 @@ The editor may export the document to its working folder and analyze it in a scr
 | `removeRange` | `range`, `ripple` | Removes the range on every track; ripple closes the gap |
 | `remove` | `clipID`, `ripple` | |
 | `move` | `clipID`, `to` (`at`, or `before`/`after` a clip) | Moves a clip and its linked sound |
-| `split` | `clipID`, `at` | |
-| `trim` | `clipID`, `edge` (`head`/`tail`), `frames`, `ripple` | Extends or shortens one end |
-| `roll` | `editPoint`, `frames` | Moves a cut point; the total length doesn't change |
+| `split` | `clipID`, `at`, `snap?` | `snap` (`blink`/`action`/`pause`) lands it on the nearest cut point within 8 frames |
+| `trim` | `clipID`, `edge` (`head`/`tail`), `frames`, `ripple`, `snap?` | Extends or shortens one end; `snap` moves the new end to the nearest cut point within 8 frames, keeping the direction |
+| `roll` | `editPoint`, `frames`, `snap?` | Moves a cut point; the total length doesn't change; `snap` as for split |
 | `slip` | `clipID`, `frames` | Changes which part of the take plays, without moving the clip |
 | `slide` | `clipID`, `frames` | Moves a clip between its neighbors, trimming them to fit |
 | `splitEdit` | `editPoint`, `lead` (`sound`/`picture`), `frames` | J- and L-cuts: sound starts before the picture changes, or carries after |
@@ -133,7 +133,7 @@ The moves' scales start from filling the frame: 1.15 on a 16:9 take in a 9:16 cu
 | `fade` | `clipID`, `in?`, `out?` (frames) | |
 | `duck` | `track` (usually A2), `under` (usually A1), `dB`, `attack?`, `release?` | Direction finds every line of dialogue from the words and writes the gain keys |
 | `syncSound` | `clipID`, `assetID?` | A take in sync with a V1 clip plays its sound under it, in place of the clip's own: the group's sound take by default. Naming the clip's own take puts its sound back. Stays lined up like a synced cutaway. |
-| `placeMusic` | `madeID` or `assetID`, `at`, `endOn` (`cut`, `word`, or a time) | Lines the music's end up with a cut or a word, trimming from the head |
+| `placeMusic` | `madeID` or `assetID`, `at`, `endOn` (`cut`, `word`, or a time), `from`, `fit`, `parts` | Lines the music's end up with a cut or a word, trimming from the head; with `fit`, plays the song from its start to its own ending, joined between bars that sound alike to last from `at` to `endOn`, a length, or to the end of the picture |
 | `audio` | as today | EQ, compression and per-track settings |
 
 **Film**: `format` and `duplicateSequence` as today. A `format` that changes the cut's shape warns about the titles, graphics and layouts placed for the old one ("2 titles and 1 layout were placed for 16:9. Look at them in the new shape."). The director changes the shape from the brief (start.md › 03): Direction sends the `format` as the director's own edit, and the `reframe` skill fills the frame when a note asks.
@@ -154,6 +154,21 @@ Every operation is checked before anything commits:
 | `words_are_yours` | Changing a graphic's words the director set, without a note that names it |
 | `shader_invalid`, `shader_too_slow` | An effect or transition shader that doesn't compile, makes NaN, or takes over 40 ms a frame at 1080p |
 | `no_screen` | `pin` or `zoomThrough` without corners, in a shot where Vision finds no screen, window or sign |
+
+### Cut points
+
+Direction measures where a take is good to cut (docs/agent-timeline.md › Cut points), so the editor chooses between measured points instead of guessing a time. `direction_cut_points` lists them near a moment of a clip, near its head and tail, over a range of the story, or over a take before it's placed:
+
+| Kind | What Direction finds | Why cut there |
+|---|---|---|
+| `blink` | A face turned to the camera closing its eyes briefly (Vision's face landmarks, every 0.1 s and every frame around a blink); never a look down, a turned head or a face cut off by the frame | A cut on the outgoing person's blink reads as a natural break |
+| `action` | Where the picture changes fastest | A cut inside a movement hides itself |
+| `pause` | A gap between words in the transcript | The sound doesn't cut a word |
+
+- [ ] `split`, `trim` and `roll` take `snap` and land on the nearest point of that kind within 8 frames that the edit can reach; the result says where, or why not (nothing near, out of reach, a freeze, sound only), and the cut is then where it was asked.
+- [ ] Measured 20 s at a time, only where asked, and kept per take in the film's cache.
+- [ ] `direction_check` with `checks: ["cuts"]` (never by default, so finishing isn't asked to recut) lists jump cuts (two moments of one take, or takes framed alike, where the frames either side visibly differ; never the style's own punch-ins) with how much they jump and what would fix it (a cutaway, `punchIn`, a roll), and sound that starts or stops inside a word, a narration's included; a clip that plays straight on from the one before isn't either.
+- [ ] A narration (sound on its own) has pauses, and snaps to them; with a J- or L-cut, a pause is judged where the sound is cut.
 
 ### Effects catalog
 

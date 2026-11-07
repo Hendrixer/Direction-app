@@ -24,8 +24,12 @@
 </head>
 <body>
 <div id="window"><div id="roll"></div></div>
+<!-- Direction's credits step writes credits.js beside this page: the director's credits and how long they roll. -->
+<script src="credits.js"></script>
 <script>
   document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  const given = window.directionCredits;
+  const duration = given ? given.duration : 14;
   let shown = null, height = 0;
   const windowHeight = () => document.getElementById('window').clientHeight;
 
@@ -44,15 +48,15 @@
   };
 
   direction.graphic({
-    duration: 14,
+    duration,
     words: {
-      credits: { label: 'Credits', text: 'Featuring\nMaya Chen\n\nProducer\nPriya Shah\n\nCamera\nSam Ortiz\n\nThanks\nThe Northwind team', max: 2000 },
+      credits: { label: 'Credits', text: given ? given.text : 'Featuring\nMaya Chen\n\nProducer\nPriya Shah\n\nCamera\nSam Ortiz\n\nThanks\nThe Northwind team', max: 2000 },
     },
     render(t, words) {
       if (shown !== words.credits) { shown = words.credits; layout(shown); }
       // From just below the window to just above it, at one speed.
       const travel = windowHeight() + height;
-      roll.style.transform = `translateY(${windowHeight() - (t / 14) * travel}px)`;
+      roll.style.transform = `translateY(${windowHeight() - (t / duration) * travel}px)`;
     },
   });
 </script>

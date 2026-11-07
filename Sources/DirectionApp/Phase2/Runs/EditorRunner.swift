@@ -55,7 +55,10 @@ import DirectionTools
         init(runID: String, store: ProjectStore, program: EditorProgram, process: Process) { self.runID = runID; self.store = store; self.program = program; self.process = process }
     }
 
-    func isLive(_ runID: String) -> Bool { live[runID] != nil }
+    /// Finishing runs while Direction does its own steps first (FinishingPass), before the program starts: the
+    /// pass, so Stop and Quit reach it.
+    private var preparing: [String: Task<Void, Never>] = [:]
+    func isLive(_ runID: String) -> Bool { live[runID] != nil || preparing[runID] != nil }
     /// Tests hold it weakly to see it let go once the run is over.
     func liveRun(_ runID: String) -> LiveRun? { live[runID] }
     var liveCount: Int { live.count }
@@ -69,7 +72,7 @@ import DirectionTools
         let programs = EditorPrograms.shared
         guard (programs.checked && !programs.checking) || !programOverride.isEmpty else { return }
         for store in stores.values {
-            guard live.count < Self.maxConcurrent, let runs = try? store.runs() else { continue }
+            guard live.count + preparing.count < Self.maxConcurrent, let runs = try? store.runs() else { continue }
             // Any program still alive, a stopped one included while it winds down, keeps the next one waiting.
             guard !runs.contains(where: { isLive($0.id) }) else { continue }
             guard let next = runs.first(where: { $0.state == .queued && !$0.held }) else { continue }
@@ -80,7 +83,7 @@ import DirectionTools
     // MARK: Launch
 
     /// Starts the program for a run: its first job text, or `continuation` on the saved session.
-    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false) {
+    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false, prepared: Bool = false) {
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
@@ -92,7 +95,7 @@ import DirectionTools
                 run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = version; $0.effort = effort }) ?? run
             }
         }
-        guard live[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
+        guard live[run.id] == nil, preparing[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
         offlineRetries[run.id]?.cancel(); offlineRetries[run.id] = nil
         // Try again, Resume or back online: a fresh start, with its one restart to come.
         if !restartingStuck { restarted.remove(run.id) }
@@ -102,10 +105,25 @@ import DirectionTools
         guard let helper = helperOverride ?? EditorJobs.helperPath else {
             end(run.id, store: store, outcome: .init(state: .failed, reason: .programQuit, detail: "Direction\u{2019}s tools aren\u{2019}t in this copy of the app. Build it with scripts/build-app.sh.")); return
         }
+        // Finishing: Direction's own steps first, then the editor on what's left. Again on Resume when the
+        // editor never started (a quit during the steps): each step only does what's still to do.
+        if run.job == .finish, run.invocations == 0, !prepared {
+            _ = try? store.updateRun(run.id) { $0.state = .starting }
+            onChange?(store.url)
+            let runID = run.id
+            preparing[runID] = Task { @MainActor in
+                await FinishingPass.run(store: store, runID: runID)
+                self.preparing[runID] = nil
+                // Stopped or paused meanwhile: it stays that way.
+                guard !Task.isCancelled, let again = try? store.run(runID), again.state == .starting || again.state == .queued else { self.onChange?(store.url); self.pump(); return }
+                self.launch(again, store: store, continuation: continuation, restartingStuck: restartingStuck, prepared: true)
+            }
+            return
+        }
         do {
             let folder = try EditorJobs.prepareFolder(film: store.url, job: run.job)
             let mcp = folder.appendingPathComponent(".mcp.json"), schema = folder.appendingPathComponent(".direction/result.schema.json")
-            try EditorProgram.mcpConfig(helper: helper, film: store.url, runID: run.id).data(pretty: true).write(to: mcp, options: .atomic)
+            try EditorProgram.mcpConfig(helper: helper, film: store.url, runID: run.id, job: run.job).data(pretty: true).write(to: mcp, options: .atomic)
             try EditorProgram.resultSchema.data(pretty: true).write(to: schema, options: .atomic)
             // A continuation without a saved session starts over with the whole job, then the answer.
             let session = continuation == nil ? nil : run.session
@@ -113,7 +131,7 @@ import DirectionTools
             if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
             // The run's own, once it has started; an older run without one reads its job's.
             let effort = run.effort ?? EditorSetup.effort(program, for: run.job)
-            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts)
+            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts, kind: run.job)
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = program.arguments(invocation)
@@ -350,6 +368,8 @@ import DirectionTools
     func stop(_ runID: String, store: ProjectStore) {
         _ = try? store.updateRun(runID) { $0.state = .stopped; $0.reason = .stoppedByYou; $0.held = false }
         offlineRetries[runID]?.cancel(); offlineRetries[runID] = nil
+        // Still on Direction's own steps: they stop between steps, or inside one that's rendering.
+        preparing[runID]?.cancel()
         guard let l = live[runID] else { onChange?(store.url); pump(); return }
         l.intent = .stop
         interrupt(l)
@@ -366,6 +386,13 @@ import DirectionTools
     /// Calls back once every program and everything it started has gone: SIGINT, then SIGTERM after
     /// 4 s, then SIGKILL after 2 more, so nothing is left working on a film Direction isn't watching.
     func pauseAllForQuit(_ done: @escaping @MainActor () -> Void) {
+        // A run still on Direction's own steps: paused like the rest, and Resume does what's left of them.
+        for (runID, task) in preparing {
+            task.cancel()
+            for store in stores.values where (try? store.run(runID)) != nil {
+                _ = try? store.updateRun(runID) { $0.state = .paused; $0.reason = .pausedByQuit; $0.pausedByQuit = true }
+            }
+        }
         let working = Array(live.values)
         guard !working.isEmpty else { done(); return }
         for l in working {

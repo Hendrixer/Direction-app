@@ -53,6 +53,11 @@ enum EditorJobs {
         // Every question the director answered, on the script or the breakdown, is settled for every job after.
         let decided = decisions(script: try store.script(), breakdown: try store.breakdown())
         if !decided.isEmpty { v["brief", default: ""] += "\n- Already decided (the director answered these; never ask them again):\n" + decided.map { "  - " + $0 }.joined(separator: "\n") }
+        // Locked scenes, said before the first edit instead of found by the first refusal.
+        if !state.pictureLocked, let cut = try? p.sequence(nil) {
+            let locked = SceneLocks.inCut(cut, dailies: dailies)
+            if !locked.isEmpty { v["brief", default: ""] += "\n- Locked scenes (recut nothing in them; their color and sound stay open): " + locked.map(\.line).joined(separator: "; ") + "." }
+        }
         switch run.job {
         case .logFootage:
             let footage = p.footage(film: store.url)
@@ -85,12 +90,11 @@ enum EditorJobs {
             let items = state.finishing ?? FinishingItem.defaults
             v["items"] = items.map { "- \($0.title) (\($0.id)): \($0.detail) By \($0.by.joined(separator: " and ")). Now \($0.state)." }.joined(separator: "\n")
             v["lockedCut"] = state.pictureLockedCutID.flatMap { id in (try? store.cuts())?.first { $0.id == id }?.name } ?? "the latest cut"
-            let lufs = UserDefaults.standard.object(forKey: "loudnessTarget") as? Double ?? -14
-            v["loudness"] = "\(Int(lufs)) LUFS"
+            v["loudness"] = LoudnessCheck.target(SharedSettings.loudnessTarget)
             v["ducking"] = ducking(UserDefaults.standard.object(forKey: "musicDucking") as? Double ?? 6)
             if let credits = state.credits, !credits.isEmpty {
                 v["credits"] = "The director wrote the credits (a role, then its names, a line each; a blank line between credits):\n\n" + credits.split(separator: "\n", omittingEmptySubsequences: false).map { $0.isEmpty ? ">" : "> " + $0 }.joined(separator: "\n")
-                    + "\n\nRoll them at the end: copy the Credits roll example (`direction_graphic_examples` with name `credits-roll`) into `Graphics/credits/`, put these words in its credits field exactly as written, check it with `direction_graphic` (note `unasked`), then `placeGraphic` it at the cut\u{2019}s length, after the last shot, where it plays on black. Add where it plays to the titles item\u{2019}s detail."
+                    + "\n\nDirection rolled them after the last shot, on black, word for word (the `credits` graphic). Watch it; if the director changes the words, run `credits` again (`direction_edit` with `{op: \"credits\"}`)."
             } else {
                 v["credits"] = "The director hasn\u{2019}t written credits yet; titles and credits are theirs. Leave that item for them."
             }

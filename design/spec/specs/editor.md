@@ -32,14 +32,29 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 ## How Direction runs a job
 
 1. **Working folder.** `<film>.direction/Editor/` holds everything the editor writes: graphics (`Graphics/`), looks (`Looks/`), shaders (`Effects/`), scripts, and `NOTES.md` (its own notes between runs). The program runs with this folder as its working directory.
-2. **Tools.** Direction's MCP server for this film (`direction mcp --project <film>`), passed per run, so the director's other MCP servers aren't loaded:
+2. **Tools.** Direction's MCP server for this film and this job (`direction mcp --project <film> --job <job>`), passed per run, so the director's other MCP servers aren't loaded:
    - Claude Code: `claude -p <job> --output-format stream-json --verbose --model <version> [--effort <level>] --mcp-config <Editor/.mcp.json> --strict-mcp-config --allowedTools <list> --append-system-prompt <role>`; continue with `--resume <session>`.
-   - Codex: `codex exec --json --model <version> [-c 'model_reasoning_effort="<level>"'] --cd <Editor> --sandbox workspace-write -c 'mcp_servers.direction.command="<direction>"' -c 'mcp_servers.direction.args=["mcp","--project","<film>"]' --output-schema <schema.json> <job>`; continue with `codex exec resume <session>`.
-3. **Allowed tools.** Every `direction_*` tool, plus file read and write inside the working folder. Running scripts (Bash) is allowed only when Settings › Engines › "Let the editor run scripts" is on (default on), and only inside the working folder: Codex's `workspace-write` sandbox; Claude Code's sandbox with `Bash` allowed. Network access from scripts is off. Services are reached through Direction's tools, never directly.
+   - Codex: `codex exec --json --model <version> [-c 'model_reasoning_effort="<level>"'] --cd <Editor> --sandbox workspace-write -c 'mcp_servers.direction.command="<direction>"' -c 'mcp_servers.direction.args=["mcp","--project","<film>","--job","<job>"]' --output-schema <schema.json> <job>`; continue with `codex exec resume <session>`.
+3. **Allowed tools.** The job's own `direction_*` tools (below), plus file read and write inside the working folder. Running scripts (Bash) is allowed only when Settings › Engines › "Let the editor run scripts" is on (default on), and only inside the working folder: Codex's `workspace-write` sandbox; Claude Code's sandbox with `Bash` allowed. Network access from scripts is off. Services are reached through Direction's tools, never directly.
 4. **The job text.** Direction writes it from a template in the app bundle (`Resources/Editor/jobs/<job>.md`), filled with: the film's name, the brief (ending with **Already decided**: every question the director answered on the script or the breakdown, with their answer, never asked again in any job), latitude and what it means, preferences (two ways, ask before guessing, conflict order, handles), the job's ids (turnover, notes), and the skill to follow. Templates are versioned files with tests, not strings in code.
 5. **The result.** Each job's final message must match `{"finished": Bool, "summary": String, "needsYou": [String]}`. The real work arrives through Direction's tools, which validate it: the dailies log, the read-back, answers, questions. A run that ends without calling its job's finishing tool fails with "The editor stopped before finishing."
 6. **Activity.** Direction reads the program's event stream (Claude: `tool_use` blocks in `assistant` events; Codex: `item.started` and `item.completed` for MCP tool calls, commands and file changes) and turns each Direction tool call into an Activity with the table below. The editor's prose is not shown.
 7. **Your own session.** The MCP server records the same Activity rows in the film's store as it handles each call, so the pill and the editor's playhead work there too.
+
+### Tools
+
+Each job is given the tools it uses, so the program has them all from the start instead of searching through Direction's sixty-odd for the one it needs (Claude Code defers a long list behind its own search). Every job reads the brief, the style, the turnovers and its questions, asks, and says what it's doing. Then:
+
+| Job | Its own tools |
+|---|---|
+| Log footage | the footage (dailies, index, shots, contact sheets, frames, watch, screen text, search, words), logging, transcribing, syncing takes, importing, the timeline and edits |
+| Assemble | the footage, the cut (timeline, edits and their catalog, restore, preview, measuring sound, the library, importing, graphics, techniques), the script and breakdown, read-back and delivery |
+| Turnover (notes) | everything assembling has, and finishing, looks, made shots and their prices, syncing, transcribing, studying frames, saved cuts and the older comment replies: a note can ask for anything |
+| Finish | the cut, frames, watching, words, contact sheets, finishing, looks, read-back and delivery, export, and the delivery check |
+| Style, Technique | the cut, frames and watching, studying frames, and their own styles or techniques |
+| A/V script, Breakdown | the script (and the breakdown), the library, prices |
+
+`direction_more_tools` is always there too: with nothing, it lists the rest a line each; with a name, one tool's description and arguments; with a name and arguments, it runs it, checked exactly like a direct call. Each use is logged, so a job that keeps reaching for a tool gets it on its list. Your own session (`direction mcp` with no `--job`) has every tool.
 
 ### Tool call → Activity
 
@@ -47,7 +62,7 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 |---|---|---|---|
 | `direction_frame`, `direction_watch` | Watching | the passage, `01:12:08–01:14:00` | the time or range start |
 | `direction_frame` with assetID, `direction_contact_sheet` | Looking at | the take, `3B T2` | — |
-| `direction_transcribe`, `direction_audio` reads | Listening to | the take, `2A T5` | — |
+| `direction_transcribe`, `direction_measure_audio` on a take | Listening to | the take, `2A T5` | — |
 | `direction_search_footage` | Searching footage for | the words, "Maya laughing" | — |
 | `direction_screen_text` | Reading the screen in | the take, `1A T1` | — |
 | `direction_edit` | The first operation's verb: Trimming, Rolling, Swapping takes, Reframing, Ducking … | the scene(s) touched, `scene 2` | the first changed time |
@@ -57,6 +72,7 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 | `direction_turnover_update` (read-back) | Reading back | `7 notes` | — |
 | `direction_ask` | Asking you | "about line 12" | — |
 | `direction_turnover_complete` | Delivering | `Cut 4` | — |
+| `direction_check` | Checking | the cut as it delivers | — |
 | Anything else (reading the brief, notes, files) | Reading | "the notes" / "the brief" | — |
 
 Consecutive calls with the same verb and object merge into one row with the latest time.
@@ -73,7 +89,7 @@ A skill is a short playbook in Markdown (`plugins/direction/skills/<name>/SKILL.
 | `make-graphic` | Graphics for a note | Start from an example, keep words in `words`, check with `direction_graphic`, place with `placeGraphic` |
 | `propose-look` | A look note | Make two or three looks with `direction_make_look`, offer them as Options or a question, never apply one |
 | `make-shot` | Picture the footage doesn't have | Footage first; stills before motion; price the plan with `direction_estimate` and ask once only when it's over the limit; recipes for changed shots, extensions, bridges, inserts, pickups, slow motion and sharpening (`made-media.md`) |
-| `finish` | After picture lock | Balance and match shots, mix to the loudness target, captions, deliveries |
+| `finish` | After picture lock | Balance and match shots, balance the mix, check what Direction laid (captions, credits, loudness), check the cut as it delivers |
 
 ## Jobs
 
@@ -83,7 +99,7 @@ A skill is a short playbook in Markdown (`plugins/direction/skills/<name>/SKILL.
 | Assemble | Assemble from circles | `assemble` | `direction_turnover_complete` (assembly) | Building the assembly |
 | Turnover | Turn over | `take-turnover` | `direction_turnover_complete` | Reading back → Cutting 3 of 7 |
 | Continue | You answer a question or approve a read-back | the same skill | — (continues the same session) | — |
-| Finish | Lock picture | `finish` | `direction_finishing` with every item done | Finishing 2 of 5 |
+| Finish | Lock picture. Direction first lays captions, rolls the credits and sets the loudness itself (finish.md › What Direction does itself) | `finish` | `direction_finishing` with every item done | Finishing 2 of 5 |
 
 - **Start: Ask me first.** Instead of starting, the pill shows "Ready to cut" with a small Start button inside the popover, and the room's primary becomes "Start the editor". Default is Right away.
 - **One run per film.** Work that arrives while a run is working queues behind it. Two films may run at once; a third waits.

@@ -171,6 +171,11 @@ struct EditorActivityTests {
         #expect(activity("direction_transcribe", ["assetID": .string("take-2a-t3")])?.verb == "Listening to")
         let search = activity("direction_search_footage", ["query": .string("Maya laughing")])
         #expect(search?.verb == "Searching footage for" && search?.object == "\u{201C}Maya laughing\u{201D}")
+        // Choosing cut points, and checking the cuts.
+        #expect(activity("direction_cut_points", ["assetID": .string("take-3b-t1")])?.object == "3B T1")
+        let near = activity("direction_cut_points", ["clipID": .string("clip-take-3a-t2-65"), "at": .number(SampleFilm.tc(1, 12))])
+        #expect(near?.verb == "Finding where to cut near" && near?.object == "1:12" && near?.time != nil)
+        #expect(activity("direction_check", ["checks": .array([.string("cuts")])])?.object == "the cuts for jumps")
     }
 
     @Test func editsNameTheirVerbScenesDeltaAndNote() {
@@ -363,8 +368,8 @@ struct EditorJobTests {
         try Data("license".utf8).write(to: license); defer { try? FileManager.default.removeItem(at: license) }
         let file = try store.addLicense(from: license)
         let text = try EditorJobs.text(for: run, store: store)
-        #expect(text.contains("> Featuring\n> Maya Chen\n>\n> Camera\n> Sam Ortiz") && text.contains("credits-roll") && text.contains(file.path))
-        #expect(text.contains("direction_measure_audio") && !text.contains("{{"))
+        #expect(text.contains("> Featuring\n> Maya Chen\n>\n> Camera\n> Sam Ortiz") && text.contains("{op: \"credits\"}") && text.contains(file.path))
+        #expect(text.contains("direction_measure_audio") && text.contains("direction_check") && text.contains("{op: \"loudness\"}") && !text.contains("{{"))
     }
 
     @Test func commandLinesUseOnlyTheCheckedFlags() {
@@ -380,6 +385,8 @@ struct EditorJobTests {
         #expect(codex.first == "exec" && codex.last == "Do the job.")
         for flag in codex where flag.hasPrefix("--") { #expect(EditorProgram.codexExecFlags.contains(flag), "\(flag) isn't in codexExecFlags") }
         #expect(codex.contains("mcp_servers.direction.args=[\"mcp\",\"--project\",\"/f\"]"))
+        var finishing = i; finishing.kind = .finish
+        #expect(EditorProgram.codex.arguments(finishing).contains("mcp_servers.direction.args=[\"mcp\",\"--project\",\"/f\",\"--job\",\"finish\"]"))
         #expect(codex.contains("mcp_servers.direction.tool_input_schema_max_bytes=32768"))
         let codexAgain = EditorProgram.codex.arguments(resumed)
         #expect(Array(codexAgain.prefix(2)) == ["exec", "resume"] && codexAgain.suffix(2) == ["s-1", "Do the job."])
@@ -408,6 +415,22 @@ struct EditorJobTests {
             let resume = EditorDiscovery.run(codex.path, ["exec", "resume", "--help"], environment: env, timeout: 30).map { $0.output + $0.error } ?? ""
             for flag in EditorProgram.codexResumeFlags { #expect(resume.contains(flag), "codex exec resume --help no longer lists \(flag)") }
         }
+    }
+
+    /// A program npm put in an nvm Node is found from the Dock too: Terminal reaches it only through .zshrc, which a
+    /// login shell never reads, so the version managers' folders are looked in, newest Node first.
+    @Test func programsInstalledWithNvmAreFound() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("direction-nvm-" + UUID().uuidString).path
+        defer { try? FileManager.default.removeItem(atPath: home) }
+        for v in ["v9.11.2", "v24.3.0", "v20.18.1"] {
+            let bin = "\(home)/.nvm/versions/node/\(v)/bin"
+            try FileManager.default.createDirectory(atPath: bin, withIntermediateDirectories: true)
+            if v != "v20.18.1" { FileManager.default.createFile(atPath: "\(bin)/codex", contents: Data("#!/bin/sh\n".utf8), attributes: [.posixPermissions: 0o755]) }
+        }
+        let folders = EditorDiscovery.versionManagerFolders(home: home)
+        #expect(Array(folders.prefix(3)) == ["v24.3.0", "v20.18.1", "v9.11.2"].map { "\(home)/.nvm/versions/node/\($0)/bin" })
+        #expect(EditorDiscovery.firstExecutable("codex", in: folders) == "\(home)/.nvm/versions/node/v24.3.0/bin/codex")
+        #expect(EditorDiscovery.firstExecutable("codex", in: ["relative/bin", "\(home)/nowhere"]) == nil)
     }
 
     @Test func versionsReadFromThePrograms() {
@@ -466,7 +489,8 @@ struct EditorRunnerTests {
         #expect(a.first == "--print" && a.contains("stream-json") && a.contains("--strict-mcp-config") && a.contains("claude-opus-5-5"))
         #expect((try? String(contentsOf: dir.appendingPathComponent("Editor/.fake-run-id"), encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) == run.id)
         let mcp = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: dir.appendingPathComponent("Editor/.mcp.json")))
-        #expect(mcp["mcpServers"]["direction"]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path)]))
+        // Started for this job: its own tools, with direction_more_tools for the rest.
+        #expect(mcp["mcpServers"]["direction"]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
         #expect(mcp["mcpServers"]["direction"]["env"]["DIRECTION_RUN_ID"].string == run.id)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/.claude/skills/start-project/SKILL.md").path))
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/NOTES.md").path))

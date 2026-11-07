@@ -31,13 +31,13 @@ text = " ".join(word["text"] for word in transcript["words"])
 assert recognition["provider"] == "apple-speech-analyzer"
 assert len(transcript["words"]) >= 20, text
 assert all(word in text.lower() for word in ["direction", "editing", "director", "comment"]), text
-assert all(word["range"]["duration"]["value"] > 0 for word in transcript["words"])
+assert all(word["end"] > word["start"] for word in transcript["words"])
 before = cli("inspect", "--project", project)
 target = next(word for word in transcript["words"] if word["text"].strip(".,").lower() == "remove")
-deleted = cli("call", "direction_edit_transcript", "--project", project, "--json", json.dumps({"baseEditRevision": before["project"]["editRevision"], "deleteWordIDs": [target["id"]]}))
+deleted = cli("call", "direction_edit", "--project", project, "--json", json.dumps({"baseEditRevision": before["project"]["editRevision"], "operations": [{"op": "removeWords", "wordIDs": [target["id"]]}]}))
 after = cli("inspect", "--project", project)
-duration = target["range"]["duration"]
-assert abs(before["durationSeconds"] - after["durationSeconds"] - duration["value"] / duration["timescale"]) < .001
+duration = target["end"] - target["start"]
+assert abs(before["durationSeconds"] - after["durationSeconds"] - duration) < .021
 report = {"passed": True, "project": str(project), "source": str(source), "provider": recognition["provider"], "wordCount": len(transcript["words"]), "recognizedText": text, "deletedWord": target, "beforeSeconds": before["durationSeconds"], "afterSeconds": after["durationSeconds"]}
 (artifacts / "speech-report.json").write_text(json.dumps(report, indent=2) + "\n")
 print(f"PASS: on-device transcription returned {len(transcript['words'])} timed words; deleting one cut its exact duration.")

@@ -10,6 +10,8 @@ import DirectionCore
         NSApplication.shared.activate()
         NSWindow.allowsAutomaticWindowTabbing = false
         ReaperLaunch.start()
+        // The loudness target was the app's own until the tools needed it.
+        SharedSettings.adopt([SharedSettings.Key.loudnessTarget], from: .standard)
         // A signed copy checks for updates (docs/releasing.md); one built from source doesn't.
         _ = AppUpdates.shared
         // Opened straight from the disk image: offer to move to Applications, where it can update itself.

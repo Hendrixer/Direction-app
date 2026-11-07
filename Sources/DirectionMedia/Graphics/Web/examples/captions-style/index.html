@@ -6,7 +6,8 @@
   - The captions are one word field, a line each, so the director can fix a word in place.
   - For captions timed to speech, give each line its own start in `cues` (seconds from the
     graphic's start) from direction_transcript; without cues, lines share the time by length.
-  - 40 px at 1080p on a backing that keeps contrast over bright and dark shots alike.
+  - 40 px at 1080p on a backing that keeps contrast over bright and dark shots alike. In a tall frame
+    they sit above the bottom fifth and clear of the right eighth, where the phone apps put their buttons.
 -->
 <html>
 <head>
@@ -21,13 +22,18 @@
 </head>
 <body>
 <div id="caption" data-word="lines"></div>
+<!-- Direction's captions step writes captions.js beside this page: the lines, when each starts, how long. -->
+<script src="captions.js"></script>
 <script>
   document.documentElement.style.setProperty('--u', innerHeight / 1080 + 'px');
+  // A tall frame: above the bottom fifth and clear of the right eighth, where the phone apps put their buttons.
+  if (innerHeight > innerWidth * 1.05) { caption.style.bottom = (innerHeight * 0.24) + 'px'; caption.style.maxWidth = (innerWidth * 0.74) + 'px'; caption.style.left = (innerWidth * 0.44) + 'px'; }
   const { ease, clamp } = direction;
-  const duration = 9;
+  const given = window.directionCaptions;
+  const duration = given ? given.duration : 9;
 
   // Optional starts, in seconds, one per line. Empty: share the time by each line's length.
-  const cues = [];
+  const cues = given ? given.cues : [];
 
   const timing = (lines) => {
     if (cues.length === lines.length) return lines.map((text, i) => ({ text, start: cues[i], end: cues[i + 1] ?? duration }));
@@ -39,7 +45,7 @@
   direction.graphic({
     duration,
     words: {
-      lines: { label: 'Captions', text: 'So we started with the edit.\nAnd everyone said, start with the camera.\nEditing was the part nobody wanted.', max: 600 },
+      lines: { label: 'Captions', text: given ? given.lines.join('\n') : 'So we started with the edit.\nAnd everyone said, start with the camera.\nEditing was the part nobody wanted.', max: 4000 },
     },
     render(t, words) {
       const lines = words.lines.split('\n').map((l) => l.trim()).filter(Boolean);

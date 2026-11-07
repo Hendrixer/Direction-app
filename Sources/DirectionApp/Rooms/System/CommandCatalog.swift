@@ -52,6 +52,7 @@ enum CommandHelp {
         ("How do I connect an editor?", "Your editor is an agent like Claude Code or Codex. Add Direction to it as an MCP server (Help \u{203A} Connect an Editor\u{2026}), then ask it to open your film.", ["agent", "claude", "codex", "mcp"]),
         ("Why does a take say it\u{2019}s missing?", "Footage is linked, not copied. When a drive is unplugged or files move, those takes go offline. File \u{203A} Find Missing Footage\u{2026} relinks them; notes, circles and cuts are kept.", ["offline", "relink", "drive"]),
         ("What are outside notes?", "Notes from people you share a cut with. They wait in the Cut room\u{2019}s Outside tab until you accept, edit or decline them. The editor never sees them before you accept.", ["producer", "client", "share"]),
+        ("Can I finish in Final Cut Pro or Resolve?", "Yes. File \u{203A} Export for an Editing App\u{2026} writes the cut as a timeline they open, with each sound track on its own and the look as a LUT. Nothing comes back into Direction.", ["final cut", "resolve", "premiere", "colorist", "fcpxml", "timeline"]),
         ("How do I share a cut?", "Screening links aren\u{2019}t available yet. Export a screening copy from the Share sheet (\u{21E7}\u{2318}S) and send it any way you like.", ["link", "export", "send"]),
     ]
 }
@@ -138,6 +139,7 @@ struct CommandCatalog {
         // Sharing and files
         add("share", "square.and.arrow.up", "Share \(m.watchedCut?.name ?? "cut")\u{2026}", caps(.share), synonyms: ["link", "send", "export"], disabled: m.cuts.isEmpty ? "No cut yet" : nil) { m.sheet = .share }
         add("export", "square.and.arrow.up.on.square", "Export\u{2026}", caps(.export), synonyms: ["deliver", "render"], disabled: m.isPictureLocked ? nil : m.cuts.isEmpty ? "No cut yet" : nil) { if m.isPictureLocked { m.sheet = .deliver } else { m.sheet = .share } }
+        add("exportTimeline", "film.stack", "Export for an Editing App\u{2026}", synonyms: ["final cut", "resolve", "premiere", "fcpxml", "xml", "timeline", "colorist", "hand off"], disabled: m.cuts.isEmpty ? "No cut yet" : m.runtime == nil ? "This film isn\u{2019}t open from disk" : nil) { FilmActions(m).exportTimeline() }
         add("footage", "square.and.arrow.down", "Bring footage\u{2026}", caps(.bringFootage), synonyms: ["import", "media"]) { m.chooseFootage() }
         add("bringScript", "doc.text", m.script == nil ? "Bring in a script\u{2026}" : "Bring in a new draft\u{2026}", synonyms: ["script", "screenplay", "fountain", "draft"]) { m.chooseScript() }
         if m.script == nil { add("bringStory", "text.book.closed", "Bring in a story\u{2026}", synonyms: ["story", "treatment", "outline", "beats"]) { m.chooseScript(.story) } }

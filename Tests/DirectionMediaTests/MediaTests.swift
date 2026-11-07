@@ -127,7 +127,7 @@ struct MediaIntegrationTests {
     @Test func realRippleCutChangesPictureAndExportDuration() async throws {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         let before = try f.store.read()
-        _ = try await f.runtime.invoke("direction_remove_range", arguments: .object(["start": .number(1), "end": .number(2), "baseEditRevision": .number(Double(before.editRevision))]))
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(before.editRevision)), "operations": .array([.object(["op": .string("removeRange"), "range": .object(["start": .number(1), "end": .number(2)])])])]))
         let sample = try await f.runtime.invoke("direction_frame", arguments: .object(["time": .number(1.2)]))
         let color = try meanColor(URL(fileURLWithPath: sample.imagePaths[0]))
         #expect(color.2 > color.0 * 2)
@@ -149,7 +149,7 @@ struct MediaIntegrationTests {
         _ = try await SequenceRenderer.audioPreview(before, range: .init(start: 0.2, end: 1.2), to: beforePath)
         #expect(try toneAmplitude(beforePath, frequency: 440) > 0.15)
         #expect(try toneAmplitude(beforePath, frequency: 880) > 0.15)
-        _ = try await f.runtime.invoke("direction_audio", arguments: .object(["assetID": .string(asset.id), "trackID": .number(Double(asset.audio[1].id)), "muted": .bool(true), "baseEditRevision": .number(Double(p.editRevision))]))
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(p.editRevision)), "operations": .array([.object(["op": .string("audio"), "assetID": .string(asset.id), "audioTrackID": .number(Double(asset.audio[1].id)), "audio": .object(["muted": .bool(true)])])])]))
         let after = try await f.compile(), afterPath = f.directory.appendingPathComponent("first-only.wav")
         _ = try await SequenceRenderer.audioPreview(after, range: .init(start: 0.2, end: 1.2), to: afterPath)
         #expect(try toneAmplitude(afterPath, frequency: 440) > 0.15)
@@ -170,7 +170,7 @@ struct MediaIntegrationTests {
         try f.store.saveTranscript(.init(assetID: asset.id, audioTrackID: asset.audio[0].id, provider: "test-timing", words: words))
         let projected = try await f.runtime.invoke("direction_transcript")
         let middle = try #require(projected.value["words"].array?[1]["id"].string)
-        _ = try await f.runtime.invoke("direction_edit_transcript", arguments: .object(["baseEditRevision": .number(Double(p.editRevision)), "deleteWordIDs": .array([.string(middle)])]))
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(p.editRevision)), "operations": .array([.object(["op": .string("removeWords"), "wordIDs": .array([.string(middle)])])])]))
         let result = try await f.runtime.invoke("direction_transcript")
         #expect(result.value["words"].array?.map { $0["text"].string } == ["First", "last"])
         #expect(try f.store.read().sequences[0].duration == MediaTime(seconds: 2))
@@ -185,7 +185,7 @@ struct MediaIntegrationTests {
         let revision = try f.store.revision()
         let c = try await f.runtime.invoke("direction_add_comment", arguments: .object(["text": .string("Keep the red section"), "start": .number(0.5), "end": .number(1), "region": .object(["x": .number(0.1), "y": .number(0.2), "width": .number(0.4), "height": .number(0.3)])]))
         let id = try c.value.requiredString("id")
-        _ = try await f.runtime.invoke("direction_remove_range", arguments: .object(["start": .number(0), "end": .number(0.2), "baseEditRevision": .number(Double(revision))]))
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(revision)), "operations": .array([.object(["op": .string("removeRange"), "range": .object(["start": .number(0), "end": .number(0.2)])])])]))
         let context = try await f.runtime.invoke("direction_feedback_context", arguments: .object(["commentID": .string(id)]))
         #expect(context.value["comment"]["editRevision"].int == revision)
         #expect(context.imagePaths.count >= 2)
@@ -202,7 +202,7 @@ struct MediaIntegrationTests {
         let result = try await AudioProcessor.processed(asset: asset, trackID: asset.audio[0].id, effects: effects, directory: f.runtime.cacheDirectory.appendingPathComponent("Audio"))
         #expect(try toneAmplitude(result, frequency: 440) < 0.04)
         let export = try await f.runtime.invoke("direction_export", arguments: .object(["path": .string(f.directory.appendingPathComponent("pinned.mp4").path), "revision": .number(Double(p.editRevision))]))
-        _ = try await f.runtime.invoke("direction_remove_range", arguments: .object(["start": .number(1), "end": .number(2), "baseEditRevision": .number(Double(p.editRevision))]))
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(p.editRevision)), "operations": .array([.object(["op": .string("removeRange"), "range": .object(["start": .number(1), "end": .number(2)])])])]))
         let done = try await f.runtime.waitForJob(export.value.requiredString("id"))
         #expect(done.result?["editRevision"].int == p.editRevision)
         let time = try done.result?["duration"].decode(MediaTime.self)
@@ -215,9 +215,12 @@ struct MediaIntegrationTests {
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         let p = try f.store.read(), asset = p.assets[0]
         let clip = try #require(try p.sequence(nil).clips.first { $0.assetID == asset.id })
-        _ = try await f.runtime.invoke("direction_audio", arguments: .object(["assetID": .string(asset.id), "trackID": .number(Double(asset.audio[0].id)), "clipID": .string(clip.id),
-                                                                              "highPassHz": .number(80), "compressor": .bool(true), "thresholdDB": .number(-24), "limiter": .bool(true),
-                                                                              "baseEditRevision": .number(Double(p.editRevision)), "idempotencyKey": .string(UUID().uuidString)]))
+        let effects: JSONValue = .object(["highPassHz": .number(80), "compressor": .bool(true), "thresholdDB": .number(-24), "limiter": .bool(true)])
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(p.editRevision)), "idempotencyKey": .string(UUID().uuidString), "operations": .array([
+            .object(["op": .string("audio"), "assetID": .string(asset.id), "audioTrackID": .number(Double(asset.audio[0].id)), "clipID": .string(clip.id), "audio": .object(["effects": effects])])])]))
+        // Only what was named changed: the rest of the clip's sound is the take's.
+        let settings = try #require(try f.store.read().sequence(nil).clips.first { $0.id == clip.id }?.audioOverrides[String(asset.audio[0].id)])
+        #expect(settings.effects.highPassHz == 80 && settings.effects.limiter && settings.gainDB == asset.audio[0].settings.gainDB && settings.effects.bassDB == asset.audio[0].settings.effects.bassDB)
         let compiled = try await f.compile()
         let loudness = try await SequenceRenderer.loudness(compiled)
         #expect(loudness["integratedLUFS"].double != nil, "\(loudness)")

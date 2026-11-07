@@ -43,9 +43,12 @@ def mt(value):
 
 
 class MCP:
+    def __init__(self, *extra):
+        self.extra = [str(a) for a in extra]
+
     def __enter__(self):
-        self.log = (run / "mcp-stderr.log").open("wb")
-        self.process = subprocess.Popen([str(binary), "mcp", "--project", str(project)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log)
+        self.log = (run / "mcp-stderr.log").open("ab")
+        self.process = subprocess.Popen([str(binary), "mcp", "--project", str(project), *self.extra], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log)
         self.buffer = b""
         self.counter = 0
         return self
@@ -130,7 +133,7 @@ current = cli("inspect", "--project", project)
 check(current["project"]["assets"][0]["audio"][1]["settings"]["muted"] and not current["project"]["assets"][0]["audio"][0]["settings"]["muted"], "Muting the second stream leaves the first enabled")
 words = cli("transcript", "--project", project)["words"]
 word = next(w for w in words if w["text"] == "short")
-call("direction_edit_transcript", {"baseEditRevision": 3, "deleteWordIDs": [word["id"]]})
+call("direction_edit", {"baseEditRevision": 3, "operations": [{"op": "removeWords", "wordIDs": [word["id"]]}]})
 current = cli("inspect", "--project", project)
 check(abs(current["durationSeconds"] - 2.1) < .001, "Text deletion ripple-cuts matching footage")
 clip = current["sequence"]["clips"][0]
@@ -171,9 +174,9 @@ with MCP() as mcp:
     audio = [base64.b64decode(c["data"]) for c in response["content"] if c["type"] == "audio"]
     check(bool(images) and all(data.startswith(b"\x89PNG\r\n\x1a\n") for data in images), "MCP returns valid inline PNG pixels to multimodal agents")
     check(bool(audio) and audio[0][:4] == b"RIFF" and audio[0][8:12] == b"WAVE", "MCP returns valid inline WAV audio")
-    stale = mcp.tool("direction_remove_range", {"start": 0, "end": .1, "baseEditRevision": 1})
-    check(stale["isError"] and json.loads(stale["content"][0]["text"])["code"] == "revision_conflict", "MCP rejects stale edits without mutation")
-    invalid = mcp.tool("direction_audio", {"assetID": asset["id"], "trackID": asset["audio"][0]["id"], "baseEditRevision": 5, "muted": "true"})
+    stale = mcp.tool("direction_edit", {"baseEditRevision": 1, "operations": [{"op": "removeRange", "range": {"start": 0, "end": .1}}]})
+    check(stale["isError"] and json.loads(stale["content"][0]["text"])["code"] == "stale_revision", "MCP rejects stale edits without mutation")
+    invalid = mcp.tool("direction_edit", {"baseEditRevision": 5, "operations": [{"op": "audio", "assetID": asset["id"], "audioTrackID": asset["audio"][0]["id"], "audio": {"muted": "true"}}]})
     check(invalid["isError"] and json.loads(invalid["content"][0]["text"])["code"] == "invalid_arguments", "MCP rejects mistyped mute flags before writing")
     after_invalid = json.loads(mcp.tool("direction_inspect")["content"][0]["text"])
     check(after_invalid["project"]["editRevision"] == 5, "Invalid tool arguments leave the project revision unchanged")
@@ -184,6 +187,17 @@ with MCP() as mcp:
         time.sleep(.1)
         job = json.loads(mcp.tool("direction_job", {"jobID": job["id"]})["content"][0]["text"])
     check(job["status"] == "completed" and Path(job["result"]["path"]).is_file(), "MCP preview job renders and can be polled to completion")
+
+# Started for one job, the server lists that job's tools and direction_more_tools, which runs the rest.
+with MCP("--job", "script") as mcp:
+    mcp.request("initialize", {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "Direction verification", "version": "1"}})
+    mcp.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+    names = [t["name"] for t in mcp.request("tools/list", {})["tools"]]
+    check("direction_script" in names and "direction_more_tools" in names and "direction_inspect" not in names and len(names) < len(listing["tools"]) / 3, "A job's tool list has its own tools and direction_more_tools")
+    others = json.loads(mcp.tool("direction_more_tools")["content"][0]["text"])
+    check(any(t["name"] == "direction_inspect" for t in others["tools"]), "direction_more_tools lists the tools the job wasn't given")
+    inspected = mcp.tool("direction_more_tools", {"name": "direction_inspect", "arguments": {}})
+    check(not inspected.get("isError") and json.loads(inspected["content"][0]["text"])["project"]["editRevision"] >= 1, "direction_more_tools runs a tool the job wasn't given")
 
 report = {"passed": len(checks), "checks": checks, "project": str(project), "export": str(run / "portrait.mp4"), "mcpProtocol": initialized["protocolVersion"]}
 (artifacts / "smoke-report.json").write_text(json.dumps(report, indent=2) + "\n")

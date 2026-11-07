@@ -28,6 +28,21 @@ public struct AudioSettings: Codable, Hashable, Sendable {
     public var fadeOut: Double = 0
     public var effects: AudioEffects = .init()
     public init(muted: Bool = false, gainDB: Double = 0) { self.muted = muted; self.gainDB = gainDB }
+
+    /// These settings with only what `changes` names changed ({muted: true}), effects key by key, as JSON: the
+    /// editor's audio operation names only what changes.
+    public func merging(_ changes: JSONValue) -> JSONValue? {
+        guard case .object(let c) = changes, case .object(var whole) = (try? JSONValue.wrapping(self)) ?? .null else { return nil }
+        for (key, change) in c {
+            if key == "effects", case .object(let e) = change, case .object(var now) = whole["effects"] ?? .null { now.merge(e) { _, b in b }; whole[key] = .object(now) }
+            else { whole[key] = change }
+        }
+        return .object(whole)
+    }
+    public func applying(_ changes: JSONValue) throws -> AudioSettings {
+        guard let merged = merging(changes) else { return self }
+        do { return try merged.decode(AudioSettings.self) } catch { throw DirectionError("bad_argument", "audio settings: {muted, gainDB, fadeIn, fadeOut, effects}, naming only what changes.") }
+    }
 }
 
 public struct AudioStream: Codable, Hashable, Sendable, Identifiable {
@@ -156,6 +171,9 @@ public struct Clip: Codable, Hashable, Sendable, Identifiable {
     public var synced: Bool? = nil
     /// Placed by a layout (layouts.md): which layout, and whether it shows the screen or the camera.
     public var layout: ClipLayout? = nil
+    /// A piece of a song placeMusic fitted (agent-timeline.md › Music): its sound carries on from the piece before it,
+    /// joined on a downbeat. A new head (a trim, a split) leaves it a clip of its own.
+    public var joined: Bool? = nil
     public init(id: String = newID("clip"), assetID: String?, name: String, kind: ClipKind = .video, layer: Int = 0, start: MediaTime = .zero, sourceRange: MediaRange, speed: Double = 1) {
         self.id = id; self.lineageID = id; self.assetID = assetID; self.name = name; self.kind = kind; self.layer = layer; self.start = start; self.sourceRange = sourceRange; self.speed = speed; self.grade = .init(); self.framing = .init(); self.audioOverrides = [:]
     }
@@ -265,6 +283,9 @@ public struct Sequence: Codable, Hashable, Sendable, Identifiable {
     public var clips: [Clip]
     /// Per-track settings by name ("V2", "A2"). nil until the editor sets one.
     public var tracks: [String: TrackSettings]? = nil
+    /// The whole mix's gain in dB, over every track: what the loudness step sets to bring the cut to its target.
+    /// nil is 0 dB.
+    public var mixGainDB: Double? = nil
     public init(id: String = newID("sequence"), name: String = "Main edit", width: Int = 1920, height: Int = 1080, frameRate: FrameRate = .init(), clips: [Clip] = []) {
         self.id = id; self.name = name; self.width = width; self.height = height; self.frameRate = frameRate; self.clips = clips
     }

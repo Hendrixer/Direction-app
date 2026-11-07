@@ -84,6 +84,7 @@ private struct FileMenuItems: View {
         Divider()
         Button("Share \(film?.watchedCut?.name ?? "Cut")\u{2026}") { film?.sheet = .share }.shortcut(.share).disabled(film?.cuts.isEmpty ?? true)
         Button("Export\u{2026}") { if let film { film.sheet = film.isPictureLocked ? .deliver : .share } }.shortcut(.export).disabled(film?.cuts.isEmpty ?? true)
+        Button("Export for an Editing App\u{2026}") { if let film { FilmActions(film).exportTimeline() } }.disabled(film?.cuts.isEmpty ?? true || film?.runtime == nil)
         Divider()
         Button("Show in Finder") { if let film { FilmActions(film).revealInFinder() } else { NSWorkspace.shared.open(URL(fileURLWithPath: UserDefaults.standard.string(forKey: SettingsKey.libraryFolder) ?? SettingsKey.defaultLibrary)) } }
     }

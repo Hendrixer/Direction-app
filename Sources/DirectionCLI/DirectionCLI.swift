@@ -7,7 +7,7 @@ import DirectionReports
 
 @main
 struct DirectionCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self, Reap.self])
+    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Bench.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self, Reap.self])
 }
 
 struct ProjectOptions: ParsableArguments {
@@ -59,9 +59,10 @@ struct Cut: AsyncParsableCommand {
     @Option var key: String?
     func run() async throws {
         let runtime = try options.runtime()
-        var a: [String: JSONValue] = ["start": .number(start), "end": .number(end), "baseEditRevision": .number(Double(try baseRevision ?? runtime.store.revision()))]
+        let op: JSONValue = .object(["op": .string("removeRange"), "range": .object(["start": .number(start), "end": .number(end)]), "ripple": .bool(true)])
+        var a: [String: JSONValue] = ["baseEditRevision": .number(Double(try baseRevision ?? runtime.store.revision())), "summary": .string("Removed \(start)\u{2013}\(end)"), "operations": .array([op])]
         if let sequenceID { a["sequenceID"] = .string(sequenceID) }; if let key { a["idempotencyKey"] = .string(key) }
-        try await execute(runtime, "direction_remove_range", a)
+        try await execute(runtime, "direction_edit", a)
     }
 }
 
@@ -105,9 +106,11 @@ struct Audio: AsyncParsableCommand {
     @Option var baseRevision: Int?
     func run() async throws {
         let runtime = try options.runtime()
-        var a: [String: JSONValue] = ["assetID": .string(assetID), "trackID": .number(Double(track)), "baseEditRevision": .number(Double(try baseRevision ?? runtime.store.revision()))]
-        if let muted { a["muted"] = .bool(muted) }; if let gain { a["gainDB"] = .number(gain) }; if let clipID { a["clipID"] = .string(clipID) }
-        try await execute(runtime, "direction_audio", a)
+        var changes: [String: JSONValue] = [:]
+        if let muted { changes["muted"] = .bool(muted) }; if let gain { changes["gainDB"] = .number(gain) }
+        var op: [String: JSONValue] = ["op": .string("audio"), "assetID": .string(assetID), "audioTrackID": .number(Double(track)), "audio": .object(changes)]
+        if let clipID { op["clipID"] = .string(clipID) }
+        try await execute(runtime, "direction_edit", ["baseEditRevision": .number(Double(try baseRevision ?? runtime.store.revision())), "summary": .string("Changed a sound track"), "operations": .array([.object(op)])])
     }
 }
 
@@ -136,6 +139,26 @@ struct Export: AsyncParsableCommand {
     @Option var revision: Int?
     @Option var sequenceID: String?
     func run() async throws { var a: [String: JSONValue] = ["path": .string(path), "preset": .string(preset)]; if let revision { a["revision"] = .number(Double(revision)) }; if let sequenceID { a["sequenceID"] = .string(sequenceID) }; try await execute(options.runtime(), "direction_export", a) }
+}
+
+/// The editor's work on a film, scored (issue #6, docs/bench.md): the cut against its brief, its notes, Direction's
+/// checks, the director's own cut, and the run's cost; with --previous, what got worse since that scorecard.
+struct Bench: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Score a cut the editor made; compare with an earlier scorecard.")
+    @OptionGroup var options: ProjectOptions
+    @Option(help: "The cut to score, by name or id; the latest when left out.") var cut: String?
+    @Option(help: "The director's own cut to compare with, by name or id.") var reference: String?
+    @Option(help: "An earlier scorecard for the same film: lists what got worse.") var previous: String?
+    @Option(help: "Write the scorecard here as well.") var out: String?
+    func run() async throws {
+        var card = try await options.runtime().benchScore(cut: cut, reference: reference)
+        if let previous {
+            let before = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: URL(fileURLWithPath: NSString(string: previous).expandingTildeInPath)))
+            if case .object(var o) = card { o["worse"] = .array(DirectionTools.Bench.worse(than: before, card).map(JSONValue.string)); card = .object(o) }
+        }
+        if let out { try card.data(pretty: true).write(to: URL(fileURLWithPath: NSString(string: out).expandingTildeInPath)) }
+        try emit(card)
+    }
 }
 
 struct Frame: AsyncParsableCommand {
@@ -213,12 +236,17 @@ struct API: AsyncParsableCommand {
 struct MCP: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "mcp", abstract: "Serve the official MCP stdio transport for an external agent.")
     @OptionGroup var options: OptionalProjectOptions
+    @Option(help: "The job Direction started the editor for (assemble, turnover, finish…): only its tools are listed, with direction_more_tools for the rest.") var job: String?
     func run() async throws {
+        let job = try job.map { name in
+            guard let job = EditorJob(rawValue: name) else { throw ValidationError("Unknown job \(name): use one of \(EditorJob.allCases.map(\.rawValue).joined(separator: ", ")).") }
+            return job
+        }
         stopsItsProgramsWhenStopped()
         // Crash reports, when the person turned them on: the editor's tools run here.
         Reports.startIfAllowed(process: "helper")
         DirectionMCPServer.onStuck = { name, minutes in Reports.stuck("Tool \(name)", minutes: minutes, tags: ["tool": name]) }
-        try await DirectionMCPServer.run(router: options.router())
+        try await DirectionMCPServer.run(router: options.router(), job: job)
         ChildProcesses.stopAll()
     }
 }

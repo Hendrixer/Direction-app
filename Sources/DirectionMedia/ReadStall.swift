@@ -31,9 +31,14 @@ public enum ReadStall {
         return output.copyNextSampleBuffer()
     }
 
+    /// The watchdog's own queue. A private serial queue gets a thread even when every shared one is blocked in a
+    /// read, which is exactly when it has to run (the full suite hung with all 16 cooperative threads in
+    /// copyNextSampleBuffer, 2026-11-07, and the watchdog on the shared utility queue never fired).
+    private static let queue = DispatchQueue(label: "dev.direction.read-stall", qos: .userInitiated)
+
     /// Under the lock: the one watchdog, which stops once nothing is waiting.
     private static func watch() {
-        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + 1, repeating: 1, leeway: .milliseconds(250))
         timer.setEventHandler { sweep() }
         watchdog = timer
@@ -54,6 +59,7 @@ public enum ReadStall {
             if waiting.isEmpty { watchdog?.cancel(); watchdog = nil }
             return late
         }
+        if !late.isEmpty { DirectionLog.error("\(late.count == 1 ? "A read" : "\(late.count) reads") waited \(Int(limit)) s for a sample; stopping \(late.count == 1 ? "it" : "them")", "media") }
         for reader in late { reader.cancelReading() }
     }
 

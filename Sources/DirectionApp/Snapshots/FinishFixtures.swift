@@ -9,7 +9,14 @@ enum FinishFixtures {
             "34-lock-scenes": { .film(lockingScenes()) },
             "35-lock-picture": { let m = lockingScenes(); m.sheet = .lockPicture; return .film(m) },
             "36-finish": { .film(finishing()) },
-            "37-export": { let m = finishing(); m.sheet = .deliver; return .film(m) },
+            "37-export": { let m = finishing(); m.sheet = .deliver; DeliveredPreview.check = nil; return .film(m) },
+            // The check found the mix quiet and a crop that loses a face.
+            "37-export-checks": {
+                let m = finishing(); m.sheet = .deliver
+                DeliveredPreview.check = .object(["ready": .bool(false), "loudness": .object(["ready": .bool(false), "target": .number(-14), "ceiling": .number(-1), "integratedLUFS": .number(-19.2), "truePeakDBTP": .number(-6.4), "says": .string("The mix is \u{2212}19.2 LUFS, 5.2 LU under the \u{2212}14 LUFS target.")]),
+                                                  "framing": .array([.object(["kind": .string("faceLost"), "at": .number(42), "says": .string("At 0:42 the frame loses the face in 2C Take 3: the crop leaves it out.")])])])
+                return .film(m)
+            },
             "38-delivered": { .film(delivered()) },
         ]
     }
@@ -56,12 +63,12 @@ enum FinishFixtures {
         return m
     }
 
-    // 38: three files written to Movies › Launch film › Delivery.
+    // 38: four written to Movies › Launch film › Delivery, the last a folder for another editing app.
     static func delivered() -> FilmModel {
         let m = finishing()
         let folder = DeliveryFormat.defaultFolder(film: "Launch film")
-        let names = ["Launch film \u{2013} Master.mov", "Launch film \u{2013} Web.mp4", "Launch film \u{2013} HEVC.mp4"]
-        DeliveredPreview.sizes = [names[0]: 3_710_000_000, names[1]: 176_000_000, names[2]: 118_000_000]
+        let names = ["Launch film \u{2013} Master.mov", "Launch film \u{2013} Web.mp4", "Launch film \u{2013} Captions.srt", "Launch film \u{2013} Timeline"]
+        DeliveredPreview.sizes = [names[0]: 3_710_000_000, names[1]: 176_000_000, names[2]: 8_200, names[3]: 412_000_000]
         m.directing.deliveredPaths = names.map { folder.appendingPathComponent($0).path }
         m.directing.deliveredAt = SampleFilm.date(10, 28, 16, 40)
         m.directing.finishing = sampleFinishing.map { item in var i = item; if i.id == "deliver" { i.state = "done" }; return i }

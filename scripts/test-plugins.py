@@ -82,7 +82,7 @@ with tempfile.TemporaryDirectory(prefix='Direction plugin test ') as folder:
         _, context = session.tool('direction_feedback_context', {'projectPath': a, 'commentID': note['id']})
         check(any(c['type'] == 'image' and base64.b64decode(c['data']).startswith(b'\x89PNG') for c in context['content']), 'Plugin returns real inline review frames')
         check(any(c['type'] == 'audio' and base64.b64decode(c['data']).startswith(b'RIFF') for c in context['content']), 'Plugin returns real inline review audio')
-        session.tool('direction_remove_range', {'projectPath': a, 'start': 0, 'end': .2, 'baseEditRevision': 1, 'idempotencyKey': 'plugin-cut'})
+        session.tool('direction_edit', {'projectPath': a, 'baseEditRevision': 1, 'idempotencyKey': 'plugin-cut', 'operations': [{'op': 'removeRange', 'range': {'start': 0, 'end': .2}, 'ripple': True}]})
         session.tool('direction_open_project', {'path': b})
         changed, _ = session.tool('direction_inspect', {'projectPath': a})
         check(changed['project']['editRevision'] == 2, 'Opening B does not redirect subsequent explicit A edits')

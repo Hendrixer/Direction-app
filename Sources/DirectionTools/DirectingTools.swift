@@ -53,7 +53,7 @@ extension ToolRuntime {
                 let folder = VideoStudy.referenceFolder(r.id, film: store.url)
                 return VideoStudy.read(in: folder).map { .object(["referenceID": .string(r.id), "title": .string($0.title), "measured": .string($0.summary), "folder": .string("References/\(r.id)"), "read": .string("study.md first, then transcript.txt and the sheet-N.jpg contact sheets")]) }
             }
-            return ToolResponse(.object(["brief": try .wrapping(brief), "studiedReferences": .array(studied), "latitude": .string(state.latitude.rawValue), "pictureLocked": .bool(state.pictureLocked), "editorPaused": .bool(state.editorPaused), "preferences": try .wrapping(state.preferences ?? EditorPreferences()),
+            return ToolResponse(.object(["brief": try .wrapping(brief), "studiedReferences": .array(studied), "latitude": .string(state.latitude.rawValue), "pictureLocked": .bool(state.pictureLocked), "lockedScenes": try .wrapping((try? store.read().sequence(nil)).map { SceneLocks.inCut($0, dailies: try store.dailies()) } ?? []), "editorPaused": .bool(state.editorPaused), "preferences": try .wrapping(state.preferences ?? EditorPreferences()),
                                          "style": try store.style().map { .object(["id": .string($0.id), "name": .string($0.name), "summary": .string($0.summary), "read": .string("direction_style has its values, its guide and its parts. Follow it wherever the brief and the notes leave a choice open.")]) } ?? .null]))
 
         case "direction_dailies":
@@ -119,7 +119,8 @@ extension ToolRuntime {
                     "mayStartCutting": .bool(!t.waitForOK || t.readBackApproved || t.kind == "assembly"),
                 ])
             }
-            return ToolResponse(.object(["turnovers": .array(items), "brief": try .wrapping(store.brief()), "preferences": try .wrapping(store.directingState().preferences ?? EditorPreferences())]))
+            let locks = try (try? p.sequence(nil)).map { try lockValue($0) } ?? .null
+            return ToolResponse(.object(["turnovers": .array(items), "brief": try .wrapping(store.brief()), "preferences": try .wrapping(store.directingState().preferences ?? EditorPreferences()), "locks": locks]))
 
         case "direction_turnover_update":
             let readBack: [ReadBackLine]? = try a["readBack"].array.map { lines in

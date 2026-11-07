@@ -149,10 +149,17 @@ public enum SequenceRenderer {
                 if clip.speed != 1 { track.scaleTimeRange(CMTimeRange(start: insertAt, duration: requested.duration), toDuration: duration) }
                 let mix = AVMutableAudioMixInputParameters(track: track)
                 mix.audioTimePitchAlgorithm = .timeDomain
-                let points = AudioEnvelope.points(clip: clip, streamDB: settings.gainDB, streamFadeIn: settings.fadeIn, streamFadeOut: settings.fadeOut, track: soundTrack.flatMap { sequence.tracks?[$0] }, from: insertAt.seconds, to: CMTimeAdd(insertAt, duration).seconds)
+                let points = AudioEnvelope.points(clip: clip, streamDB: settings.gainDB, streamFadeIn: settings.fadeIn, streamFadeOut: settings.fadeOut, track: soundTrack.flatMap { sequence.tracks?[$0] }, mixDB: sequence.mixGainDB ?? 0, from: insertAt.seconds, to: CMTimeAdd(insertAt, duration).seconds)
                 // A volume holds until the next ramp, so only changes need one.
                 if let first = points.first { mix.setVolume(first.gain, at: insertAt) }
-                for (a, b) in zip(points, points.dropFirst()) where b.t - a.t > 1e-6 && a.gain != b.gain { mix.setVolumeRamp(fromStartVolume: a.gain, toEndVolume: b.gain, timeRange: CMTimeRange(start: cm(a.t), end: cm(b.t))) }
+                // Ramps may not start before the volume set at insertAt or overlap one another, which a time that isn't on
+                // a frame (a fitted song's join) can do by a tick on its way to seconds and back: AVFoundation throws.
+                var after = insertAt
+                for (a, b) in zip(points, points.dropFirst()) where b.t - a.t > 1e-6 && a.gain != b.gain {
+                    let start = CMTimeMaximum(cm(a.t), after), end = cm(b.t)
+                    guard CMTimeCompare(end, start) > 0 else { continue }
+                    mix.setVolumeRamp(fromStartVolume: a.gain, toEndVolume: b.gain, timeRange: CMTimeRange(start: start, end: end)); after = end
+                }
                 audioParameters.append(mix)
             }
         }
@@ -300,6 +307,27 @@ public enum SequenceRenderer {
         } catch { reader.cancelReading(); try? FileManager.default.removeItem(at: output); throw error }
     }
 
+    /// How the loudness moves over the cut, in one answer: short-term loudness every second (every few on a long
+    /// cut, 600 values at most), its loudest stretches, and where the peaks are, all in cut seconds.
+    static func profile(_ meter: LoudnessMeter, from start: Double) -> JSONValue {
+        func r(_ x: Double) -> Double { (x * 10).rounded() / 10 }
+        let every = max(1, (meter.seconds / 600).rounded(.up))
+        let short = meter.shortTerm(every: every)
+        // The loudest 3 s stretches that don't overlap, loudest first.
+        var loudest: [(end: Double, lufs: Double)] = []
+        for s in short.compactMap({ s in s.lufs.map { (end: s.end, lufs: $0) } }).sorted(by: { $0.lufs > $1.lufs }) where loudest.count < 3 && !loudest.contains(where: { abs($0.end - s.end) < 3 }) { loudest.append(s) }
+        let peaks = meter.peaks(every: every)
+        let top = peaks.sorted { $0.dBTP > $1.dBTP }.prefix(5)
+        return .object([
+            "every": .number(every),
+            "shortTermLUFS": .array(short.map { $0.lufs.map { .number(r($0)) } ?? .null }),
+            "shortTermEnds": .string("Each value is the 3 s ending at \(r(start + (short.first?.end ?? 3))) s, then every \(Int(every)) s; null is silence."),
+            "loudest": .array(loudest.map { .object(["start": .number(r(start + $0.end - 3)), "end": .number(r(start + $0.end)), "shortTermLUFS": .number(r($0.lufs))]) }),
+            "peaks": .array(top.map { .object(["start": .number(r(start + $0.start)), "end": .number(r(start + $0.start + every)), "truePeakDBTP": .number(r($0.dBTP))]) }),
+            "overCeiling": .array(peaks.filter { $0.dBTP > SharedSettings.truePeakCeiling }.prefix(20).map { .object(["start": .number(r(start + $0.start)), "truePeakDBTP": .number(r($0.dBTP))]) }),
+        ])
+    }
+
     /// The mix as it plays and delivers, measured by LoudnessMeter over the whole cut or a range of it. It's
     /// read in stereo a buffer at a time as it's mixed, so a long film never sits in memory.
     public static func loudness(_ compiled: CompiledSequence, range: MediaRange? = nil) async throws -> JSONValue {
@@ -333,6 +361,7 @@ public enum SequenceRenderer {
             "method": .string("ITU-R BS.1770-4 (EBU R128): K-weighted stereo mix, 400 ms blocks every 100 ms, gated at \u{2212}70 LUFS and 10 LU under; true peak 4\u{00D7} oversampled."),
         ]
         if meter.integrated == nil { value["note"] = .string("Nothing to measure: loudness needs at least 0.4 s of sound above \u{2212}70 LUFS.") }
+        value["profile"] = profile(meter, from: range.start.seconds)
         return .object(value)
     }
 }

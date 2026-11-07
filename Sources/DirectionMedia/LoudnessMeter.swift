@@ -13,7 +13,9 @@ public struct LoudnessMeter: Sendable {
     var shelf: [Biquad], highPass: [Biquad]
     /// The weighted mean square of each whole 100 ms, in order.
     var steps: [Double] = []
-    var energy = 0.0, count = 0
+    /// The true peak of each whole 100 ms, as a linear level.
+    var stepPeaks: [Double] = []
+    var energy = 0.0, count = 0, stepPeak = 0.0
     let stepLength: Int
     var peak = 0.0, between = 0.0
     /// Each channel's last 12 samples, kept twice over so they're always in a row.
@@ -40,28 +42,28 @@ public struct LoudnessMeter: Sendable {
     public mutating func add(_ samples: UnsafeBufferPointer<Float>) {
         let taps = Oversampling.taps, h = Oversampling.phases
         var ring = recent, shelf = shelf, highPass = highPass
-        var peak = peak, between = between, energy = energy, count = count, cursor = cursor
+        var peak = peak, between = between, energy = energy, count = count, cursor = cursor, stepPeak = stepPeak
         for frame in 0..<(samples.count / channels) {
             var e = 0.0
             for c in 0..<channels {
                 let x = Double(samples[frame * channels + c])
-                peak = max(peak, abs(x))
+                peak = max(peak, abs(x)); stepPeak = max(stepPeak, abs(x))
                 let newest = c * 2 * taps + cursor + taps
                 ring[newest - taps] = x; ring[newest] = x
                 for p in 0..<3 {
                     var y = 0.0
                     for j in 0..<taps { y += ring[newest - j] * h[p * taps + j] }
-                    between = max(between, abs(y))
+                    between = max(between, abs(y)); stepPeak = max(stepPeak, abs(y))
                 }
                 let w = highPass[c].filter(shelf[c].filter(x))
                 e += weights[c] * w * w
             }
             cursor = (cursor + 1) % taps
             energy += e; count += 1
-            if count == stepLength { steps.append(energy / Double(stepLength)); energy = 0; count = 0 }
+            if count == stepLength { steps.append(energy / Double(stepLength)); stepPeaks.append(stepPeak); energy = 0; count = 0; stepPeak = 0 }
         }
         recent = ring; self.shelf = shelf; self.highPass = highPass
-        self.peak = peak; self.between = between; self.energy = energy; self.count = count; self.cursor = cursor
+        self.peak = peak; self.between = between; self.energy = energy; self.count = count; self.cursor = cursor; self.stepPeak = stepPeak
     }
 
     static func lufs(_ z: Double) -> Double { -0.691 + 10 * log10(z) }
@@ -75,6 +77,21 @@ public struct LoudnessMeter: Sendable {
         let relative = Self.lufs(audible.reduce(0, +) / Double(audible.count)) - 10
         let gated = audible.filter { Self.lufs($0) > relative }
         return gated.isEmpty ? nil : Self.lufs(gated.reduce(0, +) / Double(gated.count))
+    }
+    /// Short-term loudness (EBU R128: the last 3 s) every `every` seconds, from the first whole 3 s; nil where
+    /// it's silent (under −70 LUFS). Each value is the 3 s that end at its time.
+    public func shortTerm(every: Double) -> [(end: Double, lufs: Double?)] {
+        let stride = max(1, Int((every * 10).rounded())), window = 30
+        guard steps.count >= window else { return steps.count >= 4 ? [(Double(steps.count) / 10, Self.level(steps))] : [] }
+        return Swift.stride(from: window, through: steps.count, by: stride).map { end in (Double(end) / 10, Self.level(steps[(end - window)..<end])) }
+    }
+    /// The true peak in each `every` seconds, in dBTP, by its start.
+    public func peaks(every: Double) -> [(start: Double, dBTP: Double)] {
+        let stride = max(1, Int((every * 10).rounded()))
+        return Swift.stride(from: 0, to: stepPeaks.count, by: stride).map { i in (Double(i) / 10, 20 * log10(max(stepPeaks[i..<min(stepPeaks.count, i + stride)].max() ?? 0, 1e-12))) }
+    }
+    static func level<C: Collection>(_ z: C) -> Double? where C.Element == Double {
+        let mean = z.reduce(0, +) / Double(max(1, z.count)); return mean > 0 && lufs(mean) > -70 ? lufs(mean) : nil
     }
     public var samplePeakDBFS: Double { 20 * log10(max(peak, 1e-12)) }
     public var truePeakDBTP: Double { 20 * log10(max(peak, between, 1e-12)) }

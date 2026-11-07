@@ -9,7 +9,7 @@ import DirectionCore
 struct ToolSchemaTests {
     /// Objects whose fields are the editor's own to choose: an effect's or a transition's settings, keyframes, a style's tokens.
     static let freeForm: Set<String> = [
-        "direction_edit.operations[].params", "direction_edit.operations[].keys", "direction_edit.batch.operations[].params", "direction_edit.batch.operations[].keys",
+        "direction_edit.operations[].params", "direction_edit.operations[].keys", "direction_edit.batch",
         "direction_save_style.tokens", "direction_save_technique.transition.params", "direction_save_technique.effect.params", "direction_save_technique.variants[].params",
     ]
 
@@ -28,6 +28,15 @@ struct ToolSchemaTests {
             if schema["items"] == .null { out.append(path + "[]") } else { out += shapeless(schema["items"], path + "[]") }
         }
         return out
+    }
+
+    /// Every edit argument says what it is on the argument itself: a gain's target is a clip or a track, not "clip".
+    @Test func everyEditArgumentHasWords() throws {
+        let edit = try #require(ToolCatalog.definitions.first { $0.name == "direction_edit" })
+        guard case .object(let fields) = edit.inputSchema["properties"]["operations"]["items"]["properties"] else { Issue.record("no operation fields"); return }
+        let bare = fields.filter { $0.value["description"] == .null }.map(\.key).sorted()
+        #expect(bare.isEmpty, "\(bare)")
+        #expect(fields["target"]?["description"].string?.contains("Not the word clip") == true)
     }
 
     @Test func everyArgumentSaysItsShape() {
@@ -65,7 +74,7 @@ struct ToolSchemaTests {
                 == "arguments.readBack[0].range: expected an object, not the text \u{201C}0:00\u{2013}0:06\u{201D}.")
         // An edit time is seconds or {value, timescale}, nothing else.
         #expect(refused("direction_edit", .object(["baseEditRevision": .number(1), "operations": .array([.object(["op": .string("split"), "clipID": .string("c"), "at": .string("4.2")])])]))
-                == "arguments.operations[0].at: expected a number or {timescale, value}, not the text \u{201C}4.2\u{201D}.")
+                == "arguments.operations[0].at: expected a number or {timescale, value} or {bar, beat, clip}, not the text \u{201C}4.2\u{201D}.")
         #expect(refused("direction_log_dailies", .object(["takes": .array([.object(["assetID": .string("a"), "scene": .number(2)])])])) == "arguments.takes[0]: unknown field scene; it takes assetID, caption, code, flags, guessSceneNumber, sceneID, sceneNumber, setupCode, suggestion, unusable.")
     }
 

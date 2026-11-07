@@ -6,7 +6,7 @@ import DirectionCore
 import DirectionTools
 
 // Owner: Changes and Finish agent. Deliver (37) and the delivery that runs after it (36, 38).
-// Files are written by direction_export jobs; nothing is ever overwritten.
+// Files are written by direction_export jobs, captions straight from the cut; nothing is ever overwritten.
 
 /// An output the engine can write today.
 struct DeliveryOutput: Identifiable, Hashable {
@@ -25,20 +25,14 @@ struct DeliveryOutput: Identifiable, Hashable {
         .init(id: "master", name: "Master", preset: "prores", ext: "mov", codec: "ProRes 422", note: "with audio", defaultOn: true, mbps: 125, art: .day),
         .init(id: "web", name: "Web", preset: "h264", ext: "mp4", codec: "H.264", note: "for sharing and upload", defaultOn: true, mbps: 7, art: .room),
         .init(id: "hevc", name: "HEVC", preset: "hevc", ext: "mp4", codec: "HEVC", note: "smaller, same quality", defaultOn: false, mbps: 4.5, art: .dusk),
+        // The captions the cut shows, as SRT with a WebVTT beside it (finish.md › 37).
+        .init(id: "captions", name: "Captions", preset: "captions", ext: "srt", codec: "SRT and WebVTT", note: "", defaultOn: true, mbps: 0, art: .night),
+        // A folder for another editing app (issue #4): the cut as FCPXML, renders, each sound track and the look.
+        .init(id: "timeline", name: "Timeline", preset: "timeline", ext: "", codec: "For Final Cut Pro or DaVinci Resolve", note: "sound by track", defaultOn: false, mbps: 0, art: .dusk),
     ]
-    static func matching(_ url: URL) -> DeliveryOutput? { all.first { url.deletingPathExtension().lastPathComponent.hasSuffix("\u{2013} \($0.name)") } }
-}
-
-/// Outputs the engine doesn't make yet. The director can ask the editor for them.
-struct AskOutput: Identifiable {
-    var id: String
-    var name: String
-    var spec: String
-    var request: String
-    var art: FootageArt
-    static let all: [AskOutput] = [
-        .init(id: "captions", name: "Captions", spec: "SRT and WebVTT \u{00B7} Direction can\u{2019}t make these yet", request: "write caption files (SRT and WebVTT)", art: .night),
-    ]
+    static func matching(_ url: URL) -> DeliveryOutput? { all.first { ($0.ext.isEmpty ? url : url.deletingPathExtension()).lastPathComponent.hasSuffix("\u{2013} \($0.name)") } }
+    /// "Name.ext", or "Name" for a folder.
+    func file(_ name: String) -> String { ext.isEmpty ? name : "\(name).\(ext)" }
 }
 
 /// A delivery in progress or done. Lives with the film so it keeps running when the sheet closes.
@@ -66,9 +60,14 @@ final class Delivery {
     /// "<Film title> – <Output>.<ext>", with " 2", " 3"… when a file is already there.
     static func uniqueURL(in folder: URL, film: String, output: DeliveryOutput, taken: Set<String>) -> URL {
         let safe = film.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
-        var url = folder.appendingPathComponent("\(safe) \u{2013} \(output.name).\(output.ext)"), n = 2
-        while FileManager.default.fileExists(atPath: url.path) || taken.contains(url.path) {
-            url = folder.appendingPathComponent("\(safe) \u{2013} \(output.name) \(n).\(output.ext)"); n += 1
+        var url = folder.appendingPathComponent(output.file("\(safe) \u{2013} \(output.name)")), n = 2
+        // Captions write a .vtt beside the .srt, so that name has to be free too.
+        func used(_ url: URL) -> Bool {
+            FileManager.default.fileExists(atPath: url.path) || taken.contains(url.path)
+                || (output.id == "captions" && FileManager.default.fileExists(atPath: url.deletingPathExtension().appendingPathExtension("vtt").path))
+        }
+        while used(url) {
+            url = folder.appendingPathComponent(output.file("\(safe) \u{2013} \(output.name) \(n)")); n += 1
         }
         return url
     }
@@ -108,6 +107,11 @@ final class Delivery {
                 self.items[i].state = .writing
                 let item = self.items[i]
                 do {
+                    if item.output.id == "captions" {
+                        _ = try await runtime.writeCaptionFiles(revision: revision, sequenceID: cut.sequenceID, to: item.url)
+                        self.items[i].state = .done
+                        continue
+                    }
                     var args: [String: JSONValue] = [
                         "path": .string(item.url.path), "preset": .string(item.output.preset),
                         "revision": .number(Double(revision)), "sequenceID": .string(cut.sequenceID),
@@ -115,7 +119,11 @@ final class Delivery {
                     if let size = self.size { args["width"] = .number(Double(size.width)); args["height"] = .number(Double(size.height)) }
                     let response = try await runtime.invoke("direction_export", arguments: .object(args))
                     let job = try response.value.decode(JobRecord.self)
-                    _ = try await runtime.waitForJob(job.id)
+                    do { _ = try await runtime.waitForJob(job.id) } catch is CancellationError {
+                        // Stop stops the writing too, not only the waiting: a stopped timeline never lands later.
+                        Task { _ = try? await runtime.invoke("direction_cancel_job", arguments: .object(["jobID": .string(job.id)])) }
+                        throw CancellationError()
+                    }
                     self.items[i].state = .done
                 } catch {
                     self.items[i].state = .failed(error is CancellationError ? "Stopped" : error.localizedDescription)
@@ -211,7 +219,14 @@ enum DeliveryFormat {
         guard let v = try? probe.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeNameKey]), let free = v.volumeAvailableCapacityForImportantUsage else { return nil }
         return (free, v.volumeName ?? "this disk")
     }
-    static func fileSize(_ url: URL) -> Int64? { (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value }
+    /// A file's size, or everything in a folder.
+    static func fileSize(_ url: URL) -> Int64? {
+        var folder: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &folder) else { return nil }
+        guard folder.boolValue else { return (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value }
+        let files = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey])?.compactMap { $0 as? URL } ?? []
+        return files.reduce(0) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+    }
 }
 
 // MARK: Sheet
@@ -223,6 +238,12 @@ struct DeliverSheet: View {
     @State private var finderAlias = false
     /// "footage" or "cut": which size to deliver at, when the footage is bigger than the cut.
     @State private var sizeChoice = "footage"
+    /// The delivery check (finish.md › Checks): the sound against the target, and the framing. Warnings only.
+    @State private var check: JSONValue?
+    @State private var checking = false
+    @State private var leveling = false
+    /// The captions the cut shows: how many, in what language, and the files' size. nil until read.
+    @State private var captions: (count: Int, language: String?, bytes: Int64)?
     @AppStorage("deliveryRecentFolders") private var recentFolders = ""
 
     private var cut: ReviewCut? { model.deliveryCut }
@@ -290,6 +311,34 @@ struct DeliverSheet: View {
         }
         .accessibilityAddTraits(.isModal)
         .accessibilityLabel("Deliver \(cut?.name ?? "")")
+        .task { await readCaptions(); await runCheck() }
+    }
+
+    private func readCaptions() async {
+        if model.isPreview { captions = (41, "en-US", 8_200); return }
+        guard let runtime = model.runtime, let read = try? await runtime.captionLines(revision: cut.map { model.revision(of: $0) }, sequenceID: cut?.sequenceID) else { return }
+        captions = (read.lines.count, read.language, Int64(Captions.srt(read.lines).utf8.count + Captions.webVTT(read.lines).utf8.count))
+        if read.lines.isEmpty { chosen.remove("captions") }
+    }
+
+    private func runCheck() async {
+        if model.isPreview { check = DeliveredPreview.check; return }
+        guard let runtime = model.runtime else { return }
+        checking = true; defer { checking = false }
+        check = try? await runtime.deliveryCheck(revision: cut.map { model.revision(of: $0) })
+    }
+
+    /// The loudness step, from here: the same edit the editor would make.
+    private func level() {
+        guard let runtime = model.runtime, let store = model.store else { return }
+        leveling = true
+        Task {
+            defer { leveling = false }
+            _ = try? await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString),
+                                                                             "summary": .string("Set the mix to the loudness target"), "operations": .array([.object(["op": .string("loudness")])])]))
+            model.refresh(force: true)
+            await runCheck()
+        }
     }
 
     private var formatLine: String {
@@ -303,7 +352,10 @@ struct DeliverSheet: View {
     }
 
     private func estimate(_ o: DeliveryOutput) -> Int64 {
+        if o.id == "captions" { return captions?.bytes ?? 0 }
         let seconds = model.cutDuration(cut) ?? model.duration
+        // The sound files: the mix and each track, 48 kHz 24-bit stereo. Renders are extra, and only where needed.
+        if o.id == "timeline" { return Int64(288_000 * seconds * Double(1 + Set((sequence?.clips ?? []).filter { $0.kind == .audio }.map(\.layer)).union([0]).count)) }
         let d = dimensions
         let scale = Double((d?.width ?? 1920) * (d?.height ?? 1080)) / (1920 * 1080) * ((sequence?.frameRate.value ?? 24) / 24)
         return Int64(o.mbps * 1_000_000 / 8 * seconds * max(0.1, scale))
@@ -316,7 +368,6 @@ struct DeliverSheet: View {
             ForEach(Array(DeliveryOutput.all.enumerated()), id: \.element.id) { i, o in
                 outputRow(o).hairlineBorder(i == 0 ? [] : .top)
             }
-            ForEach(AskOutput.all) { a in askRow(a).hairlineBorder(.top) }
         }
         .gatePanel()
         .accessibilityElement(children: .contain)
@@ -325,6 +376,8 @@ struct DeliverSheet: View {
 
     private func outputRow(_ o: DeliveryOutput) -> some View {
         let on = chosen.contains(o.id)
+        // No words in the cut: nothing to caption.
+        let empty = o.id == "captions" && captions?.count == 0
         return Button { if on { chosen.remove(o.id) } else { chosen.insert(o.id) } } label: {
             HStack(spacing: 12) {
                 CheckMark(on: on)
@@ -341,40 +394,26 @@ struct DeliverSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(empty)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(o.name), \(spec(o)), about \(DeliveryFormat.bytes(estimate(o)))")
         .accessibilityValue(on ? "on" : "off")
         .accessibilityAddTraits(.isToggle)
     }
     private func spec(_ o: DeliveryOutput) -> String {
-        [o.codec, dimensions.map { "\($0.width) \u{00D7} \($0.height)" }, o.note].compactMap { $0 }.joined(separator: " \u{00B7} ")
-    }
-
-    private func askRow(_ a: AskOutput) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "minus").font(.system(size: 9, weight: .bold)).foregroundStyle(Gate.Text.disabled).frame(width: 15, height: 15)
-            thumb(a.art).opacity(0.5)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(a.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary).opacity(0.5)
-                Text(a.spec).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
-            }
-            Spacer(minLength: 8)
-            Button { ask(a) } label: { HStack(spacing: 5) { GemMark(size: 5, solid: true); Text("Ask the editor") } }
-                .buttonStyle(.gate(.normal, .small)).help("Copy a request you can paste to your editor")
+        if o.id == "captions" {
+            guard let captions else { return o.codec }
+            guard captions.count > 0 else { return "No words to caption: the takes have no transcript" }
+            let language = captions.language.flatMap { Locale(identifier: $0).language.languageCode?.identifier }.flatMap { Locale.current.localizedString(forLanguageCode: $0) }
+            return [o.codec, language, captions.count == 1 ? "1 line" : "\(captions.count) lines"].compactMap { $0 }.joined(separator: " \u{00B7} ")
         }
-        .padding(.horizontal, 14).padding(.vertical, 12)
+        if o.id == "timeline" { return [o.codec, o.note].joined(separator: " \u{00B7} ") }
+        return [o.codec, dimensions.map { "\($0.width) \u{00D7} \($0.height)" }, o.note].compactMap { $0 }.joined(separator: " \u{00B7} ")
     }
 
     private func thumb(_ art: FootageArt) -> some View {
         Thumbnail(path: model.stripScenes.last?.thumbnail, art: art).frame(width: 40, height: 40)
             .clipShape(RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Gate.Line.subtle, lineWidth: 1))
-    }
-
-    private func ask(_ a: AskOutput) {
-        let where_ = model.url.map { " at \($0.path)" } ?? ""
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("In my Direction film\(where_), \(a.request) of \(cut?.name ?? "the locked cut") for delivery. Picture is locked, so don\u{2019}t change timing.", forType: .string)
-        model.toast = Toast(title: "Copied for your editor", detail: "Paste it into Claude Code or Codex.", editor: true)
     }
 
     // MARK: Folder
@@ -430,6 +469,37 @@ struct DeliverSheet: View {
             Text("The editor is still on \(working.map { $0.title.lowercased() }.joined(separator: " and ")). These files use it as it is now.")
                 .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
         }
+        if let check, check["loudness"]["ready"].bool == false {
+            HStack(spacing: 10) {
+                Text(Image(systemName: "speaker.wave.2")).font(.system(size: 13, weight: .medium)).foregroundStyle(Gate.State.alert)
+                Text(soundWords(check["loudness"])).font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button("Set to \(LoudnessCheck.lufsText(check["loudness"]["target"].double ?? SharedSettings.loudnessTarget))") { level() }
+                    .buttonStyle(.gate(.normal)).disabled(leveling || checking)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: Gate.Radius.card).fill(Gate.Surface.panel).overlay(RoundedRectangle(cornerRadius: Gate.Radius.card).strokeBorder(Gate.State.alert.opacity(0.45), lineWidth: 1)))
+            .accessibilityElement(children: .combine)
+        }
+        if let problems = check?["framing"].array, !problems.isEmpty {
+            let said = problems.prefix(2).compactMap { $0["says"].string }.joined(separator: " ")
+            Text("Look before you publish: \(said)\(problems.count > 2 ? " And \(problems.count - 2) more." : "")")
+                .font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        if checking || leveling {
+            Text(leveling ? "Setting the mix\u{2026}" : "Checking the sound and the framing\u{2026}").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+        }
+    }
+
+    /// The sound against the target the director chose in Settings, in their words: quieter or louder, or a
+    /// moment loud enough to crackle.
+    private func soundWords(_ l: JSONValue) -> String {
+        let target = l["target"].double ?? SharedSettings.loudnessTarget
+        if let peak = l["truePeakDBTP"].double, peak > (l["ceiling"].double ?? SharedSettings.truePeakCeiling) + 0.1 {
+            return "The loudest moment is too loud and can crackle on some players. You can deliver, but don\u{2019}t publish yet."
+        }
+        guard let measured = l["integratedLUFS"].double else { return l["says"].string ?? "" }
+        return "The sound is \(measured < target ? "quieter" : "louder") than your \(LoudnessCheck.lufsText(target)) target (it\u{2019}s \(LoudnessCheck.lufsText(measured)) now). You can deliver, but it won\u{2019}t play at the level you chose."
     }
 
     private var footLine: String {

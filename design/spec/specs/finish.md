@@ -122,6 +122,17 @@ Also:
 
 **Accessibility:** Items are a list, "Finishing, 3 of 6 done". Each reads as "Captions, editor and you, needs you: 41 English captions…, Check 2 names button."
 
+**What Direction does itself.** Before the editor starts finishing, Direction runs the steps that come out the same every time, each an edit of its own (agent-timeline.md › Finishing), and writes what it did into the item's description:
+- **Captions** (unless the style turns them off): from the cut's words, a caption ending at a sentence, a pause, or when it holds as many words as fit (the style's, or 7 in a wide frame and 4 in a tall one). They're graphics (`captions-1`, `captions-2`…, a new name each time they're made) of at most 110 s each, from the style's captions graphic or Captions style; in a tall frame they sit above the bottom fifth. The item goes to Editor working: the editor checks line breaks and names.
+- **Credits**, once written: rolled on black after the last shot, word for word, for as long as they take to read.
+- **Loudness**: the whole mix to the target in Settings › Cutting, with no true peak over −1 dBTP. If the peaks hold it under the target, the item says where the loudest is.
+
+Each runs only when there's something to do, so Finish again undoes nothing: captions while none are laid, credits when none are rolled or the director's changed since, loudness while the mix is off target and Sound mix isn't done. Stop reaches these steps too, and a run paused by quitting does what's left of them on Resume.
+
+The editor's part is what needs an eye and an ear: color, the balance of the mix, titles, and checking the rest. It runs a step again after changing what it depends on.
+
+**Checks.** `direction_check` looks at the cut as it delivers: the sound against the target and the ceiling, and the framing, frame by frame at each shot and each stretch of captions: a crop that loses a face its take has or cuts down through it, words in a tall or feed frame where the phone apps put their buttons (the bottom fifth, the right eighth), words over a face. A face is judged on the shots as framed, without the graphics over them, so words over a face are said as that and not as a crop; a shot under a cutaway, or in a layout, isn't judged on its crop. Each run of a problem is one line, with the shot's clip for a crop. The editor can't mark Sound mix done until the sound is ready; framing problems it fixes or names for the director. The Deliver sheet shows the same (37).
+
 **Acceptance:**
 - [ ] Finish is unavailable until picture lock. It shows a disabled room segment with the tooltip "Lock picture first".
 - [ ] No finishing action changes picture timing.
@@ -149,6 +160,7 @@ Frame: `screens/37-export.html` · Render: `renders/37-export@2x.png`
   - Master: "ProRes 422 HQ · 3840 × 2160 · stereo + stems", ~38 GB (on).
   - Web: "H.264 · 1920 × 1080 · −14 LUFS", ~180 MB (on).
   - Captions: "SRT and WebVTT · English · 41 lines", 8 KB (on).
+  - Timeline: "For Final Cut Pro or DaVinci Resolve · sound by track", the size of its sound files (off). A folder, below.
   - Burned-in captions: "Adds a web copy with captions in the picture", ~180 MB (off).
 - Save to: "Movies › Launch film › Delivery".
 - Also: "Update the screening link to the final cut" (on), "Make a Finder alias on the Desktop" (off).
@@ -158,6 +170,18 @@ Frame: `screens/37-export.html` · Render: `renders/37-export@2x.png`
 **States and variants:**
 - The button label counts checked outputs ("Deliver 1 file"). It's disabled at 0 files, or when the size exceeds free space ("Not enough space on Macintosh HD").
 - Output presets are editable in Settings › Cutting (not here).
+- Captions are the captions as laid in the cut, with the director's fixes, at the times they show; with none laid, the cut's words as the captions step would lay them. An SRT and a WebVTT of the same name are written. With no words in the cut the row is off and says "No words to caption: the takes have no transcript".
+- When the check finds the sound off the target, a red-bordered line says it in plain words ("The sound is quieter than your −14 LUFS target (it's −19.2 LUFS now)") with "Set to −14 LUFS", which runs the loudness step; framing problems follow in a quiet line, "Look before you publish: …".
+
+### Timeline for another editing app
+Built 7 Nov 2026 (issue #4). Deliver's Timeline row, or File › Export for an Editing App… (and the command menu) for the watched cut at any stage, writes a new folder, never over one:
+- `<Film> – <Cut>.fcpxml` (FCPXML 1.10; File › Import › XML in Final Cut Pro, File › Import › Timeline in Resolve). The story layer is the primary storyline; everything else is anchored to it on its own lanes in the order Direction composites them (the layers under the look, then those above it, so graphics stay on top), sound below. Takes keep their timecode (a QuickTime timecode track, or a Broadcast Wave's time reference). Speed is a time map; reframes, opacity, blend modes and crops are Final Cut's transform, blend and crop, with holds and eases keyed in so the straight lines between keys follow Direction's; dissolves on the story are Cross Dissolves, and the sound of the shots either side goes on its own so it cuts at the edit as Direction plays it; sound keeps its level, keys (track gain, ducking and the mix's gain folded in) and fades, with the dialogue, music and effects roles, J- and L-cuts no further than the file has sound, and sound the cut doesn't play is left out. Scenes and notes are markers.
+- `Renders/`: what only Direction draws (titles, freezes, masks, blurs, steadying, pins, framed pictures, backdrops, shaders, pixel grids, dips, Direction's own transitions, dissolves off the story layer), rendered as ProRes 422 with every layer under it, without the look, and placed on the story layer in its place. Stretches that meet are one render; one that would cut a dissolve takes all of it. The sound under a render stays in the timeline as clips of its own.
+- `Sound/`: the mix and each track as the cut plays it, 48 kHz 24-bit WAV, all the cut's length; the tracks add up to the mix.
+- `Look.cube` (and a scene's own looks): the look's LUT at its strength. Camera LUTs are copied as the renderer picks them (a take's own .cube, none when it's set to none, else the one matched to its log footage), named for their takes.
+- `Read Me.txt`: what's where, each render and why, and what didn't go across: balance (the timeline has the takes as shot), look filters and sharpening on clips and tracks, sound effects (EQ, compressor) that are only in the WAVs, clips playing some of their sound tracks.
+- A sound file that can't be written, or a read that stops partway, fails the export rather than leaving silence. Stop stops the writing; a stopped export leaves nothing at the destination, and what one leaves beside it is moved to the Trash by a later export.
+- The result is checked against Apple's FCPXML 1.10 DTD and read back frame by frame against the cut in tests.
 
 **Interactions:**
 - Clicking a row toggles it; `Space` toggles the focused row. `↩` delivers.
