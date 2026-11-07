@@ -57,6 +57,22 @@ struct CutPointsTests {
         #expect(pauses.count == 2 && abs(pauses[0].start - 0.9) < 1e-4 && abs(pauses[1].start - 1.95) < 1e-4 && pauses.map(\.afterSentence) == [true, false], "\(pauses)")
         // A stretch takes in the pauses that reach into it.
         #expect(CutPoints.pauses(words, from: 1.5).count == 2 && CutPoints.pauses(words, from: 1.7).count == 1)
+        // Knowing the take's length: the quiet before the first word (too short here) and after the last.
+        let whole = CutPoints.pauses(words, length: 4)
+        #expect(whole.count == 3 && abs((whole.last?.start ?? 0) - 2.6) < 1e-4 && whole.last?.end == 4, "\(whole)")
+        let alone = CutPoints.pauses([TranscriptWord(id: "a", text: "Hi.", range: .init(start: 1.0, end: 1.4))], length: 2)
+        #expect(alone.count == 2 && alone[0].start == 0 && abs(alone[0].end - 1.0) < 1e-4 && abs(alone[1].start - 1.4) < 1e-4 && alone[1].end == 2, "\(alone)")
+    }
+
+    /// Two faces close together stay two: each frame's faces carry on their own tracks, one to one.
+    @Test func twoFacesCloseTogetherStayTwo() {
+        let a = CutPoints.EyeSample(t: 0, open: 0.3, x: 0.45, y: 0.5), b = CutPoints.EyeSample(t: 0, open: 0.3, x: 0.55, y: 0.5)
+        #expect(CutPoints.match([a, b], to: []) == [nil, nil])
+        let tracks = [[a], [b]]
+        let next = [CutPoints.EyeSample(t: 0.1, open: 0.3, x: 0.56, y: 0.5), CutPoints.EyeSample(t: 0.1, open: 0.1, x: 0.44, y: 0.5)]
+        #expect(CutPoints.match(next, to: tracks) == [1, 0])
+        // A face of its own when there's no track left for it.
+        #expect(CutPoints.match(next, to: [[a]]) == [nil, 0])
     }
 
     /// Two frames either side of a cut jump when they're framed alike but differ; a punch-in or another shot doesn't.
@@ -69,6 +85,12 @@ struct CutPointsTests {
         #expect(CutCheck.judge(distance: 0.2, before: nil, after: nil) != nil)
         #expect(CutCheck.judge(distance: 0.8, before: nil, after: nil) == nil, "another shot")
         #expect(CutCheck.judge(distance: 0.05, before: nil, after: nil) == nil)
+        // Direction's own punch-in (1 to 1.15) is a change of framing either way, never a jump.
+        let punched = CGRect(x: 0.385, y: 0.375, width: 0.23, height: 0.345)
+        #expect(CutCheck.judge(distance: 0.25, before: face, after: punched) == nil && CutCheck.judge(distance: 0.25, before: punched, after: face) == nil)
+        // A style that punches in less draws the line lower.
+        let nudged = CGRect(x: 0.395, y: 0.39, width: 0.21, height: 0.315)
+        #expect(CutCheck.judge(distance: 0.2, before: face, after: nudged) != nil && CutCheck.judge(distance: 0.2, before: face, after: nudged, punch: 1.06) == nil)
     }
 
     // MARK: In a film
@@ -106,7 +128,7 @@ struct CutPointsTests {
         let id = try #require(asset["id"].string)
         let found = try await f.runtime.invoke("direction_cut_points", arguments: .object(["assetID": .string(id)])).value
         let actions = (found["points"].array ?? []).filter { $0["kind"].string == "action" }.compactMap { $0["t"].double }
-        #expect(actions.count == 2 && abs(actions[0] - 1.25) < 0.16 && abs(actions[1] - 3.25) < 0.16, "\(found)")
+        #expect(actions.count == 2 && abs(actions[0] - 1.2) < 0.1 && abs(actions[1] - 3.2) < 0.1, "\(found)")
         // No face, so no blinks, and it says why.
         #expect(!(found["points"].array ?? []).contains { $0["kind"].string == "blink" } && found["says"].string?.contains("No face there") == true, "\(found)")
         // Kept: asked again, it's read from the cache.
@@ -124,7 +146,8 @@ struct CutPointsTests {
         let split = try await edit([.object(["op": .string("split"), "clipID": .string(clip.id), "at": .number(peak - 5.0 / 30), "snap": .string("action")])])
         #expect(split["warnings"].array?.first?.string?.hasPrefix("Snapped the split to a peak of action") == true, "\(split)")
         let pieces = try f.store.read().sequences[0].clips.filter { $0.assetID == id }.sorted { $0.start < $1.start }
-        #expect(pieces.count == 2 && abs(pieces[0].end.seconds - peak) < 0.5 / 30, "\(pieces.map(\.end.seconds)) \(peak)")
+        // On the frame nearest the peak (a peak is stamped between two looks, so it can fall between frames).
+        #expect(pieces.count == 2 && abs(pieces[0].end.seconds - peak) <= 0.5 / 30 + 1e-3, "\(pieces.map(\.end.seconds)) \(peak)")
         // Too far from one: the split is where it was asked, and the result says so.
         let far = try await edit([.object(["op": .string("split"), "clipID": .string(pieces[1].id), "at": .number(2.2), "snap": .string("action")])])
         #expect(far["warnings"].array?.first?.string?.hasPrefix("No peak of action within 8 frames") == true, "\(far)")
@@ -133,11 +156,27 @@ struct CutPointsTests {
         // A jump cut: the take cut to itself after the square has moved. A split that plays on isn't one.
         let story = try f.store.read().sequences[0].clips.filter { $0.assetID == id }.sorted { $0.start < $1.start }
         let continuing = try await f.runtime.invoke("direction_check", arguments: .object(["checks": .array([.string("cuts")])])).value
-        #expect(continuing["cuts"].array?.isEmpty == true && continuing["cutsLookedAt"].int == story.count - 1 && continuing["loudness"] == .null, "\(continuing)")
+        #expect(continuing["cuts"].array?.isEmpty == true && continuing["cutsOnTheStory"].int == story.count - 1 && continuing["cutsCompared"].int == 0 && continuing["loudness"] == .null, "\(continuing)")
         _ = try await edit([.object(["op": .string("removeRange"), "range": .object(["start": .number(0.8), "end": .number(1.8)])])])
         let jumped = try await f.runtime.invoke("direction_check", arguments: .object(["checks": .array([.string("cuts")])])).value
         let jump = try #require(jumped["cuts"].array?.first { $0["kind"].string == "jumpCut" }, "\(jumped)")
         #expect(abs((jump["at"].double ?? 0) - 0.8) < 0.05 && jump["says"].string?.contains("jumps") == true && jump["fix"].string?.contains("punchIn") == true, "\(jump)")
+        #expect(jumped["cutsCompared"].int == 1, "\(jumped)")
+        // With nothing asked, it's the sound and the framing, as finishing uses it: never the cuts.
+        let plain = try await f.runtime.invoke("direction_check").value
+        #expect(plain["cuts"] == .null && plain["framing"] != .null && plain["loudness"] != .null, "\(plain)")
+
+        // A snap past what the edit can reach is left alone, not a failed batch: a 6-frame clip asked to lose 5
+        // frames can't trim to the peak 8 or more frames back.
+        _ = try await edit([.object(["op": .string("insert"), "assetID": .string(id), "at": .number(0), "sourceRange": .object(["start": .number(1.3), "end": .number(1.5)])])])
+        let short = try #require(try f.store.read().sequences[0].clips.first { $0.assetID == id && abs($0.sourceRange.start.seconds - 1.3) < 0.01 })
+        let trimmed = try await edit([.object(["op": .string("trim"), "clipID": .string(short.id), "edge": .string("tail"), "frames": .number(-5), "snap": .string("action")])])
+        #expect(trimmed["warnings"].array?.first?.string?.hasPrefix("The nearest peak of action is further than") == true, "\(trimmed)")
+        #expect(abs(try f.store.read().sequences[0].clips.first { $0.id == short.id }!.duration.seconds - 1.0 / 30) < 0.01)
+        // A take asked for past its end is read to its end; one before its start is refused, not a crash.
+        let past = try await f.runtime.invoke("direction_cut_points", arguments: .object(["assetID": .string(id), "sourceRange": .object(["start": .number(5), "end": .number(1e300)]), "kinds": .array([.string("action")])])).value
+        #expect(past["says"].string?.contains("6.00 s of") == true, "\(past)")
+        await #expect(throws: DirectionError.self) { _ = try await f.runtime.invoke("direction_cut_points", arguments: .object(["assetID": .string(id), "sourceRange": .object(["start": .number(-5), "end": .number(2)])])) }
     }
 
     /// Sound that stops inside a word is found, and a trim snapped to a pause puts it right.
@@ -153,15 +192,23 @@ struct CutPointsTests {
         }
         let pauses = try await f.runtime.invoke("direction_cut_points", arguments: .object(["clipID": .string(clip.id), "at": .number(1.4), "kinds": .array([.string("pause")])])).value
         let pause = try #require(pauses["points"].array?.first, "\(pauses)")
-        #expect(pause["from"].double == 1.2 && pause["to"].double == 1.6 && pauses["says"].string?.hasPrefix("1 pause near 1.40 s") == true, "\(pauses)")
-        // The tail cut into "friend.".
-        _ = try await edit([.object(["op": .string("trim"), "clipID": .string(clip.id), "edge": .string("tail"), "frames": .number(-30)])])
+        #expect(pause["from"].double == 1.2 && pause["to"].double == 1.6 && pauses["says"].string?.hasPrefix("2 pauses near 1.40 s") == true, "\(pauses)")
+        // A pause reaching into a small stretch is found though its middle is outside it.
+        let edge = try await f.runtime.invoke("direction_cut_points", arguments: .object(["clipID": .string(clip.id), "at": .number(1.25), "within": .number(0.1), "kinds": .array([.string("pause")])])).value
+        #expect(edge["points"].array?.contains { $0["from"].double == 1.2 && $0["to"].double == 1.6 } == true, "\(edge)")
+        // A split inside a word that plays straight on isn't a cut in it.
+        _ = try await edit([.object(["op": .string("split"), "clipID": .string(clip.id), "at": .number(1.9)])])
+        let split = try await f.runtime.invoke("direction_check", arguments: .object(["checks": .array([.string("cuts")])])).value
+        #expect(split["cuts"].array?.isEmpty == true, "\(split)")
+        // Without the second half, the tail is cut into "friend." (at 1.9 s).
+        let halves = try f.store.read().sequences[0].clips.sorted { $0.start < $1.start }
+        _ = try await edit([.object(["op": .string("remove"), "clipID": .string(halves[1].id), "ripple": .bool(true)])])
         let check = try await f.runtime.invoke("direction_check", arguments: .object(["checks": .array([.string("cuts")])])).value
         let word = try #require(check["cuts"].array?.first { $0["kind"].string == "midWord" }, "\(check)")
         #expect(word["says"].string?.contains("stops partway through \u{201C}friend\u{201D}") == true && word["fix"].string?.contains("snap") == true, "\(word)")
-        // Asked for 10 frames shorter (1.67 s, still in "friend."): snapped into the pause, 3 frames before the word.
+        // Asked for 10 frames shorter (1.57 s, just inside the pause's last 3 frames): snapped to 3 frames before the word.
         let trimmed = try await edit([.object(["op": .string("trim"), "clipID": .string(clip.id), "edge": .string("tail"), "frames": .number(-10), "snap": .string("pause")])])
-        #expect(trimmed["warnings"].array?.first?.string?.contains("to a pause: trimmed 15 frames, not 10") == true, "\(trimmed)")
+        #expect(trimmed["warnings"].array?.first?.string?.contains("to a pause: trimmed 12 frames, not 10") == true, "\(trimmed)")
         #expect(abs(try f.store.read().sequences[0].clips[0].end.seconds - 1.5) < 0.02)
         let after = try await f.runtime.invoke("direction_check", arguments: .object(["checks": .array([.string("cuts")])])).value
         #expect(after["cuts"].array?.isEmpty == true, "\(after)")
@@ -169,13 +216,50 @@ struct CutPointsTests {
         let stays = try await edit([.object(["op": .string("trim"), "clipID": .string(clip.id), "edge": .string("tail"), "frames": .number(-4), "snap": .string("pause")])])
         #expect(stays["warnings"].array?.first?.string == "The tail lands on a pause already.", "\(stays)")
         #expect(abs(try f.store.read().sequences[0].clips[0].end.seconds - (1.5 - 4.0 / 30)) < 0.02)
+        // A trim given as a range doesn't snap, and says so.
+        let ranged = try await edit([.object(["op": .string("trim"), "clipID": .string(clip.id), "range": .object(["start": .number(0), "end": .number(1.3)]), "snap": .string("pause")])])
+        #expect(ranged["warnings"].array?.first?.string?.hasPrefix("snap goes with a trim by edge and frames") == true, "\(ranged)")
         // A narration (sound on its own) that ends inside a word.
         let voice = try await f.runtime.invoke("direction_import", arguments: .object(["path": .string(f.directory.appendingPathComponent("tone0.wav").path)])).value["asset"]
         let voiceID = try #require(voice["id"].string)
-        try f.store.saveTranscript(.init(assetID: voiceID, audioTrackID: Int32(voice["audio"].array?.first?["id"].int ?? 0), provider: "test-timing", words: [TranscriptWord(id: "n", text: "narrated", range: .init(start: 1.8, end: 2.4))]))
+        try f.store.saveTranscript(.init(assetID: voiceID, audioTrackID: Int32(voice["audio"].array?.first?["id"].int ?? 0), provider: "test-timing", words: [
+            TranscriptWord(id: "n", text: "narrated", range: .init(start: 1.8, end: 2.2)), TranscriptWord(id: "m", text: "line.", range: .init(start: 2.6, end: 3.0)),
+        ]))
         _ = try await edit([.object(["op": .string("overwrite"), "assetID": .string(voiceID), "at": .number(0), "track": .string("A2"), "sourceRange": .object(["start": .number(0), "end": .number(2.1)])])])
         let narrated = try await f.runtime.invoke("direction_check", arguments: .object(["checks": .array([.string("cuts")])])).value
         #expect(narrated["cuts"].array?.contains { $0["kind"].string == "midWord" && ($0["says"].string ?? "").contains("\u{201C}narrated\u{201D}") } == true, "\(narrated)")
+        // The narration has pauses (not blinks: it's sound only), and its tail snaps to one.
+        let line = try #require(try f.store.read().sequences[0].clips.first { $0.assetID == voiceID })
+        let spoken = try await f.runtime.invoke("direction_cut_points", arguments: .object(["clipID": .string(line.id), "kinds": .array([.string("blink"), .string("pause")])])).value
+        #expect(spoken["says"].string?.contains("is sound only") == true && spoken["points"].array?.contains { $0["kind"].string == "pause" && $0["from"].double == 2.2 } == true, "\(spoken)")
+        let carried = try await edit([.object(["op": .string("trim"), "clipID": .string(line.id), "edge": .string("tail"), "frames": .number(4), "snap": .string("pause")])])
+        #expect(carried["warnings"].array?.first?.string?.contains("to a pause: extended 6 frames, not 4") == true, "\(carried)")
+        #expect(abs(try f.store.read().sequences[0].clips.first { $0.id == line.id }!.end.seconds - 2.3) < 0.02)
+        let clean = try await f.runtime.invoke("direction_check", arguments: .object(["checks": .array([.string("cuts")])])).value
+        #expect(clean["cuts"].array?.contains { ($0["says"].string ?? "").contains("narrated") } == false, "\(clean)")
+    }
+
+    /// With an L-cut the sound ends after the picture: a pause is judged where the sound is cut.
+    @Test func aPauseIsJudgedWhereTheSoundIsCut() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let p = try f.store.read(), asset = p.assets[0], clip = p.sequences[0].clips[0]
+        try f.store.saveTranscript(.init(assetID: asset.id, audioTrackID: asset.audio[0].id, provider: "test-timing", words: [
+            TranscriptWord(id: "a", text: "Hello", range: .init(start: 0.2, end: 0.6)), TranscriptWord(id: "b", text: "there", range: .init(start: 0.7, end: 1.2)),
+            TranscriptWord(id: "c", text: "friend.", range: .init(start: 1.6, end: 2.2)),
+        ]))
+        func edit(_ ops: [JSONValue]) async throws -> JSONValue {
+            try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try f.store.revision())), "idempotencyKey": .string(UUID().uuidString), "operations": .array(ops)])).value
+        }
+        _ = try await edit([.object(["op": .string("split"), "clipID": .string(clip.id), "at": .number(1.4)])])
+        let pieces = try f.store.read().sequences[0].clips.sorted { $0.start < $1.start }
+        // The first piece's sound carries 12 frames (0.4 s) past its picture.
+        _ = try await edit([.object(["op": .string("splitEdit"), "editPoint": .string("\(pieces[0].id)|\(pieces[1].id)"), "lead": .string("picture"), "frames": .number(12)])])
+        // 3 frames shorter puts the picture at 1.3 s, in the pause, but the sound at 1.7 s, inside "friend.": it snaps
+        // the sound back into the pause (1.5 s, 3 frames before the word), so the picture goes to 1.1 s.
+        let snapped = try await edit([.object(["op": .string("trim"), "clipID": .string(pieces[0].id), "edge": .string("tail"), "frames": .number(-3), "snap": .string("pause")])])
+        #expect(snapped["warnings"].array?.first?.string?.contains("to a pause: trimmed 9 frames, not 3") == true, "\(snapped)")
+        let first = try #require(try f.store.read().sequences[0].clips.first { $0.id == pieces[0].id })
+        #expect(abs(first.end.seconds - 1.1) < 0.02 && abs(first.soundRange.end.seconds - 1.5) < 0.02, "\(first.end.seconds) \(first.soundRange.end.seconds)")
     }
 
     @Test func snapIsOnlyForSplitTrimAndRoll() throws {

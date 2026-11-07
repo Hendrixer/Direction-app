@@ -7,16 +7,15 @@ import DirectionMedia
 // before the batch runs, so it holds to the locks and lands as one revision like any other edit.
 extension ToolCatalog {
     static var checkDefinitions: [ToolDefinition] { [
-        definition("direction_check", "Check the cut the way it delivers, before you call finishing done: the mix against the loudness target and the \u{2212}1 dBTP ceiling, and the framing, looked at frame by frame: a crop that loses a face the take has or cuts through it, words in a tall or feed frame where the phone apps put their buttons and captions (the bottom fifth, the right eighth), words over a face. Before picture lock it also looks at the cuts: jump cuts (the story cutting between two moments of one take, or takes framed alike, where the picture visibly jumps, with how much and what would fix it) and sound that starts or stops partway through a word. Each problem has its time. ready is the sound: sound can be marked done only when it\u{2019}s true. Framing and cut problems are yours to fix, or to name in needsYou when they\u{2019}re meant.", ["revision": integer, "checks": noted(list(strings(["sound", "framing", "cuts"])), "Only these checks; all three unless given (cuts only before picture lock).")]),
+        definition("direction_check", "Check the cut the way it delivers, before you call finishing done: the mix against the loudness target and the \u{2212}1 dBTP ceiling, and the framing, looked at frame by frame: a crop that loses a face the take has or cuts through it, words in a tall or feed frame where the phone apps put their buttons and captions (the bottom fifth, the right eighth), words over a face. With checks [\"cuts\"] (while you cut, not in finishing) it looks at the cuts instead: jump cuts (the story cutting between two moments of one take, or takes framed alike, where the picture visibly jumps, with how much and what would fix it) and sound that starts or stops partway through a word. Each problem has its time. ready is the sound: sound can be marked done only when it\u{2019}s true. Framing and cut problems are yours to fix, or to name in needsYou when they\u{2019}re meant.", ["revision": integer, "checks": noted(list(strings(["sound", "framing", "cuts"])), "Which checks: sound and framing unless given; cuts only when named.")]),
     ] }
 }
 
 extension ToolRuntime {
     func invokeCheck(_ name: String, _ a: JSONValue) async throws -> ToolResponse? {
         guard name == "direction_check" else { return nil }
-        var checks: Set<String> = ["sound", "framing", "cuts"]
-        if let asked = a["checks"].array?.compactMap(\.string) { checks = Set(asked) }
-        else if (try? store.directingState().pictureLocked) == true { checks.remove("cuts") }
+        // The cuts only when named: finishing calls this with nothing and has no business recutting.
+        let checks = Set(a["checks"].array?.compactMap(\.string) ?? ["sound", "framing"])
         guard !checks.isEmpty else { throw DirectionError("bad_argument", "checks names at least one of sound, framing and cuts.") }
         return ToolResponse(try await deliveryCheck(revision: a["revision"].int, checks: checks))
     }
@@ -53,8 +52,15 @@ extension ToolRuntime {
             value["framing"] = try .wrapping(framing.problems); value["framesLookedAt"] = .number(Double(framing.frames))
         }
         if checks.contains("cuts") {
-            let cuts = try await CutCheck.run(project: p, sequence: s, dailies: dailies, transcripts: try store.transcripts(), looks: looks, cacheDirectory: cacheDirectory, label: label)
-            value["cuts"] = try .wrapping(cuts.problems); value["cutsLookedAt"] = .number(Double(cuts.cuts))
+            // The style's smallest punch-in: two shots framed that far apart are a change of framing, not a jump.
+            let moves = ((try? store.appliedStyle())?.moves ?? StyleMoves.standard).over(.standard)
+            let scales = (moves.punchIn?.scales ?? []).filter { $0 > 0 }.sorted()
+            let steps = zip(scales, scales.dropFirst()).map { $1 / $0 }.filter { $0 > 1.001 } + [moves.emphasisPunch?.scale ?? 1.3]
+            let cuts = try await CutCheck.run(project: p, sequence: s, dailies: dailies, transcripts: try store.transcripts(), looks: looks, punch: steps.min() ?? 1.15, cacheDirectory: cacheDirectory, label: label)
+            value["cuts"] = try .wrapping(cuts.problems)
+            value["cutsOnTheStory"] = .number(Double(cuts.cuts)); value["cutsCompared"] = .number(Double(cuts.compared))
+            if cuts.notCompared > 0 { value["cutsNotCompared"] = .number(Double(cuts.notCompared)) }
+            if cuts.more > 0 { value["moreCutProblems"] = .number(Double(cuts.more)) }
         }
         return .object(value)
     }

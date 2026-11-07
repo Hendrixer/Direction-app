@@ -6,14 +6,15 @@ import DirectionMedia
 // editor chooses a cut point by judgment instead of guessing a time, and split, trim and roll can snap to one.
 extension ToolCatalog {
     static var cutPointDefinitions: [ToolDefinition] { [
-        definition("direction_cut_points", "Where to cut, measured, so you choose a cut point instead of guessing a time: blinks (the eyes most closed; a cut on the outgoing person\u{2019}s blink reads as a natural break), peaks of action (the picture moving fastest; a cut inside a movement hides itself) and pauses between words (from the transcript). Give clipID with at for the points near a moment of a clip, clipID alone for those near its head and tail (for a trim), range for every shot of the story over a stretch, at alone for the shot under it, or assetID with sourceRange for a take before it\u{2019}s in the cut. Each point has t (cut seconds; with assetID, the take\u{2019}s), kind, strength 0\u{2013}1, who (left, middle, right) when more than one face is seen, from and to for a pause, and outside: true when it\u{2019}s in the take beyond the clip, where a trim can reach. Blinks are found only on a face turned to the camera and near enough to see its eyes; says tells you when there\u{2019}s none. Measured on this Mac the first time a stretch is asked for (a few seconds per 20 s of footage), then kept. split, trim and roll in direction_edit take snap: blink, action or pause, and land on the nearest one within 8 frames.", [
+        definition("direction_cut_points", "Where to cut, measured, so you choose a cut point instead of guessing a time: blinks (the eyes most closed; a cut on the outgoing person\u{2019}s blink reads as a natural break), peaks of action (the picture moving fastest; a cut inside a movement hides itself) and pauses between words (from the transcript, the quiet before the first word and after the last included). Give clipID with at for the points near a moment of a clip, clipID alone for those near its head and tail (for a trim), range for every shot of the story (and every narration, for pauses) over a stretch, at alone for the shot or narration under it, or assetID with sourceRange for a take before it\u{2019}s in the cut. Sound on its own (a narration) has pauses only. Each point has t (cut seconds; with assetID, the take\u{2019}s), kind, strength 0\u{2013}1, who (left, middle, right) when more than one face is seen, from and to for a pause, and outside: true when it\u{2019}s in the take beyond the clip, where a trim can reach. Blinks are found only on a face turned to the camera and near enough to see its eyes; says tells you when there\u{2019}s none. Measured on this Mac the first time a stretch is asked for (a few seconds per 20 s of footage), then kept. split, trim and roll in direction_edit take snap: blink, action or pause, and land on the nearest one within 8 frames that the edit can reach.", [
             "clipID": noted(string, "A clip in the cut (direction_timeline): its points near at, or near its head and tail without at."),
-            "at": noted(number, "Cut seconds: the points near this moment, on clipID or the story\u{2019}s shot under it."),
-            "range": noted(record(["start": number, "end": number], required: ["start", "end"]), "{start, end} in cut seconds: the points inside it, on every shot of the story."),
+            "at": noted(number, "Cut seconds: the points near this moment, on clipID or the story\u{2019}s shot (or a narration) under it."),
+            "range": noted(record(["start": number, "end": number], required: ["start", "end"]), "{start, end} in cut seconds: the points inside it, on every shot of the story, and every narration for pauses."),
             "assetID": noted(string, "A take (direction_dailies): its points over sourceRange."),
-            "sourceRange": noted(record(["start": number, "end": number], required: ["start", "end"]), "With assetID: {start, end} in the take\u{2019}s seconds, 5 minutes at most."),
+            "sourceRange": noted(record(["start": number, "end": number], required: ["start", "end"]), "With assetID: {start, end} in the take\u{2019}s seconds, inside it and 5 minutes at most."),
             "within": noted(number, "Seconds either side of at, or of a clip\u{2019}s head and tail: 1 unless given, at most 10."),
             "kinds": noted(list(strings(["blink", "action", "pause"])), "Only these kinds; all three unless given."),
+            "sequenceID": noted(string, "Another sequence of the film; the cut you\u{2019}re editing unless given."),
         ]),
     ] }
 }
@@ -24,16 +25,18 @@ extension ToolRuntime {
         let kinds = Set(a["kinds"].array?.compactMap(\.string) ?? ["blink", "action", "pause"])
         guard !kinds.isEmpty else { throw DirectionError("bad_argument", "kinds names at least one of blink, action and pause.") }
         let within = min(10, max(0.04, a["within"].double ?? 1))
-        let p = try store.read(), s = try p.sequence(nil)
-        let names = takeNames(p)
+        let p = try store.read(), s = try p.sequence(a["sequenceID"].string)
+        let names = takeNames(p), transcripts = try store.transcripts()
         func asset(_ id: String?) -> MediaAsset? { id.flatMap { id in p.assets.first { $0.id == id } } }
         func label(_ a: MediaAsset) -> String { names[a.id] ?? (a.name as NSString).deletingPathExtension }
 
         // A take before it's in the cut: its own seconds.
         if let id = a["assetID"].string {
-            guard let take = asset(id) else { throw DirectionError("asset_not_found", "There\u{2019}s no take \(id). direction_dailies lists them.") }
-            let from = a["sourceRange"]["start"].double ?? 0, to = a["sourceRange"]["end"].double ?? take.duration.seconds
-            guard to > from else { throw DirectionError("bad_argument", "sourceRange is {start, end} in the take\u{2019}s seconds, end after start.") }
+            guard let take = asset(id), take.graphic == nil, !take.isImage else { throw DirectionError("asset_not_found", "There\u{2019}s no take \(id). direction_dailies lists them.") }
+            let length = take.duration.seconds
+            let from = a["sourceRange"]["start"].double ?? 0, asked = a["sourceRange"]["end"].double ?? length
+            guard from.isFinite, asked.isFinite, from >= 0, from < length, asked > from else { throw DirectionError("bad_argument", "sourceRange is {start, end} inside the take, 0\u{2013}\(cutSeconds(length)), end after start.") }
+            let to = min(asked, length)
             try limit(to - from)
             let found = try await cutPoints(take, from: from, to: to, kinds: kinds, name: label(take))
             let points = found.points.map { $0.json(cut: { $0 }, outside: nil) }
@@ -42,29 +45,36 @@ extension ToolRuntime {
             return ToolResponse(.object(value))
         }
 
-        // Shots in the cut: a clip, the shot under at, or every shot of the story over range.
+        // Clips in the cut: a clip, the shot (or narration) under at, or every shot of the story over range. A
+        // narration is sound on its own with words: it has pauses.
         let story = s.storyLayer
-        let shots = s.clips.filter { $0.kind == .video && $0.layer == story && $0.hold == nil && asset($0.assetID).map { !$0.video.isEmpty && !$0.isImage && $0.graphic == nil } == true }.sorted { $0.start < $1.start }
+        func pictured(_ c: Clip) -> Bool { c.kind == .video && c.hold == nil && asset(c.assetID).map { !$0.video.isEmpty && !$0.isImage && $0.graphic == nil } == true }
+        func narration(_ c: Clip) -> Bool { c.kind == .audio && c.assetID.map { !TranscriptEditing.sourceWords($0, transcripts).isEmpty } == true }
+        let shots = s.clips.filter { $0.layer == story && pictured($0) }.sorted { $0.start < $1.start }
+        let voices = s.clips.filter(narration).sorted { ($0.layer, $0.start) < ($1.layer, $1.start) }
         var asked: [(clip: Clip, windows: [(Double, Double)], inside: Bool)] = []
         var place: String
-        if let r = a["range"] != .null ? (a["range"]["start"].double, a["range"]["end"].double) : nil {
-            guard let start = r.0, let end = r.1, end > start else { throw DirectionError("bad_argument", "range is {start, end} in cut seconds.") }
-            for c in shots where c.start.seconds < end && c.end.seconds > start {
+        if a["range"] != .null {
+            guard let start = a["range"]["start"].double, let end = a["range"]["end"].double, start.isFinite, end.isFinite, end > start else { throw DirectionError("bad_argument", "range is {start, end} in cut seconds.") }
+            for c in shots + (kinds.contains("pause") ? voices : []) where c.start.seconds < end && c.end.seconds > start {
                 asked.append((c, [(max(start, c.start.seconds), min(end, c.end.seconds))], true))
             }
             place = "over \(cutSeconds(start))\u{2013}\(cutSeconds(end))"
-            guard !asked.isEmpty else { throw DirectionError("bad_argument", "There\u{2019}s no shot of a take on the story over \(cutSeconds(start))\u{2013}\(cutSeconds(end)).") }
+            guard !asked.isEmpty else { throw DirectionError("bad_argument", "There\u{2019}s no shot of a take on the story\(kinds.contains("pause") ? ", or narration," : "") over \(cutSeconds(start))\u{2013}\(cutSeconds(end)).") }
         } else {
             let clip: Clip
             if let id = a["clipID"].string {
                 guard let c = s.clips.first(where: { $0.id == id }) else { throw DirectionError("clip_not_found", "There\u{2019}s no clip \(id) in the cut. direction_timeline lists them.") }
-                guard c.hold == nil, asset(c.assetID).map({ !$0.video.isEmpty && !$0.isImage && $0.graphic == nil }) == true else { throw DirectionError("bad_argument", "\(id) isn\u{2019}t a shot of a take: cut points are in the footage.") }
+                guard c.hold == nil else { throw DirectionError("bad_argument", "\(id) is a freeze: it has no blinks, action or pauses.") }
+                guard pictured(c) || (c.kind == .audio && asset(c.assetID).map { !$0.audio.isEmpty } == true) else { throw DirectionError("bad_argument", "\(id) isn\u{2019}t a shot or the sound of a take: cut points are in the footage.") }
                 clip = c
             } else if let t = a["at"].double {
-                guard let c = shots.first(where: { $0.start.seconds <= t + 1e-6 && t < $0.end.seconds }) else { throw DirectionError("bad_argument", "There\u{2019}s no shot of a take on the story at \(cutSeconds(t)).") }
+                guard t.isFinite, t >= 0, t <= s.duration.seconds else { throw DirectionError("bad_argument", "at is a moment of the cut, 0\u{2013}\(cutSeconds(s.duration.seconds)).") }
+                guard let c = (shots + voices).first(where: { $0.start.seconds <= t + 1e-6 && t < $0.end.seconds }) else { throw DirectionError("bad_argument", "There\u{2019}s no shot of a take on the story, or narration, at \(cutSeconds(t)).") }
                 clip = c
             } else { throw DirectionError("bad_argument", "Give clipID, at, range, or assetID with sourceRange.") }
             if let t = a["at"].double {
+                guard t.isFinite else { throw DirectionError("bad_argument", "at is a moment of the cut in seconds.") }
                 asked.append((clip, [(t - within, t + within)], false))
                 place = "near \(cutSeconds(t))"
             } else {
@@ -100,7 +110,7 @@ extension ToolRuntime {
     }
 
     private func limit(_ seconds: Double) throws {
-        guard seconds <= 300 else { throw DirectionError("bad_argument", "Ask for 5 minutes of footage or less at a time (sourceRange with assetID, or a shorter range); this asks for \(Int((seconds / 60).rounded(.up))) minutes.") }
+        guard seconds <= 300 else { throw DirectionError("bad_argument", "Ask for 5 minutes of footage or less at a time (sourceRange with assetID, or a shorter range); this asks for \(Int(min(seconds, 1e6) / 60) + 1) minutes.") }
     }
 
     /// Takes by the names Dailies gives them ("2A Take 3").
@@ -113,8 +123,8 @@ extension ToolRuntime {
     struct Found {
         struct Point { var t: Double; var kind: String; var strength: Double; var who: String?; var from: Double?; var to: Double?; var end: Double? }
         var points: [Point] = []
-        var faceSeconds = 0.0, askedBlinks = false, words = true, take = ""
-        mutating func add(_ other: Found) { faceSeconds += other.faceSeconds; askedBlinks = askedBlinks || other.askedBlinks; words = words && other.words; if take.isEmpty { take = other.take } }
+        var faceSeconds = 0.0, words = true, picture = true, take = ""
+        mutating func add(_ other: Found) { faceSeconds += other.faceSeconds; words = words && other.words; picture = picture && other.picture; if take.isEmpty { take = other.take } }
 
         /// A line on what was found (`found`, the kinds of the points shown), and why a kind asked for has none.
         func says(_ kinds: Set<String>, _ found: [String], where place: String) -> String {
@@ -125,19 +135,22 @@ extension ToolRuntime {
             if kinds.contains("action") { parts.append(many(n("action"), "peak of action", "peaks of action")) }
             if kinds.contains("pause") { parts.append(many(n("pause"), "pause", "pauses")) }
             var text = (parts.count > 1 ? parts.dropLast().joined(separator: ", ") + " and " + parts.last! : parts.joined()) + " " + place + "."
-            if kinds.contains("blink") && n("blink") == 0 && faceSeconds < 0.5 { text += " No face there is turned to the camera and near enough to see its eyes, so there are no blinks to cut on." }
-            if kinds.contains("pause") && n("pause") == 0 && !words { text += " \(take.isEmpty ? "The take" : take) has no transcript, so no pauses: direction_transcribe makes one." }
+            let who = take.isEmpty ? "The take" : take
+            if !picture && (kinds.contains("blink") || kinds.contains("action")) { text += " \(who) is sound only, so it has no blinks or action." }
+            else if kinds.contains("blink") && n("blink") == 0 && faceSeconds < 0.5 { text += " No face there is turned to the camera and near enough to see its eyes, so there are no blinks to cut on." }
+            if kinds.contains("pause") && n("pause") == 0 && !words { text += " \(who) has no transcript, so no pauses: direction_transcribe makes one." }
             return text
         }
     }
 
-    /// The cut points of one stretch of a take (take seconds), sorted by time.
+    /// The cut points of one stretch of a take (take seconds), sorted by time. Sound on its own has pauses only.
     func cutPoints(_ take: MediaAsset, from: Double, to: Double, kinds: Set<String>, name: String) async throws -> Found {
         var found = Found()
         found.take = name
-        if kinds.contains("blink") || kinds.contains("action") {
+        found.picture = !take.video.isEmpty && !take.isImage
+        if found.picture && (kinds.contains("blink") || kinds.contains("action")) {
             let m = try await CutPoints.measure(take, from: from, to: to, cacheDirectory: cacheDirectory)
-            found.faceSeconds = m.faceSeconds; found.askedBlinks = kinds.contains("blink")
+            found.faceSeconds = m.faceSeconds
             func who(_ x: Double) -> String? { m.faces > 1 ? (x < 0.4 ? "left" : x > 0.6 ? "right" : "middle") : nil }
             if kinds.contains("blink") { found.points += m.blinks.map { .init(t: $0.t, kind: "blink", strength: $0.depth, who: who($0.x), end: $0.end) } }
             if kinds.contains("action") { found.points += m.actions.map { .init(t: $0.t, kind: "action", strength: $0.strength) } }
@@ -145,8 +158,9 @@ extension ToolRuntime {
         if kinds.contains("pause") {
             let words = TranscriptEditing.sourceWords(take.id, try store.transcripts())
             found.words = !words.isEmpty
-            found.points += CutPoints.pauses(words, from: from, to: to).filter { $0.middle >= from && $0.middle <= to }.map { p in
-                .init(t: p.middle, kind: "pause", strength: min(1, (p.end - p.start) / 0.8 + (p.afterSentence ? 0.2 : 0)), from: p.start, to: p.end)
+            // Every pause that reaches into the stretch, at its middle or as near it as the stretch goes.
+            found.points += CutPoints.pauses(words, from: from, to: to, length: take.duration.seconds).map { p in
+                .init(t: min(max(p.middle, from), to), kind: "pause", strength: min(1, (p.end - p.start) / 0.8 + (p.afterSentence ? 0.2 : 0)), from: p.start, to: p.end)
             }
         }
         found.points.sort { $0.t < $1.t }
@@ -156,25 +170,42 @@ extension ToolRuntime {
     // MARK: Snapping an edit to one
 
     /// split, trim and roll with snap: the cut point moved to the nearest blink, peak of action or pause within 8
-    /// frames, worked out on the cut as the operations before leave it, and said in the operation's result.
+    /// frames that the edit can reach, worked out on the cut as the operations before leave it, and said in the
+    /// operation's result. A pause is judged where the sound is cut: with a J- or L-cut, where the sound ends or
+    /// starts, not the picture.
     func resolveSnap(_ op: inout EditOperation, _ p: Project, _ s: DirectionCore.Sequence) async throws {
         guard let kind = op.snap else { return }
         let frame = 1 / s.frameRate.value, reach = 8 * frame
-        let names = takeNames(p)
+        let names = takeNames(p), transcripts = try store.transcripts()
         func clip(_ id: String?) -> Clip? { id.flatMap { id in s.clips.first { $0.id == id } } }
-        func asset(_ c: Clip) -> MediaAsset? { c.assetID.flatMap { id in p.assets.first { $0.id == id } }.flatMap { $0.video.isEmpty || $0.isImage || $0.graphic != nil ? nil : $0 } }
+        func asset(_ c: Clip) -> MediaAsset? { c.assetID.flatMap { id in p.assets.first { $0.id == id } } }
         func label(_ c: Clip) -> String { c.assetID.flatMap { names[$0] } ?? (c.name as NSString).deletingPathExtension }
         func source(_ c: Clip, _ t: Double) -> Double { c.sourceRange.start.seconds + (t - c.start.seconds) * c.speed }
         func cut(_ c: Clip, _ t: Double) -> Double { c.start.seconds + (t - c.sourceRange.start.seconds) / c.speed }
         let noun = ["blink": "blink", "action": "peak of action", "pause": "pause"][kind] ?? kind
+        let nouns = ["blink": "blinks", "action": "peaks of action", "pause": "pauses"][kind] ?? kind
+        func warn(_ text: String) {
+            var resolved = op.resolved ?? ResolvedValues()
+            resolved.warnings = (resolved.warnings ?? []) + [text]
+            op.resolved = resolved
+        }
+        /// Why a clip has no points of this kind to snap to, or nil when it can have some.
+        func unable(_ c: Clip) -> String? {
+            if c.hold != nil { return "\(label(c)) is a freeze there: it has no \(nouns)" }
+            guard let a = asset(c), a.graphic == nil, !a.isImage else { return "\(label(c)) isn\u{2019}t footage or sound: it has no \(nouns)" }
+            if kind != "pause" && a.video.isEmpty { return "\(label(c)) is sound only: \(nouns) need picture" }
+            if kind == "pause" && a.audio.isEmpty { return "\(label(c)) has no sound: pauses are between words" }
+            return nil
+        }
         enum Role { case head, tail, middle }
-        /// Where in the take a point puts the cut: a blink's most closed frame (its end, eyes open again, for a
-        /// head), a peak of action, or the nearest moment of a pause that's 3 frames clear of the words either side
-        /// (a cut already in a pause stays where it is).
-        func candidates(_ c: Clip, around t: Double, role: Role) async throws -> (times: [Double], found: Found)? {
-            guard let a = asset(c), c.hold == nil else { return nil }
-            let r = reach * c.speed
-            let found = try await cutPoints(a, from: t - r - 0.6, to: t + r + 0.6, kinds: [kind], name: label(c))
+        /// Where in the take (picture-edge source seconds) a point puts the cut near `t`: a blink's most closed
+        /// frame (its end, eyes open again, for a head), a peak of action, or the nearest moment of a pause that's 3
+        /// frames clear of the words either side, judged where the sound is cut (`shift` source seconds past the
+        /// picture edge). Nearest first.
+        func candidates(_ c: Clip, around t: Double, role: Role, shift: Double = 0) async throws -> (times: [Double], found: Found)? {
+            guard unable(c) == nil, let a = asset(c) else { return nil }
+            let r = reach * c.speed, at = kind == "pause" ? t + shift : t
+            let found = try await cutPoints(a, from: at - r - 0.6, to: at + r + 0.6, kinds: [kind], name: label(c))
             var times: [Double] = []
             for point in found.points {
                 switch (point.kind, role) {
@@ -182,61 +213,104 @@ extension ToolRuntime {
                 case ("pause", _):
                     guard let from = point.from, let to = point.to else { continue }
                     let margin = min(3 * frame * c.speed, (to - from) / 2)
-                    times.append(min(max(t, from + margin), to - margin))
+                    times.append(min(max(at, from + margin), to - margin) - shift)
                 default: times.append(point.t)
                 }
             }
             return (times.filter { abs($0 - t) <= r + 1e-6 }.sorted { abs($0 - t) < abs($1 - t) }, found)
         }
-        func none(_ found: Found?, _ who: String) -> String {
+        func none(_ found: Found?, _ who: String, outOfReach: Bool) -> String {
+            if outOfReach { return "The nearest \(noun) is further than \(who) can reach, so the cut is where you asked." }
             var text = "No \(noun) within 8 frames in \(who), so the cut is where you asked."
             if kind == "blink", (found?.faceSeconds ?? 0) < 0.5 { text += " No face there is turned to the camera near enough to see its eyes." }
             if kind == "pause", found?.words == false { text += " \(who) has no transcript: direction_transcribe makes one." }
             return text
         }
-        var said: String?
+        func frames(_ n: Int) -> String { "\(abs(n)) frame\(abs(n) == 1 ? "" : "s")" }
+        /// Seconds of the take beyond a clip's out point (`after`) or before its in point.
+        func handle(_ c: Clip, after: Bool) -> Double { after ? max(0, (asset(c)?.duration.seconds ?? 0) - c.sourceRange.end.seconds) : max(0, c.sourceRange.start.seconds) }
+        func length(_ c: Clip) -> Int { Int((c.duration.seconds / frame).rounded()) }
+
         switch op.type {
         case "split":
-            guard let c = clip(op.clipID), let at = op.at?.seconds, let got = try await candidates(c, around: source(c, at), role: .middle) else { return }
+            guard let c = clip(op.clipID), let at = op.at?.seconds else { return }
+            if let why = unable(c) { warn("\(why), so the split is where you asked."); return }
+            guard let got = try await candidates(c, around: source(c, at), role: .middle) else { return }
             let (times, found) = got
             if let best = times.map({ cut(c, $0) }).first(where: { $0 > c.start.seconds + frame / 2 && $0 < c.end.seconds - frame / 2 }) {
                 let moved = Int(((best - at) / frame).rounded())
                 op.at = MediaTime(seconds: best)
-                said = moved == 0 ? "The split is on a \(noun) already." : "Snapped the split to a \(noun) in \(label(c)) at \(cutSeconds(best)), \(abs(moved)) frame\(abs(moved) == 1 ? "" : "s") \(moved > 0 ? "later" : "earlier") than asked."
-            } else { said = none(found, label(c)) }
+                warn(moved == 0 ? "The split is on a \(noun) already." : "Snapped the split to a \(noun) in \(label(c)) at \(cutSeconds(best)), \(frames(moved)) \(moved > 0 ? "later" : "earlier") than asked.")
+            } else { warn(none(found, label(c), outOfReach: !times.isEmpty)) }
+
         case "trim":
-            guard let c = clip(op.clipID), let n = op.frames, n != 0, let edge = op.edge, edge == "head" || edge == "tail" else { return }
+            guard let c = clip(op.clipID) else { return }
+            guard let n = op.frames, n != 0, let edge = op.edge, edge == "head" || edge == "tail" else { warn("snap goes with a trim by edge and frames, so this trim is as asked."); return }
+            if let why = unable(c) { warn("\(why), so the trim is as asked."); return }
             let step = frame * c.speed, tail = edge == "tail"
             let now = tail ? c.sourceRange.end.seconds : c.sourceRange.start.seconds
             let target = tail ? now + Double(n) * step : now - Double(n) * step
-            guard let got = try await candidates(c, around: target, role: tail ? .tail : .head) else { return }
+            // The sound's edge: an L-cut's sound ends after the picture, a J-cut's starts before it.
+            let shift = tail ? (c.soundTail ?? 0) * c.speed : -(c.soundLead ?? 0) * c.speed
+            guard let got = try await candidates(c, around: target, role: tail ? .tail : .head, shift: shift) else { return }
             let (times, found) = got
             let options = times.map { t in Int(((tail ? t - now : now - t) / step).rounded()) }.filter { $0 != 0 && ($0 > 0) == (n > 0) }
-            if let best = options.first {
+            // Only what the trim can do: leave a frame of the clip, and extend only into footage there is.
+            let reachable = options.filter { m in m < 0 ? -m < length(c) : Double(m) * step <= handle(c, after: tail) + 1e-6 }
+            if let best = reachable.first {
                 op.frames = best
-                said = best == n ? "The \(edge) lands on a \(noun) already." : "Snapped \(label(c))\u{2019}s \(edge) to a \(noun): \(best > 0 ? "extended" : "trimmed") \(abs(best)) frame\(abs(best) == 1 ? "" : "s"), not \(abs(n))."
-            } else { said = none(found, label(c)) }
+                warn(best == n ? "The \(edge) lands on a \(noun) already." : "Snapped \(label(c))\u{2019}s \(edge) to a \(noun): \(best > 0 ? "extended" : "trimmed") \(frames(best)), not \(abs(n)).")
+            } else { warn(none(found, label(c), outOfReach: !options.isEmpty)) }
+
         case "roll":
             guard let point = op.editPoint, let bar = point.firstIndex(of: "|"), let l = clip(String(point[..<bar])), let r = clip(String(point[point.index(after: bar)...])), let n = op.frames, n != 0 else { return }
             let at = r.start.seconds, target = at + Double(n) * frame
-            // The outgoing shot's points first: a cut on its blink or its action; then the incoming one's.
-            var options: [Int] = [], found: Found?
-            for c in [l, r] {
-                guard let got = try await candidates(c, around: source(c, target), role: .middle) else { continue }
-                let times = got.times
-                found = found ?? got.found
-                options += times.map { Int(((cut(c, $0) - at) / frame).rounded()) }.filter { $0 != 0 && ($0 > 0) == (n > 0) }
+            /// What a roll of `m` frames can do: leave a frame of each clip and use only footage there is.
+            func reachable(_ m: Int) -> Bool {
+                m > 0 ? Double(m) * frame * l.speed <= handle(l, after: true) + 1e-6 && m < length(r)
+                      : Double(-m) * frame * r.speed <= handle(r, after: false) + 1e-6 && -m < length(l)
             }
-            if let best = options.min(by: { abs($0 - n) < abs($1 - n) }) {
+            func rolls(_ c: Clip, _ times: [Double]) -> [Int] { times.map { Int(((cut(c, $0) - at) / frame).rounded()) }.filter { $0 != 0 && ($0 > 0) == (n > 0) } }
+            var best: Int?, found: Found?, any = false
+            if kind == "pause" {
+                // Where both sounds are cut clear of a word: the outgoing one's end and the incoming one's start (a
+                // J- or L-cut moves them off the picture's cut), each by its own take's words.
+                func clear(_ c: Clip, _ t: Double) -> Bool {
+                    guard let id = c.assetID else { return true }
+                    return !TranscriptEditing.sourceWords(id, transcripts).contains { $0.range.start.seconds + 0.06 < t && t < $0.range.end.seconds - 0.06 }
+                }
+                let continuing = l.assetID == r.assetID && l.speed == r.speed && abs(r.sourceRange.start.seconds - l.sourceRange.end.seconds) < frame * l.speed / 2
+                var options: [Int] = []
+                for (c, shift) in [(l, (l.soundTail ?? 0) * l.speed), (r, -(r.soundLead ?? 0) * r.speed)] {
+                    guard let got = try await candidates(c, around: source(c, target), role: .middle, shift: shift) else { continue }
+                    found = found ?? got.found
+                    options += rolls(c, got.times)
+                }
+                any = !options.isEmpty
+                let fine = options.filter { m in
+                    let t = at + Double(m) * frame
+                    return continuing || (clear(l, source(l, t) + (l.soundTail ?? 0) * l.speed) && clear(r, source(r, t) - (r.soundLead ?? 0) * r.speed))
+                }
+                best = fine.filter(reachable).min { abs($0 - n) < abs($1 - n) }
+            } else {
+                // A cut on the outgoing shot's blink or action first (its most closed frame); else the incoming
+                // one's, starting as its eyes open again.
+                for (c, role) in [(l, Role.tail), (r, Role.head)] where best == nil {
+                    guard let got = try await candidates(c, around: source(c, target), role: role) else { continue }
+                    found = found ?? got.found
+                    let options = rolls(c, got.times)
+                    any = any || !options.isEmpty
+                    best = options.filter(reachable).min { abs($0 - n) < abs($1 - n) }
+                }
+            }
+            if let best {
                 op.frames = best
-                said = best == n ? "The cut lands on a \(noun) already." : "Snapped the cut to a \(noun): rolled \(abs(best)) frame\(abs(best) == 1 ? "" : "s") \(best > 0 ? "later" : "earlier"), not \(abs(n))."
-            } else { said = none(found, "\(label(l)) or \(label(r))") }
+                warn(best == n ? "The cut lands on a \(noun) already." : "Snapped the cut to a \(noun): rolled \(frames(best)) \(best > 0 ? "later" : "earlier"), not \(abs(n)).")
+            } else if let why = unable(l), unable(r) != nil { warn("\(why), so the roll is as asked.") }
+            else { warn(none(found, "\(label(l)) or \(label(r))", outOfReach: any)) }
+
         default: return
         }
-        guard let said else { return }
-        var resolved = op.resolved ?? ResolvedValues()
-        resolved.warnings = (resolved.warnings ?? []) + [said]
-        op.resolved = resolved
     }
 }
 

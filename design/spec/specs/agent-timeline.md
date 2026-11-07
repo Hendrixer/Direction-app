@@ -165,9 +165,10 @@ Direction measures where a take is good to cut (docs/agent-timeline.md › Cut p
 | `action` | Where the picture changes fastest | A cut inside a movement hides itself |
 | `pause` | A gap between words in the transcript | The sound doesn't cut a word |
 
-- [ ] `split`, `trim` and `roll` take `snap` and land on the nearest point of that kind within 8 frames; the result says where, or that nothing was near and the cut is where it was asked.
+- [ ] `split`, `trim` and `roll` take `snap` and land on the nearest point of that kind within 8 frames that the edit can reach; the result says where, or why not (nothing near, out of reach, a freeze, sound only), and the cut is then where it was asked.
 - [ ] Measured 20 s at a time, only where asked, and kept per take in the film's cache.
-- [ ] `direction_check`, before picture lock, lists jump cuts (two moments of one take, or takes framed alike, where the frames either side visibly differ) with how much they jump and what would fix it (a cutaway, `punchIn`, a roll), and sound that starts or stops inside a word.
+- [ ] `direction_check` with `checks: ["cuts"]` (never by default, so finishing isn't asked to recut) lists jump cuts (two moments of one take, or takes framed alike, where the frames either side visibly differ; never the style's own punch-ins) with how much they jump and what would fix it (a cutaway, `punchIn`, a roll), and sound that starts or stops inside a word, a narration's included; a clip that plays straight on from the one before isn't either.
+- [ ] A narration (sound on its own) has pauses, and snaps to them; with a J- or L-cut, a pause is judged where the sound is cut.
 
 ### Effects catalog
 

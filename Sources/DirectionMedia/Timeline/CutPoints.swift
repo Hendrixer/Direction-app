@@ -10,7 +10,7 @@ import DirectionCore
 /// only where asked, and kept in the film's cache, so an hour of interviews is never looked at all at once.
 public enum CutPoints {
     /// Raised when what's measured changes, so a take is looked at again.
-    public static let version = 1
+    public static let version = 2
     /// Seconds of a take measured and kept at a time.
     static let chunk = 20.0
     /// Seconds between the frames looked at; every frame around a blink.
@@ -153,6 +153,9 @@ public enum CutPoints {
         defer { reader.cancelReading() }
         let found = try await VisionWork.run { try look(reading) }
         try ReadStall.check(reader, asset.name)
+        try Task.checkCancellation()
+        // A read that failed or was stopped partway is said, never kept as if the stretch had nothing in it.
+        guard reader.status == .completed else { throw DirectionError("frame_unreadable", "Couldn\u{2019}t read \(asset.name) through: \(reader.error?.localizedDescription ?? "the reader stopped partway").") }
         let tracks = found.tracks.map { $0.sorted { $0.t < $1.t } }.filter { $0.contains { $0.open != nil } }
         let blinks = tracks.flatMap { blinks(in: $0) }.filter { $0.t >= from && $0.t < to }.sorted { $0.t < $1.t }
         let actions = actions(in: found.energy).filter { $0.t >= from && $0.t < to }
@@ -169,18 +172,15 @@ public enum CutPoints {
         var lastGrey: [Float]?
         // The frames since the last one looked at, so a blink's start isn't missed; copies, as the reader reuses its own.
         var skipped: [(t: Double, buffer: CVPixelBuffer)] = []
-        var n = 0, close = false, closeSince = 0.0, openAgain = 0
+        var n = 0, close = false, closeSince = 0.0, openAgain = 0, lastT = 0.0
         func add(_ samples: [EyeSample]) {
-            for s in samples {
-                if let k = tracks.indices.min(by: { distance(tracks[$0].last!, s) < distance(tracks[$1].last!, s) }), distance(tracks[k].last!, s) < 0.15 { tracks[k].append(s) }
-                else { tracks.append([s]) }
-            }
+            for (s, k) in zip(samples, match(samples, to: tracks)) { if let k { tracks[k].append(s) } else { tracks.append([s]) } }
             faces = max(faces, samples.filter { $0.open != nil }.count)
         }
         /// A face's eyes are closing: open less than 0.8 of how open they've been lately.
         func closing(_ samples: [EyeSample]) -> Bool {
-            samples.contains { s in
-                guard let o = s.open, let k = tracks.indices.min(by: { distance(tracks[$0].last!, s) < distance(tracks[$1].last!, s) }), distance(tracks[k].last!, s) < 0.15 else { return false }
+            zip(samples, match(samples, to: tracks)).contains { s, k in
+                guard let o = s.open, let k else { return false }
                 let recent = tracks[k].suffix(40).compactMap(\.open)
                 guard recent.count >= 6 else { return false }
                 return o < median(recent) * 0.8
@@ -193,15 +193,16 @@ public enum CutPoints {
             let regular = n % every == 0
             if regular {
                 let grey = thumbnail(buffer)
-                if let lastGrey { energy.append((t, Double(zip(grey, lastGrey).reduce(Float(0)) { $0 + abs($1.0 - $1.1) }) / Double(grey.count))) }
-                lastGrey = grey
+                // The change since the last look happened between the two: it's stamped halfway.
+                if let lastGrey { energy.append(((t + lastT) / 2, Double(zip(grey, lastGrey).reduce(Float(0)) { $0 + abs($1.0 - $1.1) }) / Double(grey.count))) }
+                lastGrey = grey; lastT = t
             }
             guard regular || close else {
                 if let copy = copy(buffer) { skipped.append((t, copy)); if skipped.count > every { skipped.removeFirst() } }
                 continue
             }
-            let now = eyes(buffer, t: t, orientation: r.orientation)
-            if !close && closing(now) {
+            let now = eyes(buffer, t: t, orientation: r.orientation), shutting = closing(now)
+            if !close && shutting {
                 // Back to the frames skipped since the last look, then every frame until the eyes are open again.
                 for (st, sb) in skipped { add(eyes(sb, t: st, orientation: r.orientation)) }
                 close = true; closeSince = t; openAgain = 0
@@ -209,7 +210,7 @@ public enum CutPoints {
             add(now)
             skipped.removeAll()
             if close {
-                openAgain = closing(now) ? 0 : openAgain + 1
+                openAgain = shutting ? 0 : openAgain + 1
                 if openAgain >= 3 || t - closeSince > 0.8 { close = false }
             }
         }
@@ -217,6 +218,20 @@ public enum CutPoints {
     }
 
     static func distance(_ a: EyeSample, _ b: EyeSample) -> Double { hypot(a.x - b.x, a.y - b.y) }
+
+    /// Which face track each of one frame's faces carries on (nil: a face of its own), one to one: the closest
+    /// pairs first, within 0.15 of the picture, and a track takes at most one face a frame. Two faces close
+    /// together stay two tracks.
+    static func match(_ samples: [EyeSample], to tracks: [[EyeSample]]) -> [Int?] {
+        var out = [Int?](repeating: nil, count: samples.count), taken = Set<Int>()
+        let pairs = samples.indices.flatMap { i in tracks.indices.compactMap { k -> (i: Int, k: Int, d: Double)? in
+            guard let last = tracks[k].last, last.t < samples[i].t else { return nil }
+            let d = distance(last, samples[i])
+            return d < 0.15 ? (i, k, d) : nil
+        } }.sorted { $0.d < $1.d }
+        for p in pairs where out[p.i] == nil && !taken.contains(p.k) { out[p.i] = p.k; taken.insert(p.k) }
+        return out
+    }
 
     /// Each face in the frame with how open its eyes are: judged only when it faces the camera (turned less than
     /// about 35° and tipped less than about 30°), is wholly in the picture, at least 50 pixels tall here, and Vision
@@ -347,15 +362,17 @@ public enum CutPoints {
         return peaks
     }
 
-    /// Gaps of at least `shortest` seconds between a take's words (source seconds).
-    public static func pauses(_ words: [TranscriptWord], from: Double = 0, to: Double = .infinity, atLeast shortest: Double = 0.25) -> [Pause] {
+    /// Gaps of at least `shortest` seconds between a take's words (source seconds) that reach into `from`–`to`;
+    /// given the take's `length`, the quiet before its first word and after its last too.
+    public static func pauses(_ words: [TranscriptWord], from: Double = 0, to: Double = .infinity, length: Double? = nil, atLeast shortest: Double = 0.25) -> [Pause] {
         let w = words.sorted { $0.range.start < $1.range.start }
-        return zip(w, w.dropFirst()).compactMap { a, b in
-            let s = a.range.end.seconds, e = b.range.start.seconds
-            guard e - s >= shortest, e >= from, s <= to else { return nil }
-            let last = a.text.trimmingCharacters(in: .whitespaces).last
-            return Pause(start: s, end: e, afterSentence: last.map { ".?!\u{2026}".contains($0) } ?? false)
+        func ends(_ word: TranscriptWord) -> Bool { word.text.trimmingCharacters(in: .whitespaces).last.map { ".?!\u{2026}".contains($0) } ?? false }
+        var all = zip(w, w.dropFirst()).map { a, b in Pause(start: a.range.end.seconds, end: b.range.start.seconds, afterSentence: ends(a)) }
+        if let length, let first = w.first, let last = w.last {
+            all.insert(Pause(start: 0, end: first.range.start.seconds, afterSentence: true), at: 0)
+            all.append(Pause(start: last.range.end.seconds, end: length, afterSentence: true))
         }
+        return all.filter { $0.end - $0.start >= shortest && $0.end >= from && $0.start <= to }
     }
 
     static func quantile(_ values: [Double], _ q: Double) -> Double {
