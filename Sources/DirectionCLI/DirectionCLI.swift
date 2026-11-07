@@ -7,7 +7,7 @@ import DirectionReports
 
 @main
 struct DirectionCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self, Reap.self])
+    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Bench.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self, Reap.self])
 }
 
 struct ProjectOptions: ParsableArguments {
@@ -139,6 +139,26 @@ struct Export: AsyncParsableCommand {
     @Option var revision: Int?
     @Option var sequenceID: String?
     func run() async throws { var a: [String: JSONValue] = ["path": .string(path), "preset": .string(preset)]; if let revision { a["revision"] = .number(Double(revision)) }; if let sequenceID { a["sequenceID"] = .string(sequenceID) }; try await execute(options.runtime(), "direction_export", a) }
+}
+
+/// The editor's work on a film, scored (issue #6, docs/bench.md): the cut against its brief, its notes, Direction's
+/// checks, the director's own cut, and the run's cost; with --previous, what got worse since that scorecard.
+struct Bench: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Score a cut the editor made; compare with an earlier scorecard.")
+    @OptionGroup var options: ProjectOptions
+    @Option(help: "The cut to score, by name or id; the latest when left out.") var cut: String?
+    @Option(help: "The director's own cut to compare with, by name or id.") var reference: String?
+    @Option(help: "An earlier scorecard for the same film: lists what got worse.") var previous: String?
+    @Option(help: "Write the scorecard here as well.") var out: String?
+    func run() async throws {
+        var card = try await options.runtime().benchScore(cut: cut, reference: reference)
+        if let previous {
+            let before = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: URL(fileURLWithPath: NSString(string: previous).expandingTildeInPath)))
+            if case .object(var o) = card { o["worse"] = .array(DirectionTools.Bench.worse(than: before, card).map(JSONValue.string)); card = .object(o) }
+        }
+        if let out { try card.data(pretty: true).write(to: URL(fileURLWithPath: NSString(string: out).expandingTildeInPath)) }
+        try emit(card)
+    }
 }
 
 struct Frame: AsyncParsableCommand {

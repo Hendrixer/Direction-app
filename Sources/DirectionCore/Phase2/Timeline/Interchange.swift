@@ -648,7 +648,7 @@ public enum Interchange {
         return e
     }
     static func attribute(_ name: String, _ value: String) -> XMLNode { XMLNode.attribute(withName: name, stringValue: value) as! XMLNode }
-    static func number(_ v: Double) -> String {
+    public static func number(_ v: Double) -> String {
         let r = (v * 10_000).rounded() / 10_000
         return r == r.rounded() ? String(Int(r)) : String(format: "%g", r)
     }
