@@ -50,6 +50,15 @@ public struct ShelfItem: Codable, Hashable, Sendable, Identifiable {
         public var sounds: [String]?
         /// Its level over its length, 0–1, for the waveform the Library draws.
         public var levels: [Float]?
+        /// Music: where its beats and bars fall and where it moves on (library.md › Beats and bars).
+        public var grid: BeatGrid?
+        /// Music heard with no steady beat to cut on (ambient, or a tempo that changes): false. nil before it's
+        /// been listened to for one.
+        public var steady: Bool?
+        /// Which listening measured it: a sound measured by an older one is listened to again, once.
+        public var version: Int?
+        /// Listening now: 2 hears beats, bars and where the music moves on.
+        public static let currentVersion = 2
         /// An image: its size in pixels, whether any of it is see-through, and the words in it.
         public var width: Int?
         public var height: Int?
@@ -68,7 +77,7 @@ public struct ShelfItem: Codable, Hashable, Sendable, Identifiable {
         } else {
             if let s = m.seconds { parts.append(s < 10 ? String(format: "%.1f s", s) : String(format: "%d:%02d", Int(s.rounded()) / 60, Int(s.rounded()) % 60)) }
             if kind == .music {
-                if let t = m.tempo { parts.append("\(Int(t.rounded())) BPM") }
+                if let t = m.tempo { parts.append("\(Int(t.rounded())) BPM") } else if m.steady == false { parts.append("no steady beat") }
                 if let k = m.key { parts.append(k) }
                 if let i = m.instruments, !i.isEmpty { parts.append(i.joined(separator: ", ")) }
                 if let v = m.vocals { parts.append(v ? "vocals" : "no vocals") }
@@ -131,8 +140,9 @@ public struct MediaLibrary: Sendable, Equatable {
         return nil
     }
 
-    /// True when the file has changed since it was measured, or never was.
+    /// True when the file has changed since it was measured, or never was, or a sound was heard by an older listening.
     public func needsMeasuring(_ item: ShelfItem) -> Bool {
+        if item.isSound, let m = item.measured, (m.version ?? 1) < ShelfItem.Measured.currentVersion { return true }
         guard item.measured != nil, let values = try? url(item).resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) else { return true }
         return Int64(values.fileSize ?? -1) != item.fileSize || abs((values.contentModificationDate?.timeIntervalSince1970 ?? 0) - item.modifiedAt) > 0.01
     }

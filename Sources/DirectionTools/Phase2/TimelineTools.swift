@@ -113,7 +113,7 @@ extension ToolRuntime {
         // made: the revision the graphics Direction made for captions or credits left the film at.
         var cut = p, through = 0, context: EditContext?, made = base, remade = false
         for i in batch.operations.indices {
-            if i > through || remade, Self.measured.contains(batch.operations[i].type) || batch.operations[i].snap != nil {
+            if i > through || remade, Self.measured.contains(batch.operations[i].type) || batch.operations[i].snap != nil || Self.musical(batch.operations[i]) {
                 // The graphics just made are in the film now: measure on it, with every operation before.
                 if remade { cut = try store.read(); through = 0; remade = false }
                 if context == nil { context = try store.editContext() }
@@ -123,6 +123,7 @@ extension ToolRuntime {
             }
             do {
                 let sequence = try cut.sequence(batch.sequenceID)
+                try await resolveMusic(&batch.operations[i], cut, sequence)
                 switch batch.operations[i].type {
                 case "loudness": try await resolveLoudness(&batch.operations[i], cut, sequence)
                 case "captions": let was = made; try await resolveCaptions(&batch.operations[i], cut, sequence, revision: &made, validateOnly: validateOnly); remade = made != was
@@ -160,6 +161,74 @@ extension ToolRuntime {
         guard let whole = current.merging(value["audio"]) else { return value }
         op["audio"] = whole
         return .object(op)
+    }
+
+    /// An operation with a time in bars, or a song to fit: measured on the cut as the batch reaches it.
+    static func musical(_ op: EditOperation) -> Bool { op.atMusic != nil || op.fromMusic != nil || op.fit != nil }
+
+    /// Times in bars and placeMusic's fit (agent-timeline.md › Music): the song's grid, heard once a film
+    /// (SongBeats), gives a bar's moment in the song, then where that moment plays in the cut; fit gets each bar's sound.
+    func resolveMusic(_ op: inout EditOperation, _ p: Project, _ s: DirectionCore.Sequence) async throws {
+        guard Self.musical(op) else { return }
+        // An asset by its id, or a made clip by its made record's id, as placeMusic takes it.
+        func asset(_ id: String?) -> MediaAsset? { id.flatMap { id in p.assets.first { $0.id == id } ?? p.assets.first { $0.madeID == id } } }
+        func songName(_ a: MediaAsset) -> String { (a.song ?? "").isEmpty ? a.name : a.song! }
+        func grid(_ a: MediaAsset) async throws -> BeatGrid {
+            let heard = try await SongBeats.heard(a, in: p, cacheDirectory: cacheDirectory)
+            guard let g = heard.grid else { throw DirectionError("no_beat", heard.steady == false ? "\(songName(a)) has no steady beat to count bars in; give the time in seconds." : "\(songName(a)) is too short to count bars in; give the time in seconds.") }
+            return g
+        }
+        if op.fromMusic != nil || op.fit != nil {
+            guard op.type == "placeMusic" else { throw DirectionError("bad_argument", op.fit != nil ? "fit is placeMusic\u{2019}s." : "from in bars is placeMusic\u{2019}s: the moment of the song that plays at at.") }
+            guard let a = asset(op.madeID ?? op.assetID) else { return }
+            let g = try await grid(a)
+            if let m = op.fromMusic { op.from = try g.seconds(m, song: songName(a)) }
+            if op.fit != nil {
+                var r = op.resolved ?? ResolvedValues()
+                r.music = try await SongBeats.material(a, in: p, grid: g)
+                op.resolved = r
+            }
+        }
+        if let m = op.atMusic {
+            // The music in the cut: sound below A1 with a steady beat (a song, not a whoosh or a room tone), by song.
+            let frame = Double(s.frameRate.denominator) / Double(s.frameRate.numerator)
+            func key(_ a: MediaAsset) -> String { (a.song ?? "").isEmpty ? a.id : "song:" + a.song! }
+            var grids: [String: BeatGrid] = [:], heard = Set<String>(), music: [Clip] = []
+            for c in s.clips where c.kind == .audio && c.hold == nil && c.layer > 0 {
+                guard let a = asset(c.assetID), a.duration.seconds >= 8 else { continue }
+                let k = key(a)
+                if heard.insert(k).inserted, let g = try? await SongBeats.heard(a, in: p, cacheDirectory: cacheDirectory).grid { grids[k] = g }
+                if grids[k] != nil { music.append(c) }
+            }
+            func keyOf(_ c: Clip) -> String { asset(c.assetID).map(key) ?? "" }
+            var clips: [Clip]
+            if let named = m["clip"].string {
+                guard let c = music.first(where: { $0.id == named }) else { throw DirectionError("bad_argument", "\(named) isn\u{2019}t music with a steady beat in this cut. at.clip is a music clip\u{2019}s id from direction_timeline.") }
+                // That placing of the song: the clips of it that touch, a fitted song's pieces and its parts.
+                clips = [c]
+                var grew = true
+                while grew {
+                    grew = false
+                    for x in music where keyOf(x) == keyOf(c) && !clips.contains(where: { $0.id == x.id }) && clips.contains(where: { x.start.seconds <= $0.end.seconds + frame / 2 && x.end.seconds >= $0.start.seconds - frame / 2 }) { clips.append(x); grew = true }
+                }
+            } else {
+                let songs = Set(music.map(keyOf))
+                guard let only = songs.first else { throw DirectionError("bad_argument", "There\u{2019}s no music with a steady beat in the cut to count bars in. Place it with placeMusic first, or give at in seconds.") }
+                guard songs.count == 1 else { throw DirectionError("bad_argument", "\(songs.count) songs play in the cut; name the one to count bars in with at.clip.") }
+                clips = music.filter { keyOf($0) == only }
+            }
+            clips.sort { $0.start < $1.start }
+            guard let first = clips.first, let a = asset(first.assetID), let g = grids[keyOf(first)] else { return }
+            let t = try g.seconds(m, song: songName(a)) ?? 0
+            // Where that moment plays: inside a clip's own stretch of the song, or in the sound just before it (a fitted
+            // piece's downbeat sits in its J-cut, and a song placed from a bar starts on the frame nearest it).
+            func sound(_ c: Clip) -> (Double, Double) { (c.sourceRange.start.seconds - (c.soundLead ?? 0) * c.speed - frame / 2, c.sourceRange.end.seconds + max(0, c.soundTail ?? 0) * c.speed) }
+            guard let c = clips.first(where: { $0.sourceRange.start.seconds <= t + 1e-6 && t < $0.sourceRange.end.seconds - 1e-6 }) ?? clips.first(where: { sound($0).0 <= t && t < sound($0).1 }) else {
+                let plays = clips.map { "bars \(g.bar(at: $0.sourceRange.start.seconds + 0.01) ?? 1)\u{2013}\(g.bar(at: $0.sourceRange.end.seconds - 0.01) ?? 1)" }
+                throw DirectionError("bad_argument", "That moment of \(songName(a)) isn\u{2019}t in the cut; it plays \(Array(Set(plays)).sorted().joined(separator: ", ")).")
+            }
+            op.at = c.sequenceTime(at: MediaTime(seconds: t))
+        }
     }
 
     /// The operations `resolve` measures the cut for.

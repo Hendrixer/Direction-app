@@ -133,7 +133,7 @@ The moves' scales start from filling the frame: 1.15 on a 16:9 take in a 9:16 cu
 | `fade` | `clipID`, `in?`, `out?` (frames) | |
 | `duck` | `track` (usually A2), `under` (usually A1), `dB`, `attack?`, `release?` | Direction finds every line of dialogue from the words and writes the gain keys |
 | `syncSound` | `clipID`, `assetID?` | A take in sync with a V1 clip plays its sound under it, in place of the clip's own: the group's sound take by default. Naming the clip's own take puts its sound back. Stays lined up like a synced cutaway. |
-| `placeMusic` | `madeID` or `assetID`, `at`, `endOn` (`cut`, `word`, or a time) | Lines the music's end up with a cut or a word, trimming from the head |
+| `placeMusic` | `madeID` or `assetID`, `at`, `endOn` (`cut`, `word`, or a time), `from`, `fit`, `parts` | Lines the music's end up with a cut or a word, trimming from the head; with `fit`, plays the song from its start to its own ending, joined between bars that sound alike to last from `at` to `endOn`, a length, or to the end of the picture |
 | `audio` | as today | EQ, compression and per-track settings |
 
 **Film**: `format` and `duplicateSequence` as today. A `format` that changes the cut's shape warns about the titles, graphics and layouts placed for the old one ("2 titles and 1 layout were placed for 16:9. Look at them in the new shape."). The director changes the shape from the brief (start.md › 03): Direction sends the `format` as the director's own edit, and the `reframe` skill fills the frame when a note asks.

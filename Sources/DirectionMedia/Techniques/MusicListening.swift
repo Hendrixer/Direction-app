@@ -33,6 +33,20 @@ enum MusicListening {
 
     /// Features of a sound file, read in one pass.
     static func features(_ url: URL) throws -> Features {
+        var reader = Reader()
+        try read(url) { reader.add($0) }
+        return reader.features
+    }
+
+    /// A sound file's samples in one channel at `rate`.
+    static func samples(_ url: URL) throws -> [Float] {
+        var out: [Float] = []
+        try read(url) { out.append(contentsOf: $0) }
+        return out
+    }
+
+    /// A sound file's samples in one channel at `rate`, in order, a stretch at a time.
+    static func read(_ url: URL, _ each: (UnsafeBufferPointer<Float>) -> Void) throws {
         let file = try AVAudioFile(forReading: url)
         guard let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: file.processingFormat, to: mono) else { throw DirectionError("audio_unreadable", "\(url.lastPathComponent) can't be read.") }
@@ -42,7 +56,6 @@ enum MusicListening {
               let output = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: AVAudioFrameCount(rate) + 4096) else { throw DirectionError("audio_unreadable", "\(url.lastPathComponent) can't be read.") }
         final class Feed: @unchecked Sendable { var ended = false }
         let feed = Feed()
-        var reader = Reader()
         while true {
             var error: NSError?
             let status = converter.convert(to: output, error: &error) { _, state in
@@ -55,10 +68,9 @@ enum MusicListening {
                 return input
             }
             if status == .error { throw error ?? DirectionError("audio_unreadable", "\(url.lastPathComponent) can't be read.") }
-            if output.frameLength > 0, let data = output.floatChannelData { reader.add(UnsafeBufferPointer(start: data[0], count: Int(output.frameLength))) }
+            if output.frameLength > 0, let data = output.floatChannelData { each(UnsafeBufferPointer(start: data[0], count: Int(output.frameLength))) }
             if status == .endOfStream || (feed.ended && output.frameLength == 0) { break }
         }
-        return reader.features
     }
 
     /// Features of samples already at `rate`, for tests and short sounds.

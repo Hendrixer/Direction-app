@@ -153,21 +153,28 @@ public enum LibraryCatalog {
         return found.sorted { $0.range.lowerBound < $1.range.lowerBound }
     }
 
+    /// Music's bars, for the editor: " Its beat: 4 beats a bar, a bar about every 3.00 s from 0.01 s (105 bars); it
+    /// moves on at bar 9 (0:24.0). direction_library has every bar's start." Music with no steady beat says so.
+    static func grid(_ i: ShelfItem) -> String {
+        if let g = i.measured?.grid { return " Its beat: \(g.line) direction_library has every bar\u{2019}s start." }
+        return i.measured?.steady == false ? " It has no steady beat to cut on." : ""
+    }
+
     /// What the editor reads under a note that names some: "@Grid flash is the technique Grid flash: …".
     public static func explain(_ found: [LibraryEntry]) -> String {
         found.map { e in
             if let parts = e.parts {
                 let song = Song(name: e.name, parts: parts)
                 let words = [song.note, song.source.map { "From \($0)." }].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-                return "@\(e.name) is a song in the director's library, in parts (\(song.partsText)): \(song.lead.summary).\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
+                return "@\(e.name) is a song in the director's library, in parts (\(song.partsText)): \(song.lead.summary).\(grid(song.lead))\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
             }
             if let i = e.item, let song = e.partOf {
                 let words = [i.note, i.source.map { "From \($0)." }].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-                return "@\(e.name) is the \(i.part ?? "part") of \(song), a song in the director's library: \(i.summary).\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
+                return "@\(e.name) is the \(i.part ?? "part") of \(song), a song in the director's library: \(i.summary).\(grid(i))\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
             }
             if let i = e.item {
                 let words = [i.note, i.source.map { "From \($0)." }].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-                return "@\(e.name) is \(i.kind == .image ? "an image" : i.kind == .music ? "music" : "a sound effect") in the director's library: \(i.summary).\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
+                return "@\(e.name) is \(i.kind == .image ? "an image" : i.kind == .music ? "music" : "a sound effect") in the director's library: \(i.summary).\(grid(i))\(words.isEmpty ? "" : " " + words.joined(separator: " ")) Use \(e.use)."
             }
             return "@\(e.name) is \(e.isBuiltIn ? "Direction's own \(e.kind)" : "the \(e.kind) technique \(e.name)"): \(e.summary) Use \(e.use)."
         }.joined(separator: " ")

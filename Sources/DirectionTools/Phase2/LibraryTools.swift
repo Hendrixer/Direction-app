@@ -6,7 +6,7 @@ import DirectionMedia
 // own copy in <film>/Library, never footage.
 extension ToolCatalog {
     static var libraryDefinitions: [ToolDefinition] { [
-        definition("direction_library", "List the director's sounds and images, kept outside any film (the Sounds and Images folders, beside Styles): music beds, stings and sound effects, logos and stills. Each has its name, kind (music, effect or image), summary of what Direction measured (length, tempo, key, instruments, voice; size, transparency, words), the director's note on when to use it and where it's from. A song kept in parts (stems such as Drums, Bass, Instruments, Melody, and maybe its Full mix) is one item with its parts; a note names the song (\"@Neon Drive\") or one part (\"@Neon Drive Drums\"). kind or query (words in any of that) narrows the list. A note or the brief names one with \"@Name\". To use one, bring it in with direction_import's library and the name (the film keeps its own copy, and it isn't footage; a song brings every part), then place it: placeMusic for music (parts picks a song's parts, which play in time together), overwrite onto A3 for an effect, cutaway and reframe for an image.", ["kind": string, "query": string]),
+        definition("direction_library", "List the director's sounds and images, kept outside any film (the Sounds and Images folders, beside Styles): music beds, stings and sound effects, logos and stills. Each has its name, kind (music, effect or image), summary of what Direction measured (length, tempo, key, instruments, voice; size, transparency, words), the director's note on when to use it and where it's from. Music has its grid: tempo, beats in a bar, where every bar starts (bar 1 first) and the bars where the song moves on (beats: true adds every beat), the same grid for every part of a song; steady false is music with no steady beat to cut on. Times in edits can be the song's bars once it's placed ({bar: 9}, {bar: 9, beat: 3}, {beat: 33}), and placeMusic's fit makes a song a given length by joining its bars. A song kept in parts (stems such as Drums, Bass, Instruments, Melody, and maybe its Full mix) is one item with its parts; a note names the song (\"@Neon Drive\") or one part (\"@Neon Drive Drums\"). kind or query (words in any of that) narrows the list. A note or the brief names one with \"@Name\". To use one, bring it in with direction_import's library and the name (the film keeps its own copy, and it isn't footage; a song brings every part), then place it: placeMusic for music (parts picks a song's parts, which play in time together), overwrite onto A3 for an effect, cutaway and reframe for an image.", ["kind": string, "query": string, "beats": bool]),
     ] }
 }
 
@@ -15,14 +15,21 @@ extension ToolRuntime {
         switch name {
         case "direction_library":
             let kind = a["kind"].string.flatMap(ShelfItem.Kind.init(rawValue:))
-            let words = (a["query"].string ?? "").lowercased().split(separator: " ")
+            let words = (a["query"].string ?? "").lowercased().split(separator: " "), everyBeat = a["beats"].bool ?? false
+            // What was measured, with the grid as the editor reads it and without the listening's own version.
+            func measured(_ m: ShelfItem.Measured?) throws -> JSONValue {
+                guard let m, case .object(var o) = try JSONValue.wrapping(m) else { return .null }
+                o["version"] = nil
+                if let g = m.grid { o["grid"] = g.compact(beats: everyBeat) }
+                return .object(o)
+            }
             var items: [JSONValue] = []
             func matches(_ text: [String?]) -> Bool { let t = text.compactMap { $0 }.joined(separator: " ").lowercased(); return words.allSatisfy { t.contains($0) } }
             for song in MediaLibrary.sounds.songs() where (kind == nil || kind == .music) && matches([song.name, song.summary, song.note, song.source] + song.parts.map(\.part)) {
                 let parts: [JSONValue] = song.parts.map { p in .object(["part": .string(p.part ?? ""), "name": .string(Song.name(song.name, part: p.part ?? "")), "file": .string(p.file), "summary": .string(p.summary)]) }
                 items.append(.object(["name": .string(song.name), "kind": .string("music"), "summary": .string(song.summary), "parts": .array(parts),
                                       "note": song.note.map(JSONValue.string) ?? .null, "source": song.source.map(JSONValue.string) ?? .null,
-                                      "measured": try song.lead.measured.map { try JSONValue.wrapping($0) } ?? .null, "path": .string(MediaLibrary.sounds.url(song.lead).path)]))
+                                      "measured": try measured(song.lead.measured), "path": .string(MediaLibrary.sounds.url(song.lead).path)]))
             }
             for library in MediaLibrary.shelves {
                 for i in library.items() where !i.isPart && (kind == nil || i.kind == kind) {
@@ -30,7 +37,7 @@ extension ToolRuntime {
                     guard words.allSatisfy({ text.contains($0) }) else { continue }
                     items.append(.object(["name": .string(i.name), "kind": .string(i.kind.rawValue), "summary": .string(i.summary),
                                           "note": i.note.map(JSONValue.string) ?? .null, "source": i.source.map(JSONValue.string) ?? .null,
-                                          "measured": try i.measured.map { try JSONValue.wrapping($0) } ?? .null, "path": .string(library.url(i).path)]))
+                                          "measured": try measured(i.measured), "path": .string(library.url(i).path)]))
                 }
             }
             return ToolResponse(.object(["items": .array(items), "sounds": .string(MediaLibrary.sounds.folder.path), "images": .string(MediaLibrary.images.folder.path)]))
