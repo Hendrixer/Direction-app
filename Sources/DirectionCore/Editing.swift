@@ -19,6 +19,9 @@ public struct EditOperation: Hashable, Sendable {
     public var assetID: String?
     public var clipID: String?
     public var at: MediaTime?
+    /// `at` as a moment of the music in the cut ({bar: 9}, {bar: 9, beat: 3}, {beat: 33}, with clip when more than one
+    /// song plays), until Direction's tools find where it plays.
+    public var atMusic: JSONValue?
     public var range: MediaRange?
     public var sourceRange: MediaRange?
     public var layer: Int?
@@ -81,6 +84,11 @@ public struct EditOperation: Hashable, Sendable {
     /// seconds, that plays at `at`.
     public var parts: [String]?
     public var from: Double?
+    /// `from` as a moment of the song ({bar: 9}), until Direction's tools look up its grid.
+    public var fromMusic: JSONValue?
+    /// `placeMusic`: make the song this long by joining its bars (true: from at to endOn; seconds; or "cut", to the
+    /// end of the picture), playing it from its start to its own ending.
+    public var fit: JSONValue?
     /// `parts`: where each part of a song is heard, by part, in cut seconds; [] for nowhere.
     public var heard: [String: [MediaRange]]?
     /// `pin` and `zoomThrough`: four corners [[x, y], …] as fractions of the frame (y down), top left first, clockwise.
@@ -139,6 +147,8 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
     public var placed: [PlacedGraphic]?
     /// audio: only the settings the operation names, put over the track's as the batch reaches it.
     public var audioChanges: JSONValue?
+    /// placeMusic's fit and musical times: the song's grid and each bar's sound.
+    public var music: MusicMaterial?
     public init(keys: [String: [Keyframe]]? = nil, grade: ColorGrade? = nil, source: String? = nil, quiet: [MediaRange]? = nil, assetID: String? = nil, layout: LayoutMeasure? = nil, faces: [String: FaceTrack]? = nil, warnings: [String]? = nil) { self.keys = keys; self.grade = grade; self.source = source; self.quiet = quiet; self.assetID = assetID; self.layout = layout; self.faces = faces; self.warnings = warnings }
 }
 
@@ -171,7 +181,7 @@ extension EditOperation {
 }
 
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "parts", "from", "heard", "corners", "layout", "scales", "focus", "name", "variant", "lufs", "truePeak", "wordsAtATime", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "parts", "from", "heard", "corners", "layout", "scales", "focus", "name", "variant", "lufs", "truePeak", "wordsAtATime", "fit", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -190,7 +200,7 @@ extension EditOperation: Codable {
         func decoded<T: Decodable>(_ k: String, _ t: T.Type, _ what: String) throws -> T? { try value(k).map { v in do { return try v.decode(t) } catch { throw bad(k, what) } } }
         type = name; legacy = f["op"] == nil
         note = try int("note"); assetID = try str("assetID"); clipID = try str("clipID")
-        at = try value("at").map { try Self.time($0, "at") }
+        if let v = value("at"), Self.musical(v) { atMusic = try Self.checkedMusical(v, "at") } else { at = try value("at").map { try Self.time($0, "at") } }
         range = try value("range").map { try Self.range($0, "range") }
         sourceRange = try value("sourceRange").map { try Self.range($0, "sourceRange") }
         layer = try int("layer"); track = try str("track"); speed = try num("speed"); rate = try num("rate"); ripple = try bool("ripple")
@@ -214,7 +224,9 @@ extension EditOperation: Codable {
         dB = try num("dB"); fadeIn = try int("in"); fadeOut = try int("out"); under = try str("under"); attack = try num("attack"); release = try num("release")
         endOn = value("endOn")
         parts = try decoded("parts", [String].self, "a list of a song's parts, like [\"Drums\", \"Bass\"]")
-        from = try num("from")
+        if let v = value("from"), Self.musical(v) { fromMusic = try Self.checkedMusical(v, "from") } else { from = try num("from") }
+        fit = value("fit")
+        if let f = fit { guard f.bool == true || f.string == "cut" || (f.double.map { $0.isFinite && $0 > 0 } ?? false) else { throw bad("fit", "true (from at to endOn), a length in seconds, or \"cut\" (to the end of the picture)") } }
         if let v = value("heard") {
             guard case .object(let o) = v else { throw bad("heard", "{part: [{start, end}]}, in cut seconds") }
             heard = try o.mapValues { list in
@@ -240,7 +252,7 @@ extension EditOperation: Codable {
         func put(_ k: String, _ v: Int?) { if let v { f[k] = .number(Double(v)) } }
         func put(_ k: String, _ v: Bool?) { if let v { f[k] = .bool(v) } }
         func put<T: Encodable>(_ k: String, any v: T?) { if let v, let j = try? JSONValue.wrapping(v) { f[k] = j } }
-        put("note", note); put("assetID", assetID); put("clipID", clipID); put("at", any: at); put("range", any: range); put("sourceRange", any: sourceRange)
+        put("note", note); put("assetID", assetID); put("clipID", clipID); put("at", any: at); if at == nil, let m = atMusic { f["at"] = m }; if let v = fit { f["fit"] = v }; if from == nil, let m = fromMusic { f["from"] = m }; put("range", any: range); put("sourceRange", any: sourceRange)
         put("layer", layer); put("track", track); put("speed", speed); put("rate", rate); put("ripple", ripple); put("grade", any: grade); put("framing", any: framing)
         put("audioTrackID", audioTrackID.map(Int.init)); put("audio", any: audio); put("text", text); put("width", width); put("height", height); put("frameRate", any: frameRate)
         if let to { f["to"] = to }; put("edge", edge); put("frames", frames); put("editPoint", editPoint); put("lead", lead); put("withAssetID", withAssetID); put("alignOn", alignOn)
@@ -251,6 +263,15 @@ extension EditOperation: Codable {
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
         put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("parts", any: parts); put("from", from); put("heard", any: heard); put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("variant", variant); put("lufs", lufs); put("truePeak", truePeak); put("wordsAtATime", wordsAtATime); put("resolved", any: resolved)
         return .object(f)
+    }
+
+    /// A moment of the music: {bar}, {beat}, or both.
+    static func musical(_ v: JSONValue) -> Bool { if case .object(let o) = v { return o["bar"] != nil || o["beat"] != nil }; return false }
+    static func checkedMusical(_ v: JSONValue, _ k: String) throws -> JSONValue {
+        guard case .object(let o) = v, o.keys.allSatisfy(["bar", "beat", "clip"].contains) else { throw DirectionError("bad_argument", "\(k) as music is {bar: 9}, {bar: 9, beat: 3} or {beat: 33}, with clip when more than one song plays.") }
+        for key in ["bar", "beat"] where o[key] != nil { guard let n = o[key]?.double, n.rounded() == n, n >= 1, n < 1e6 else { throw DirectionError("bad_argument", "\(k).\(key) is a whole number from 1.") } }
+        if o["clip"] != nil { guard o["clip"]?.string?.isEmpty == false else { throw DirectionError("bad_argument", "\(k).clip is the id of a music clip in the cut.") } }
+        return v
     }
 
     static func time(_ v: JSONValue, _ k: String) throws -> MediaTime {
@@ -697,6 +718,8 @@ struct EditWork {
     // MARK: Dispatch
 
     mutating func perform(_ op: EditOperation) throws -> Outcome {
+        // A moment of the music is worked out by Direction's tools from the song's grid before the batch runs.
+        if (op.atMusic != nil && op.at == nil) || (op.fromMusic != nil && op.from == nil) { throw bad("A time in bars is worked out by direction_edit from the music in the cut; send the batch there.") }
         switch op.type {
         case "insert": return try insert(op, overwrite: false)
         case "overwrite": return try insert(op, overwrite: true)
@@ -1786,15 +1809,23 @@ struct EditWork {
         guard !a.audio.isEmpty else { throw bad("\(a.name) has no sound.") }
         guard let raw = op.at else { throw bad("at is where the music may start, in cut seconds.") }
         let at = snap(raw)
-        guard let endOn = op.endOn else { throw bad("endOn is {cut: \"<left>|<right>\"}, {word: id} or a time in seconds.") }
         var end: MediaTime, what: String
-        if let t = endOn.double ?? endOn["time"].double { end = snap(MediaTime(seconds: t)); what = tc(end) }
-        else if let p = endOn["cut"].string ?? (endOn.string?.contains("|") == true ? endOn.string : nil) { end = s.clips[try editPoint(p, needsLeft: false).right].start; what = "the cut at \(tc(end))" }
-        else if let id = endOn["word"].string ?? endOn.string {
+        // fit with a length, or "cut": the music ends there, played whole and joined to fit (MusicFitting).
+        if let seconds = op.fit?.double {
+            guard op.endOn == nil else { throw bad("fit with a length ends the music by itself; leave endOn out, or send fit: true to fit it from at to endOn.") }
+            end = snap(at + MediaTime(seconds: seconds)); what = tc(end)
+        } else if op.fit?.string == "cut" {
+            guard op.endOn == nil else { throw bad("fit \"cut\" ends the music with the picture; leave endOn out.") }
+            guard let last = s.clips.filter({ $0.kind != .audio }).map(\.end).max() else { throw bad("There\u{2019}s no picture to fit the music to.") }
+            end = last; what = "the end of the picture at \(tc(end))"
+        } else if let endOn = op.endOn, let t = endOn.double ?? endOn["time"].double { end = snap(MediaTime(seconds: t)); what = tc(end) }
+        else if let endOn = op.endOn, let p = endOn["cut"].string ?? (endOn.string?.contains("|") == true ? endOn.string : nil) { end = s.clips[try editPoint(p, needsLeft: false).right].start; what = "the cut at \(tc(end))" }
+        else if let endOn = op.endOn, let id = endOn["word"].string ?? endOn.string {
             guard let word = TranscriptEditing.words(on: s.clips, transcripts: transcripts).first(where: { $0.id == id }) else { throw bad("There's no word \(id) in this cut. Read direction_transcript for word ids.") }
             end = snap(word.range.start); what = "“\(word.text)” at \(tc(end))"
         } else { throw bad("endOn is {cut: \"<left>|<right>\"}, {word: id} or a time in seconds.") }
         guard end > at else { throw bad("The music has to end after it starts.") }
+        if op.fit != nil { guard op.from == nil else { throw bad("fit plays the song from its start to its own ending; leave from out.") } }
         // A library song's parts, by name; each plays the same moment of the song.
         var playing = [a]
         if let names = op.parts {
@@ -1804,6 +1835,7 @@ struct EditWork {
             for n in names { let p = try part(n, of: g); if !playing.contains(where: { $0.id == p.id }) { playing.append(p) } }
         }
         let songLength = playing.map(\.duration).min()!, title = playing.count > 1 ? "\(a.song!) (\(playing.compactMap(\.part).joined(separator: ", ")))" : playing[0].name
+        if op.fit != nil { return try fitMusic(op, playing: playing, title: title, at: at, end: end, what: what) }
         var start = at, warnings: [String] = [], src: MediaTime
         if let from = op.from {
             // From a moment of the song: it plays on from there and stops at the mark.
@@ -1832,6 +1864,42 @@ struct EditWork {
         let on = tracks.count == 1 ? tracks[0] : tracks.joined(separator: ", ")
         let summary = op.from == nil ? "Placed \(title) on \(on) to end on \(what)" : "Placed \(title) on \(on) from \(tc(src)) in the song to \(what)"
         return .init(summary: summary, changes: [.init(before: (start.seconds, end.seconds), after: (start.seconds, end.seconds), tracks: tracks)], clipIDs: ids, warnings: warnings)
+    }
+
+    /// placeMusic with fit: the song from its start to its own ending, joined between bars that sound alike so it
+    /// lasts from `at` to `end` (MusicFitting). Every part plays the same pieces, each on its own track. A piece's
+    /// clip starts on a frame; its sound starts and ends exactly at the joins (a J- or L-cut of under a frame), and
+    /// crosses over the next in the 10 ms before the downbeat.
+    mutating func fitMusic(_ op: EditOperation, playing: [MediaAsset], title: String, at: MediaTime, end: MediaTime, what: String) throws -> Outcome {
+        guard var material = op.resolved?.music else { throw bad("fit is worked out by direction_edit from the song\u{2019}s bars.") }
+        material.seconds = min(material.seconds, playing.map(\.duration.seconds).min() ?? material.seconds)
+        let plan = try MusicFitting.plan(material, length: (end - at).seconds, song: title)
+        // Where each piece starts in the cut, exactly, and on the frame its clip starts on.
+        var exact = [at.seconds]
+        for piece in plan.pieces { exact.append(exact.last! + piece.end - piece.start) }
+        exact[exact.count - 1] = end.seconds
+        let framed = exact.indices.map { k in k == 0 ? at : k == exact.count - 1 ? end : snap(MediaTime(seconds: exact[k])) }
+        let r = MediaRange(start: at, duration: end - at), xf = plan.crossfade
+        var ids: [String] = [], tracks: [String] = []
+        for (k, p) in playing.enumerated() {
+            var t: Track = (true, firstFree(audio: true, from: 1, r))
+            if k == 0, let given = op.track { t = try parseTrack(given) }
+            guard t.audio else { throw bad("Music goes on an A track.") }
+            guard free(t, r) else { throw DirectionError("overlap", "\(name(t)) already has sound at \(tc(at))\u{2013}\(tc(end)).") }
+            for (i, piece) in plan.pieces.enumerated() where framed[i + 1] > framed[i] {
+                let off = framed[i].seconds - exact[i]
+                var clip = Clip(assetID: p.id, name: p.name, kind: .audio, layer: t.layer, start: framed[i], sourceRange: .init(start: MediaTime(seconds: max(0, piece.start + off)), duration: framed[i + 1] - framed[i]))
+                if i > 0 { clip.soundLead = off + min(xf, piece.start); clip.fadeIn = xf }
+                if i < plan.pieces.count - 1 { clip.soundTail = exact[i + 1] - framed[i + 1].seconds; clip.fadeOut = xf }
+                if i == 0, let f = plan.fadeIn { clip.fadeIn = f }
+                if i == plan.pieces.count - 1, let f = plan.fadeOut { clip.fadeOut = f }
+                s.clips.append(clip); ids.append(clip.id)
+            }
+            tracks.append(name(t))
+        }
+        let on = tracks.count == 1 ? tracks[0] : tracks.joined(separator: ", ")
+        let joined = plan.joins.isEmpty ? "" : "; joined \(plan.joins.joined(separator: " and "))"
+        return .init(summary: "Fitted \(title) on \(on) to end on \(what): \(plan.said)\(joined)", changes: [.init(before: (at.seconds, end.seconds), after: (at.seconds, end.seconds), tracks: tracks)], clipIDs: ids, warnings: plan.warnings)
     }
 
     mutating func audio(_ op: EditOperation) throws -> Outcome {

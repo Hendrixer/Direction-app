@@ -144,8 +144,14 @@ public enum TimelineExport {
         // The outline: one row per clip, top layer first, then sound.
         func tc(_ t: Double) -> String { CutTimecode.string(t, rate: rate) }
         let lastOfScene = Dictionary(scenes.map { ($0.last, $0.scene) }, uniquingKeysWith: { a, _ in a })
+        // A fitted song's pieces (placeMusic fit): the same song on the same track, one ending where the next starts,
+        // from another moment of it. Said as a join, not as the J- and L-cuts and fades of under a frame that make it.
+        func joined(_ a: Clip, _ b: Clip) -> Bool {
+            a.kind == .audio && b.kind == .audio && a.layer == b.layer && a.assetID == b.assetID && abs(a.end.seconds - b.start.seconds) < 1e-6 && abs(a.sourceRange.end.seconds - b.sourceRange.start.seconds) > 0.05
+        }
         func row(_ c: Clip) -> String? {
             guard overlaps(c.start.seconds, c.end.seconds) else { return nil }
+            let before = s.clips.first { joined($0, c) }, after = s.clips.first { joined(c, $0) }
             let a = asset(c), role = ["A1": "voice", "A2": "music", "A3": "effects"][c.trackName] ?? "sound"
             var parts = [c.trackName, "\(tc(c.start.seconds))–\(tc(c.end.seconds))", c.id]
             if c.kind == .title { parts.append("title \"\(c.title ?? c.name)\"") }
@@ -181,10 +187,12 @@ public enum TimelineExport {
             if let h = c.hold { parts.append("freeze(\(String(format: "%.1f", h.seconds)) s)") }
             if c.grade != ColorGrade() { parts.append("balance") }
             if let b = c.blend, b != "normal" { parts.append(b) }
-            if let v = c.soundLead, v > 0 { parts.append("J \(Int((v * rate).rounded()))f") }
-            if let v = c.soundTail, v > 0 { parts.append("L \(Int((v * rate).rounded()))f") }
+            if let b = before { parts.append("joined from \(tc(b.sourceRange.end.seconds)) of the song") }
+            if let v = c.soundLead, v > 0, before == nil { parts.append("J \(Int((v * rate).rounded()))f") }
+            if let v = c.soundTail, v > 0, after == nil { parts.append("L \(Int((v * rate).rounded()))f") }
             if let g = c.gainDB { parts.append(dbText(g)) }
-            if c.fadeIn != nil || c.fadeOut != nil { parts.append("fade \(Int(((c.fadeIn ?? 0) * rate).rounded()))f/\(Int(((c.fadeOut ?? 0) * rate).rounded()))f") }
+            let fadeIn = before == nil ? c.fadeIn : nil, fadeOut = after == nil ? c.fadeOut : nil
+            if fadeIn != nil || fadeOut != nil { parts.append("fade \(Int(((fadeIn ?? 0) * rate).rounded()))f/\(Int(((fadeOut ?? 0) * rate).rounded()))f") }
             if c.duckKeys != nil, let d = s.tracks?[c.trackName]?.ducked { parts.append("ducked \(dbText(d.dB)) under \(d.under)") }
             if c.aboveLook ?? s.tracks?[c.trackName]?.aboveLook ?? false { parts.append("above look") }
             if let sc = lastOfScene[c.id] { parts.append("‹scene \(sc.number)\(sc.locked ? " · locked" : "")›") }

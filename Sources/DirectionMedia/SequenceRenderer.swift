@@ -152,7 +152,14 @@ public enum SequenceRenderer {
                 let points = AudioEnvelope.points(clip: clip, streamDB: settings.gainDB, streamFadeIn: settings.fadeIn, streamFadeOut: settings.fadeOut, track: soundTrack.flatMap { sequence.tracks?[$0] }, mixDB: sequence.mixGainDB ?? 0, from: insertAt.seconds, to: CMTimeAdd(insertAt, duration).seconds)
                 // A volume holds until the next ramp, so only changes need one.
                 if let first = points.first { mix.setVolume(first.gain, at: insertAt) }
-                for (a, b) in zip(points, points.dropFirst()) where b.t - a.t > 1e-6 && a.gain != b.gain { mix.setVolumeRamp(fromStartVolume: a.gain, toEndVolume: b.gain, timeRange: CMTimeRange(start: cm(a.t), end: cm(b.t))) }
+                // Ramps may not start before the volume set at insertAt or overlap one another, which a time that isn't on
+                // a frame (a fitted song's join) can do by a tick on its way to seconds and back: AVFoundation throws.
+                var after = insertAt
+                for (a, b) in zip(points, points.dropFirst()) where b.t - a.t > 1e-6 && a.gain != b.gain {
+                    let start = CMTimeMaximum(cm(a.t), after), end = cm(b.t)
+                    guard CMTimeCompare(end, start) > 0 else { continue }
+                    mix.setVolumeRamp(fromStartVolume: a.gain, toEndVolume: b.gain, timeRange: CMTimeRange(start: start, end: end)); after = end
+                }
                 audioParameters.append(mix)
             }
         }

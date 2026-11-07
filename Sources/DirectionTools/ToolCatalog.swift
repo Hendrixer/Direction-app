@@ -36,6 +36,8 @@ public enum ToolCatalog {
     static func either(_ shapes: [JSONValue], _ text: String) -> JSONValue { .object(["anyOf": .array(shapes), "description": .string(text)]) }
     /// A time: seconds, or {value, timescale}.
     static let moment = either([number, time], "Seconds, like 4.2, or {value, timescale}.")
+    /// A moment of the music: its bar, a beat of the bar, or its beat; clip names the music when more than one song plays.
+    static let bars = record(["bar": integer, "beat": integer, "clip": string])
     /// A stretch: {start, end}, or {start, duration}, each a time.
     static func span(_ text: String) -> JSONValue { noted(record(["start": moment, "end": moment, "duration": moment], required: ["start"]), text) }
     private static let operation: JSONValue = .object(["type": .string("object"), "description": .string("One edit function: {\"op\": name, …arguments}. direction_edit_catalog lists every op with its arguments."), "properties": .object([
@@ -46,9 +48,10 @@ public enum ToolCatalog {
         "frames": signed, "in": integer, "out": integer, "layer": integer, "audioTrackID": integer, "width": integer, "height": integer,
         "ripple": bool, "aboveLook": bool, "rate": number, "speed": number, "seconds": number, "scale": number, "x": number, "y": number, "exposure": number, "contrast": number, "saturation": number, "temperature": number, "tint": number, "longerThan": number, "dB": number, "attack": number, "release": number, "lufs": number, "truePeak": number, "wordsAtATime": integer,
         "wordIDs": list(string), "params": object, "keys": object, "grade": grade, "framing": framing, "audio": audio, "frameRate": record(["numerator": integer, "denominator": integer], required: ["numerator", "denominator"]),
-        "at": noted(moment, "Cut seconds."), "range": span("{start, end} in cut seconds."), "sourceRange": span("{start, end} in the take's seconds."),
+        "at": either([number, time, Self.bars], "Cut seconds; or where a bar of the music in the cut plays: {bar: 9}, {bar: 9, beat: 3}, {beat: 33}, with clip when more than one song plays."), "range": span("{start, end} in cut seconds."), "sourceRange": span("{start, end} in the take's seconds."),
         "to": either([number, record(["at": number, "before": string, "after": string, "track": string])], "move: {at} or {before: clip} or {after: clip}, with track to change it. tightenPauses: seconds each pause becomes."), "endOn": either([number, record(["cut": string, "word": string, "time": number])], "placeMusic: {cut: \"<left>|<right>\"}, {word: id} or seconds."),
-        "parts": noted(list(string), "placeMusic: a library song's parts to play, like [\"Drums\", \"Bass\"]."), "from": noted(number, "placeMusic: the moment of the song, in its own seconds, that plays at at."),
+        "parts": noted(list(string), "placeMusic: a library song's parts to play, like [\"Drums\", \"Bass\"]."), "from": either([number, Self.bars], "placeMusic: the moment of the song that plays at at, in its own seconds or bars ({bar: 9})."),
+        "fit": either([bool, number, string], "placeMusic: play the song from its start to its own ending, joined between bars that sound alike to last from at to endOn (true), this many seconds, or to the end of the picture (\"cut\")."),
         "heard": noted(map(list(record(["start": number, "end": number], required: ["start", "end"]))), "parts: {part: [{start, end}]}, where each part is heard in cut seconds; [] for nowhere."),
     ])])
     /// What each edit argument is, in a line, on the argument itself: the editor reads these, not the catalog.

@@ -74,7 +74,7 @@ struct ToolSchemaTests {
                 == "arguments.readBack[0].range: expected an object, not the text \u{201C}0:00\u{2013}0:06\u{201D}.")
         // An edit time is seconds or {value, timescale}, nothing else.
         #expect(refused("direction_edit", .object(["baseEditRevision": .number(1), "operations": .array([.object(["op": .string("split"), "clipID": .string("c"), "at": .string("4.2")])])]))
-                == "arguments.operations[0].at: expected a number or {timescale, value}, not the text \u{201C}4.2\u{201D}.")
+                == "arguments.operations[0].at: expected a number or {timescale, value} or {bar, beat, clip}, not the text \u{201C}4.2\u{201D}.")
         #expect(refused("direction_log_dailies", .object(["takes": .array([.object(["assetID": .string("a"), "scene": .number(2)])])])) == "arguments.takes[0]: unknown field scene; it takes assetID, caption, code, flags, guessSceneNumber, sceneID, sceneNumber, setupCode, suggestion, unusable.")
     }
 

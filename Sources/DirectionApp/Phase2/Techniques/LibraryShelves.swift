@@ -23,9 +23,11 @@ extension LibraryModel {
                 do { replace(try await LibraryMeasuring.measure(item, in: shelf, cacheDirectory: DirectionPaths.caches.appendingPathComponent("Library"))) }
                 catch { DirectionLog.warning("\(item.file) wasn\u{2019}t measured: \(error.localizedDescription)", "library") }
             }
-            // Heard for their lengths, a song's stems and full mix are put together (library.md › Songs in parts).
+            // Heard for their lengths, a song's stems and full mix are put together (library.md › Songs in parts), and
+            // the song's beats, bars and changes are heard once for all its parts.
             do { if try !MediaLibrary.sounds.groupStems().isEmpty { load() } }
             catch { DirectionLog.warning("Songs in parts weren\u{2019}t put together: \(error.localizedDescription)", "library") }
+            if !(await LibraryMeasuring.shareSongGrids(cacheDirectory: DirectionPaths.caches.appendingPathComponent("Library"))).isEmpty { load() }
         }
     }
 
