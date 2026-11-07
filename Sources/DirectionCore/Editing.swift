@@ -103,6 +103,9 @@ public struct EditOperation: Hashable, Sendable {
     public var truePeak: Double?
     /// `captions`: the most words on screen at once.
     public var wordsAtATime: Int?
+    /// `split`, `trim` and `roll`: the cut point moves to the nearest blink, peak of action or pause in the take
+    /// within 8 frames (agent-timeline.md › Cut points), measured by Direction's tools before the batch runs.
+    public var snap: String?
     /// What Direction's tools measured before the batch runs: face keys, a matched balance, a checked
     /// shader, quiet stretches, a graphic's render. Never taken from the editor.
     public var resolved: ResolvedValues?
@@ -171,7 +174,7 @@ extension EditOperation {
 }
 
 extension EditOperation: Codable {
-    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "parts", "from", "heard", "corners", "layout", "scales", "focus", "name", "variant", "lufs", "truePeak", "wordsAtATime", "resolved"]
+    static let argumentNames: Set<String> = ["op", "type", "note", "assetID", "clipID", "at", "range", "sourceRange", "layer", "track", "speed", "rate", "ripple", "grade", "framing", "audioTrackID", "audio", "text", "width", "height", "frameRate", "to", "edge", "frames", "editPoint", "lead", "withAssetID", "alignOn", "wordIDs", "longerThan", "seconds", "scale", "x", "y", "follow", "keepIn", "exposure", "contrast", "saturation", "temperature", "tint", "toClipID", "lut", "target", "effect", "params", "keys", "effectID", "cover", "graphic", "aboveLook", "madeID", "dB", "in", "out", "under", "attack", "release", "endOn", "parts", "from", "heard", "corners", "layout", "scales", "focus", "name", "variant", "lufs", "truePeak", "wordsAtATime", "snap", "resolved"]
 
     public init(from decoder: Decoder) throws { try self.init(json: JSONValue(from: decoder)) }
     public func encode(to encoder: Encoder) throws { try json.encode(to: encoder) }
@@ -230,6 +233,11 @@ extension EditOperation: Codable {
         if let f = focus { guard f.string == "action" || (f["x"].double != nil && f["y"].double != nil) || f["text"].string?.isEmpty == false else { throw bad("focus", "\"action\", {x, y} or {text}") } }
         transitionName = try str("name"); variant = try str("variant")
         lufs = try num("lufs"); truePeak = try num("truePeak"); wordsAtATime = try int("wordsAtATime")
+        snap = try str("snap")
+        if let snap {
+            guard ["blink", "action", "pause"].contains(snap) else { throw bad("snap", "blink, action or pause") }
+            guard ["split", "trim", "roll"].contains(name) else { throw DirectionError("bad_argument", "snap goes with split, trim or roll.") }
+        }
         resolved = try decoded("resolved", ResolvedValues.self, "Direction's own measurements")
     }
 
@@ -249,7 +257,7 @@ extension EditOperation: Codable {
         put("toClipID", toClipID); put("lut", lut); put("target", target); put("effect", effect); if let params { f["params"] = .object(params) }; put("keys", any: keys); put("effectID", effectID)
         if !legacy { put("type", transitionType) }
         put("cover", cover); put("graphic", graphic); put("aboveLook", aboveLook); put("madeID", madeID); put("dB", dB); put("in", fadeIn); put("out", fadeOut)
-        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("parts", any: parts); put("from", from); put("heard", any: heard); put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("variant", variant); put("lufs", lufs); put("truePeak", truePeak); put("wordsAtATime", wordsAtATime); put("resolved", any: resolved)
+        put("under", under); put("attack", attack); put("release", release); if let endOn { f["endOn"] = endOn }; put("parts", any: parts); put("from", from); put("heard", any: heard); put("corners", any: corners); put("layout", any: layout); if layout == nil { put("layout", layoutName) }; put("scales", any: scales); if let focus { f["focus"] = focus }; put("name", transitionName); put("variant", variant); put("lufs", lufs); put("truePeak", truePeak); put("wordsAtATime", wordsAtATime); put("snap", snap); put("resolved", any: resolved)
         return .object(f)
     }
 

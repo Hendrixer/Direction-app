@@ -22,6 +22,8 @@ struct JobToolsTests {
         #expect(ToolCatalog.names(for: .script).isSuperset(of: ["direction_script", "direction_script_update", "direction_turnovers", "direction_questions", "direction_style", "direction_brief"]))
         #expect(ToolCatalog.names(for: .finish).isSuperset(of: ["direction_measure_audio", "direction_frame", "direction_edit", "direction_finishing", "direction_graphic", "direction_watch", "direction_looks", "direction_library"]))
         #expect(ToolCatalog.names(for: .turnover).isSuperset(of: ["direction_import", "direction_cancel_job", "direction_feedback_reply", "direction_cuts", "direction_restore", "direction_preview"]))
+        // Cutting jobs choose cut points and check their cuts.
+        for job in [EditorJob.assemble, .turnover] { #expect(ToolCatalog.names(for: job).isSuperset(of: ["direction_cut_points", "direction_check"]), "\(job)") }
     }
 
     @Test func moreToolsDescribesAndRunsOneThisJobWasntGiven() throws {
