@@ -2,7 +2,7 @@
 
 No frames. This is the contract between the editor and Direction's renderer. Read `product-model.md` first.
 
-The director never sees a timeline: they see scenes on a strip, answers and choices. The editor sees everything: every layer, effect, keyframe, graphic and made clip. Direction doesn't hand off to another editing app; it renders everything itself.
+The director never sees a timeline: they see scenes on a strip, answers and choices. The editor sees everything: every layer, effect, keyframe, graphic and made clip. Direction renders everything itself; another editing app gets a copy of the cut only through File › Export for an Editing App… (`finish.md › Timeline for another editing app`), and nothing comes back; it renders everything itself.
 
 **The editor reads the timeline as data and changes it only through Direction's edit functions.** It never writes the timeline itself. Each function is one editorial act ("trim", "swap the take", "duck the music"), carried out by Direction's own code: the frame math, keeping picture and sound in sync, locks, and which note the change answers. The editor decides what to do; Direction does it exactly.
 

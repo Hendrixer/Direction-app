@@ -198,6 +198,19 @@ public actor ToolRuntime {
                     throw DirectionError("invalid_size", "Export at the cut\u{2019}s shape (\(s.width) \u{00D7} \(s.height)) or a multiple of it, up to 8192 wide.")
                 }
             }
+            // A timeline for another editing app: a folder with the FCPXML, renders, sound and LUTs (issue #4).
+            if preset == "timeline", !preview {
+                let s = try p.sequence(sequenceID)
+                // The cut this is, or the one it was finished from.
+                let cut = try store.cuts().filter { $0.editRevision <= p.editRevision && $0.sequenceID == s.id }.max { ($0.editRevision, $0.createdAt) < ($1.editRevision, $1.createdAt) }
+                let request = InterchangeExport.Request(project: p, sequenceID: s.id, filmName: p.name, cutName: cut?.name ?? "Working cut", dailies: try store.dailies(), notes: try store.notes(),
+                                                        looks: try? store.lookContext(), cacheDirectory: directory, folder: output)
+                let job = try startJob(kind: "export", revision: p.editRevision, phase: "Writing the timeline", progress: nil) { [store] job in
+                    let phases = JobPhases(job: job, store: store)
+                    return try await InterchangeExport.write(request) { phases.say($0) }
+                }
+                return ToolResponse(try .wrapping(job))
+            }
             let job = try startJob(kind: preview ? "preview" : "export", revision: p.editRevision, phase: "Compiling pinned edit for \(preset)") { [scale] in
                 let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequenceID, cacheDirectory: directory, looks: try? self.store.lookContext(), scale: scale)
                 return try await SequenceRenderer.export(compiled, to: output, preset: preset, range: range)
@@ -310,5 +323,20 @@ extension ReviewComment {
         if range == nil && time == nil { fields["anchors"] = nil; fields["anchoredTo"] = .string("the whole cut") }
         fields["transcriptContext"] = .object(["excerpt": .string(transcriptExcerpt()), "wordCount": .number(Double(transcriptContext.count))])
         return .object(fields)
+    }
+}
+
+/// A running job's phase, saved as it changes ("Rendering 2 of 3: a title").
+final class JobPhases: @unchecked Sendable {
+    private let lock = NSLock()
+    private var job: JobRecord
+    private let store: ProjectStore
+    init(job: JobRecord, store: ProjectStore) { self.job = job; self.store = store }
+    func say(_ phase: String) {
+        lock.withLock {
+            guard phase != job.phase else { return }
+            job.phase = phase; job.updatedAt = Date().timeIntervalSince1970
+            try? store.saveJob(job)
+        }
     }
 }

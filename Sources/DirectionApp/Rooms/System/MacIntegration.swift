@@ -118,7 +118,7 @@ enum DeliveryWatch {
         }
         guard running.isEmpty, !finished.isEmpty else { return }
         let files = finished; finished = []
-        let bytes = files.compactMap { (try? FileManager.default.attributesOfItem(atPath: $0))?[.size] as? Int64 }.reduce(0, +)
+        let bytes = files.compactMap { DeliveryFormat.fileSize(URL(fileURLWithPath: $0)) }.reduce(0, +)
         let body = "\(files.count) \(files.count == 1 ? "file" : "files"), \(SystemSupport.bytes(bytes))."
         film.onNotify?("\(film.filmName) is delivered", body, NotificationKey.delivery)
     }
@@ -314,6 +314,30 @@ struct FilmActions {
         case 2: return Double(n[0] * 60 + n[1])
         case 3: return hours ? Double(n[0] * 3600 + n[1] * 60 + n[2]) : Double(n[0] * 60 + n[1]) + Double(n[2]) / fps
         default: return Double(n[0] * 3600 + n[1] * 60 + n[2]) + Double(n[3]) / fps
+        }
+    }
+
+    /// Film › Export for an Editing App…: the watched cut as a folder Final Cut Pro and DaVinci Resolve open
+    /// (issue #4), at any stage, not only once it's delivered.
+    func exportTimeline() {
+        guard let cut = m.watchedCut, let runtime = m.runtime else { return }
+        let panel = NSSavePanel()
+        panel.title = "Export for an Editing App"; panel.prompt = "Export"
+        panel.message = "A folder with \(cut.name) for Final Cut Pro or DaVinci Resolve, each sound track on its own, and the look."
+        panel.nameFieldStringValue = "\(m.filmName) \u{2013} \(cut.name) Timeline"; panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let film = m
+        film.toast = Toast(title: "Exporting \(cut.name) for an editing app\u{2026}")
+        Task { @MainActor in
+            do {
+                let response = try await runtime.invoke("direction_export", arguments: .object(["path": .string(url.path), "preset": .string("timeline"), "revision": .number(Double(film.revision(of: cut))), "sequenceID": .string(cut.sequenceID)]))
+                let job = try response.value.decode(JobRecord.self)
+                ScreeningCopy.jobIDs.insert(job.id)
+                _ = try await runtime.waitForJob(job.id)
+                film.toast = Toast(title: "\(cut.name) is ready for an editing app", detail: url.lastPathComponent, actionTitle: "Show in Finder", run: { NSWorkspace.shared.activateFileViewerSelecting([url]) })
+            } catch {
+                film.toast = Toast(title: "\(cut.name) wasn\u{2019}t exported", detail: error.localizedDescription)
+            }
         }
     }
 

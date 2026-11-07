@@ -27,8 +27,12 @@ struct DeliveryOutput: Identifiable, Hashable {
         .init(id: "hevc", name: "HEVC", preset: "hevc", ext: "mp4", codec: "HEVC", note: "smaller, same quality", defaultOn: false, mbps: 4.5, art: .dusk),
         // The captions the cut shows, as SRT with a WebVTT beside it (finish.md › 37).
         .init(id: "captions", name: "Captions", preset: "captions", ext: "srt", codec: "SRT and WebVTT", note: "", defaultOn: true, mbps: 0, art: .night),
+        // A folder for another editing app (issue #4): the cut as FCPXML, renders, each sound track and the look.
+        .init(id: "timeline", name: "Timeline", preset: "timeline", ext: "", codec: "For Final Cut Pro or DaVinci Resolve", note: "sound by track", defaultOn: false, mbps: 0, art: .dusk),
     ]
-    static func matching(_ url: URL) -> DeliveryOutput? { all.first { url.deletingPathExtension().lastPathComponent.hasSuffix("\u{2013} \($0.name)") } }
+    static func matching(_ url: URL) -> DeliveryOutput? { all.first { ($0.ext.isEmpty ? url : url.deletingPathExtension()).lastPathComponent.hasSuffix("\u{2013} \($0.name)") } }
+    /// "Name.ext", or "Name" for a folder.
+    func file(_ name: String) -> String { ext.isEmpty ? name : "\(name).\(ext)" }
 }
 
 /// A delivery in progress or done. Lives with the film so it keeps running when the sheet closes.
@@ -56,14 +60,14 @@ final class Delivery {
     /// "<Film title> – <Output>.<ext>", with " 2", " 3"… when a file is already there.
     static func uniqueURL(in folder: URL, film: String, output: DeliveryOutput, taken: Set<String>) -> URL {
         let safe = film.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
-        var url = folder.appendingPathComponent("\(safe) \u{2013} \(output.name).\(output.ext)"), n = 2
+        var url = folder.appendingPathComponent(output.file("\(safe) \u{2013} \(output.name)")), n = 2
         // Captions write a .vtt beside the .srt, so that name has to be free too.
         func used(_ url: URL) -> Bool {
             FileManager.default.fileExists(atPath: url.path) || taken.contains(url.path)
                 || (output.id == "captions" && FileManager.default.fileExists(atPath: url.deletingPathExtension().appendingPathExtension("vtt").path))
         }
         while used(url) {
-            url = folder.appendingPathComponent("\(safe) \u{2013} \(output.name) \(n).\(output.ext)"); n += 1
+            url = folder.appendingPathComponent(output.file("\(safe) \u{2013} \(output.name) \(n)")); n += 1
         }
         return url
     }
@@ -115,7 +119,11 @@ final class Delivery {
                     if let size = self.size { args["width"] = .number(Double(size.width)); args["height"] = .number(Double(size.height)) }
                     let response = try await runtime.invoke("direction_export", arguments: .object(args))
                     let job = try response.value.decode(JobRecord.self)
-                    _ = try await runtime.waitForJob(job.id)
+                    do { _ = try await runtime.waitForJob(job.id) } catch is CancellationError {
+                        // Stop stops the writing too, not only the waiting: a stopped timeline never lands later.
+                        Task { _ = try? await runtime.invoke("direction_cancel_job", arguments: .object(["jobID": .string(job.id)])) }
+                        throw CancellationError()
+                    }
                     self.items[i].state = .done
                 } catch {
                     self.items[i].state = .failed(error is CancellationError ? "Stopped" : error.localizedDescription)
@@ -211,7 +219,14 @@ enum DeliveryFormat {
         guard let v = try? probe.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeNameKey]), let free = v.volumeAvailableCapacityForImportantUsage else { return nil }
         return (free, v.volumeName ?? "this disk")
     }
-    static func fileSize(_ url: URL) -> Int64? { (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value }
+    /// A file's size, or everything in a folder.
+    static func fileSize(_ url: URL) -> Int64? {
+        var folder: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &folder) else { return nil }
+        guard folder.boolValue else { return (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value }
+        let files = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey])?.compactMap { $0 as? URL } ?? []
+        return files.reduce(0) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+    }
 }
 
 // MARK: Sheet
@@ -339,6 +354,8 @@ struct DeliverSheet: View {
     private func estimate(_ o: DeliveryOutput) -> Int64 {
         if o.id == "captions" { return captions?.bytes ?? 0 }
         let seconds = model.cutDuration(cut) ?? model.duration
+        // The sound files: the mix and each track, 48 kHz 24-bit stereo. Renders are extra, and only where needed.
+        if o.id == "timeline" { return Int64(288_000 * seconds * Double(1 + Set((sequence?.clips ?? []).filter { $0.kind == .audio }.map(\.layer)).union([0]).count)) }
         let d = dimensions
         let scale = Double((d?.width ?? 1920) * (d?.height ?? 1080)) / (1920 * 1080) * ((sequence?.frameRate.value ?? 24) / 24)
         return Int64(o.mbps * 1_000_000 / 8 * seconds * max(0.1, scale))
@@ -390,6 +407,7 @@ struct DeliverSheet: View {
             let language = captions.language.flatMap { Locale(identifier: $0).language.languageCode?.identifier }.flatMap { Locale.current.localizedString(forLanguageCode: $0) }
             return [o.codec, language, captions.count == 1 ? "1 line" : "\(captions.count) lines"].compactMap { $0 }.joined(separator: " \u{00B7} ")
         }
+        if o.id == "timeline" { return [o.codec, o.note].joined(separator: " \u{00B7} ") }
         return [o.codec, dimensions.map { "\($0.width) \u{00D7} \($0.height)" }, o.note].compactMap { $0 }.joined(separator: " \u{00B7} ")
     }
 

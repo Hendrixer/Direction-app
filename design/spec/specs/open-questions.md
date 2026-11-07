@@ -16,7 +16,7 @@ The four room specs were drawn in parallel. These are the cross-room decisions m
 10. **Class names `.agent` and `.side`** in `gate.css` are reserved for the titlebar pill and the sidebar. Don't reuse them inside other components.
 
 11. **No timeline for the director, and no raw timeline for the editor.** The editor reads the cut as OpenTimelineIO and changes it only through Direction's edit functions (`direction_edit`): named operations that Direction carries out exactly (`agent-timeline.md`). The director sees scenes, answers and choices only.
-12. **No hand-off to other editing apps.** Direction renders everything: effects, graphics, made clips, looks. No FCPXML, OTIO or EDL export for finishing elsewhere. (OTIO is the editor's format, not an export.)
+12. **Out to other editing apps, never back in** (reversed 7 Nov 2026, issue #4; was "no hand-off"). Direction still renders everything itself. For a colorist, a mixer or an editor who finishes elsewhere, File › Export for an Editing App… and Deliver's Timeline write a folder Final Cut Pro and DaVinci Resolve open: the cut as FCPXML 1.10, what only Direction draws rendered as ProRes in its place, each sound track as a WAV, the look as LUTs, and a read-me (`finish.md › Timeline for another editing app`). Nothing comes back, and the director still never sees a timeline. (OTIO stays the editor's format.)
 13. **The look is the director's.** The editor balances shots and may propose looks; it never applies one.
 14. **Graphic words are the director's to fix** directly, without a turnover. Everything else about a graphic goes through notes.
 15. **Direction makes every service request.** Keys stay in the Keychain; the editor asks Direction with `direction_make`.

@@ -63,12 +63,12 @@ enum FinishFixtures {
         return m
     }
 
-    // 38: three files written to Movies › Launch film › Delivery.
+    // 38: four written to Movies › Launch film › Delivery, the last a folder for another editing app.
     static func delivered() -> FilmModel {
         let m = finishing()
         let folder = DeliveryFormat.defaultFolder(film: "Launch film")
-        let names = ["Launch film \u{2013} Master.mov", "Launch film \u{2013} Web.mp4", "Launch film \u{2013} Captions.srt"]
-        DeliveredPreview.sizes = [names[0]: 3_710_000_000, names[1]: 176_000_000, names[2]: 8_200]
+        let names = ["Launch film \u{2013} Master.mov", "Launch film \u{2013} Web.mp4", "Launch film \u{2013} Captions.srt", "Launch film \u{2013} Timeline"]
+        DeliveredPreview.sizes = [names[0]: 3_710_000_000, names[1]: 176_000_000, names[2]: 8_200, names[3]: 412_000_000]
         m.directing.deliveredPaths = names.map { folder.appendingPathComponent($0).path }
         m.directing.deliveredAt = SampleFilm.date(10, 28, 16, 40)
         m.directing.finishing = sampleFinishing.map { item in var i = item; if i.id == "deliver" { i.state = "done" }; return i }

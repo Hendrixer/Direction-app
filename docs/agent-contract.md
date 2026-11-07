@@ -136,7 +136,7 @@ After editing, use `direction_feedback_reply` with text, resulting revision, and
 
 ## Export, previews, and jobs
 
-`direction_export` accepts path, optional revision/sequenceID, and preset `h264`, `hevc`, or `prores`. The snapshot is pinned before work begins. Existing paths are refused. `direction_preview` renders a bounded range to the project cache; `direction_frame` returns an actual edited PNG immediately.
+`direction_export` accepts path, optional revision/sequenceID, and preset `h264`, `hevc`, `prores`, or `timeline`: a new folder at path with the cut as FCPXML 1.10 for Final Cut Pro and DaVinci Resolve, ProRes renders of what only Direction draws, each sound track as WAV and the look as LUTs (`design/spec/specs/finish.md › Timeline for another editing app`). The snapshot is pinned before work begins. Existing paths are refused. `direction_preview` renders a bounded range to the project cache; `direction_frame` returns an actual edited PNG immediately.
 
 Transcription/export/preview return job records with ID, owner PID, revision, status, phase, result/error, and timestamps. Poll `direction_job`; `direction_jobs` lists records. CLI commands wait automatically. A persistent API/MCP process must remain open. Cancellation is performed in the job's owning process. If it exits, jobs are reported interrupted; they are not silently resumed elsewhere.
 
