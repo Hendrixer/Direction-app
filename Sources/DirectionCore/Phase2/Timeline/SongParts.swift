@@ -107,7 +107,7 @@ extension EditWork {
                 piece.duckKeys = ducking.isEmpty ? nil : ducking
                 // On an edge it had, it keeps how its sound met the next (a fitted song's join, under a frame).
                 let head = old.first { abs($0.start.seconds - piece.start.seconds) < frame / 2 }, tail = old.first { abs($0.end.seconds - piece.end.seconds) < frame / 2 }
-                piece.fadeIn = head?.fadeIn; piece.soundLead = head?.soundLead
+                piece.fadeIn = head?.fadeIn; piece.soundLead = head?.soundLead; piece.joined = head?.joined
                 piece.fadeOut = tail?.fadeOut; piece.soundTail = tail?.soundTail
                 s.clips.append(piece); kept.insert(piece.id); made.append(piece.id)
                 changes.append(.init(before: (sp.0, sp.1), after: (sp.0, sp.1), tracks: [piece.trackName]))

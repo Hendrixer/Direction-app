@@ -78,7 +78,10 @@ public enum MusicFitting {
         let shift = { (j: Join) in starts[j.y] - starts[j.x] }
 
         // What's left over once the joins are made comes off the ring, then the moment before bar 1; a little more
-        // (up to a bar) can come off the end faded early, or the start; anything else isn't this plan.
+        // (up to a bar) can come off the end faded early, or the start; anything else isn't this plan. Every piece
+        // plays at least a beat: a join into the song's last bar, when it's a single hit with little ring after, can
+        // leave nothing of the ending to play.
+        let beat = g.tempo > 0 ? 60 / g.tempo : barSeconds / Double(max(1, g.beatsPerBar))
         func settle(_ start: Double, _ startBar: Int?, _ js: [Join], _ base: Double, _ notes: [String]) -> Candidate? {
             var left = m.seconds - start - js.reduce(0) { $0 + shift($1) } - length
             guard left >= -1e-9 else { return nil }
@@ -90,6 +93,8 @@ public enum MusicFitting {
                 tail += left; left = 0; cost += 0.15
                 warnings.append("\(song) ends faded \(String(format: "%.1f", tail)) s before its own end.")
             }
+            let firstEnd = js.first.map { starts[$0.x] } ?? (m.seconds - tail), lastStart = js.last.map { starts[$0.y] } ?? begin
+            guard firstEnd - begin >= beat - 1e-9, m.seconds - tail - lastStart >= beat - 1e-9 else { return nil }
             return Candidate(start: begin, startBar: startBar, joins: js, tail: tail, cost: cost, warnings: warnings)
         }
 
@@ -107,12 +112,14 @@ public enum MusicFitting {
         }
         if best == nil || best!.cost > poor || best!.joins.contains(where: { abs($0.y - $0.x) % 4 != 0 }) {
             // Starting on a later bar, skipping the intro: best where the song moves on or a phrase starts, and only as
-            // a last resort when the song is made longer, since there's room for its start then.
+            // a last resort when the song is made longer, since there's room for its start then. With the best few
+            // hundred joins only, so a long song is planned in moments, not seconds.
+            let top = joins.sorted { $0.cost < $1.cost }.prefix(300)
             for s in 1..<n {
                 let note = "\(song) starts at bar \(s + 1), leaving out what comes before."
                 let base = 0.1 + (changes.contains(s) ? 0 : s % 4 == 0 ? 0.03 : 0.08) + (length > m.seconds ? 0.3 : 0)
                 consider(settle(starts[s], s, [], base, [note]))
-                for j in joins where j.x > s && j.y > s { consider(settle(starts[s], s, [j], base, [note])) }
+                for j in top where j.x > s && j.y > s { consider(settle(starts[s], s, [j], base, [note])) }
             }
         }
         guard var c = best else {

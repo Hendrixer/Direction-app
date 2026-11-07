@@ -78,7 +78,7 @@ struct MusicFitRenderTests {
             func db(_ a: Int, _ b: Int) -> Double { let s = x[max(0, a)..<min(x.count, b)]; return 10 * log10(Double(s.reduce(0) { $0 + $1 * $1 }) / Double(max(1, s.count)) + 1e-12) }
             let level = db(j + Int(0.02 * sr), j + Int(1.5 * sr)) - db(j - Int(1.5 * sr), j - Int(0.02 * sr))
             var heard = Heard(at: join, click: Double(atJoin / max(usual, 1e-6)), level: level)
-            if let g = try SongBeats.hear(file).grid {
+            if let g = try await SongBeats.offPool({ try SongBeats.hear(file) }).grid {
                 let local = join - from + MusicFitting.early
                 if let k = g.beats.indices.min(by: { abs(g.beats[$0] - local) < abs(g.beats[$1] - local) }) {
                     heard.beat = g.beats[k] - local
@@ -141,6 +141,87 @@ struct MusicFitRenderTests {
         let heard = try await Self.joins(store, clips, in: dir)
         print("FIT parts: \(heard)")
         Self.check(heard, "in parts")
+    }
+
+    /// Bars as times, against the music in the cut: a fitted piece's downbeat (just inside its J-cut) is found at the
+    /// piece's head; at.clip picks one placing of a song placed twice; a whoosh on another track isn't music; and a made
+    /// song is fitted by its made record's id.
+    @Test func barsAreFoundWhereTheyPlay() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("bars-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let band = SongBeatsTests.band(bpm: 112, sections: 5)
+        let url = dir.appendingPathComponent("Song.wav"), whoosh = dir.appendingPathComponent("Whoosh.wav")
+        try Self.write(band.mix, url)
+        try Self.write((0..<Int(Self.rate)).map { Float(0.3 * sin(2 * Double.pi * 900 * Double($0) / Self.rate) * exp(-Double($0) / Self.rate * 4)) }, whoosh)
+        let seconds = Double(band.mix.count) / Self.rate
+        let (store, pieces, _) = try await Self.fitted([(url, nil)], song: nil, fit: seconds * 0.8, parts: nil, in: dir)
+        let runtime = try ToolRuntime(store: store)
+        let song = try #require(pieces.first?.assetID)
+        // The same song again from 2 s after the fitted one ends, on A3, and a whoosh on A4.
+        let end = pieces.last!.end.seconds
+        let sfx = try await runtime.invoke("direction_import", arguments: .object(["path": .string(whoosh.path)])).value["asset"]["id"].string ?? ""
+        func edit(_ ops: [JSONValue]) async throws {
+            _ = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString), "summary": .string("More"), "operations": .array(ops)]))
+        }
+        try await edit([.object(["op": .string("placeMusic"), "assetID": .string(song), "at": .number(end + 2), "endOn": .number(end + 22), "track": .string("A3")]),
+                        .object(["op": .string("overwrite"), "assetID": .string(sfx), "sourceRange": .object(["start": .number(0), "end": .number(1)]), "at": .number(3), "track": .string("A4")])])
+        let p = try store.read(), s = p.sequences[0]
+        let g = try #require(try await SongBeats.heard(p.assets.first { $0.id == song }!, in: p, cacheDirectory: runtime.cacheDirectory).grid)
+        func at(_ music: JSONValue) async throws -> Double {
+            var op = try EditOperation(json: .object(["op": .string("split"), "clipID": .string(pieces[0].id), "at": music]))
+            try await runtime.resolveMusic(&op, p, s)
+            return try #require(op.at).seconds
+        }
+        // Each piece after a join starts on the downbeat of its bar.
+        for piece in pieces.dropFirst() {
+            let bar = try #require(g.bar(at: piece.sourceRange.start.seconds + 0.05))
+            let t = try await at(.object(["bar": .number(Double(bar))]))
+            #expect(abs(t - piece.start.seconds) <= 1.0 / 30, "bar \(bar) at \(t), piece at \(piece.start.seconds)")
+        }
+        // The second placing, by its clip: the moment it plays there, not in the fitted one.
+        let second = try #require(s.clips.first { $0.assetID == song && $0.layer == 2 })
+        let lastBar = try #require(g.bar(at: second.sourceRange.start.seconds + 5))
+        let there = try await at(.object(["bar": .number(Double(lastBar)), "clip": .string(second.id)]))
+        #expect(there >= second.start.seconds - 1e-6 && there < second.end.seconds, "\(there) not in \(second.start.seconds)–\(second.end.seconds)")
+        // Placed from a bar whose downbeat falls between frames: the song starts on the frame after it, and the bar is
+        // still found at the clip's head.
+        let bar = try #require((5..<g.barCount).first { b in let f = (g.barStart(b)! * 30).truncatingRemainder(dividingBy: 1); return f > 0.55 && f < 0.95 })
+        try await edit([.object(["op": .string("placeMusic"), "assetID": .string(song), "at": .number(end + 40), "endOn": .number(end + 50), "from": .object(["bar": .number(Double(bar))]), "track": .string("A5")])])
+        let q = try store.read(), fromBar = try #require(q.sequences[0].clips.first { $0.assetID == song && $0.layer == 4 })
+        var op = try EditOperation(json: .object(["op": .string("split"), "clipID": .string(pieces[0].id), "at": .object(["bar": .number(Double(bar)), "clip": .string(fromBar.id)])]))
+        try await runtime.resolveMusic(&op, q, q.sequences[0])
+        #expect(abs((op.at?.seconds ?? -1) - fromBar.start.seconds) <= 1.0 / 30, "bar \(bar) at \(op.at?.seconds ?? -1), placed at \(fromBar.start.seconds) from \(fromBar.sourceRange.start.seconds) for \(g.barStart(bar)!)")
+        // A made song is fitted by its made record's id.
+        let made = try store.read()
+        _ = try store.update(expectedRevision: made.editRevision, key: UUID().uuidString, request: Data("{}".utf8), summary: "Made") { p in
+            if let i = p.assets.firstIndex(where: { $0.id == song }) { p.assets[i].madeID = "made-song" }
+        }
+        let result = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString), "summary": .string("Made"),
+            "operations": .array([.object(["op": .string("placeMusic"), "madeID": .string("made-song"), "at": .number(0), "fit": .number(seconds * 0.8), "track": .string("A6")])])])).value
+        #expect(result["operations"].array?.first?["summary"].string?.hasPrefix("Fitted") == true, "\(result)")
+    }
+
+    /// A song in parts whose bass can't be read still gets its grid on the parts that can.
+    @Test func aSongWithAPartThatCantBeReadSharesItsGridWithTheRest() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("share-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("Sounds"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let band = SongBeatsTests.band(bpm: 104, sections: 2)
+        try Self.write(band.mix, dir.appendingPathComponent("Sounds/Song.wav"))
+        try Self.write(band.drums, dir.appendingPathComponent("Sounds/Song (Drums).wav"))
+        try Data("not a sound".utf8).write(to: dir.appendingPathComponent("Sounds/Song (Bass).wav"))
+        let sounds = MediaLibrary(.sounds, folder: dir.appendingPathComponent("Sounds"))
+        for (file, part, measured) in [("Song.wav", Stems.fullMix, true), ("Song (Drums).wav", "Drums", true), ("Song (Bass).wav", "Bass", false)] {
+            try sounds.update(file) { i in
+                i.song = "Song"; i.part = part
+                if measured { var m = ShelfItem.Measured(); m.seconds = Double(band.mix.count) / Self.rate; m.version = ShelfItem.Measured.currentVersion; i.measured = m }
+            }
+        }
+        let changed = await LibraryMeasuring.shareSongGrids(in: sounds, cacheDirectory: dir.appendingPathComponent("cache"))
+        #expect(Set(changed.map(\.file)) == ["Song.wav", "Song (Drums).wav"])
+        let items = sounds.items()
+        #expect(items.filter { $0.file != "Song (Bass).wav" }.allSatisfy { $0.measured?.grid?.heardOn == "Drums" && abs(($0.measured?.tempo ?? 0) - 104) < 1 }, "\(items.map { ($0.file, $0.measured?.tempo ?? 0) })")
     }
 
     /// A sound that starts between the renderer's ticks (a seventh of a second), fading in, is scheduled without its

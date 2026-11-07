@@ -226,7 +226,9 @@ extension EditOperation: Codable {
         parts = try decoded("parts", [String].self, "a list of a song's parts, like [\"Drums\", \"Bass\"]")
         if let v = value("from"), Self.musical(v) { fromMusic = try Self.checkedMusical(v, "from") } else { from = try num("from") }
         fit = value("fit")
-        if let f = fit { guard f.bool == true || f.string == "cut" || (f.double.map { $0.isFinite && $0 > 0 } ?? false) else { throw bad("fit", "true (from at to endOn), a length in seconds, or \"cut\" (to the end of the picture)") } }
+        if let f = fit { guard f.bool == true || f.string == "cut" || (f.double.map { $0.isFinite && $0 > 0 && $0 <= Self.longestFit } ?? false) else { throw bad("fit", "true (from at to endOn), a length in seconds up to four hours, or \"cut\" (to the end of the picture)") } }
+        if let e = endOn, let t = e.double ?? e["time"].double { guard t.isFinite, abs(t) <= Self.latest else { throw bad("endOn", "a time in the cut") } }
+        if let f = from { guard abs(f) <= Self.latest else { throw bad("from", "a moment of the song, in its seconds") } }
         if let v = value("heard") {
             guard case .object(let o) = v else { throw bad("heard", "{part: [{start, end}]}, in cut seconds") }
             heard = try o.mapValues { list in
@@ -274,9 +276,14 @@ extension EditOperation: Codable {
         return v
     }
 
+    /// No time in an edit is further than this (about eleven days), so none overflows the times it's added to.
+    static let latest = 1_000_000.0
+    /// fit makes a song at most four hours long.
+    static let longestFit = 4 * 3_600.0
+
     static func time(_ v: JSONValue, _ k: String) throws -> MediaTime {
-        if let s = v.double, s.isFinite { return MediaTime(seconds: s) }
-        if let value = v["value"].double, value.rounded() == value, abs(value) < 9e15, let scale = v["timescale"].int, scale > 0, scale <= Int(Int32.max) { return MediaTime(value: Int64(value), timescale: Int32(scale)) }
+        if let s = v.double, s.isFinite, abs(s) <= latest { return MediaTime(seconds: s) }
+        if let value = v["value"].double, value.rounded() == value, abs(value) < 9e15, let scale = v["timescale"].int, scale > 0, scale <= Int(Int32.max), abs(value / Double(scale)) <= latest { return MediaTime(value: Int64(value), timescale: Int32(scale)) }
         throw DirectionError("bad_argument", "\(k) is a time in seconds, like 4.2.")
     }
     static func range(_ v: JSONValue, _ k: String) throws -> MediaRange {
@@ -483,7 +490,7 @@ public enum EditReducer {
         var p = c
         if c.hold != nil { p.hold = o.duration }
         else { p.sourceRange = .init(start: c.sourceTime(at: o.start), duration: o.duration.scaled(by: c.speed)) }
-        if o.start > c.start { p.transition = nil; p.soundLead = nil; p.fadeIn = nil }
+        if o.start > c.start { p.transition = nil; p.soundLead = nil; p.fadeIn = nil; p.joined = nil }
         if o.end < c.end { p.soundTail = nil; p.fadeOut = nil }
         p.start = o.start
         return p
@@ -1879,6 +1886,11 @@ struct EditWork {
         for piece in plan.pieces { exact.append(exact.last! + piece.end - piece.start) }
         exact[exact.count - 1] = end.seconds
         let framed = exact.indices.map { k in k == 0 ? at : k == exact.count - 1 ? end : snap(MediaTime(seconds: exact[k])) }
+        // Every piece plays, in order, for at least a frame: the plan never leaves one empty, and the music can't run
+        // past where it was asked to end.
+        guard plan.pieces.allSatisfy({ $0.end > $0.start }), zip(framed, framed.dropFirst()).allSatisfy({ $1 > $0 }), abs(exact[exact.count - 1] - (exact[exact.count - 2] + plan.pieces[plan.pieces.count - 1].end - plan.pieces[plan.pieces.count - 1].start)) < 0.001 else {
+            throw bad("\(title) can\u{2019}t be fitted to \(String(format: "%.1f", (end - at).seconds)) s by its bars.")
+        }
         let r = MediaRange(start: at, duration: end - at), xf = plan.crossfade
         var ids: [String] = [], tracks: [String] = []
         for (k, p) in playing.enumerated() {
@@ -1886,10 +1898,10 @@ struct EditWork {
             if k == 0, let given = op.track { t = try parseTrack(given) }
             guard t.audio else { throw bad("Music goes on an A track.") }
             guard free(t, r) else { throw DirectionError("overlap", "\(name(t)) already has sound at \(tc(at))\u{2013}\(tc(end)).") }
-            for (i, piece) in plan.pieces.enumerated() where framed[i + 1] > framed[i] {
+            for (i, piece) in plan.pieces.enumerated() {
                 let off = framed[i].seconds - exact[i]
                 var clip = Clip(assetID: p.id, name: p.name, kind: .audio, layer: t.layer, start: framed[i], sourceRange: .init(start: MediaTime(seconds: max(0, piece.start + off)), duration: framed[i + 1] - framed[i]))
-                if i > 0 { clip.soundLead = off + min(xf, piece.start); clip.fadeIn = xf }
+                if i > 0 { clip.soundLead = off + min(xf, piece.start); clip.fadeIn = xf; clip.joined = true }
                 if i < plan.pieces.count - 1 { clip.soundTail = exact[i + 1] - framed[i + 1].seconds; clip.fadeOut = xf }
                 if i == 0, let f = plan.fadeIn { clip.fadeIn = f }
                 if i == plan.pieces.count - 1, let f = plan.fadeOut { clip.fadeOut = f }

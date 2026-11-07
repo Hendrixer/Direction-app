@@ -144,10 +144,11 @@ public enum TimelineExport {
         // The outline: one row per clip, top layer first, then sound.
         func tc(_ t: Double) -> String { CutTimecode.string(t, rate: rate) }
         let lastOfScene = Dictionary(scenes.map { ($0.last, $0.scene) }, uniquingKeysWith: { a, _ in a })
-        // A fitted song's pieces (placeMusic fit): the same song on the same track, one ending where the next starts,
-        // from another moment of it. Said as a join, not as the J- and L-cuts and fades of under a frame that make it.
+        // A fitted song's pieces (placeMusic fit, marked joined): the same song on the same track, one ending where the
+        // next starts. Said as a join, not as the J- and L-cuts and fades of under a frame that make it; a cut made by
+        // hand reads as it is.
         func joined(_ a: Clip, _ b: Clip) -> Bool {
-            a.kind == .audio && b.kind == .audio && a.layer == b.layer && a.assetID == b.assetID && abs(a.end.seconds - b.start.seconds) < 1e-6 && abs(a.sourceRange.end.seconds - b.sourceRange.start.seconds) > 0.05
+            b.joined == true && a.kind == .audio && b.kind == .audio && a.layer == b.layer && a.assetID == b.assetID && abs(a.end.seconds - b.start.seconds) < 1e-6
         }
         func row(_ c: Clip) -> String? {
             guard overlaps(c.start.seconds, c.end.seconds) else { return nil }

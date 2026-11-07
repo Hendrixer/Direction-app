@@ -17,7 +17,7 @@ public enum LibraryMeasuring {
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
         var measured: ShelfItem.Measured, kind = item.kind
         if item.kind == .image { measured = try await image(url) } else {
-            let heard = try await sound(url, cacheDirectory: cacheDirectory)
+            let heard = try await sound(url, cacheDirectory: cacheDirectory, beats: !item.isPart)
             measured = heard.measured
             if item.measured == nil { kind = heard.kind }
         }
@@ -41,15 +41,17 @@ public enum LibraryMeasuring {
 
     /// A song kept in parts has one grid for all of them (library.md › Songs in parts): its beats heard where the drums
     /// are clearest, its bars and where it moves on in the whole mix, and the tempo that goes with them; a part heard
-    /// on its own (drums alone can sound like no steady beat) takes the song's. Run once the parts are put together;
+    /// on its own (drums alone can sound like no steady beat) takes the song's. Heard on the parts that could be
+    /// measured, so one that can't be read doesn't keep the rest from it. Run once the parts are put together;
     /// returns the parts it changed.
     @discardableResult
     public static func shareSongGrids(in library: MediaLibrary = .sounds, cacheDirectory: URL) async -> [ShelfItem] {
         var changed: [ShelfItem] = []
-        for song in library.songs() where song.parts.allSatisfy({ $0.measured != nil }) {
-            guard let heard = try? await SongBeats.heard(song.parts.map { (library.url($0), $0.part) }, cacheDirectory: cacheDirectory) else { continue }
+        for song in library.songs() {
+            let heardOn = song.parts.filter { $0.measured != nil }
+            guard !heardOn.isEmpty, let heard = try? await SongBeats.heard(heardOn.map { (library.url($0), $0.part) }, cacheDirectory: cacheDirectory) else { continue }
             let tempo = heard.grid.map { ($0.tempo * 2).rounded() / 2 }
-            for part in song.parts where part.measured?.grid != heard.grid || part.measured?.steady != heard.steady || part.measured?.tempo != tempo {
+            for part in heardOn where part.measured?.grid != heard.grid || part.measured?.steady != heard.steady || part.measured?.tempo != tempo {
                 if let item = try? library.update(part.file, { i in i.measured?.grid = heard.grid; i.measured?.steady = heard.steady; i.measured?.tempo = tempo }) { changed.append(item) }
             }
         }
@@ -64,7 +66,7 @@ public enum LibraryMeasuring {
     /// The waveform the Library draws has at most this many bars.
     static let bars = 96
 
-    static func sound(_ url: URL, cacheDirectory: URL) async throws -> (measured: ShelfItem.Measured, kind: ShelfItem.Kind) {
+    static func sound(_ url: URL, cacheDirectory: URL, beats: Bool = true) async throws -> (measured: ShelfItem.Measured, kind: ShelfItem.Kind) {
         let asset = try await MediaInspector.inspect(url: url)
         var m = ShelfItem.Measured()
         let seconds = asset.duration.seconds
@@ -86,7 +88,8 @@ public enum LibraryMeasuring {
                 if seconds >= VideoStudying.keyLength { m.key = MusicListening.key(MusicListening.notes(f, from: 0, to: seconds, quiet: MusicListening.noteMask([], f))) }
             }
             // Its beats, bars and where it moves on; the tempo is the beat's.
-            let heard = (try? await SongBeats.heard([(url, nil)], cacheDirectory: cacheDirectory)) ?? SongBeats.Heard(grid: nil, steady: nil)
+            // A part of a song takes the song's grid once the parts are put together (shareSongGrids).
+            let heard = beats ? (try? await SongBeats.heard([(url, nil)], cacheDirectory: cacheDirectory)) ?? SongBeats.Heard(grid: nil, steady: nil) : SongBeats.Heard(grid: nil, steady: nil)
             m.grid = heard.grid; m.steady = heard.steady
             m.tempo = heard.grid.map { ($0.tempo * 2).rounded() / 2 }
         } else {

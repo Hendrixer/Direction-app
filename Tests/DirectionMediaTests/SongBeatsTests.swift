@@ -75,10 +75,10 @@ struct SongBeatsTests {
         #expect(heard.count >= truth.count - 2 && heard.count <= truth.count, "\(label): \(heard.count) beats for \(truth.count)")
     }
 
-    @Test func clicksAreHeardOnTheBeatWithBarsOnTheFirst() throws {
+    @Test func clicksAreHeardOnTheBeatWithBarsOnTheFirst() async throws {
         for bpm in [120.0, 96, 140] {
-            let (x, truth) = Self.clicks(bpm: bpm, seconds: 30)
-            let heard = SongBeats.hear(samples: x)
+            let (x, truth) = Self.clicks(bpm: bpm, seconds: 24)
+            let heard = try await SongBeats.offPool { SongBeats.hear(samples: x) }
             let grid = try #require(heard.grid, "\(bpm): no grid")
             #expect(heard.steady == true)
             #expect(abs(grid.tempo - bpm) < 0.5, "\(bpm) heard as \(grid.tempo)")
@@ -89,9 +89,9 @@ struct SongBeatsTests {
         }
     }
 
-    @Test func aBandsBarsAndSectionsAreHeard() throws {
+    @Test func aBandsBarsAndSectionsAreHeard() async throws {
         let b = Self.band(bpm: 112)
-        let grid = try #require(SongBeats.hear(samples: b.mix).grid)
+        let grid = try #require(try await SongBeats.offPool { SongBeats.hear(samples: b.mix) }.grid)
         #expect(abs(grid.tempo - 112) < 0.5, "\(grid.tempo)")
         Self.matches(grid.beats, b.beats, "band")
         #expect(grid.beatsPerBar == 4)
@@ -101,24 +101,24 @@ struct SongBeatsTests {
         #expect(grid.changes.count <= 4, "changes \(grid.changes)")
     }
 
-    @Test func aPadWithNoBeatAndATempoThatChangesHaveNoSteadyBeat() {
+    @Test func aPadWithNoBeatAndATempoThatChangesHaveNoSteadyBeat() async throws {
         // A pad that swells, with no knock in it.
-        let pad = (0..<Int(40 * Self.rate)).map { i -> Float in
+        let pad = (0..<Int(30 * Self.rate)).map { i -> Float in
             let t = Double(i) / Self.rate
             return Float(0.1 * [220.0, 261.6, 329.6].reduce(0) { $0 + sin(2 * .pi * $1 * t) } * (0.6 + 0.4 * sin(2 * .pi * 0.07 * t)) + Double.random(in: -0.02...0.02))
         }
-        let ambient = SongBeats.hear(samples: pad)
+        let ambient = try await SongBeats.offPool { SongBeats.hear(samples: pad) }
         #expect(ambient.grid == nil && ambient.steady == false)
         // 100 beats a minute, then 132.
         let slow = Self.clicks(bpm: 100, seconds: 30).samples, fast = Self.clicks(bpm: 132, seconds: 30).samples
-        let changing = SongBeats.hear(samples: slow + fast)
+        let changing = try await SongBeats.offPool { SongBeats.hear(samples: slow + fast) }
         #expect(changing.grid == nil && changing.steady == false, "\(changing.grid?.tempo ?? 0)")
         // Too short to tell either way.
-        let short = SongBeats.hear(samples: Self.clicks(bpm: 120, seconds: 5).samples)
+        let short = try await SongBeats.offPool { SongBeats.hear(samples: Self.clicks(bpm: 120, seconds: 5).samples) }
         #expect(short.grid == nil && short.steady == nil)
     }
 
-    @Test func aSongInPartsKeepsOneGridHeardOnItsDrums() throws {
+    @Test func aSongInPartsKeepsOneGridHeardOnItsDrums() async throws {
         // Drums come in at bar 5: the grid still starts with the song.
         let b = Self.band(bpm: 104, drumsFrom: 5)
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("beats-" + UUID().uuidString)
@@ -135,16 +135,40 @@ struct SongBeatsTests {
             return url
         }
         let drums = try write(b.drums, "Song (Drums).wav"), bass = try write(b.bass, "Song (Bass).wav"), keys = try write(b.keys, "Song (Keys).wav"), mix = try write(b.mix, "Song.wav")
-        let parts = try SongBeats.hear(mix: mix, parts: [mix, drums, bass, keys], drums: drums)
+        let parts = try await SongBeats.offPool { try SongBeats.hear(mix: mix, parts: [mix, drums, bass, keys], drums: drums) }
         let grid = try #require(parts.grid)
         #expect(grid.heardOn == "Drums")
         Self.matches(grid.beats, b.beats, "in parts")
         #expect(abs((grid.barStart(1) ?? 0) - b.downbeats[0]) < Self.withinAFrame, "bar 1 at \(grid.barStart(1) ?? -1)")
         // Without a full mix, every part together; the same beats as the full mix alone.
-        let summed = try #require(try SongBeats.hear(mix: nil, parts: [drums, bass, keys], drums: drums).grid)
-        let whole = try #require(try SongBeats.hear(mix).grid)
+        let summed = try #require(try await SongBeats.offPool { try SongBeats.hear(mix: nil, parts: [drums, bass, keys], drums: drums) }.grid)
+        let whole = try #require(try await SongBeats.offPool { try SongBeats.hear(mix) }.grid)
         #expect(summed.beats.count == grid.beats.count && zip(summed.beats, grid.beats).allSatisfy { abs($0 - $1) < 0.005 })
         #expect(grid.beats.filter { g in whole.beats.contains { abs($0 - g) < Self.withinAFrame } }.count >= grid.beats.count - 2, "full mix alone: \(whole.beats.count) beats against \(grid.beats.count)")
+    }
+
+    /// Off-beat accents (a skank and hats louder than the kick, between the beats): the beat is where the kick is.
+    @Test func theBeatIsOnTheKickWhenTheOffBeatsAreLouder() async throws {
+        let bpm = 96.0, beat = 60 / bpm, start = 0.35, seconds = 30.0
+        var x = [Float](repeating: 0, count: Int(seconds * Self.rate)), kicks: [Double] = []
+        var noise = SystemRandomNumberGenerator()
+        func add(at t: Double, seconds d: Double, _ f: (Double) -> Double) {
+            let a = Int(t * Self.rate)
+            for j in 0..<Int(d * Self.rate) where a + j < x.count { let s = Double(j) / Self.rate; x[a + j] += Float(f(s) * min(1, (d - s) / 0.01)) }
+        }
+        var t = start
+        while t < seconds - 1 {
+            kicks.append(t)
+            add(at: t, seconds: 0.25) { s in 0.35 * exp(-s * 16) * sin(2 * .pi * (50 + 70 * exp(-s * 30)) * s) }
+            let off = t + beat / 2
+            add(at: off, seconds: 0.12) { s in 0.5 * exp(-s * 25) * [523.3, 659.3, 784.0].reduce(0) { $0 + sin(2 * .pi * $1 * s) + 0.5 * sin(4 * .pi * $1 * s) } / 3 }
+            add(at: off, seconds: 0.05) { s in 0.45 * exp(-s * 60) * Double.random(in: -1...1, using: &noise) }
+            t += beat
+        }
+        let samples = x
+        let grid = try #require(try await SongBeats.offPool { SongBeats.hear(samples: samples) }.grid)
+        let off = grid.beats.map { b in kicks.map { abs($0 - b) }.min() ?? 1 }
+        #expect(off.filter { $0 < Self.withinAFrame }.count >= grid.beats.count - 2, "beats \(grid.beats.prefix(6)) against kicks \(kicks.prefix(6))")
     }
 
     @Test func musicalTimesNameTheSongsBarsAndBeats() throws {

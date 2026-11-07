@@ -68,7 +68,7 @@ public enum SongBeats {
         // Music made to a click keeps one pace from start to end: where most beats lie on one, it's the grid, and a
         // beat followed a little early or late, or lost in a sparse stretch, is put back on it. Music played without
         // a click keeps the beats as followed, if they keep close to their tempo.
-        let beats = clicked(onsets, followed: followed, pace: pace(frames) * Double(MusicListening.onsetHop) / rate) ?? followed
+        let beats = clicked(onsets, followed: followed, pace: pace(frames) * Double(MusicListening.onsetHop) / rate, samples: samples) ?? followed
         guard steadyBeats(beats) else { return Heard(grid: nil, steady: false) }
         let per = perBeat(samples, beats: beats)
         let (count, phase) = meter(per)
@@ -133,9 +133,9 @@ public enum SongBeats {
     /// The one pace a song made to a click keeps, as every beat from the first followed to the last on it, when six in
     /// ten of its strongest hits (the loudest quarter) lie within 25 ms of the sixteenths of it, and half in each third
     /// of the song (a band that drifts is off it somewhere). The pace is the one near what was followed (`pace` seconds
-    /// a beat) at which what's played piles up most at one place in the beat; the beat is the sixteenth of it with the
-    /// most played on it; then both are fitted to the hits on the beats.
-    static func clicked(_ onsets: [Float], followed: [Double], pace: Double) -> [Double]? {
+    /// a beat) at which what's played piles up most at one place in the beat; the beat is the sixteenth of it where the
+    /// low end hits (`downbeatPhase`); then both are fitted to the hits on the beats.
+    static func clicked(_ onsets: [Float], followed: [Double], pace: Double, samples: [Float]) -> [Double]? {
         guard let from = followed.first, let to = followed.last else { return nil }
         let n = onsets.count, median = onsets.sorted()[n / 2], hop = Double(MusicListening.onsetHop)
         var peaks: [(t: Double, w: Double)] = []
@@ -149,17 +149,20 @@ public enum SongBeats {
             for x in peaks { let ph = (x.t / p).truncatingRemainder(dividingBy: 1); h[min(bins - 1, Int(ph * Double(bins)))] += x.w }
             return (0..<bins).map { b in 0.5 * h[(b + bins - 1) % bins] + h[b] + 0.5 * h[(b + 1) % bins] }
         }
+        // A tenth of a percent at a time across a percent either way, then a fiftieth of a percent around the best.
         var best = (p: pace, score: 0.0)
-        for k in -500...500 {
-            let p = pace * (1 + Double(k) * 2e-5)
+        for k in -10...10 {
+            let p = pace * (1 + Double(k) * 1e-3)
+            if let top = folded(p).max(), top > best.score { best = (p, top) }
+        }
+        let coarse = best.p
+        for k in -60...60 {
+            let p = coarse * (1 + Double(k) * 2e-5)
             if let top = folded(p).max(), top > best.score { best = (p, top) }
         }
         var p = best.p
         let h = folded(p), top = h.indices.max { h[$0] < h[$1] }!
-        // The beat: of the four sixteenths, the one with the most played on it and on the eighth after it. (On a song
-        // made at 80 to a click from 0:00, its sections then start on round bars: 2:00.0, not half a beat after.)
-        let quarter = (0..<4).map { (top + $0 * bins / 4) % bins }.max { a, b in h[a] + 0.5 * h[(a + bins / 2) % bins] < h[b] + 0.5 * h[(b + bins / 2) % bins] }!
-        var t0 = (Double(quarter) + 0.5) / Double(bins) * p
+        var t0 = beatPhase(h, top: top, p: p, samples: samples, from: from, to: to)
         for _ in 0..<3 {
             let on = peaks.compactMap { x -> (k: Double, t: Double, w: Double)? in let k = ((x.t - t0) / p).rounded(); return abs(x.t - t0 - k * p) < 0.025 ? (k, x.t, x.w) : nil }
             let w = on.reduce(0) { $0 + $1.w }
@@ -180,6 +183,43 @@ public enum SongBeats {
         let first = ((from - t0) / p - 0.75).rounded(.up), last = ((to - t0) / p + 0.75).rounded(.down)
         guard last > first else { return nil }
         return stride(from: first, through: last, by: 1).map { t0 + $0 * p }.filter { $0 >= 0 }
+    }
+
+    /// Where in the pace the beat is, of the four sixteenths from where most is played: where the low end hits (a kick
+    /// is on the beat, while hats and a skank can be louder off it), when that's clear; otherwise where most is played
+    /// on it and on the eighth after it. (On Try Again the low end hits on both halves of the beat, its 3 + 3 + 2
+    /// kicks; most is played where its sections start on round bars, 2:00.0, not half a beat after.) Seconds into
+    /// the pace.
+    static func beatPhase(_ h: [Double], top: Int, p: Double, samples: [Float], from: Double, to: Double) -> Double {
+        let bins = h.count, phases = (0..<4).map { (top + $0 * bins / 4) % bins }
+        func seconds(_ b: Int) -> Double { (Double(b) + 0.5) / Double(bins) * p }
+        func decided(_ scores: [Double]) -> Int? {
+            let order = scores.indices.sorted { scores[$0] > scores[$1] }
+            return scores[order[0]] > 0 && scores[order[0]] >= 1.25 * scores[order[1]] ? order[0] : nil
+        }
+        // The low end, smoothed twice over 80 samples (nothing much above 150 Hz is left), and how much it rises in the
+        // 80 ms after each beat over the 80 ms before.
+        var low = samples.map(abs)
+        for _ in 0..<2 {
+            var sum: Float = 0, out = [Float](repeating: 0, count: low.count)
+            for i in low.indices { sum += low[i]; if i >= 80 { sum -= low[i - 80] }; out[i] = sum / 80 }
+            low = out
+        }
+        let span = Int(0.08 * rate)
+        func rise(_ t: Double) -> Double {
+            let i = Int(t * rate)
+            guard i - span >= 0, i + span < low.count else { return 0 }
+            let after = low[i..<(i + span)].reduce(0, +), before = low[(i - span)..<i].reduce(0, +)
+            return Double(max(0, after - before)) / Double(span)
+        }
+        let count = max(1, Int((to - from) / p)), every = max(1, count / 256)
+        let lows = phases.map { b -> Double in
+            let start = from + (seconds(b) - from.truncatingRemainder(dividingBy: p) + p).truncatingRemainder(dividingBy: p)
+            return stride(from: 0, to: count, by: every).reduce(0) { $0 + rise(start + Double($1) * p) }
+        }
+        if let k = decided(lows) { return seconds(phases[k]) }
+        let played = phases.map { h[$0] + 0.5 * h[($0 + bins / 2) % bins] }
+        return seconds(phases[played.indices.max { played[$0] < played[$1] }!])
     }
 
     /// Eight beats at a time keep within `drift` of the song's tempo.
@@ -438,6 +478,14 @@ public enum SongBeats {
 
     // MARK: Songs, kept
 
+    /// Listening is seconds of reading and arithmetic: on a thread of its own, not one of the few Swift's tasks share,
+    /// so nothing else waits on it.
+    static func offPool<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { done in
+            DispatchQueue.global(qos: .userInitiated).async { done.resume(with: Result { try work() }) }
+        }
+    }
+
     /// What listening keeps between runs, so a song is heard once.
     static let cacheVersion = 1
 
@@ -453,13 +501,13 @@ public enum SongBeats {
         let name = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined().prefix(24)
         let file = cacheDirectory.appendingPathComponent("Beats", isDirectory: true).appendingPathComponent("\(name).json")
         if let data = try? Data(contentsOf: file), let h = try? JSONDecoder().decode(Heard.self, from: data) { return h }
-        let h: Heard = try await Task.detached(priority: .userInitiated) {
+        let h: Heard = try await offPool {
             guard files.count > 1 else { return try hear(files[0].url) }
             let drums = files.first { $0.part == "Drums" }?.url, mix = files.first { $0.part == Stems.fullMix }?.url
             var h = try hear(mix: mix, parts: files.map(\.url), drums: drums)
             if drums == nil { h.grid?.heardOn = mix != nil ? Stems.fullMix : "every part" }
             return h
-        }.value
+        }
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? JSONEncoder().encode(h).write(to: file, options: .atomic)
         return h
@@ -480,7 +528,7 @@ public enum SongBeats {
     public static func material(_ asset: MediaAsset, in project: Project, grid: BeatGrid) async throws -> MusicMaterial {
         let parts = parts(asset, in: project)
         let seconds = parts.map(\.duration.seconds).min() ?? asset.duration.seconds
-        return try await Task.detached(priority: .userInitiated) {
+        return try await offPool {
             var whole: [Float] = []
             if let mix = parts.first(where: { $0.part == Stems.fullMix }) ?? (parts.count == 1 ? parts.first : nil) { whole = try MusicListening.samples(URL(fileURLWithPath: mix.path)) }
             else {
@@ -498,6 +546,6 @@ public enum SongBeats {
                 return xs.reduce(0, +) / Float(max(1, xs.count))
             }
             return MusicMaterial(grid: grid, seconds: seconds, bars: bars.map { $0.map { ($0 * 1000).rounded() / 1000 } }, levels: levels.map { ($0 * 10).rounded() / 10 }, lastHit: grid.beats.last ?? 0)
-        }.value
+        }
     }
 }
