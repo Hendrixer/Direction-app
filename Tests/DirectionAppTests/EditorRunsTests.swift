@@ -171,6 +171,11 @@ struct EditorActivityTests {
         #expect(activity("direction_transcribe", ["assetID": .string("take-2a-t3")])?.verb == "Listening to")
         let search = activity("direction_search_footage", ["query": .string("Maya laughing")])
         #expect(search?.verb == "Searching footage for" && search?.object == "\u{201C}Maya laughing\u{201D}")
+        // Choosing cut points, and checking the cuts.
+        #expect(activity("direction_cut_points", ["assetID": .string("take-3b-t1")])?.object == "3B T1")
+        let near = activity("direction_cut_points", ["clipID": .string("clip-take-3a-t2-65"), "at": .number(SampleFilm.tc(1, 12))])
+        #expect(near?.verb == "Finding where to cut near" && near?.object == "1:12" && near?.time != nil)
+        #expect(activity("direction_check", ["checks": .array([.string("cuts")])])?.object == "the cuts for jumps")
     }
 
     @Test func editsNameTheirVerbScenesDeltaAndNote() {

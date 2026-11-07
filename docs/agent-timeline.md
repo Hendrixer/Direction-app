@@ -86,9 +86,9 @@ Story operations keep every layer in sync; overlays and sound-only clips move on
 | `removeRange` | `range, ripple?` (default true) | Every track. |
 | `remove` | `clipID, ripple?` (default false) | Ripple closes the gap on every track for V1, on its own track otherwise. |
 | `move` | `clipID, to: {at} \| {before} \| {after}, to.track?` | A V1 clip takes everything over it; the story closes behind it and opens where it lands. Overlays just move. |
-| `split` | `clipID, at` | The right half is a new clip with new effect ids. |
-| `trim` | `clipID, edge, frames, ripple?` (default true) | Shortening V1 with ripple removes the frames on every track; lengthening moves everything after. Errors say how much handle there is. |
-| `roll` | `editPoint, frames` | Length unchanged. |
+| `split` | `clipID, at, snap?` | The right half is a new clip with new effect ids. `snap` moves `at` to the nearest blink, peak of action or pause within 8 frames (Cut points). |
+| `trim` | `clipID, edge, frames, ripple?` (default true), `snap?` | Shortening V1 with ripple removes the frames on every track; lengthening moves everything after. Errors say how much handle there is. `snap` moves the new end to the nearest cut point within 8 frames, keeping the trim's direction. |
+| `roll` | `editPoint, frames, snap?` | Length unchanged. `snap` lands the cut on the nearest cut point in either shot within 8 frames. |
 | `slip` | `clipID, frames` | Keys stay with the footage (they're in source seconds). |
 | `slide` | `clipID, frames` | Neighbors trim to fit. |
 | `splitEdit` | `editPoint, lead: sound\|picture, frames` | J-cut: the right clip's sound starts early and the left's ends as early. L-cut: the reverse. 0 frames straightens it. |
@@ -121,6 +121,24 @@ Story operations keep every layer in sync; overlays and sound-only clips move on
 **Songs in parts.** A library song kept in stems (library.md › Songs in parts) comes into the film whole: each part is a `MediaAsset` with `song` and `part`. Wherever two of a song's parts play at once they play the same moment of it, and Direction keeps it that way: `move` and `slip` on any part take every part in that stretch of the song (its parts at the same moment, meeting in time), `fade` fades every part that starts or ends on that edge, `gain` on a part sets that part wherever it's heard there, `duck` ducks them all, and `trim` trims a part where it stands unless `ripple` is given. `slide` and `speed` are refused on a part, and any edit that would put two parts out of time is `not_in_sync`. A cut in the story cuts every part at once, so each side still plays in time. The outline shows a part as `music "Neon Drive" Drums`.
 
 Older shapes still decode: `{"batch": {…}}` with `type` per operation and `{value,timescale}` times; `title`, `color`, `frame` and `rename` keep working.
+
+## Cut points
+
+Direction measures where a take is good to cut, so the editor chooses a cut point instead of guessing a time. `direction_cut_points` gives them for a clip near a moment (`clipID`, `at`), near a clip's head and tail (`clipID` alone, for a trim), for every shot of the story over a `range`, for the shot under `at`, or for a take before it's in the cut (`assetID`, `sourceRange` in its own seconds, 5 minutes at most). `within` is the seconds either side (1, at most 10); `kinds` narrows to `blink`, `action` and `pause`.
+
+| Kind | What it is | Where the cut goes |
+|---|---|---|
+| `blink` | A face's eyes closing and opening again: at least 45% shut against how open they've been over the 2 s around it (the upper quarter, so looking down doesn't lower it), shut no longer than 0.45 s, open again before and after, the head facing the same way and the same size throughout. | The eyes most closed (`t`); a head trim starts as they're open again. A cut on the outgoing person's blink reads as a natural break. |
+| `action` | Where the picture changes fastest: a peak of the change between frames 0.1 s apart (64 × 36 grey), at least three times the take's usual movement and 0.5 s from a stronger one. A change of picture inside the take (a cut, a flash) isn't action. | The peak. A cut inside a movement hides itself. |
+| `pause` | A gap of 0.25 s or more between the take's words (its transcript), with `from` and `to`; stronger when longer or after the end of a sentence. | The nearest moment that's 3 frames clear of the words either side. |
+
+Each point has `t` (cut seconds; with `assetID`, the take's), `kind`, `strength` 0–1, `who` (`left`, `middle`, `right`) when more than one face is seen, `from` and `to` for a pause, and `outside: true` when it's in the take beyond the clip (a trim can reach it). `says` counts them, and says why a kind has none: no face turned to the camera near enough to see its eyes, or no transcript.
+
+Blinks are judged only on a face turned less than about 35° and tipped less than about 30°, wholly in the picture, at least 50 pixels tall at the 960-pixel size Vision reads, with Vision sure of its outline; a turned, distant, cut-off or murky head never reads as closed eyes. Vision looks at the faces every 0.1 s and at every frame from just before an eye starts to close until it's open again (`CutPoints` keeps the frames since the last look, so a blink's start isn't missed). Measured 20 s of a take at a time, only where asked, and kept in the film's cache by file (`CutPoints/`): about 2 s per 20 s of 1080p or 4K on an M-series Mac.
+
+`split`, `trim` and `roll` take `snap: blink | action | pause`. Direction finds the nearest point of that kind within 8 frames of where the operation would put the cut, on the cut as the operations before it leave it, and moves the cut there: `split` to a moment inside the clip, `trim` keeping its direction (a shortening stays a shortening), `roll` to the outgoing shot's points or the incoming one's. The operation's `warnings` say where it snapped ("Snapped the split to a blink in 2A Take 3 at 12.48 s, 2 frames later than asked.") or that nothing was near, and the cut is then where it was asked.
+
+`direction_check` looks at the cuts before picture lock (`checks: ["cuts"]` for only them): **jump cuts**, where the story cuts between two moments of one take, two takes of one setup, or other takes whose frames look alike (not angles of one moment in sync, which cut as a multicam does), and the frames either side, rendered without graphics, are framed alike (the face no more than 15% bigger or smaller; without faces, a feature-print distance under 0.45) yet visibly differ (the face moves 1% of the frame or changes size 3%, or a distance of 0.12 or more); and **sound that starts or stops inside a word** of the clip's own transcript, J- and L-cuts included, on the story's shots and on sound on its own (a narration on A1). Each says its time, how much it jumps (`amount`), the clips, and a `fix`. A transition, a cutaway over the cut, or a split that plays on where it left off isn't a jump.
 
 ## Effects
 

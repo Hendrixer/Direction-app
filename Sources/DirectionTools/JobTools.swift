@@ -18,11 +18,11 @@ extension ToolCatalog {
     public static func names(for job: EditorJob) -> Set<String> {
         switch job {
         case .logFootage: everyJob.union(looking).union(["direction_log_dailies", "direction_transcribe", "direction_sync_takes", "direction_import", "direction_timeline", "direction_edit"])
-        case .assemble: everyJob.union(looking).union(cutting).union(["direction_breakdown", "direction_script", "direction_turnover_update", "direction_turnover_complete"])
+        case .assemble: everyJob.union(looking).union(cutting).union(["direction_breakdown", "direction_script", "direction_turnover_update", "direction_turnover_complete", "direction_cut_points", "direction_check"])
         // A note can ask for anything: a made shot, a look, a graphic, an import, an earlier version.
         case .turnover: everyJob.union(looking).union(cutting).union(["direction_turnover_update", "direction_turnover_complete", "direction_finishing", "direction_looks", "direction_make_look",
                                                                        "direction_make", "direction_estimate", "direction_services", "direction_sync_takes", "direction_transcribe", "direction_study_frames",
-                                                                       "direction_cuts", "direction_feedback_reply", "direction_breakdown", "direction_script"])
+                                                                       "direction_cuts", "direction_feedback_reply", "direction_breakdown", "direction_script", "direction_cut_points", "direction_check"])
         case .finish: everyJob.union(cutting).union(["direction_frame", "direction_watch", "direction_transcript", "direction_inspect", "direction_contact_sheet", "direction_finishing",
                                                      "direction_looks", "direction_make_look", "direction_turnover_update", "direction_turnover_complete", "direction_export", "direction_check"])
         case .style: everyJob.union(cutting).union(["direction_styles", "direction_save_style", "direction_study_frames", "direction_looks", "direction_make_look", "direction_transcript",

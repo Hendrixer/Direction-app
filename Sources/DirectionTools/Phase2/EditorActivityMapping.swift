@@ -59,7 +59,12 @@ public enum EditorActivityLog {
         case "direction_sync_takes":
             return ActivityInput(verb: "Matching", object: "the takes\u{2019} sound", tool: name)
         case "direction_check":
+            if let asked = a["checks"].array?.compactMap(\.string), asked == ["cuts"] { return ActivityInput(verb: "Checking", object: "the cuts for jumps", tool: name) }
             return ActivityInput(verb: "Checking", object: "the cut as it delivers", tool: name)
+        case "direction_cut_points":
+            if let asset = a["assetID"].string { return ActivityInput(verb: "Finding where to cut in", object: take(asset, c), tool: name) }
+            if let t = seconds(a["at"]) { return ActivityInput(verb: "Finding where to cut near", object: PlainTime.text(t), mono: true, time: t, tool: name) }
+            return ActivityInput(verb: "Finding where to cut", object: "the shots", tool: name)
         case "direction_screen_text":
             return ActivityInput(verb: "Reading the screen in", object: a["assetID"].string.map { take($0, c) } ?? "the footage", tool: name)
         case "direction_search_footage":

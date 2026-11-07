@@ -113,7 +113,7 @@ extension ToolRuntime {
         // made: the revision the graphics Direction made for captions or credits left the film at.
         var cut = p, through = 0, context: EditContext?, made = base, remade = false
         for i in batch.operations.indices {
-            if i > through || remade, Self.measured.contains(batch.operations[i].type) {
+            if i > through || remade, Self.measured.contains(batch.operations[i].type) || batch.operations[i].snap != nil {
                 // The graphics just made are in the film now: measure on it, with every operation before.
                 if remade { cut = try store.read(); through = 0; remade = false }
                 if context == nil { context = try store.editContext() }
@@ -127,6 +127,7 @@ extension ToolRuntime {
                 case "loudness": try await resolveLoudness(&batch.operations[i], cut, sequence)
                 case "captions": let was = made; try await resolveCaptions(&batch.operations[i], cut, sequence, revision: &made, validateOnly: validateOnly); remade = made != was
                 case "credits": let was = made; try await resolveCredits(&batch.operations[i], cut, sequence, revision: &made, validateOnly: validateOnly); remade = made != was
+                case "split", "trim", "roll": try await resolveSnap(&batch.operations[i], cut, sequence)
                 default: try await resolve(&batch.operations[i], cut, sequence)
                 }
             } catch let e as DirectionError { throw DirectionError(e.code, e.message, index: i) }

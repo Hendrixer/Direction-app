@@ -7,14 +7,18 @@ import DirectionMedia
 // before the batch runs, so it holds to the locks and lands as one revision like any other edit.
 extension ToolCatalog {
     static var checkDefinitions: [ToolDefinition] { [
-        definition("direction_check", "Check the cut the way it delivers, before you call finishing done: the mix against the loudness target and the \u{2212}1 dBTP ceiling, and the framing, looked at frame by frame: a crop that loses a face the take has or cuts through it, words in a tall or feed frame where the phone apps put their buttons and captions (the bottom fifth, the right eighth), words over a face. Each problem has its time. ready is the sound: sound can be marked done only when it\u{2019}s true. Framing problems are yours to fix, or to name in needsYou when they\u{2019}re meant.", ["revision": integer]),
+        definition("direction_check", "Check the cut the way it delivers, before you call finishing done: the mix against the loudness target and the \u{2212}1 dBTP ceiling, and the framing, looked at frame by frame: a crop that loses a face the take has or cuts through it, words in a tall or feed frame where the phone apps put their buttons and captions (the bottom fifth, the right eighth), words over a face. Before picture lock it also looks at the cuts: jump cuts (the story cutting between two moments of one take, or takes framed alike, where the picture visibly jumps, with how much and what would fix it) and sound that starts or stops partway through a word. Each problem has its time. ready is the sound: sound can be marked done only when it\u{2019}s true. Framing and cut problems are yours to fix, or to name in needsYou when they\u{2019}re meant.", ["revision": integer, "checks": noted(list(strings(["sound", "framing", "cuts"])), "Only these checks; all three unless given (cuts only before picture lock).")]),
     ] }
 }
 
 extension ToolRuntime {
     func invokeCheck(_ name: String, _ a: JSONValue) async throws -> ToolResponse? {
         guard name == "direction_check" else { return nil }
-        return ToolResponse(try await deliveryCheck(revision: a["revision"].int))
+        var checks: Set<String> = ["sound", "framing", "cuts"]
+        if let asked = a["checks"].array?.compactMap(\.string) { checks = Set(asked) }
+        else if (try? store.directingState().pictureLocked) == true { checks.remove("cuts") }
+        guard !checks.isEmpty else { throw DirectionError("bad_argument", "checks names at least one of sound, framing and cuts.") }
+        return ToolResponse(try await deliveryCheck(revision: a["revision"].int, checks: checks))
     }
 
     /// The whole mix at a revision against the loudness target.
@@ -28,23 +32,31 @@ extension ToolRuntime {
         } catch let e as DirectionError where e.code == "no_audio" { return (.silent, .object([:])) }
     }
 
-    /// What direction_check and the Deliver sheet show: the sound's verdict, and what the framing check found.
-    public func deliveryCheck(revision: Int? = nil) async throws -> JSONValue {
+    /// What direction_check and the Deliver sheet show: the sound's verdict, what the framing check found, and (for
+    /// direction_check before picture lock) jump cuts and cuts inside a word.
+    public func deliveryCheck(revision: Int? = nil, checks: Set<String> = ["sound", "framing"]) async throws -> JSONValue {
         let p = try store.read(revision: revision), s = try p.sequence(nil), dailies = try store.dailies()
         let looks = try? store.lookContext()
-        let compiled = try await SequenceRenderer.compile(project: p, sequenceID: s.id, cacheDirectory: cacheDirectory, looks: looks)
-        let (verdict, m) = try await loudnessVerdict(revision: p.editRevision)
         // Takes by the names Dailies gives them ("2A Take 3"), the ones the director types in a note.
         let names = Dictionary(FootageNames.all(dailies, assets: p.assets).filter { $0.kind == .take }.compactMap { n in n.assetID.map { ($0, n.name) } }, uniquingKeysWith: { a, _ in a })
-        let framing = try await FramingCheck.run(project: p, sequence: s, compiled: compiled, looks: looks, cacheDirectory: cacheDirectory, label: { c in
-            c.assetID.flatMap { names[$0] } ?? (c.name as NSString).deletingPathExtension
-        })
-        return .object([
-            "ready": .bool(verdict.isReady), "editRevision": .number(Double(p.editRevision)),
-            "loudness": .object(["integratedLUFS": m["integratedLUFS"], "truePeakDBTP": m["truePeakDBTP"], "target": .number(SharedSettings.loudnessTarget), "ceiling": .number(SharedSettings.truePeakCeiling),
-                                 "ready": .bool(verdict.isReady), "says": .string(verdict == .silent ? "There\u{2019}s no sound in the cut." : verdict.words ?? "On target."), "fix": verdict.isReady ? .null : .string("direction_edit with {op: \"loudness\"}")]),
-            "framing": try .wrapping(framing.problems), "framesLookedAt": .number(Double(framing.frames)),
-        ])
+        let label: @Sendable (Clip) -> String = { c in c.assetID.flatMap { names[$0] } ?? (c.name as NSString).deletingPathExtension }
+        var value: [String: JSONValue] = ["editRevision": .number(Double(p.editRevision))]
+        if checks.contains("sound") {
+            let (verdict, m) = try await loudnessVerdict(revision: p.editRevision)
+            value["ready"] = .bool(verdict.isReady)
+            value["loudness"] = .object(["integratedLUFS": m["integratedLUFS"], "truePeakDBTP": m["truePeakDBTP"], "target": .number(SharedSettings.loudnessTarget), "ceiling": .number(SharedSettings.truePeakCeiling),
+                                         "ready": .bool(verdict.isReady), "says": .string(verdict == .silent ? "There\u{2019}s no sound in the cut." : verdict.words ?? "On target."), "fix": verdict.isReady ? .null : .string("direction_edit with {op: \"loudness\"}")])
+        }
+        if checks.contains("framing") {
+            let compiled = try await SequenceRenderer.compile(project: p, sequenceID: s.id, cacheDirectory: cacheDirectory, looks: looks)
+            let framing = try await FramingCheck.run(project: p, sequence: s, compiled: compiled, looks: looks, cacheDirectory: cacheDirectory, label: label)
+            value["framing"] = try .wrapping(framing.problems); value["framesLookedAt"] = .number(Double(framing.frames))
+        }
+        if checks.contains("cuts") {
+            let cuts = try await CutCheck.run(project: p, sequence: s, dailies: dailies, transcripts: try store.transcripts(), looks: looks, cacheDirectory: cacheDirectory, label: label)
+            value["cuts"] = try .wrapping(cuts.problems); value["cutsLookedAt"] = .number(Double(cuts.cuts))
+        }
+        return .object(value)
     }
 
     /// loudness: the mix measured as the operations before it leave it, and the target from Settings › Cutting.
