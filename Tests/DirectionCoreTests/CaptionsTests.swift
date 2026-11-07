@@ -37,3 +37,19 @@ struct CaptionsTests {
         #expect(LoudnessCheck.dBText(3.17) == "+3.2 dB" && LoudnessCheck.lufsText(-14) == "\u{2212}14 LUFS")
     }
 }
+
+struct CaptionFileTests {
+    @Test func aGraphicsLinesAreTimedAtTheirCuesOrByLength() {
+        let cued = Captions.timed(["One.", "Two."], cues: [0, 1.5], duration: 3)
+        #expect(cued == [.init(text: "One.", start: 0, end: 1.5), .init(text: "Two.", start: 1.5, end: 3)])
+        // The director made it three lines: they share the time by length, as the page shows them.
+        let shared = Captions.timed(["A.", "Longer line.", "B."], cues: [0, 1.5], duration: 4)
+        #expect(shared.count == 3 && shared[0].start == 0 && abs(shared[2].end - 4) < 1e-9 && shared[1].end - shared[1].start > shared[0].end - shared[0].start)
+    }
+
+    @Test func webVTTHasItsHeaderAndDotTimes() {
+        let vtt = Captions.webVTT([.init(text: "Hello.", start: 61.25, end: 62.5)])
+        #expect(vtt == "WEBVTT\n\n00:01:01.250 --> 00:01:02.500\nHello.\n")
+        #expect(Captions.srt([.init(text: "Hello.", start: 3661.25, end: 3662.5)]) == "1\n01:01:01,250 --> 01:01:02,500\nHello.\n")
+    }
+}

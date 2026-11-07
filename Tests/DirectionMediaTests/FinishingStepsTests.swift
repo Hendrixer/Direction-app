@@ -24,16 +24,44 @@ extension GraphicsTests {
         _ = try await edit([.object(["op": .string("captions")]), .object(["op": .string("credits")])])
         let after = try f.store.read(), s = after.sequences[0]
         let graphic = { (c: Clip) in c.assetID.flatMap { id in after.assets.first { $0.id == id }?.graphic } }
-        let captions = s.clips.filter { graphic($0) == "captions-1" }, credits = s.clips.filter { graphic($0) == "credits" }
+        let captions = s.clips.filter { graphic($0) == "captions-1" }, credits = s.clips.filter { graphic($0)?.hasPrefix("credits-") == true }
         #expect(captions.count == 1 && abs((captions.first?.start.seconds ?? -1) - 0.1) < 0.05 && (captions.first?.layer ?? 0) > 0)
         // A caption ends at a sentence and at a pause; the page got the lines and when each starts.
         let page = try String(contentsOf: f.store.graphicsFolder.appendingPathComponent("captions-1/captions.js"), encoding: .utf8)
         #expect(page.contains("\"So we started.\"") && page.contains("\"Then it worked.\""), "\(page)")
         // The credits roll on black after the last shot, and the cut runs on for them.
         #expect(abs((credits.first?.start.seconds ?? -1) - before) < 0.05 && s.duration.seconds > before + 7)
-        // Again: in place of the ones it laid, not on top.
+        // The caption files say what the cut shows: the director's word where they changed one, at the line's time.
+        _ = try f.store.setDirectorWords("captions-1", ["lines": "So we began.\nThen it worked."], render: nil)
+        let laid = try await f.runtime.captionLines().lines
+        #expect(laid.map(\.text) == ["So we began.", "Then it worked."], "\(laid)")
+        #expect(abs((laid.first?.start ?? -1) - 0.1) < 0.02 && abs((laid.last?.start ?? -1) - 1.6) < 0.02 && (laid.last?.end ?? 99) <= before + 0.01, "\(laid)")
+        let srt = f.directory.appendingPathComponent("Film \u{2013} Captions.srt")
+        #expect(try await f.runtime.writeCaptionFiles(to: srt) == 2)
+        let vtt = try String(contentsOf: srt.deletingPathExtension().appendingPathExtension("vtt"), encoding: .utf8)
+        #expect(try String(contentsOf: srt, encoding: .utf8).hasPrefix("1\n00:00:00,100 --> ") && vtt.hasPrefix("WEBVTT\n\n00:00:00.100 --> ") && vtt.contains("So we began."), "\(vtt)")
+        // Never over a file already there.
+        await #expect(throws: (any Error).self) { _ = try await f.runtime.writeCaptionFiles(to: srt) }
+        // Again: in place of the ones it laid, not on top, as a graphic of its own (the old one is the earlier
+        // version's), and the director's line stays theirs.
         _ = try await edit([.object(["op": .string("captions")])])
-        #expect(try f.store.read().sequences[0].clips.filter { c in c.assetID.flatMap { id in after.assets.first { $0.id == id }?.graphic }?.hasPrefix("captions-") == true }.count == 1)
+        func placedCaptions() throws -> [String] {
+            let p = try f.store.read()
+            return p.sequences[0].clips.compactMap { c in c.assetID.flatMap { id in p.assets.first { $0.id == id }?.graphic } }.filter { $0.hasPrefix("captions-") }
+        }
+        let second = try placedCaptions()
+        #expect(second == ["captions-2"], "\(second)")
+        let again = try await f.runtime.captionLines().lines.map(\.text)
+        #expect(again == ["So we began.", "Then it worked."], "\(again)")
+        // Over a range: the lines around it stay as they were, a word at a time inside it.
+        _ = try await edit([.object(["op": .string("captions"), "range": .object(["start": .number(1.5), "end": .number(2.6)]), "wordsAtATime": .number(1)])])
+        let ranged = try await f.runtime.captionLines().lines.map(\.text)
+        #expect(try placedCaptions() == ["captions-3"] && ranged == ["So we began.", "Then", "it", "worked."], "\(ranged)")
+        // Checked only: nothing made, the film where it was.
+        let revision = try f.store.revision()
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(revision)), "validateOnly": .bool(true), "operations": .array([.object(["op": .string("captions")]), .object(["op": .string("credits")])])]))
+        #expect(try f.store.revision() == revision && !FileManager.default.fileExists(atPath: f.store.graphicsFolder.appendingPathComponent("captions-4").path))
+        #expect(try placedCaptions() == ["captions-3"])
     }
 
     @Test func noWordsAndNoCreditsSayWhy() async throws {
@@ -42,6 +70,34 @@ extension GraphicsTests {
             do { _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try f.store.revision())), "operations": .array([.object(["op": .string(op)])])])); Issue.record("\(op) should be refused") }
             catch let e as DirectionError { #expect(e.code == code, "\(op): \(e.code) \(e.message)") }
         }
+        // No words, no caption files: delivery leaves the row off and says why.
+        #expect(try await f.runtime.captionLines().lines.isEmpty)
+        do { _ = try await f.runtime.writeCaptionFiles(to: f.directory.appendingPathComponent("none.srt")); Issue.record("no words, no files") }
+        catch let e as DirectionError { #expect(e.code == "no_words") }
+    }
+
+    @Test func twoAudioChangesInABatchBothHold() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let asset = try f.store.read().assets[0], track = Double(asset.audio[0].id)
+        _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try f.store.revision())), "operations": .array([
+            .object(["op": .string("audio"), "assetID": .string(asset.id), "audioTrackID": .number(track), "audio": .object(["muted": .bool(true)])]),
+            .object(["op": .string("audio"), "assetID": .string(asset.id), "audioTrackID": .number(track), "audio": .object(["effects": .object(["limiter": .bool(true)])])]),
+        ])]))
+        let settings = try f.store.read().assets[0].audio[0].settings
+        #expect(settings.muted && settings.effects.limiter, "\(settings)")
+        // A track number past what a track can be is refused, not a crash.
+        do { _ = try await f.runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try f.store.revision())), "operations": .array([.object(["op": .string("audio"), "assetID": .string(asset.id), "audioTrackID": .number(4_294_967_296), "audio": .object(["muted": .bool(true)])])])])); Issue.record("should be refused") }
+        catch let e as DirectionError { #expect(e.code == "bad_argument") }
+    }
+
+    @Test func captionFilesComeFromTheCutsWordsWhenNoneAreLaid() async throws {
+        let f = try await MediaFixture.make(); defer { f.cleanup() }
+        let asset = try f.store.read().assets[0]
+        try f.store.saveTranscript(.init(assetID: asset.id, audioTrackID: asset.audio[0].id, language: "fr-FR", provider: "test-timing", words: [
+            TranscriptWord(id: "a", text: "Bonjour.", range: .init(start: 0.2, end: 0.7)), TranscriptWord(id: "b", text: "Merci.", range: .init(start: 1.5, end: 1.9)),
+        ]))
+        let read = try await f.runtime.captionLines()
+        #expect(read.lines.map(\.text) == ["Bonjour.", "Merci."] && read.language == "fr-FR", "\(read)")
     }
 }
 

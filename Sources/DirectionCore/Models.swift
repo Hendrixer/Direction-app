@@ -28,6 +28,21 @@ public struct AudioSettings: Codable, Hashable, Sendable {
     public var fadeOut: Double = 0
     public var effects: AudioEffects = .init()
     public init(muted: Bool = false, gainDB: Double = 0) { self.muted = muted; self.gainDB = gainDB }
+
+    /// These settings with only what `changes` names changed ({muted: true}), effects key by key, as JSON: the
+    /// editor's audio operation names only what changes.
+    public func merging(_ changes: JSONValue) -> JSONValue? {
+        guard case .object(let c) = changes, case .object(var whole) = (try? JSONValue.wrapping(self)) ?? .null else { return nil }
+        for (key, change) in c {
+            if key == "effects", case .object(let e) = change, case .object(var now) = whole["effects"] ?? .null { now.merge(e) { _, b in b }; whole[key] = .object(now) }
+            else { whole[key] = change }
+        }
+        return .object(whole)
+    }
+    public func applying(_ changes: JSONValue) throws -> AudioSettings {
+        guard let merged = merging(changes) else { return self }
+        do { return try merged.decode(AudioSettings.self) } catch { throw DirectionError("bad_argument", "audio settings: {muted, gainDB, fadeIn, fadeOut, effects}, naming only what changes.") }
+    }
 }
 
 public struct AudioStream: Codable, Hashable, Sendable, Identifiable {

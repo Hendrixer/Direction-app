@@ -137,6 +137,8 @@ public struct ResolvedValues: Codable, Hashable, Sendable {
     public var loudness: MixLoudness?
     /// `captions` and `credits`: the graphics Direction made and checked, where each goes.
     public var placed: [PlacedGraphic]?
+    /// audio: only the settings the operation names, put over the track's as the batch reaches it.
+    public var audioChanges: JSONValue?
     public init(keys: [String: [Keyframe]]? = nil, grade: ColorGrade? = nil, source: String? = nil, quiet: [MediaRange]? = nil, assetID: String? = nil, layout: LayoutMeasure? = nil, faces: [String: FaceTrack]? = nil, warnings: [String]? = nil) { self.keys = keys; self.grade = grade; self.source = source; self.quiet = quiet; self.assetID = assetID; self.layout = layout; self.faces = faces; self.warnings = warnings }
 }
 
@@ -158,6 +160,14 @@ public struct PlacedGraphic: Codable, Hashable, Sendable {
     public var at: Double
     public var seconds: Double
     public init(graphic: String, assetID: String, at: Double, seconds: Double) { self.graphic = graphic; self.assetID = assetID; self.at = at; self.seconds = seconds }
+}
+
+extension EditOperation {
+    /// What an effect or gain is on: a clip's id or a track. The words "clip" and "track" point at clipID and
+    /// track. Every check reads it from here, so none can be got round by naming the target another way.
+    public var targetName: String? {
+        switch target { case "clip"?: clipID; case "track"?: track; case nil: clipID ?? track; default: target }
+    }
 }
 
 extension EditOperation: Codable {
@@ -1299,10 +1309,7 @@ struct EditWork {
         if let t = try? parseTrack(value) { guard !t.audio else { throw bad("Sound tracks take gain and duck, not picture effects.") }; return .track(name(t)) }
         throw noTarget(value)
     }
-    /// target is a clip's id or a track; the words "clip" and "track" point at clipID and track.
-    func targetName(_ op: EditOperation) -> String? {
-        switch op.target { case "clip"?: op.clipID; case "track"?: op.track; case nil: op.clipID ?? op.track; default: op.target }
-    }
+    func targetName(_ op: EditOperation) -> String? { op.targetName }
     /// A target that's neither: a clip an operation before it in the batch replaced, or not a name at all.
     func noTarget(_ value: String) -> DirectionError {
         value.hasPrefix("clip-")
@@ -1633,7 +1640,7 @@ struct EditWork {
     /// same step placed before (captions-…, credits).
     mutating func placeMade(graphics op: EditOperation) throws -> Outcome {
         guard let placed = op.resolved?.placed else { throw bad("\(op.type) is laid out and checked by Direction\u{2019}s tools; send it through direction_edit.") }
-        let mine: (String) -> Bool = op.type == "captions" ? { $0.hasPrefix("captions-") } : { $0 == "credits" }
+        let mine: (String) -> Bool = op.type == "captions" ? { $0.hasPrefix("captions-") } : { $0 == "credits" || $0.hasPrefix("credits-") }
         let range = op.range.map { ($0.start.seconds, $0.end.seconds) }
         var changes: [LocalChange] = [], ids: [String] = []
         let old = s.clips.filter { c in
@@ -1828,16 +1835,21 @@ struct EditWork {
     }
 
     mutating func audio(_ op: EditOperation) throws -> Outcome {
-        guard let track = op.audioTrackID, let settings = op.audio else { throw bad("audio takes audioTrackID and audio, the settings to change.") }
+        guard let track = op.audioTrackID, op.audio != nil || op.resolved?.audioChanges != nil else { throw bad("audio takes audioTrackID and audio, the settings to change.") }
+        // What the operation names, over the settings as the operations before it in the batch left them.
+        func settled(_ current: AudioSettings) throws -> AudioSettings {
+            if let changes = op.resolved?.audioChanges { return try current.applying(changes) }
+            return op.audio ?? current
+        }
         if let id = op.clipID {
             let i = try clipIndex(id)
             let a = try asset(s.clips[i].assetID ?? "")
-            guard a.audio.contains(where: { $0.id == track }) else { throw bad("The clip does not have that audio track.") }
-            s.clips[i].audioOverrides[String(track)] = settings
+            guard let stream = a.audio.first(where: { $0.id == track }) else { throw bad("The clip does not have that audio track.") }
+            s.clips[i].audioOverrides[String(track)] = try settled(s.clips[i].audioOverrides[String(track)] ?? stream.settings)
             return change("Changed \(label(s.clips[i]))’s sound", s.clips[i])
         }
         guard let ai = project.assets.firstIndex(where: { $0.id == op.assetID }), let ti = project.assets[ai].audio.firstIndex(where: { $0.id == track }) else { throw bad("Audio track not found.") }
-        project.assets[ai].audio[ti].settings = settings
+        project.assets[ai].audio[ti].settings = try settled(project.assets[ai].audio[ti].settings)
         let uses = s.clips.filter { $0.assetID == op.assetID }
         return .init(summary: "Changed \(project.assets[ai].audio[ti].label) in \(project.assets[ai].name)", changes: uses.map { .init(before: ($0.start.seconds, $0.end.seconds), after: ($0.start.seconds, $0.end.seconds), tracks: [$0.kind == .audio ? $0.trackName : "A1"]) })
     }

@@ -476,4 +476,6 @@ struct FileRow: View {
 /// Snapshots can't write files; fixtures give the delivered files their sizes here.
 @MainActor enum DeliveredPreview {
     static var sizes: [String: Int64] = [:]
+    /// What the Deliver sheet's check found, for a snapshot.
+    static var check: JSONValue?
 }

@@ -438,7 +438,7 @@ extension EditWork {
             guard let r = op.range else { return }
             if s.clips.contains(where: { mine($0) && $0.start.seconds < r.end.seconds && $0.end.seconds > r.start.seconds }) { throw fail }
         case "addEffect":
-            if let id = op.target ?? op.clipID, let c = s.clips.first(where: { $0.id == id }), mine(c), placing(op.effect, on: c) { throw fail }
+            if let id = op.targetName, let c = s.clips.first(where: { $0.id == id }), mine(c), placing(op.effect, on: c) { throw fail }
         case "setEffect", "removeEffect":
             if let e = op.effectID, let c = s.clips.first(where: { mine($0) && $0.effect(e) != nil }), placing(c.effect(e)?.name, on: c) { throw fail }
         case "reframe":

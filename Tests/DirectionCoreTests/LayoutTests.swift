@@ -174,6 +174,8 @@ struct LayoutTests {
         expectFailure("layout_is_yours", index: 0) { _ = try run(c, [try op("{\"op\":\"removeEffect\",\"effectID\":\"\(card.id)\"}")], notes: nil) }
         let bubble = try #require(laidOut(mine).first { $0.layout?.role == .camera }), screen = try #require(laidOut(mine).first { $0.layout?.role == .screen })
         expectFailure("layout_is_yours", index: 0) { _ = try run(c, [try op("{\"op\":\"addEffect\",\"target\":\"\(bubble.id)\",\"effect\":\"transform\",\"params\":{\"scale\":0.5}}")], notes: nil) }
+        // Naming the clip with target "clip" and clipID is the same clip, and the same lock.
+        expectFailure("layout_is_yours", index: 0) { _ = try run(c, [try op("{\"op\":\"addEffect\",\"target\":\"clip\",\"clipID\":\"\(bubble.id)\",\"effect\":\"transform\",\"params\":{\"scale\":0.5}}")], notes: nil) }
         expectFailure("layout_is_yours", index: 0) { _ = try run(c, [try op("{\"op\":\"remove\",\"clipID\":\"\(screen.id)\"}")], notes: nil) }
         // Where it sits is theirs; the style's zoom and a blur over something private aren't.
         _ = try run(c, [try op("{\"op\":\"addEffect\",\"target\":\"\(screen.id)\",\"effect\":\"transform\",\"params\":{\"scale\":1.5}}"), try op("{\"op\":\"addEffect\",\"target\":\"\(screen.id)\",\"effect\":\"blur\",\"params\":{\"radius\":12}}")], notes: nil)

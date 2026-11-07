@@ -2,7 +2,7 @@ import Foundation
 
 /// Captions from the cut's words (finish.md › Captions), worked out the same way every time: a caption ends at
 /// the end of a sentence, at a pause, or when it holds as many words or letters as fit, and stays up until the
-/// next one starts. The finishing step lays them as caption graphics; delivery writes the same lines as SRT.
+/// next one starts. The finishing step lays them as caption graphics; delivery writes what those show as SRT and WebVTT.
 public enum Captions {
     public struct Line: Codable, Hashable, Sendable {
         public var text: String
@@ -65,6 +65,22 @@ public enum Captions {
         return out
     }
 
+    /// A captions graphic's lines at the times it shows them, from its start: each at its cue when every line
+    /// has one, or sharing the time by length when the director's words changed how many there are (the
+    /// captions page times them the same way).
+    public static func timed(_ lines: [String], cues: [Double], duration: Double) -> [Line] {
+        if cues.count == lines.count {
+            return lines.indices.map { i in Line(text: lines[i], start: cues[i], end: i + 1 < cues.count ? cues[i + 1] : duration) }
+        }
+        let total = lines.reduce(0) { $0 + Double($1.count + 12) }
+        guard total > 0 else { return [] }
+        var at = 0.0
+        return lines.map { text in
+            let start = at; at += Double(text.count + 12) / total * duration
+            return Line(text: text, start: start, end: at)
+        }
+    }
+
     /// SubRip, the caption file every player and site takes.
     public static func srt(_ lines: [Line]) -> String {
         func stamp(_ t: Double) -> String {
@@ -72,5 +88,14 @@ public enum Captions {
             return String(format: "%02d:%02d:%02d,%03d", h, m, s, ms % 1000)
         }
         return lines.enumerated().map { i, l in "\(i + 1)\n\(stamp(l.start)) --> \(stamp(l.end))\n\(l.text)\n" }.joined(separator: "\n")
+    }
+
+    /// WebVTT, what a web page's video player reads.
+    public static func webVTT(_ lines: [Line]) -> String {
+        func stamp(_ t: Double) -> String {
+            let ms = Int((max(0, t) * 1000).rounded()), h = ms / 3_600_000, m = ms / 60_000 % 60, s = ms / 1000 % 60
+            return String(format: "%02d:%02d:%02d.%03d", h, m, s, ms % 1000)
+        }
+        return "WEBVTT\n\n" + lines.map { l in "\(stamp(l.start)) --> \(stamp(l.end))\n\(l.text)\n" }.joined(separator: "\n")
     }
 }

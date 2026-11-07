@@ -91,7 +91,12 @@ extension ToolRuntime {
         var ops: [EditOperation] = []
         let start = try store.read()
         for (i, value) in list.enumerated() {
-            do { var op = try EditOperation(json: Self.withWholeAudio(value, start, b["sequenceID"].string)); op.resolved = nil; ops.append(op) }
+            do {
+                var op = try EditOperation(json: Self.withWholeAudio(value, start, b["sequenceID"].string)); op.resolved = nil
+                // The reducer puts only what's named over the settings as the batch reaches them.
+                if op.type == "audio", case .object = value["audio"] { op.resolved = ResolvedValues(); op.resolved?.audioChanges = value["audio"] }
+                ops.append(op)
+            }
             catch let e as DirectionError { throw DirectionError(e.code, e.message, index: i) }
         }
         if case .array(let notes) = b["notes"] { guard notes.allSatisfy({ $0.int != nil }) else { throw DirectionError("bad_argument", "notes lists note numbers, like [1, 4].") } }
@@ -106,7 +111,7 @@ extension ToolRuntime {
         // batch still commits as one.
         _ = try p.sequence(batch.sequenceID)
         // made: the revision the graphics Direction made for captions or credits left the film at.
-        var cut = p, through = 0, context: EditContext?, made: Int?, remade = false
+        var cut = p, through = 0, context: EditContext?, made = base, remade = false
         for i in batch.operations.indices {
             if i > through || remade, Self.measured.contains(batch.operations[i].type) {
                 // The graphics just made are in the film now: measure on it, with every operation before.
@@ -120,15 +125,15 @@ extension ToolRuntime {
                 let sequence = try cut.sequence(batch.sequenceID)
                 switch batch.operations[i].type {
                 case "loudness": try await resolveLoudness(&batch.operations[i], cut, sequence)
-                case "captions": made = try await resolveCaptions(&batch.operations[i], cut, sequence) ?? made; remade = true
-                case "credits": made = try await resolveCredits(&batch.operations[i], cut, sequence) ?? made; remade = true
+                case "captions": let was = made; try await resolveCaptions(&batch.operations[i], cut, sequence, revision: &made, validateOnly: validateOnly); remade = made != was
+                case "credits": let was = made; try await resolveCredits(&batch.operations[i], cut, sequence, revision: &made, validateOnly: validateOnly); remade = made != was
                 default: try await resolve(&batch.operations[i], cut, sequence)
                 }
             } catch let e as DirectionError { throw DirectionError(e.code, e.message, index: i) }
         }
         // Making a graphic is a revision of its own; the batch goes in on top of it, unless someone else
         // changed the film meanwhile.
-        if let made {
+        if made != base {
             guard try store.revision() == made else { throw DirectionError("stale_revision", "The film changed while Direction made the graphics. Read direction_timeline again and send the batch again.") }
             batch.baseEditRevision = made
         }
@@ -144,19 +149,15 @@ extension ToolRuntime {
         return .object(value)
     }
 
-    /// audio names only what changes ({muted: true}); the rest comes from the clip's own settings, or the take's
-    /// track, as they are when the batch starts.
+    /// audio names only what changes ({muted: true}). Made whole here from the settings as the batch starts, so
+    /// its argument is checked; the reducer puts the same changes over the settings as the batch reaches them.
     static func withWholeAudio(_ value: JSONValue, _ p: Project, _ sequenceID: String?) -> JSONValue {
-        guard value["op"].string == "audio", case .object(var op) = value, case .object(let changes) = value["audio"], let track = value["audioTrackID"].int else { return value }
+        guard value["op"].string == "audio", case .object(var op) = value, let track = value["audioTrackID"].int.flatMap(Int32.init(exactly:)) else { return value }
         let clip = value["clipID"].string.flatMap { id in (try? p.sequence(sequenceID))?.clips.first { $0.id == id } }
         let asset = (clip?.assetID ?? value["assetID"].string).flatMap { id in p.assets.first { $0.id == id } }
-        let current = clip?.audioOverrides[String(track)] ?? asset?.audio.first { $0.id == Int32(track) }?.settings ?? AudioSettings()
-        guard case .object(var whole) = (try? JSONValue.wrapping(current)) ?? .null else { return value }
-        for (key, change) in changes {
-            if key == "effects", case .object(let effects) = change, case .object(var now) = whole["effects"] ?? .null { now.merge(effects) { _, b in b }; whole[key] = .object(now) }
-            else { whole[key] = change }
-        }
-        op["audio"] = .object(whole)
+        let current = clip?.audioOverrides[String(track)] ?? asset?.audio.first { $0.id == track }?.settings ?? AudioSettings()
+        guard let whole = current.merging(value["audio"]) else { return value }
+        op["audio"] = whole
         return .object(op)
     }
 
@@ -179,12 +180,12 @@ extension ToolRuntime {
         case "addEffect", "setEffect":
             let current = op.type == "setEffect" ? existing(op.effectID) : nil
             let name = op.type == "addEffect" ? op.effect : current?.name
-            if name == "stabilize", op.type == "addEffect", let c = clip(op.target ?? op.clipID), let a = asset(c), !a.video.isEmpty, c.hold == nil {
+            if name == "stabilize", op.type == "addEffect", let c = clip(op.targetName), let a = asset(c), !a.video.isEmpty, c.hold == nil {
                 op.resolved = .init(keys: try await TimelineAnalysis.stabilize(asset: a, clip: c, cacheDirectory: cacheDirectory))
             }
             // A pixel grid finds the subject square by square, again when the squares change.
             if name == "pixelGrid", op.type == "addEffect" || op.params?["cells"] != nil,
-               let c = op.type == "addEffect" ? clip(op.target ?? op.clipID) : s.clips.first(where: { $0.effect(op.effectID ?? "") != nil }), let a = asset(c), !a.video.isEmpty {
+               let c = op.type == "addEffect" ? clip(op.targetName) : s.clips.first(where: { $0.effect(op.effectID ?? "") != nil }), let a = asset(c), !a.video.isEmpty {
                 let cells = Int(((current?.params ?? [:]).merging(op.params ?? [:]) { _, b in b })["cells"]?.double ?? 16)
                 if op.resolved == nil { op.resolved = .init() }
                 op.resolved?.data = try await SubjectCells.measure(a, from: c.sourceRange.start.seconds, to: c.sourceRange.end.seconds, cols: min(64, max(4, cells)), aspect: Double(s.width) / Double(s.height), cacheDirectory: cacheDirectory)

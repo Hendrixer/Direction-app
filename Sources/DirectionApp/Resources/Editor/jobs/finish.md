@@ -1,4 +1,4 @@
-<!-- direction-job finish v4 -->
+<!-- direction-job finish v5 -->
 # Finish "{{film}}"
 
 Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
@@ -16,7 +16,7 @@ Direction has already done the steps that come out the same every time, and says
 5. {{credits}}
 6. Licenses are the director's. {{licenses}} Say which tracks still need one.
 7. Before you finish, run `direction_check`. `sound` can be `done` only when it says `ready`; every framing problem it lists (a face the crop loses or cuts through, words where a phone's buttons go, words over a face) is yours to fix, or to name in `needsYou` when it's meant.
-8. Prepare the deliveries. Direction writes the master, web and HEVC files when the director delivers; it can't make a vertical version or caption files (SRT, WebVTT) yet, so say that rather than making them.
+8. Prepare the deliveries. Direction writes the master, web and HEVC files and the caption files (SRT and WebVTT, from the captions as laid, with the director's fixes) when the director delivers; it can't make a vertical version yet, so say that rather than making one.
 9. Report each item with `direction_finishing` as you go: `working`, then `done`, or `needsYou` with what the director has to do. An item an earlier run left at `needsYou` may be sorted out now: try it again before asking again.
 
 ## The brief

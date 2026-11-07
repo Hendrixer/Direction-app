@@ -194,12 +194,7 @@ struct Tools: AsyncParsableCommand {
 struct API: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "api", abstract: "Serve newline-delimited local JSON requests on stdin/stdout. Request: {id,method,params}.")
     @OptionGroup var options: OptionalProjectOptions
-    @Option(help: "The job Direction started the editor for (assemble, turnover, finish…): only its tools are listed, with direction_more_tools for the rest.") var job: String?
     func run() async throws {
-        let job = try job.map { name in
-            guard let job = EditorJob(rawValue: name) else { throw ValidationError("Unknown job \(name): use one of \(EditorJob.allCases.map(\.rawValue).joined(separator: ", ")).") }
-            return job
-        }
         stopsItsProgramsWhenStopped()
         let runtime = try options.router()
         while let line = readLine() {

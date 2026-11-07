@@ -140,7 +140,7 @@ extension ToolRuntime {
             return true
         case "effect":
             guard let fx = t.effect else { throw DirectionError("bad_argument", "\(t.name) has no effect.") }
-            guard let clipID = op.clipID ?? op.target else { throw DirectionError("bad_argument", "\(t.name) is an effect: give clipID, the clip it goes on.") }
+            guard let clipID = op.clipID ?? op.targetName else { throw DirectionError("bad_argument", "\(t.name) is an effect: give clipID, the clip it goes on.") }
             if let variant = op.variant, t.variant(variant) == nil { throw DirectionError("bad_argument", "\(t.name) has no variant \(variant). It has \(t.variants.map(\.name).joined(separator: ", ")).") }
             var params = fx.params ?? [:]
             for (k, x) in t.variant(op.variant)?.params ?? [:] { params[k] = x }

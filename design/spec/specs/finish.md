@@ -123,13 +123,15 @@ Also:
 **Accessibility:** Items are a list, "Finishing, 3 of 6 done". Each reads as "Captions, editor and you, needs you: 41 English captions…, Check 2 names button."
 
 **What Direction does itself.** Before the editor starts finishing, Direction runs the steps that come out the same every time, each an edit of its own (agent-timeline.md › Finishing), and writes what it did into the item's description:
-- **Captions** (unless the style turns them off): from the cut's words, a caption ending at a sentence, a pause, or when it holds as many words as fit (the style's, or 7 in a wide frame and 4 in a tall one). They're graphics, `captions-1`, `captions-2`… of at most 110 s each, from the style's captions graphic or Captions style; in a tall frame they sit above the bottom fifth. The item goes to Editor working: the editor checks line breaks and names.
+- **Captions** (unless the style turns them off): from the cut's words, a caption ending at a sentence, a pause, or when it holds as many words as fit (the style's, or 7 in a wide frame and 4 in a tall one). They're graphics (`captions-1`, `captions-2`…, a new name each time they're made) of at most 110 s each, from the style's captions graphic or Captions style; in a tall frame they sit above the bottom fifth. The item goes to Editor working: the editor checks line breaks and names.
 - **Credits**, once written: rolled on black after the last shot, word for word, for as long as they take to read.
 - **Loudness**: the whole mix to the target in Settings › Cutting, with no true peak over −1 dBTP. If the peaks hold it under the target, the item says where the loudest is.
 
+Each runs only when there's something to do, so Finish again undoes nothing: captions while none are laid, credits when none are rolled or the director's changed since, loudness while the mix is off target and Sound mix isn't done. Stop reaches these steps too, and a run paused by quitting does what's left of them on Resume.
+
 The editor's part is what needs an eye and an ear: color, the balance of the mix, titles, and checking the rest. It runs a step again after changing what it depends on.
 
-**Checks.** `direction_check` looks at the cut as it delivers: the sound against the target and the ceiling, and the framing, frame by frame at each shot and each stretch of captions: a crop that loses a face its take has or cuts down through it, words in a tall or feed frame where the phone apps put their buttons (the bottom fifth, the right eighth), words over a face. The editor can't mark Sound mix done until the sound is ready; framing problems it fixes or names for the director. The Deliver sheet shows the same (37).
+**Checks.** `direction_check` looks at the cut as it delivers: the sound against the target and the ceiling, and the framing, frame by frame at each shot and each stretch of captions: a crop that loses a face its take has or cuts down through it, words in a tall or feed frame where the phone apps put their buttons (the bottom fifth, the right eighth), words over a face. A face is judged on the shots as framed, without the graphics over them, so words over a face are said as that and not as a crop; a shot under a cutaway, or in a layout, isn't judged on its crop. Each run of a problem is one line, with the shot's clip for a crop. The editor can't mark Sound mix done until the sound is ready; framing problems it fixes or names for the director. The Deliver sheet shows the same (37).
 
 **Acceptance:**
 - [ ] Finish is unavailable until picture lock. It shows a disabled room segment with the tooltip "Lock picture first".
@@ -167,6 +169,8 @@ Frame: `screens/37-export.html` · Render: `renders/37-export@2x.png`
 **States and variants:**
 - The button label counts checked outputs ("Deliver 1 file"). It's disabled at 0 files, or when the size exceeds free space ("Not enough space on Macintosh HD").
 - Output presets are editable in Settings › Cutting (not here).
+- Captions are the captions as laid in the cut, with the director's fixes, at the times they show; with none laid, the cut's words as the captions step would lay them. An SRT and a WebVTT of the same name are written. With no words in the cut the row is off and says "No words to caption: the takes have no transcript".
+- When the check finds the sound off the target, a red-bordered line says it in plain words ("The sound is quieter than your −14 LUFS target (it's −19.2 LUFS now)") with "Set to −14 LUFS", which runs the loudness step; framing problems follow in a quiet line, "Look before you publish: …".
 
 **Interactions:**
 - Clicking a row toggles it; `Space` toggles the focused row. `↩` delivers.

@@ -42,7 +42,9 @@ extension ToolCatalog {
     }
 
     static let moreTools = definition(moreToolsName, "Direction\u{2019}s other tools. This job was given the ones it usually needs; when a step needs one you don\u{2019}t have, it\u{2019}s here. With no arguments: the rest, a line each. With name: that tool\u{2019}s full description and arguments. With name and arguments: runs it, checked exactly like a direct call, and returns what it returns.",
-                                      ["name": noted(string, "A tool\u{2019}s name, like direction_looks."), "arguments": noted(object, "The tool\u{2019}s own arguments, as its description gives them.")])
+                                      ["name": noted(string, "A tool\u{2019}s name, like direction_looks."), "arguments": noted(object, "The tool\u{2019}s own arguments, as its description gives them.")],
+                                      // It runs edits too: never one to call alongside others as if it only read.
+                                      readOnly: false)
 
     /// What direction_more_tools does with its arguments: answer at once (the list, one tool's description), or
     /// run a tool.
