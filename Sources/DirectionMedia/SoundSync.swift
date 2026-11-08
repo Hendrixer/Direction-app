@@ -34,7 +34,7 @@ public enum SoundSync {
         for stream in tracks {
             try Task.checkCancellation()
             guard let track = try await source.loadTracks(withMediaType: .audio).first(where: { $0.trackID == stream.id }) else { continue }
-            let raw = try envelope(source, track: track)
+            let raw = try await envelope(source, track: track)
             let level = percentile(raw, 0.9)
             // A silent track (desktop audio nobody played) can't be matched.
             guard level > 1e-4, level > (best?.level ?? 0) else { continue }
@@ -45,14 +45,14 @@ public enum SoundSync {
 
     /// Mean absolute level every 10 ms, decoded at 8 kHz mono. Samples land at their own timestamps,
     /// so a track that starts after the picture keeps its place.
-    static func envelope(_ source: AVURLAsset, track: AVAssetTrack) throws -> [Float] {
+    static func envelope(_ source: AVURLAsset, track: AVAssetTrack) async throws -> [Float] {
         let sampleRate = 8_000.0, hop = Int(sampleRate / rate)
         let reader = try AVAssetReader(asset: source)
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsFloatKey: true, AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsNonInterleaved: false])
         reader.add(output)
         guard reader.startReading() else { throw reader.error ?? DirectionError("audio_decode_failed", "Cannot decode audio.") }
         var sums: [Float] = [], counts: [Int] = []
-        while let sample = output.nextSample(of: reader) {
+        while let sample = await output.nextSample(of: reader) {
             try Task.checkCancellation()
             guard let block = CMSampleBufferGetDataBuffer(sample) else { continue }
             let n = CMSampleBufferGetNumSamples(sample)

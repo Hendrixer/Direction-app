@@ -23,7 +23,7 @@ public enum AudioProcessor {
         do {
             let file = try AVAudioFile(forWriting: temp, settings: format.settings, commonFormat: .pcmFormatFloat32, interleaved: true)
             guard reader.startReading() else { throw reader.error ?? DirectionError("audio_decode_failed", "Cannot decode audio.") }
-            while let sample = output.nextSample(of: reader) {
+            while let sample = await output.nextSample(of: reader) {
                 try Task.checkCancellation()
                 guard let data = CMSampleBufferGetDataBuffer(sample) else { continue }
                 let frames = CMSampleBufferGetNumSamples(sample)
@@ -49,7 +49,7 @@ public enum AudioProcessor {
             guard reader.status == .completed else { throw reader.error ?? DirectionError("audio_decode_failed", "Audio decoding did not complete.") }
             try install(temp: temp, at: target)
             return target
-        } catch { reader.cancelReading(); try? FileManager.default.removeItem(at: temp); throw error }
+        } catch { ReadStall.cancel(reader); try? FileManager.default.removeItem(at: temp); throw error }
     }
 
     public static func processed(asset: MediaAsset, trackID: Int32, effects: AudioEffects, directory: URL) async throws -> URL {

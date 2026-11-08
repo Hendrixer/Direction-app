@@ -79,11 +79,11 @@ struct SeekableCopyTests {
         for track in try await asset.load(.tracks).sorted(by: { $0.trackID < $1.trackID }) {
             let reader = try AVAssetReader(asset: asset), output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
             reader.add(output); reader.startReading()
-            nonisolated(unsafe) let read = output
+            nonisolated(unsafe) let read = output, from = reader
             all.append(await withCheckedContinuation { done in
                 DispatchQueue(label: "seekable-copy-tests").async {
                     var times: [CMTime] = []
-                    while let sample = read.copyNextSampleBuffer() {
+                    while let sample = read.nextSampleWaiting(of: from) {
                         let n = CMSampleBufferGetNumSamples(sample), each = CMTimeMultiplyByRatio(sample.duration, multiplier: 1, divisor: Int32(max(1, n)))
                         for k in 0..<n { times.append(sample.presentationTimeStamp + CMTimeMultiply(each, multiplier: Int32(k))) }
                     }

@@ -297,7 +297,7 @@ struct GraphicsTests {
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
         reader.add(output); reader.startReading()
         var out: [(UInt8, UInt8)] = []
-        while let sample = output.copyNextSampleBuffer(), let buffer = CMSampleBufferGetImageBuffer(sample) {
+        while let sample = await output.nextSample(of: reader), let buffer = CMSampleBufferGetImageBuffer(sample) {
             CVPixelBufferLockBaseAddress(buffer, .readOnly)
             let base = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self), stride = CVPixelBufferGetBytesPerRow(buffer)
             var maximum: UInt8 = 0

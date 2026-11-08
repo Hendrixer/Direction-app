@@ -294,7 +294,7 @@ public enum SequenceRenderer {
         let file = try AVAudioFile(forWriting: output, settings: format.settings, commonFormat: .pcmFormatInt16, interleaved: true)
         guard reader.startReading() else { throw reader.error ?? DirectionError("audio_preview_failed", "Cannot render audio preview.") }
         do {
-            while let sample = mix.nextSample(of: reader) {
+            while let sample = await mix.nextSample(of: reader) {
                 try Task.checkCancellation()
                 guard let data = CMSampleBufferGetDataBuffer(sample), let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(CMSampleBufferGetNumSamples(sample))), let pointer = buffer.mutableAudioBufferList.pointee.mBuffers.mData else { continue }
                 buffer.frameLength = buffer.frameCapacity
@@ -304,7 +304,7 @@ public enum SequenceRenderer {
             try ReadStall.check(reader, "the cut\u{2019}s sound")
             guard reader.status == .completed else { throw reader.error ?? DirectionError("audio_preview_failed", "Audio preview failed.") }
             return .object(["path": .string(output.path), "mimeType": .string("audio/wav"), "editRevision": .number(Double(compiled.revision)), "range": try .wrapping(range)])
-        } catch { reader.cancelReading(); try? FileManager.default.removeItem(at: output); throw error }
+        } catch { ReadStall.cancel(reader); try? FileManager.default.removeItem(at: output); throw error }
     }
 
     /// How the loudness moves over the cut, in one answer: short-term loudness every second (every few on a long
@@ -343,7 +343,7 @@ public enum SequenceRenderer {
         guard reader.startReading() else { throw reader.error ?? DirectionError("measure_failed", "Cannot read the cut\u{2019}s sound.") }
         var meter = LoudnessMeter(sampleRate: 48_000, channels: 2), samples: [Float] = []
         do {
-            while let sample = mix.nextSample(of: reader) {
+            while let sample = await mix.nextSample(of: reader) {
                 try Task.checkCancellation()
                 guard let data = CMSampleBufferGetDataBuffer(sample) else { continue }
                 let n = CMSampleBufferGetNumSamples(sample) * 2
@@ -353,7 +353,7 @@ public enum SequenceRenderer {
             }
             try ReadStall.check(reader, "the cut\u{2019}s sound")
             guard reader.status == .completed else { throw reader.error ?? DirectionError("measure_failed", "Measuring the cut\u{2019}s sound stopped.") }
-        } catch { reader.cancelReading(); throw error }
+        } catch { ReadStall.cancel(reader); throw error }
         func r(_ x: Double) -> JSONValue { .number((x * 100).rounded() / 100) }
         var value: [String: JSONValue] = [
             "integratedLUFS": meter.integrated.map(r) ?? .null, "samplePeakDBFS": r(meter.samplePeakDBFS), "truePeakDBTP": r(meter.truePeakDBTP),

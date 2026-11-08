@@ -69,7 +69,7 @@ public enum SeekableCopy {
             guard writer.status == .completed else { throw failed() }
             return try SDRCopy.place(temp, as: url, in: folder)
         } catch {
-            for stream in streams where stream.reader.status == .reading { stream.reader.cancelReading() }
+            for stream in streams { ReadStall.cancel(stream.reader) }
             if writer.status == .writing { writer.cancelWriting() }
             try? FileManager.default.removeItem(at: temp)
             throw error
@@ -150,7 +150,7 @@ private final class Stream {
     init(reader: AVAssetReader, output: AVAssetReaderTrackOutput, input: AVAssetWriterInput, video: Bool) { self.reader = reader; self.output = output; self.input = input; self.video = video }
 
     func next() -> CMSampleBuffer? {
-        while waiting.isEmpty, let sample = output.nextSample(of: reader) {
+        while waiting.isEmpty, let sample = output.nextSampleWaiting(of: reader) {
             guard video else { return sample }
             if let keyframe = held {
                 if sample.presentationTimeStamp < keyframe.presentationTimeStamp { Self.markPartial(keyframe) }

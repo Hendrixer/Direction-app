@@ -201,12 +201,14 @@ Off until the person says yes. A crash, a freeze or one of Direction's errors th
 
 Nothing Direction or the editor does may wait forever. On 2026-11-05 a friend's run sat 19 minutes on one step ("Watching 0:15", just after the editor wrote a new effect) and Stop then crashed, and the tests froze the same week with 17 video reads waiting at once. Each kind of wait now has a time past which it's stuck, and what's stuck is stopped and recovered from, then reported (Crash reports). The times are awake time: a Mac asleep isn't work that's stuck.
 
+The frozen reads were Direction's own doing, found on 2026-11-08. Reading a video or sound file waits for each sample, and on macOS 26 the work that brings the sample needs one of Swift's shared threads (one per core) to be free. The reads waited on those same threads, so once every one of them held a read, nothing was left to bring a sample and every read stopped for good: 16 at once on a 16-core Mac, 8 on an 8-core one. GCD's threads ran out the same way at about 60 reads, since Apple's media code needs those too. Every read now waits on a thread of Direction's own and leaves both kinds free (`ReadStall`, `OwnThreads`), and so does Vision's work (`VisionWork`), which needs them for the same reason; nothing Direction runs may hold a shared thread while it waits on something else. One limit is Apple's alone: past about a hundred readers reading at once in one process, its media code runs out of threads of its own and every read stops, whatever threads ask. Direction's work in parallel runs four at a time, far under it, and must stay that way.
+
 | What waits | Stuck after | Then |
 |---|---|---|
 | One frame of the cut (watching, a frame, a contact sheet) | 60 s | The render is cancelled and the editor hears which moment didn't render and that an effect, graphic or made shot on it may never finish. |
 | One tool call the editor makes | 10 min (long work runs as jobs and returns at once; an import, which copies a whole file inside the call, has no limit of its own) | The call returns an error naming the tool and what to try instead; the editor carries on. Logged at 5 minutes too, with every thread's stack in a report. |
 | The editor saying anything at all | 15 min; 2 hours while it waits on an import | Direction stops it (with everything it started) and starts it again on its session, told its last step and not to repeat it the same way. Once a run: stuck again, the run ends as **Stuck** (editor.md › stop reasons) with Try again, which starts it with its one restart to come again. Logged at 10 minutes first. |
-| One sample from a video or sound file | 30 s | The read is cancelled and says which file stopped answering, instead of a read that never ends. |
+| One sample from a video or sound file | 30 s | The read is given up on and says which file stopped answering, instead of a read that never ends. The reader is stopped only once its copy comes back: stopping it while the copy still waits crashes the app. |
 | The footage index's vision model loading | 10 min | The helper is stopped, logged, and the index says why. Each request already had its own limit. |
 
 ## Deleting a film
