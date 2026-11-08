@@ -8,7 +8,6 @@ enum RunsFixtures {
     static var frames: [String: () -> SnapshotScene] {
         [
             "43-settings-editor": { settings() },
-            "43-editor-per-job": { perJob() },
             "56-editor-setup": { setup() },
             "56-editor-not-signed-in": { setup(signedIn: false) },
             "57-editor-working": { working() },
@@ -30,13 +29,6 @@ enum RunsFixtures {
         previewPrograms(chosen: true)
         return SnapshotScene(size: CGSize(width: Gate.Size.settingsWidth, height: 789),
                              SettingsView(initialTab: .editor, preview: true).frame(width: Gate.Size.settingsWidth, height: 789, alignment: .top).clipped().background(Gate.Surface.ground))
-    }
-
-    /// Change per job…: the breakdown set to Extra high by the director, the rest Direction's picks.
-    private static func perJob() -> SnapshotScene {
-        previewPrograms(chosen: true)
-        EditorSetup.setEffort("xhigh", for: .claudeCode, job: .breakdown)
-        return SnapshotScene(size: CGSize(width: 524, height: 410), EditorPicksPanel(program: .claudeCode).frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground).preferredColorScheme(.dark))
     }
 
     // MARK: 56

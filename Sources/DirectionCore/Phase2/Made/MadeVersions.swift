@@ -42,8 +42,11 @@ public struct MadeVersion: Codable, Hashable, Sendable, Identifiable {
     public var frames: [String] = []
     /// `/videos/models` lists an `upscale_factor` range.
     public var upscales: Bool = false
-    public init(id: String, name: String, listing: Listing, pricing: [String: String] = [:], skus: [String: String] = [:], durations: [Int] = [], resolutions: [String] = [], aspectRatios: [String] = [], voices: [String] = [], frames: [String] = [], upscales: Bool = false) {
+    /// `/videos/models` `generate_audio`: whether it can make sound; nil when the list doesn't say.
+    public var makesSound: Bool?
+    public init(id: String, name: String, listing: Listing, pricing: [String: String] = [:], skus: [String: String] = [:], durations: [Int] = [], resolutions: [String] = [], aspectRatios: [String] = [], voices: [String] = [], frames: [String] = [], upscales: Bool = false, makesSound: Bool? = nil) {
         self.id = id; self.name = name; self.listing = listing; self.pricing = pricing; self.skus = skus; self.durations = durations; self.resolutions = resolutions; self.aspectRatios = aspectRatios; self.voices = voices; self.frames = frames; self.upscales = upscales
+        self.makesSound = makesSound
     }
 
     /// Returns the video it's given, changed (Aleph, FLUX Video Edit): no listed durations or frames, priced by the second out.
@@ -170,7 +173,7 @@ public enum MadeVersions {
             versions.append(MadeVersion(id: id, name: MadeVersion.displayName(m["name"].string ?? "", id: id), listing: .video, skus: strings(m["pricing_skus"]),
                                         durations: m["supported_durations"].array?.compactMap(\.int) ?? [], resolutions: m["supported_resolutions"].array?.compactMap(\.string) ?? [],
                                         aspectRatios: m["supported_aspect_ratios"].array?.compactMap(\.string) ?? [],
-                                        frames: m["supported_frame_images"].array?.compactMap(\.string) ?? [], upscales: m["upscale_factor"] != .null))
+                                        frames: m["supported_frame_images"].array?.compactMap(\.string) ?? [], upscales: m["upscale_factor"] != .null, makesSound: m["generate_audio"].bool))
         }
         guard !versions.isEmpty else { throw DirectionError("no_versions", "OpenRouter listed no versions.") }
         return MadeCatalog(fetchedAt: now.timeIntervalSince1970, versions: versions)
@@ -266,6 +269,14 @@ public enum MadeEstimator {
         return listed.first { Double($0) >= seconds - 0.001 } ?? listed.last!
     }
     /// 1080p when listed, else the largest listed under it, else the first.
+    /// For the film's speed and quality: Best makes 1080p where it can; Faster and Balanced make 720p where it's
+    /// listed (else 768p, else the version's default), quicker and for about half, which this Mac sharpens to a
+    /// cut half again as tall or more. When this Mac can't sharpen (`sharpensHere` false), the version's default.
+    public static func videoResolution(_ v: MadeVersion, quality: FilmQuality, sharpensHere: Bool = true) -> String? {
+        guard quality != .best, sharpensHere, v.listing == .video, !v.changesVideo, !v.upscales else { return videoResolution(v) }
+        for r in ["720p", "768p"] where v.resolutions.contains(r) { return r }
+        return videoResolution(v)
+    }
     public static func videoResolution(_ v: MadeVersion) -> String? {
         if v.resolutions.isEmpty || v.resolutions.contains("1080p") { return v.resolutions.isEmpty ? nil : "1080p" }
         let order = ["480p", "720p", "768p", "1080p", "1K", "2K", "4K"]
@@ -311,7 +322,8 @@ public enum MadeFormat {
     public static func length(_ seconds: Double) -> String { let s = Int(seconds.rounded()); return "\(s / 60):" + String(format: "%02d", s % 60) }
 
     /// The Services sub-label for a kind's version: "About $0.04 a 30 s clip", "About $0.40 a second at 1080p".
-    public static func priceLine(_ kind: MadeKind, _ v: MadeVersion) -> String? {
+    /// `resolution`: the one the film's speed and quality makes it at; the version's default otherwise.
+    public static func priceLine(_ kind: MadeKind, _ v: MadeVersion, resolution: String? = nil) -> String? {
         switch kind.listing {
         case .audio:
             let e = MadeEstimator.estimate(kind, version: v, seconds: MadeEstimator.clipSeconds)
@@ -319,7 +331,7 @@ public enum MadeFormat {
             return MadeEstimator.isClipVersion(v) ? "About \(money(e.spend)) a 30 s clip" : "About \(money(e.spend)) for 30 s"
         case .video:
             if v.isLocal { return "Nothing, on this Mac" }
-            let res = v.changesVideo ? nil : MadeEstimator.videoResolution(v)
+            let res = v.changesVideo ? nil : resolution ?? MadeEstimator.videoResolution(v)
             guard let per = MadeEstimator.perSecond(v, resolution: res, audio: false, fromImage: false), per > 0 else { return nil }
             return "About \(money(per)) a second" + (res.map { " at \($0)" } ?? "")
         case .speech, .image: return nil

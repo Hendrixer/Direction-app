@@ -409,6 +409,8 @@ public struct DirectingState: Codable, Hashable, Sendable {
     /// Who edits this film, as chosen in Who's editing? when it was started: "claudeCode", "codex" or
     /// "yourOwn". nil in films started before 2026-11-04, which follow Settings › Engines › Who edits.
     public var editor: String?
+    /// Speed and quality, from the editor's popover or Who's editing?; nil is Balanced (`speedAndQuality`).
+    public var quality: FilmQuality?
     /// The director's standing instructions to the editor (Settings › Editor).
     public var preferences: EditorPreferences?
     /// How a camera and a screen recording in sync share the frame, chosen in Dailies (layouts.md).

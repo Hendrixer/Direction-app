@@ -150,7 +150,7 @@ public enum CutPoints {
         reader.add(output)
         guard reader.startReading() else { throw DirectionError("frame_unreadable", "Couldn\u{2019}t read \(asset.name): \(reader.error?.localizedDescription ?? "the reader didn\u{2019}t start").") }
         let reading = Reading(reader: reader, output: output, orientation: orientation(transform), fps: fps, name: asset.name)
-        defer { reader.cancelReading() }
+        defer { ReadStall.cancel(reader) }
         let found = try await VisionWork.run { try look(reading) }
         try ReadStall.check(reader, asset.name)
         try Task.checkCancellation()
@@ -186,7 +186,7 @@ public enum CutPoints {
                 return o < median(recent) * 0.8
             }
         }
-        while let sample = r.output.nextSample(of: r.reader) {
+        while let sample = r.output.nextSampleWaiting(of: r.reader) {
             defer { n += 1 }
             guard let buffer = CMSampleBufferGetImageBuffer(sample) else { continue }
             let t = CMSampleBufferGetPresentationTimeStamp(sample).seconds

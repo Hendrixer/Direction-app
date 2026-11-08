@@ -144,7 +144,9 @@ private struct MadeFixture {
         let done = try await f.finish(try await f.make(shot))
         #expect(done.status == "completed", "\(done.error ?? "")")
         let submit = try #require(stub.bodies("/videos").first)
-        #expect(submit["model"].string == "google/veo-3.1" && submit["duration"].double == 8 && submit["resolution"].string == "1080p" && submit["aspect_ratio"].string == "16:9" && submit["generate_audio"].bool == false)
+        // Balanced makes 720p, which this Mac sharpens to the cut; Best, or a Mac that can't sharpen, asks for 1080p.
+        let made = MadeProcessing.sharpeningStatus(width: 1280, height: 720) == .unsupported ? "1080p" : "720p"
+        #expect(submit["model"].string == "google/veo-3.1" && submit["duration"].double == 8 && submit["resolution"].string == made && submit["aspect_ratio"].string == "16:9" && submit["generate_audio"].bool == false)
         let frame = submit["frame_images"].array?.first
         #expect(submit["frame_images"].array?.count == 1 && frame?["frame_type"].string == "first_frame" && frame?["image_url"]["url"].string?.hasPrefix("data:image/jpeg;base64,") == true)
         #expect(polls.used == 4 && stub.requests.contains { $0.url?.path.hasSuffix("/videos/vid-1/content") == true && $0.url?.query == "index=0" })
@@ -211,7 +213,10 @@ private struct MadeFixture {
         #expect(services["limits"]["askAbovePerTurnover"].double == 5 && services["limits"]["stopAtPerMonth"].double == 50)
         #expect(abs((services["month"]["spent"].double ?? 0) - 50.1) < 1e-9 && abs((services["turnover"]["spent"].double ?? 0) - 6.4) < 1e-9)
         let kinds = services["kinds"].array ?? []
-        #expect(kinds.first { $0["kind"].string == "shot" }?["price"].string == "About $0.20 a second at 1080p")
+        // Balanced makes 720p for this Mac to sharpen; a Mac that can't sharpen makes the full 1080p.
+        let made = MadeProcessing.sharpeningStatus(width: 1280, height: 720) == .unsupported ? "1080p" : "720p"
+        #expect(kinds.first { $0["kind"].string == "shot" }?["price"].string == "About $0.20 a second at \(made)")
+        #expect(services["quality"].string == "balanced")
         #expect(kinds.first { $0["kind"].string == "changedShot" }?["version"].string == "runway/aleph-2" && kinds.first { $0["kind"].string == "slowMotion" }?["service"].string == "local")
     }
 
@@ -337,7 +342,7 @@ private struct MadeFixture {
         catalog.versions += [MadeVersion(id: "bytedance/seedance-2.5", name: "Seedance 2.5", listing: .video, skus: ["duration_seconds": "0.23"], durations: Array(4...30), resolutions: ["720p"], frames: ["first_frame", "last_frame"]),
                              MadeVersion(id: "minimax/hailuo-3", name: "H3", listing: .video, skus: ["duration_seconds": "0.13"], durations: Array(5...15), resolutions: ["2K"], frames: ["first_frame", "last_frame"])]
         try JSONEncoder.direction.encode(catalog).write(to: try #require(f.overrides.catalog))
-        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("Slow push in on the desk."), "seconds": .number(5), "first": .object(["assetID": .string(f.assetID), "at": .number(1)])]
+        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("Hands typing at the desk."), "seconds": .number(5), "first": .object(["assetID": .string(f.assetID), "at": .number(1)])]
         // The fixture's frames show no one, so the best-rated version is tried first.
         #expect(try await f.call("direction_estimate", ["turnover": .string(f.turnover.id), "steps": .array([.object(shot)])])["steps"].array?.first?["version"].string == "bytedance/seedance-2.5")
         let done = try await f.finish(try await f.make(shot))
@@ -366,7 +371,7 @@ private struct MadeFixture {
                              MadeVersion(id: "minimax/hailuo-3", name: "H3", listing: .video, skus: ["duration_seconds": "1.2"], durations: Array(5...15), resolutions: ["2K"], frames: ["first_frame", "last_frame"])]
         try JSONEncoder.direction.encode(catalog).write(to: try #require(f.overrides.catalog))
         // $1.15 at Seedance is under the $5.00 limit; H3 would be $6.00.
-        let done = try await f.finish(try await f.make(["kind": .string("shot"), "ask": .string("Slow push in on the desk."), "seconds": .number(5)]))
+        let done = try await f.finish(try await f.make(["kind": .string("shot"), "ask": .string("Hands typing at the desk."), "seconds": .number(5)]))
         #expect(done.status == "completed", "\(done.error ?? "")")
         let result = try #require(done.result)
         #expect(result["status"].string == "spend_over_limit" && abs((result["estimate"].double ?? 0) - 6) < 1e-9 && result["versionName"].string == "H3")
@@ -439,6 +444,11 @@ private struct MadeFixture {
         let estimate = try await f.make(change.merging(["estimateOnly": .bool(true)]) { _, b in b })
         #expect(abs((estimate["spend"].double ?? 0) - 0.56) < 1e-9 && estimate["version"].string == "runway/aleph-2" && estimate["seconds"].double == 2)
         await expectCode("invalid_arguments") { _ = try await f.make(change.merging(["from": .object(["assetID": .string(f.assetID), "start": .number(1)])]) { _, b in b }) }
+        // A changed shot keeps the take's own sound, so asking for sound doesn't rule out a version that makes none.
+        var catalog = MadeCatalog.builtIn; catalog.fetchedAt = Date().timeIntervalSince1970
+        if let i = catalog.versions.firstIndex(where: { $0.id == "runway/aleph-2" }) { catalog.versions[i].makesSound = false }
+        try JSONEncoder.direction.encode(catalog).write(to: try #require(f.overrides.catalog))
+        #expect(try await f.make(change.merging(["estimateOnly": .bool(true), "sound": .bool(true)]) { _, b in b })["version"].string == "runway/aleph-2")
 
         let done = try await f.finish(try await f.make(change))
         #expect(done.status == "completed", "\(done.error ?? "")")

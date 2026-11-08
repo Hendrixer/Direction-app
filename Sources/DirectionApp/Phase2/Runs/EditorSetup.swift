@@ -5,10 +5,8 @@ import DirectionCore
 enum EditorSetupKey {
     /// "claudeCode" | "codex" | "yourOwn". Absent until the director picks (frame 56 or Settings).
     static let runsOn = "editorRunsOn"
-    /// What the director changed for one job ("editorEffortClaudeCode.script"); absent while it's
-    /// Direction's pick. The single keys before 2026-11-03 ("editorEffortClaudeCode") aren't read.
-    static func version(_ p: EditorProgram, _ job: EditorJob) -> String { "editorVersion\(p.keyName).\(job.rawValue)" }
-    static func effort(_ p: EditorProgram, _ job: EditorJob) -> String { "editorEffort\(p.keyName).\(job.rawValue)" }
+    /// Speed and quality a new film starts with: the last one chosen (FilmQuality raw value).
+    static let quality = "filmQuality"
     /// "rightAway" | "askFirst"
     static let startWork = "editorStartWork"
     static let scripts = "editorRunsScripts"
@@ -23,7 +21,7 @@ extension EditorProgram {
     var keyName: String { self == .claudeCode ? "ClaudeCode" : "Codex" }
 }
 
-/// The jobs as Settings › Engines › Change per job… lists them.
+/// The jobs, as the editor's picks list them.
 extension EditorJob {
     /// In the order a film is made, then styles and techniques.
     static let byFilm: [EditorJob] = [.script, .breakdown, .logFootage, .assemble, .turnover, .finish, .style, .technique]
@@ -32,11 +30,6 @@ extension EditorJob {
         case .script: "A/V script"; case .breakdown: "Breakdown"; case .logFootage: "Logging takes"; case .assemble: "Assembly"
         case .turnover: "Notes"; case .finish: "Finishing"; case .style: "Styles"; case .technique: "Techniques"
         }
-    }
-    /// Direction's pick: Extra high where the work is judgement (cutting, answering notes, a style's
-    /// taste), High where the editor writes at length to a plan or works through a list.
-    var pickedEffort: String {
-        switch self { case .assemble, .turnover, .style: "xhigh"; default: "high" }
     }
 }
 
@@ -80,47 +73,30 @@ enum EditorSetup {
         return chosen && runsOn.program.map { !p.checked || p.install($0) != nil } ?? false
     }
 
-    // MARK: Version and effort, per job (specs/editor.md › Version and effort)
+    // MARK: Version and effort (specs/editor.md › Speed and quality)
 
-    /// The version a job runs on: the director's, or Direction's pick (the program's first).
-    static func version(_ p: EditorProgram, for job: EditorJob) -> String {
-        value(EditorSetupKey.version(p, job)) as? String ?? p.defaultVersion
-    }
-    /// The effort a job runs at: the director's, or Direction's pick. A version that doesn't take
-    /// it gets the nearest it does below it, or the program's default.
-    static func effort(_ p: EditorProgram, for job: EditorJob) -> String {
-        fitted(value(EditorSetupKey.effort(p, job)) as? String ?? job.pickedEffort, p.efforts(version(p, for: job)).map(\.id))
-    }
-    /// Direction's pick for a job, as `version` (by default the one the job runs on now) takes it.
-    static func pickedEffort(_ p: EditorProgram, for job: EditorJob, on version: String? = nil) -> String {
-        fitted(job.pickedEffort, p.efforts(version ?? self.version(p, for: job)).map(\.id))
-    }
     /// `effort` if offered, else the nearest offered below it, else the program's default ("").
-    static func fitted(_ effort: String, _ offered: [String]) -> String {
+    nonisolated static func fitted(_ effort: String, _ offered: [String]) -> String {
         if offered.contains(effort) { return effort }
         let below = EditorProgram.efforts.firstIndex(of: effort).map { EditorProgram.efforts[..<$0].reversed() } ?? []
         return below.first(where: offered.contains) ?? ""
     }
-    /// Choosing Direction's pick forgets the change, so the job follows Direction's picks again.
-    static func setVersion(_ v: String, for p: EditorProgram, job: EditorJob) {
-        put(EditorSetupKey.version(p, job), v == p.defaultVersion ? nil : v)
-    }
-    static func setEffort(_ e: String, for p: EditorProgram, job: EditorJob) {
-        put(EditorSetupKey.effort(p, job), e == pickedEffort(p, for: job) ? nil : e)
-    }
-    /// Jobs whose version or effort the director changed.
-    static func changed(_ p: EditorProgram) -> [EditorJob] {
-        EditorJob.byFilm.filter { value(EditorSetupKey.version(p, $0)) != nil || value(EditorSetupKey.effort(p, $0)) != nil }
-    }
-    static func restorePicks(_ p: EditorProgram) {
-        for job in EditorJob.allCases { put(EditorSetupKey.version(p, job), nil); put(EditorSetupKey.effort(p, job), nil) }
-    }
-    /// A new run on the version and effort chosen for its job; it keeps them once it has started.
-    static func newRun(_ job: EditorJob, on p: EditorProgram, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil) -> EditorRun {
-        var run = EditorRun(job: job, program: p.rawValue, version: version(p, for: job), turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
-        run.effort = effort(p, for: job)
+    /// A new run on the version and effort for its job at the film's speed and quality (`EditorPicks`).
+    /// A run that hasn't started takes the film's setting again when it launches; once started, it keeps them.
+    static func newRun(_ job: EditorJob, on p: EditorProgram, quality: FilmQuality, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil) -> EditorRun {
+        let pick = EditorPicks.pick(p, job, quality)
+        var run = EditorRun(job: job, program: p.rawValue, version: pick.version, turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
+        run.effort = pick.effort
         return run
     }
+    /// What a new film starts with: the speed and quality chosen last, or what the old Made with setting
+    /// said (Cheapest is Faster) until one is.
+    static var defaultQuality: FilmQuality {
+        if let q = (value(EditorSetupKey.quality) as? String).flatMap(FilmQuality.init) { return q }
+        guard !EditorPrograms.shared.preview, let old = SharedSettings.defaults.string(forKey: "madeQuality") else { return .balanced }
+        return old == "cheapest" ? .faster : FilmQuality(rawValue: old) ?? .balanced
+    }
+    static func setDefaultQuality(_ q: FilmQuality) { put(EditorSetupKey.quality, q.rawValue) }
     static var asksFirst: Bool { value(EditorSetupKey.startWork) as? String == "askFirst" }
     static func setAsksFirst(_ on: Bool) { put(EditorSetupKey.startWork, on ? "askFirst" : "rightAway") }
     static var runsScripts: Bool { value(EditorSetupKey.scripts) as? Bool ?? true }
@@ -174,7 +150,7 @@ enum EditorSetup {
         guard !preview, let i = installs[p], !signingIn.contains(p), force || EditorSetup.signedIn(p) == nil else { return }
         signingIn.insert(p); couldNotCheck[p] = nil
         // The version cutting runs on: the one most of the work uses.
-        let version = EditorSetup.version(p, for: .assemble)
+        let version = EditorPicks.pick(p, .assemble, .balanced).version
         Task.detached {
             var answer = EditorDiscovery.checkSignedIn(i, version: version)
             // No sign-in of its own, but the shell sets an API key: that's how this person uses it in Terminal.

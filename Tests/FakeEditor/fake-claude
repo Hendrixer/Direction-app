@@ -46,6 +46,15 @@ case "$scenario" in
     echo '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_rb","content":[{"type":"text","text":"{}"}]}]},"session_id":"'"$session"'"}'
     echo '{"type":"result","subtype":"success","is_error":false,"result":"{\"finished\": false, \"summary\": \"Read back 1 note.\", \"needsYou\": [\"OK the read-back\"]}","total_cost_usd":0.05,"session_id":"'"$session"'"}'
     ;;
+  running-total)
+    # Like Claude Code: the session's running total, carried on by --resume and started over without it.
+    read_notes
+    total=25
+    if printf '%s\n' "$@" | grep -qx -- "--resume"; then total=$(( $(cat "$folder/.fake-total" 2>/dev/null || echo 0) + 25 )); fi
+    echo "$total" > "$folder/.fake-total"
+    cost=$(awk "BEGIN { printf \"%.2f\", $total / 100 }")
+    echo '{"type":"result","subtype":"success","is_error":false,"result":"{\"finished\": true, \"summary\": \"Logged 1 take.\", \"needsYou\": []}","total_cost_usd":'"$cost"',"session_id":"'"$session"'"}'
+    ;;
   stubborn)
     # Ignores Ctrl-C and SIGTERM; only SIGKILL stops it.
     read_notes

@@ -18,7 +18,7 @@ extension ToolCatalog {
     }
 
     static var madeDefinitions: [ToolDefinition] { [
-        definition("direction_services", "Read what you can make picture and sound with: whether OpenRouter is ready, the version Direction uses for each kind right now (and when a frame shows a person) with its price, whether this Mac can sharpen, the director's limits, and what's left in the open turnover and this month. You don't choose versions: Direction picks one for each request from what it needs and the director's Made with setting, and moves to the next if a version turns it down. Use the footage first (direction_search_footage). The make-shot skill has the workflow."),
+        definition("direction_services", "Read what you can make picture and sound with: whether OpenRouter is ready, the version Direction uses for each kind right now (and when a frame shows a person) with its price, whether this Mac can sharpen, the director's limits, and what's left in the open turnover and this month. You don't choose versions: Direction picks one for each request from what it needs and the film's speed and quality (quality in the result), and moves to the next if a version turns it down. Use the footage first (direction_search_footage). The make-shot skill has the workflow."),
         definition("direction_estimate", "Price a plan before making any of it: steps is a list of direction_make arguments (kind, ask, seconds, from, first, last, references, sound, ways…), turnover the turnover ID. Returns each step's version, seconds and spend, the plan's total, what this turnover has spent, the director's limit and needsQuestion. Under the limit, make it without asking. Over it, ask one spend question for the whole plan (direction_ask kind spend, spend: {estimate: total, choiceID}) and pass its id as spendQuestionID on every step. Spends nothing.",
                    ["turnover": string, "steps": list(record(makeProperties))], required: ["steps"]),
         definition("direction_make", "Make something the footage doesn't have. Through OpenRouter: music, soundEffect, voice (ask is the words), still, shot (a new shot from words, a first frame, or first and last frames), extension (continues a take: from {assetID, end, side: tail}), bridge (first and last frames, from two takes; a last frame always needs a first), changedShot (changes a range of a take itself, up to 10 s: from {assetID, start, end}, ask is the change: \"remove the boom at top left\", \"dusk sky with cloud\"). On this Mac at no cost: slowMotion (from a range, factor 2–4) and upscale (sharpens a range to the cut's size). A frame is {assetID, at} (at is source seconds; omit for a still). references are up to 4 stills or takes ({assetID, at}) that ground it in the film. Shots are silent unless sound is true. seconds is the length for music, sound effects, shots, extensions and bridges. ways is 1 or 2 (up to 4 for stills). note is the note ID (or \"unasked\"), turnover the turnover ID. Price the whole plan first with direction_estimate. Over the turnover's limit you get spend_over_limit: ask one spend question and call again with spendQuestionID. Past the monthly cap you get spend_cap, with no override. Otherwise a job: poll direction_job; its result has each made clip's assetID and provenance, and note says when Direction used another version because one turned the request down. If the next version would pass a limit, the job's result is spend_over_limit or spend_cap instead, the same as this call's. Made shots are sharpened to the cut's size on this Mac and extensions join without a repeated frame. Watch what's made before placing it with placeMade (a changed shot goes on V2 over its own range).",
@@ -65,6 +65,8 @@ struct MadeRequest: Sendable {
     var alternatives: [MadeVersion] = []
     /// A frame or reference shows a person.
     var person = false
+    /// The film's speed and quality as the resolution a shot is made at follows it (Best when this Mac can't sharpen).
+    var quality: FilmQuality = .balanced
 }
 
 extension ToolRuntime {
@@ -99,7 +101,7 @@ extension ToolRuntime {
         let month = SpendLedger.monthSpent(entries), turnover = SpendLedger.turnoverSpent(entries, filmID: filmID, turnoverID: open?.id)
         func describe(_ k: MadeKind, _ v: MadeVersion) -> [String: JSONValue] {
             var o: [String: JSONValue] = ["id": .string(v.id), "name": .string(v.name)]
-            if let line = MadeFormat.priceLine(k, v) { o["price"] = .string(line) }
+            if let line = MadeFormat.priceLine(k, v, resolution: MadeEstimator.videoResolution(v, quality: quality, sharpensHere: sharpensHere)) { o["price"] = .string(line) }
             if v.listing == .video && !v.isLocal {
                 if !v.durations.isEmpty { o["durations"] = .array(v.durations.map { .number(Double($0)) }) }
                 o["lastFrame"] = .bool(v.takesLastFrame)
@@ -107,7 +109,8 @@ extension ToolRuntime {
             }
             return o
         }
-        let quality = SharedSettings.madeQuality, refused = MadeRefusals.refusedPeople()
+        let quality = FilmQuality.forMade(try? store.directingState()), refused = MadeRefusals.refusedPeople()
+        let sharpensHere = MadeProcessing.sharpeningStatus(width: 1280, height: 720) != .unsupported
         let kinds: [JSONValue] = MadeKind.allCases.compactMap { k in
             // A typical request of the kind: shots and their kin start from a frame of the film.
             let framed = [.shot, .extension, .bridge].contains(k)
@@ -129,7 +132,7 @@ extension ToolRuntime {
             "services": .array([.object(["name": .string("OpenRouter"), "service": .string("openrouter"), "state": .string(OpenRouter.Key.read() != nil ? "ready" : "notSet")]),
                                 .object(["name": .string("This Mac"), "service": .string("local"), "state": .string("ready"), "kinds": .array([.string("slowMotion"), .string("upscale")]), "sharpening": .string(sharpening)])]),
             "kinds": .array(kinds),
-            "madeWith": .string(quality.rawValue),
+            "quality": .string(quality.rawValue),
             "limits": .object(["askAbovePerTurnover": .number(ask), "stopAtPerMonth": cap.map(JSONValue.number) ?? .null]),
             "turnover": open.map { .object(["id": .string($0.id), "spent": .number(turnover), "left": .number(max(0, ask - turnover))]) } ?? .null,
             "month": .object(["spent": .number(month), "left": cap.map { .number(max(0, $0 - month)) } ?? .null]),
@@ -251,23 +254,28 @@ extension ToolRuntime {
         let person = kind.isPicture && kind != .slowMotion && kind != .upscale ? await PeopleCheck.anyPerson(in: try await frameData([first, last].compactMap { $0 } + references)) : false
         var sharpenHere = true
         if kind == .upscale, let stream = fromAsset?.video.first { sharpenHere = MadeProcessing.sharpeningStatus(width: stream.width, height: stream.height) != .unsupported }
-        let needs = MadeNeeds(kind: kind, firstFrame: first != nil, lastFrame: last != nil, person: person, seconds: seconds, sound: kind.isMadeShot && a["sound"].bool == true, sharpenHere: sharpenHere)
-        let route = catalog.route(needs, quality: SharedSettings.madeQuality, refusedPeople: person ? MadeRefusals.refusedPeople() : [])
+        // A changed shot keeps the take's own sound, so it never asks for any.
+        let sound = kind.isMadeShot && kind != .changedShot && a["sound"].bool == true
+        let needs = MadeNeeds(kind: kind, firstFrame: first != nil, lastFrame: last != nil, person: person, seconds: seconds, sound: sound, sharpenHere: sharpenHere,
+                              lettering: kind == .still && MadeNeeds.hasLettering(ask), camera: [.shot, .extension].contains(kind) && MadeNeeds.isCameraMove(ask))
+        let quality = FilmQuality.forMade(try? store.directingState())
+        // Shots made smaller than the cut need this Mac to sharpen them; one that can't asks for the full size.
+        let madeSharpensHere = MadeProcessing.sharpeningStatus(width: 1280, height: 720) != .unsupported
+        let route = catalog.route(needs, quality: quality, refusedPeople: person ? MadeRefusals.refusedPeople() : [])
         guard let version = route.first else {
             let why = person && kind.isPicture ? " that takes a frame with a person in it" : last != nil ? " that takes a last frame" : seconds.map { " that makes \(Int($0)) seconds" } ?? ""
             throw DirectionError("unknown_version", "OpenRouter lists no version for \(kind.label.lowercased())\(why). Try it shorter, or without the frame.")
         }
         let versionNote: String? = nil
-        let sound = kind.isMadeShot && kind != .changedShot && a["sound"].bool == true
         let sequence = try p.sequence(nil)
         let cut = MadeProcessing.Steps.Size(width: sequence.width, height: sequence.height)
         if kind == .upscale, let asset = fromAsset, let stream = asset.video.first {
             guard cut.height > stream.height else { throw DirectionError("nothing_to_sharpen", "\(asset.name) is already \(stream.width) \u{00D7} \(stream.height), as big as the cut.") }
         }
-        let estimate = MadeEstimator.estimate(kind, version: version, seconds: seconds, words: ask, ways: ways, sound: sound, fromImage: first != nil || last != nil, outputPixels: Double(cut.width * cut.height))
+        let estimate = MadeEstimator.estimate(kind, version: version, seconds: seconds, words: ask, ways: ways, resolution: MadeEstimator.videoResolution(version, quality: quality, sharpensHere: madeSharpensHere), sound: sound, fromImage: first != nil || last != nil, outputPixels: Double(cut.width * cut.height))
         return MadeRequest(kind: kind, version: version, ask: ask, seconds: seconds, ways: ways, noteID: noteID, turnoverID: turnoverID, from: from, fromAsset: fromAsset, first: first, last: last,
                            references: references, sound: sound, factor: factor, estimate: estimate, aspect: Self.aspect(sequence, listed: version.aspectRatios), cut: cut, versionNote: versionNote,
-                           alternatives: Array(route.dropFirst().prefix(2)), person: person)
+                           alternatives: Array(route.dropFirst().prefix(2)), person: person, quality: madeSharpensHere ? quality : .best)
     }
 
     private func make(_ a: JSONValue) async throws -> JSONValue {
@@ -372,7 +380,7 @@ extension ToolRuntime {
                         let refused = r.version, why = (error as? DirectionError)?.message.lowercased().contains("person") == true ? "a frame with a person in it" : "what was asked"
                         if r.person || why.contains("person") { MadeRefusals.record(refused.id) }
                         r.version = r.alternatives.removeFirst()
-                        r.estimate = MadeEstimator.estimate(r.kind, version: r.version, seconds: r.seconds, words: r.ask, ways: r.ways, sound: r.sound, fromImage: r.first != nil || r.last != nil, outputPixels: Double(r.cut.width * r.cut.height))
+                        r.estimate = MadeEstimator.estimate(r.kind, version: r.version, seconds: r.seconds, words: r.ask, ways: r.ways, resolution: MadeEstimator.videoResolution(r.version, quality: r.quality), sound: r.sound, fromImage: r.first != nil || r.last != nil, outputPixels: Double(r.cut.width * r.cut.height))
                         // The next version often costs more: the hold moves to it only within the limits and the director's yes.
                         if !refused.isLocal && !r.version.isLocal {
                             let planned = spent + r.estimate.spend / Double(r.ways) * Double(r.ways - made.count)

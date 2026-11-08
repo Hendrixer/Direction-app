@@ -55,8 +55,8 @@ public struct EditorRun: Codable, Hashable, Sendable, Identifiable {
     public var program: String
     /// `--model`; empty for the program's default.
     public var version: String
-    /// `--effort`, chosen for this run's job (Settings › Engines › Change per job…); empty for the
-    /// program's default. Older runs have none and read it from Settings when they start.
+    /// `--effort`, chosen for this run's job at the film's speed and quality (`EditorPicks`); empty for the
+    /// program's default. Older runs have none and take their job's pick when they start.
     public var effort: String?
     /// The program's own session id, kept so the run can resume with its context.
     public var session: String?
@@ -69,6 +69,10 @@ public struct EditorRun: Codable, Hashable, Sendable, Identifiable {
     public var endedAt: Double?
     /// Dollars the program reported across every invocation of this run; nil when it reports none.
     public var spend: Double?
+    /// The last total the program reported for the session the run is on. Claude Code reports a session's
+    /// running total, and a resumed session's carries on from where it was, so only what's new since this
+    /// goes into `spend`. Cleared when the run starts a fresh session.
+    public var sessionSpend: Double?
     public var tokens: Int?
     /// The app process that started the program, and the program's own process.
     public var ownerPID: Int32?

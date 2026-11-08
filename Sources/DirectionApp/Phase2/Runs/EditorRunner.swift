@@ -87,12 +87,13 @@ import DirectionTools
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
-        // A run that never started takes the film's editor and the version and effort chosen now for its job
-        // (Choose another editor…, Change per job…).
-        if run.invocations == 0, let p = EditorSetup.runsOn(film: try? store.directingState().editor).program, programOverride.isEmpty {
-            let version = EditorSetup.version(p, for: run.job), effort = EditorSetup.effort(p, for: run.job)
-            if p.rawValue != run.program || version != run.version || effort != run.effort {
-                run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = version; $0.effort = effort }) ?? run
+        // A run that never started takes the film's editor, and the version and effort for its job at the
+        // film's speed and quality as they are now (Choose another editor…, the slider).
+        let state = try? store.directingState()
+        if run.invocations == 0, let p = EditorSetup.runsOn(film: state?.editor).program, programOverride.isEmpty {
+            let pick = EditorPicks.pick(p, run.job, state?.speedAndQuality ?? .balanced)
+            if p.rawValue != run.program || pick.version != run.version || pick.effort != run.effort {
+                run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = pick.version; $0.effort = pick.effort }) ?? run
             }
         }
         guard live[run.id] == nil, preparing[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
@@ -127,10 +128,14 @@ import DirectionTools
             try EditorProgram.resultSchema.data(pretty: true).write(to: schema, options: .atomic)
             // A continuation without a saved session starts over with the whole job, then the answer.
             let session = continuation == nil ? nil : run.session
+            // A fresh session counts its spend from nothing. A run resumed from before sessions' totals were
+            // kept takes what it has recorded as the session's total so far.
+            if session == nil, run.sessionSpend != nil { run = (try? store.updateRun(run.id) { $0.sessionSpend = nil }) ?? run }
+            else if session != nil, run.sessionSpend == nil, let spent = run.spend { run = (try? store.updateRun(run.id) { $0.sessionSpend = spent }) ?? run }
             var job = try (session == nil ? EditorJobs.text(for: run, store: store) : continuation!)
             if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
             // The run's own, once it has started; an older run without one reads its job's.
-            let effort = run.effort ?? EditorSetup.effort(program, for: run.job)
+            let effort = run.effort ?? EditorPicks.pick(program, run.job, state?.speedAndQuality ?? .balanced).effort
             let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts, kind: run.job)
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)
@@ -260,7 +265,13 @@ import DirectionTools
             // A pause the director asked for stays a pause even if the program exits on its own.
             if r.state == .paused && o.state != .done && o.reason != .pausedByQuit { r.endedAt = Date().timeIntervalSince1970 }
             else { r.state = o.state; r.reason = o.reason; r.detail = o.detail; r.pausedByQuit = o.reason == .pausedByQuit; r.endedAt = Date().timeIntervalSince1970 }
-            if let cost { r.spend = (r.spend ?? 0) + cost }
+            if let cost {
+                // A running total for the session: what's new since its last report. Lower than that last
+                // report, it's a fresh count, all new.
+                let before = r.sessionSpend ?? 0
+                r.spend = (r.spend ?? 0) + (cost >= before ? cost - before : cost)
+                r.sessionSpend = cost
+            }
             if let tokens { r.tokens = (r.tokens ?? 0) + tokens }
             if let result { r.summary = result.summary; r.needsYou = result.needsYou }
             if let asked { r.askedAt = asked.at; r.askedForOK = asked.forOK }

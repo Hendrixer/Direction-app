@@ -214,7 +214,7 @@ import DirectionTools
     @discardableResult
     func makeStyle(_ film: FilmModel, request: String, fromFilm: Bool, studies: [URL] = []) -> Bool {
         guard startsEditor, ready, let store = film.store, let program = runsOn.program else { return false }
-        var run = EditorSetup.newRun(.style, on: program)
+        var run = EditorSetup.newRun(.style, on: program, quality: film.directing.speedAndQuality)
         run.request = request; run.fromFilm = fromFilm; run.studies = studies.isEmpty ? nil : studies.map(\.path)
         try? store.saveRun(run)
         runs.append(run)
@@ -226,7 +226,7 @@ import DirectionTools
     @discardableResult
     func learnTechnique(_ film: FilmModel, request: String, folder: URL, video: URL) -> Bool {
         guard startsEditor, ready, let store = film.store, let program = runsOn.program else { return false }
-        var run = EditorSetup.newRun(.technique, on: program)
+        var run = EditorSetup.newRun(.technique, on: program, quality: film.directing.speedAndQuality)
         run.request = request; run.learnFolder = folder.path; run.learnVideo = video.path
         try? store.saveRun(run)
         runs.append(run)
@@ -257,7 +257,7 @@ import DirectionTools
     }
 
     private func create(_ job: EditorJob, program: EditorProgram, turnoverID: String? = nil, assetCount: Int? = nil, assetIDs: [String]? = nil, store: ProjectStore) {
-        var run = EditorSetup.newRun(job, on: program, turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
+        var run = EditorSetup.newRun(job, on: program, quality: (try? store.directingState())?.speedAndQuality ?? .balanced, turnoverID: turnoverID, assetCount: assetCount, assetIDs: assetIDs)
         run.held = EditorSetup.asksFirst
         try? store.saveRun(run)
         runs.append(run)

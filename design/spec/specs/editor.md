@@ -118,7 +118,7 @@ A skill is a short playbook in Markdown (`plugins/direction/skills/<name>/SKILL.
 - **Quitting** while the editor works: the existing quit guard says "The editor is cutting Cut 4. Quit and pause it?" Quit pauses the run and keeps the session; the next launch shows a banner "The editor was paused when Direction quit. Resume?" with Resume / Not now.
 - **Nothing keeps running.** Every program Direction starts (the editor, Whisper, the vision helper and its downloads, the checks on the editor programs) has a process group of its own, which whatever it starts joins: the `direction` tool server, a shell's `ffmpeg … &`. Pause, Stop and Quit signal the whole group: SIGINT (the program keeps its session), SIGTERM after 4 s if anything is left, SIGKILL 2 s later. Quit goes ahead only once the groups are gone. When a program ends on its own, whatever it left in its group is stopped. The `direction` tool server, stopped, stops what it started first. If Direction goes away without doing any of this (a crash, Force Quit), the reaper it starts at launch (`direction reap`, reading the running groups from a pipe) sees the pipe close and stops them the same way. The editor doesn't carry on without Direction: nothing would record how the run ended, start the next job or show its questions.
 - **Sleep.** While a run works, Direction holds a `ProcessInfo` activity so the Mac doesn't sleep. Display sleep is allowed.
-- **Spend.** Claude Code reports the run's cost in its result event; Codex reports tokens. Show "$0.84 so far" when a cost is known; show nothing when it isn't (a plan sign-in often reports none). Spend on services (made media) is separate and always known; see `made-media.md`.
+- **Spend.** Claude Code reports the session's running total in its result event, and a resumed session's total includes what came before, so a run adds only what's new since the session's last report (`EditorRun.sessionSpend`); Codex reports tokens. Show "$0.84 so far" when a cost is known; show nothing when it isn't (a plan sign-in often reports none). Spend on services (made media) is separate and always known; see `made-media.md`.
 
 ## What you see while the editor works
 
@@ -136,7 +136,6 @@ Frame: `screens/43-settings-editor.html` drew it as the Editor tab's first group
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
 | Who edits | Editor runs on | Seg: Claude Code / Codex / Your own session | Claude Code if installed, else Codex, else Your own session | Which program Direction starts. Sub-label shows what was found: "Claude Code 2.4.1 · signed in", "Not installed. Install it, then come back." with **Copy install command**, or for Your own session "Run Claude Code or Codex yourself. Direction shows what it does but can't start or pause it. How to connect". |
-| Who edits | Version and effort | Text-2 "Chosen for each job" (· "N set by you" once any is changed) and **Change per job…** (`.btn`) | Direction's picks (below) | Sub-label: "How long the editor thinks before each step. Direction gives more to judgement (cutting, notes, a style) and less where the editor writes at length. More is slower and uses more of your plan." Change per job… opens the list in a popover (frame `43-editor-per-job`, below). Disabled for Your own session. |
 | Who edits | Start work | Select: Right away / Ask me first | Right away | Sub-label: "When notes are turned over or footage arrives." |
 | Who edits | Let the editor run scripts | Switch | On | Sub-label: "Only inside its own folder in the film, with no internet. Some graphics and looks need it." |
 | Freedom | unchanged | | | |
@@ -145,35 +144,37 @@ Frame: `screens/43-settings-editor.html` drew it as the Editor tab's first group
 
 Note under Before cutting: "The editor reads the brief before every cut."
 
-### Version and effort, per job
-Each kind of work runs on its own version and effort (decided 2026-11-03): writing at length to a plan doesn't need the thought that cutting does, and one setting for everything made a script pass as slow as an assembly. Direction picks; the director can change any line.
+### Speed and quality
+One setting per film, a slider with three stops: **Faster · Balanced · Best** (decided 2026-11-08, replacing the version and effort per job of 2026-11-03 and Made with). The director never chooses a version or an effort: Direction picks both for each job, and the version for each made request, from the film's stop. The picks, their sources and how they're refreshed are in `docs/speed-and-quality.md`.
 
-| Job (as listed, in the order a film is made) | Direction's pick (Claude Code) |
-|---|---|
-| A/V script | Claude Opus 5.5 · High |
-| Breakdown | Claude Opus 5.5 · High |
-| Logging takes | Claude Opus 5.5 · High |
-| Assembly | Claude Opus 5.5 · Extra high |
-| Notes (a turnover) | Claude Opus 5.5 · Extra high |
-| Finishing | Claude Opus 5.5 · High |
-| Styles | Claude Opus 5.5 · Extra high |
-| Techniques | Claude Opus 5.5 · High |
+- **Where.** The editor popover (frame 41), under How much freedom, and Who's editing? (frame 56) when a film starts. Nowhere in Settings. The film keeps it (`DirectingState.quality`, nil is Balanced); a new film starts with the last one chosen.
+- **When.** Any time the editor isn't working. While it works (Your own session's idle popover), the slider is disabled with "Applies from the next turnover." A run takes the film's setting when it starts and keeps it, resumed and continued runs included; a run that hasn't started takes it again when it launches.
+- **The control.** `.slider` with stops: the 4 pt track, steel-8 fill to the knob, the 16 pt steel-9 knob, a 6 pt dot at each stop, and the stops' names under it (11.5, the chosen one text-1 medium, the others text-3). Click or drag anywhere and it lands on the nearest stop; a name picks its stop; ←/→ and VoiceOver move one stop. Under it, one line (11.5 text-3):
+  - Faster: "The editor works quicker and made shots come back sooner. Good for a first pass or a quick cut."
+  - Balanced: "The editor takes its time cutting and answering notes, and moves quickly through the rest."
+  - Best: "The editor takes its time on everything, and made shots use the best versions. Slower, and spends more."
 
-- Codex: The program's default version for every job, at the same efforts.
-- The popover (`--panel`, 500 wide, padding 12): a card with a row per job (label 13 text-1; the Version select with Other…, as before; the Effort select: The program's default · Low · Medium · High · Extra high · Max, each Codex version listing its own from Codex's cache, "ultra" never offered since it hands work to agents of its own). Version and effort selects have fixed minimum widths so they line up in two columns. A changed row says under its label, 11 text-3, what Direction would pick where it differs: "Direction's pick: High", "Direction's pick: Claude Opus 5.5", or both. Under the card: the note "A run keeps what it started with; a change applies to the next one." and **Restore Direction's picks** (ghost, small), disabled while nothing is changed.
-- Choosing Direction's pick again forgets the change, so the job follows Direction's picks if they change in a later version of the app. Changes are kept per program and per job.
-- An effort the job's version doesn't take falls to the nearest it does below it, else the program's default.
+| Job | Faster | Balanced | Best |
+|---|---|---|---|
+| A/V script | Sonnet 5.5 · Medium | Opus 5.5 · Medium | Opus 5.5 · High |
+| Breakdown | Haiku 5.5 · Medium | Sonnet 5.5 · Medium | Opus 5.5 · Medium |
+| Logging takes | Sonnet 5.5 · Medium | Sonnet 5.5 · Medium | Opus 5.5 · High |
+| Assembly, Notes, Styles | Opus 5.5 · Medium | Opus 5.5 · High | Opus 5.5 · Extra high |
+| Finishing | Haiku 5.5 · Medium | Sonnet 5.5 · Medium | Opus 5.5 · Medium |
+| Techniques | Sonnet 5.5 · Medium | Opus 5.5 · Medium | Opus 5.5 · High |
+
+- Codex: the same shape on GPT-6.1 Terra (the list-like jobs), GPT-6.1 Sol (judgement) and GPT-6 Astra (judgement at Best). A version the installed Codex doesn't list falls to the next one it does, else its own default.
+- An effort the version doesn't take falls to the nearest it does below it, else the program's default.
 - Claude Code: `--model <version> --effort <level>`; Codex: `--model <version> --config model_reasoning_effort="<level>"`, on resumed runs too.
-- A run records its version and effort when it's made, and takes the job's current ones again if it hasn't started yet. Once started it keeps them, resumed and continued runs included. The activity popover's program line names both: "Claude Opus 5.5 · Extra high effort · 4 min" (the version names the program; with the program's default version the program's name stands in: "Codex · High effort · 4 min").
-- The one Version and Effort from before (the `editorVersionClaudeCode` / `editorEffortClaudeCode` defaults) are no longer read. The signed-in check runs on the assembly's version.
-- Not yet measured: whether High holds the script, breakdown and finishing to the same standard as Extra high. Compare real runs before lowering anything further.
+- The activity popover's program line names both: "Claude Opus 5.5 · Extra high effort · 4 min" (with the program's default version the program's name stands in: "Codex · High effort · 4 min").
+- For testing and the bench, `DIRECTION_EDITOR_VERSION` and `DIRECTION_EDITOR_EFFORT` pin both for every job.
+- Not yet measured on real films: Opus at Medium against Sonnet at High for an assembly, and Astra against Sol for notes (docs/bench.md).
 
 **Acceptance:**
 - [ ] Choosing Codex when it isn't installed keeps the choice and shows the install row; work waits with the pill "Editor not set up".
-- [ ] Changing a job's version or effort applies to that job's next run, not the one working; other jobs are untouched.
-- [ ] A script pass with nothing changed starts with `--effort high`; an assembly with `--effort xhigh`.
-- [ ] Restore Direction's picks clears every change for the program, and the row says "Chosen for each job" again.
-- [ ] Your own session disables Version and effort, Start work and Let the editor run scripts.
+- [ ] Moving the slider applies to the film's next run, not the one working; the next new film starts with it.
+- [ ] At Balanced an assembly starts with `--model claude-opus-5-5 --effort high`; at Faster a breakdown with `--model claude-haiku-5-5 --effort medium`.
+- [ ] Your own session disables Start work and Let the editor run scripts.
 
 ---
 
@@ -187,8 +188,9 @@ Opens on every new film (New Film…, from a script or a story, a dropped folder
 - Two program cards side by side (`--raised`, radius 10, padding 14, the same selection ring as the Freedom cards):
   - **Claude Code**: "Found · 2.4.1 · signed in" with a green dot (`--approve`). Selected.
   - **Codex**: "Not installed" text-3, and under it SF Mono 11.5 `npm install -g @openai/codex` with a copy icon.
-- Start work row: seg "Right away / Ask me first". (The Version row went on 2026-11-03: Direction picks the version and effort for each job.)
-- Under the card, a note (11.5 text-3): "Direction picks the version and effort for each job. Change them in Settings › Engines."
+- Start work row: seg "Right away / Ask me first".
+- Speed and quality row: the slider (200 wide), its line as the row's detail (Speed and quality, above). Starts on the last one chosen.
+- Under the card, a note (11.5 text-3): "Change the speed and quality anytime the editor isn't working, from the editor button at the top of the window."
 - A text link (text-2, 12): "I'll run my own session instead". It turns the sheet into the MCP instructions (the install script and the "Copy request for your editor" text), with **Done**.
 - Buttons: Cancel (plain) · **Use Claude Code** (steel). The steel label follows the selected card.
 
@@ -208,7 +210,7 @@ The Cut room while the editor cuts Cut 4 (state of frame 25), with the popover o
 - Pill: shimmering "Cutting 3 of 7".
 - Scene strip: the editor's playhead at 01:12:08 in scene 3 (note 3's anchor).
 - Popover (320 wide, `.pop`), under the pill:
-  - Header: diamond + "Cutting Cut 4" (13/600), sub "Claude Opus 5.5 · Extra high effort · 4 min" (11.5 text-3; see Version and effort, per job).
+  - Header: diamond + "Cutting Cut 4" (13/600), sub "Claude Opus 5.5 · Extra high effort · 4 min" (11.5 text-3; see Speed and quality).
   - Activity list (rows 30 tall, time-ago in SF Mono 11 text-4 on the left, verb in text-1 and object in text-2):
     - now · **Watching** 01:12:08–01:14:00 (shimmer on this row)
     - 12 s · **Reframed** 3B T2 to 1.6× · note 3

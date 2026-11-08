@@ -24,6 +24,7 @@ struct EditorPopover: View {
             else {
                 status
                 latitude
+                speedAndQuality
                 if !activity.isEmpty { recent }
                 footer
             }
@@ -224,6 +225,21 @@ struct EditorPopover: View {
             .opacity(latitudeLocked ? 0.5 : 1)
             .accessibilityElement(children: .contain).accessibilityLabel("How much freedom")
             if latitudeLocked, pill != .offline { Text("Applies from the next turnover.").font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary) }
+        }
+    }
+
+    // MARK: Speed and quality
+
+    /// The film's own. Locked while the editor works or has work under way (waiting on an answer, paused):
+    /// the run keeps the stop it started with, and so do the shots it makes.
+    private var speedAndQuality: some View {
+        let working: Bool = { if case .working = pill { return true }; if case .assembling = pill { return true }; return false }()
+        let locked = working || model.runs.runs.contains { $0.invocations > 0 && [.starting, .working, .waitingForYou, .paused].contains($0.state) }
+        return section {
+            SectionLabel("Speed and quality")
+            SpeedQualityControl(quality: Binding(get: { model.directing.speedAndQuality }, set: { model.setQuality($0) }))
+                .disabled(locked)
+            if locked { Text("Change it once the editor finishes what it\u{2019}s doing.").font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary) }
         }
     }
 

@@ -227,14 +227,9 @@ Note under Looking at footage: "The editor reads what's found here to log takes,
 
 **Editing the key:** the row grows to show a secure `.input` (placeholder "Paste your OpenRouter key"), a text link "Get a key" with an arrow-up-right icon (opens openrouter.ai/keys), and Cancel (plain) / **Save** (`.btn`, not steel; the window has no steel button). After Save, Direction checks the key (`GET /key`) and shows Ready or "That key didn't work: <OpenRouter's message>". The row's context menu has Replace Key…, Remove Key, and Show Credits (opens openrouter.ai/credits).
 
-**What the editor makes** (a card under the key; made-media.md › Choosing a version):
+Note under the key: "Your key is kept in your Mac's keychain, and the editor never sees it. Direction makes every request and picks the version for each from what it needs and the film's speed and quality. Frames of your takes are sent to OpenRouter, so they leave this Mac. Slow motion and sharpening happen on this Mac and cost nothing."
 
-- **Made with**: a select of Best · Balanced · Cheapest (default Balanced). Detail: "The best-rated version for each shot, whatever it costs." / "The cheapest of the versions rated close to the best." / "The cheapest version that's still rated good."
-- Under it, what Direction would use right now, one line each with its price in SF Mono: New shots, With you in the frame (only when it differs), Stills, Changed shots. "New shots · MiniMax H3 Max · About $0.08 a second at 768p."
-
-Note under the card: "Direction picks the version for each shot and still from what it needs, and tries the next one if a version turns it down. Frames of your takes are sent to OpenRouter, so they leave this Mac. Slow motion and sharpening happen on this Mac and cost nothing."
-
-There are no per-kind version selects: the director chooses how good against how cheap, never a version.
+There are no version selects and no Made with (gone 2026-11-08): the film's speed and quality (editor.md › Speed and quality) is the only choice, and it lives with the film's editor, not in Settings.
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
@@ -242,7 +237,6 @@ There are no per-kind version selects: the director chooses how good against how
 | Spending | Stop for the month at | Select: $25.00 / $50.00 / $100.00 / $250.00 / No limit | $50.00 | Nothing is made past this. |
 | Spending | Spent this month | Meter (like Storage's), one segment per kind, with a legend: Music $0.36, New shots $12.40, Looking at footage $0.04, Checking $0.01 | — | Read-only. "$12.80 of $50.00" in SF Mono on the right of the row. Checking is Direction looking at what was made (decisions.md); kinds under half a cent aren't shown. |
 
-Note under the key: "Your key is kept in your Mac's keychain. The editor never sees it; Direction makes every request."
 Note under Spending: "Check each version's terms on OpenRouter before you release a film. Some don't cover film or TV."
 
 **Acceptance:**

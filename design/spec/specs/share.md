@@ -128,8 +128,9 @@ Frame: `screens/41-agent-popover.html` · Render: `renders/41-agent-popover@2x.p
 - Sections are separated by hairlines, with padding 14/16:
   1. Status: a diamond, "Editor" in Archivo 14/700, and a status chip on the right. Below it, one sentence in 12 text-2.
   2. "How much freedom": three radio rows (13 label, 11.5 text-3 explanation).
-  3. "Recent": up to 3 activity rows, each with a 14 diamond, text and an SF Mono 11 time.
-  4. Footer: **Pause editor** (ghost sm, left) and **Editor settings…** (ghost sm, right).
+  3. "Speed and quality": the film's slider, Faster · Balanced · Best, with its line under it (editor.md › Speed and quality). Disabled while the editor works, with "Applies from the next turnover."
+  4. "Recent": up to 3 activity rows, each with a 14 diamond, text and an SF Mono 11 time.
+  5. Footer: **Pause editor** (ghost sm, left) and **Editor settings…** (ghost sm, right).
 
 **Content:**
 - Status sentence (Ready): "Nothing in progress. Your 6 notes on Cut 3 are waiting. Turn them over when you're done."

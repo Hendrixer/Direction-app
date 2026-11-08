@@ -154,13 +154,13 @@ public enum InterchangeExport {
         guard reader.canAdd(output) else { return nil }
         reader.add(output)
         guard reader.startReading() else { return nil }
-        defer { reader.cancelReading() }
+        defer { ReadStall.cancel(reader) }
         // The reader can hand back an empty sample first, and a sample read as it is may not carry its
         // description; the track's has the same.
         let described = try? await track.load(.formatDescriptions).first
         var found: (CMSampleBuffer, CMBlockBuffer)?
         for _ in 0..<8 {
-            guard let sample = output.copyNextSampleBuffer() else { break }
+            guard let sample = await output.nextSample(of: reader) else { break }
             if CMSampleBufferGetNumSamples(sample) > 0, let data = CMSampleBufferGetDataBuffer(sample) { found = (sample, data); break }
         }
         guard let (sample, data) = found, let format = CMSampleBufferGetFormatDescription(sample) ?? described else { return nil }
@@ -238,7 +238,7 @@ public enum InterchangeExport {
         do {
             while written < total {
                 try Task.checkCancellation()
-                guard let sample = mix.nextSample(of: reader) else {
+                guard let sample = await mix.nextSample(of: reader) else {
                     // The end of the sound, or a read that stopped: only the first is padded with silence.
                     try ReadStall.check(reader, "the cut\u{2019}s sound")
                     guard reader.status == .completed else { throw reader.error ?? DirectionError("sound_failed", "Writing the sound stopped partway.") }
@@ -252,7 +252,7 @@ public enum InterchangeExport {
                 try file.write(from: buffer)
                 written += n
             }
-            reader.cancelReading()
+            ReadStall.cancel(reader)
             // Silence to the end of the cut, so every file lines up.
             while written < total {
                 let n = min(48_000, total - written)
@@ -263,7 +263,7 @@ public enum InterchangeExport {
                 written += n
             }
             return true
-        } catch { reader.cancelReading(); try? FileManager.default.removeItem(at: url); throw error }
+        } catch { ReadStall.cancel(reader); try? FileManager.default.removeItem(at: url); throw error }
     }
 
     /// A look's color as a 33-point .cube: its LUT at its strength. Filters that aren't color (grain, a vignette,

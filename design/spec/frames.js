@@ -53,7 +53,6 @@ window.FRAMES = [
 
   { id: "42-settings-general", group: "Settings", title: "Settings, General", spec: "settings.md", size: "940x789" },
   { id: "43-settings-editor", group: "Settings", title: "Settings, Editor", spec: "editor.md", size: "940x789" },
-  { id: "43-editor-per-job", group: "Settings", title: "Engines, Change per job…", spec: "editor.md", size: "524x410" },
   { id: "44-settings-cutting", group: "Settings", title: "Settings, Cutting", spec: "settings.md", size: "940x789" },
   { id: "45-settings-notifications", group: "Settings", title: "Settings, Notifications", spec: "settings.md", size: "940x789" },
   { id: "46-settings-shortcuts", group: "Settings", title: "Settings, Shortcuts", spec: "settings.md", size: "940x789" },

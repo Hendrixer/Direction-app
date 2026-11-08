@@ -18,7 +18,7 @@ public enum MadeProcessing {
         guard start.isFinite, end.isFinite, end - start > 0 else { throw DirectionError("invalid_range", "The range has to end after it starts.") }
         guard maxDimension >= 16, maxBytes > 0 else { throw DirectionError("invalid_size", "The size limits are too small to send anything.") }
         let source = try await Source(URL(fileURLWithPath: path))
-        let frames = try source.frames(in: start...end)
+        let frames = try await source.frames(in: start...end)
         let seconds = (frames.last!.end - frames[0].time).seconds, fps = source.frameRate
         var longest = min(maxDimension, max(source.display.width, source.display.height))
         var size = fit(source.display, inside: .init(width: longest, height: longest))
@@ -47,7 +47,7 @@ public enum MadeProcessing {
         let keys = Set(frames.map { source.ticks($0.time) })
         var writer: Writer?
         do {
-            while let sample = reader.output.nextSample(of: reader.reader) {
+            while let sample = await reader.output.nextSample(of: reader.reader) {
                 try Task.checkCancellation()
                 guard let decoded = sample.imageBuffer, keys.contains(source.ticks(sample.presentationTimeStamp)) else { continue }
                 if writer == nil {
@@ -153,7 +153,7 @@ public enum MadeProcessing {
         if let factor = steps.slowMotion, !(2...4).contains(factor) { throw DirectionError("invalid_slow_motion", "Slow motion is 2, 3 or 4 times slower.") }
         if let size = steps.sharpenTo, size.width < 2 || size.height < 2 { throw DirectionError("invalid_size", "The size to sharpen to is too small.") }
         let source = try await Source(input)
-        let frames = try source.frames(in: steps.range ?? 0...source.duration.seconds)
+        let frames = try await source.frames(in: steps.range ?? 0...source.duration.seconds)
         let factor = steps.slowMotion ?? 1
         let total = (frames.count - 1) * factor + 1 - (steps.dropFirstFrame ? 1 : 0) - (steps.dropLastFrame ? 1 : 0)
         guard total > 0 else { throw DirectionError("empty_range", "Dropping the join frame leaves nothing of this shot.") }
@@ -195,7 +195,7 @@ public enum MadeProcessing {
         }
         do {
             var previous: (buffer: CVPixelBuffer, ticks: Int64)?
-            while let sample = reader.output.nextSample(of: reader.reader) {
+            while let sample = await reader.output.nextSample(of: reader.reader) {
                 try Task.checkCancellation()
                 guard let decoded = sample.imageBuffer else { continue }
                 let time = sample.presentationTimeStamp, t = ticks(time)
@@ -312,7 +312,7 @@ private struct Source {
 
     /// The frames shown in a range of source seconds, in order: each one whose time on screen overlaps the
     /// range by more than a quarter of a frame, or else the one on screen at its start.
-    func frames(in range: ClosedRange<Double>) throws -> [Frame] {
+    func frames(in range: ClosedRange<Double>) async throws -> [Frame] {
         let lower = max(0, range.lowerBound), upper = min(duration.seconds, range.upperBound)
         guard upper > lower else { throw DirectionError("invalid_range", "That range is outside the take, which is \(String(format: "%.2f", duration.seconds)) s long.") }
         let reader = try AVAssetReader(asset: asset)
@@ -322,7 +322,7 @@ private struct Source {
         reader.add(output)
         guard reader.startReading() else { throw DirectionError("media_unreadable", "Couldn't read \(asset.url.lastPathComponent): \(reader.error?.localizedDescription ?? "unknown error").") }
         var all: [Frame] = []
-        while let sample = output.nextSample(of: reader) {
+        while let sample = await output.nextSample(of: reader) {
             for timing in (try? sample.sampleTimingInfos()) ?? [] where timing.presentationTimeStamp.isNumeric {
                 all.append(.init(time: timing.presentationTimeStamp, duration: timing.duration.isNumeric && timing.duration > .zero ? timing.duration : frameDuration))
             }
@@ -538,17 +538,17 @@ private final class Writer {
     func append(_ buffer: CVPixelBuffer, at time: CMTime) async throws {
         while !input.isReadyForMoreMediaData {
             if writer.status == .failed { throw failure }
-            if try !pumpSound() { try await Task.sleep(for: .milliseconds(1)) }
+            if try await pumpSound() == false { try await Task.sleep(for: .milliseconds(1)) }
         }
         guard adaptor.append(buffer, withPresentationTime: time) else { throw failure }
-        _ = try pumpSound()
+        _ = try await pumpSound()
     }
 
     func finish(at end: CMTime) async throws {
         input.markAsFinished()
         while sounds.contains(where: { !$0.done }) {
             if writer.status == .failed { throw failure }
-            if try !pumpSound() { try await Task.sleep(for: .milliseconds(1)) }
+            if try await pumpSound() == false { try await Task.sleep(for: .milliseconds(1)) }
         }
         writer.endSession(atSourceTime: end)
         await writer.finishWriting()
@@ -556,7 +556,7 @@ private final class Writer {
     }
 
     func cancel() {
-        for sound in sounds { sound.reader.cancelReading() }
+        for sound in sounds { ReadStall.cancel(sound.reader) }
         if writer.status == .writing { writer.cancelWriting() }
         try? FileManager.default.removeItem(at: writer.outputURL)
     }
@@ -564,11 +564,11 @@ private final class Writer {
     private var failure: Error { writer.error.map { DirectionError("write_failed", "Couldn't write the shot: \($0.localizedDescription)") } ?? DirectionError("write_failed", "Couldn't write the shot.") }
 
     /// Feeds the sound while the writer wants it, so picture and sound interleave. True if anything moved.
-    private func pumpSound() throws -> Bool {
+    private func pumpSound() async throws -> Bool {
         var moved = false
         for i in sounds.indices where !sounds[i].done {
             while sounds[i].input.isReadyForMoreMediaData {
-                guard let sample = sounds[i].output.nextSample(of: sounds[i].reader) else {
+                guard let sample = await sounds[i].output.nextSample(of: sounds[i].reader) else {
                     try ReadStall.check(sounds[i].reader, "the sound")
                     if sounds[i].reader.status == .failed { throw DirectionError("media_unreadable", "Couldn't read the sound: \(sounds[i].reader.error?.localizedDescription ?? "unknown error").") }
                     sounds[i].input.markAsFinished(); sounds[i].done = true; break

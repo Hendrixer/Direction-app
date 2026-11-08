@@ -1,0 +1,61 @@
+import Foundation
+import DirectionCore
+
+/// The editor's version and effort for each job at each stop of the film's speed and quality
+/// (docs/speed-and-quality.md › The editor). From Artificial Analysis's index and time per task by effort,
+/// the Vision Arena, and Anthropic's and OpenAI's own notes, read 8 Nov 2026. Judgement (cutting, notes,
+/// a style) stays on the strongest version at every stop and only its effort moves; the list-like jobs
+/// (a breakdown, finishing) move to lighter versions. Nothing below medium on a job that looks at frames.
+enum EditorPicks {
+    struct Pick: Equatable { var version: String; var effort: String }
+
+    static let readOn = "2026-11-08"
+
+    private static let opus = "claude-opus-5-5", sonnet = "claude-sonnet-5-5", haiku = "claude-haiku-5-5"
+    static let sol = "gpt-6.1-sol", terra = "gpt-6.1-terra", astra = "gpt-6-astra"
+
+    /// Faster, Balanced, Best.
+    private static let claude: [EditorJob: [Pick]] = [
+        .script: [.init(version: sonnet, effort: "medium"), .init(version: opus, effort: "medium"), .init(version: opus, effort: "high")],
+        .breakdown: [.init(version: haiku, effort: "medium"), .init(version: sonnet, effort: "medium"), .init(version: opus, effort: "medium")],
+        .logFootage: [.init(version: sonnet, effort: "medium"), .init(version: sonnet, effort: "medium"), .init(version: opus, effort: "high")],
+        .assemble: [.init(version: opus, effort: "medium"), .init(version: opus, effort: "high"), .init(version: opus, effort: "xhigh")],
+        .turnover: [.init(version: opus, effort: "medium"), .init(version: opus, effort: "high"), .init(version: opus, effort: "xhigh")],
+        .finish: [.init(version: haiku, effort: "medium"), .init(version: sonnet, effort: "medium"), .init(version: opus, effort: "medium")],
+        .style: [.init(version: opus, effort: "medium"), .init(version: opus, effort: "high"), .init(version: opus, effort: "xhigh")],
+        .technique: [.init(version: sonnet, effort: "medium"), .init(version: opus, effort: "medium"), .init(version: opus, effort: "high")],
+    ]
+    private static let codex: [EditorJob: [Pick]] = [
+        .script: [.init(version: terra, effort: "medium"), .init(version: sol, effort: "medium"), .init(version: sol, effort: "high")],
+        .breakdown: [.init(version: terra, effort: "low"), .init(version: terra, effort: "medium"), .init(version: sol, effort: "medium")],
+        .logFootage: [.init(version: terra, effort: "medium"), .init(version: terra, effort: "medium"), .init(version: sol, effort: "high")],
+        .assemble: [.init(version: sol, effort: "medium"), .init(version: sol, effort: "high"), .init(version: astra, effort: "high")],
+        .turnover: [.init(version: sol, effort: "medium"), .init(version: sol, effort: "high"), .init(version: astra, effort: "high")],
+        .finish: [.init(version: terra, effort: "low"), .init(version: terra, effort: "medium"), .init(version: sol, effort: "medium")],
+        .style: [.init(version: sol, effort: "medium"), .init(version: sol, effort: "high"), .init(version: astra, effort: "high")],
+        .technique: [.init(version: terra, effort: "medium"), .init(version: sol, effort: "medium"), .init(version: sol, effort: "high")],
+    ]
+
+    /// What the table says, before checking what the installed program offers.
+    static func listed(_ p: EditorProgram, _ job: EditorJob, _ q: FilmQuality) -> Pick {
+        let row = (p == .claudeCode ? claude : codex)[job] ?? (p == .claudeCode ? claude : codex)[.turnover]!
+        return row[FilmQuality.allCases.firstIndex(of: q) ?? 1]
+    }
+
+    /// The pick as the installed program can run it. A Codex that doesn't list the version falls back
+    /// (Astra, then Sol, then Terra, then the program's own default); the effort is the nearest the
+    /// version offers at or below the pick. `DIRECTION_EDITOR_VERSION` and `DIRECTION_EDITOR_EFFORT`
+    /// replace both for every job, for testing and the bench.
+    static func pick(_ p: EditorProgram, _ job: EditorJob, _ q: FilmQuality, environment: [String: String] = ProcessInfo.processInfo.environment, codexVersions: [String]? = nil) -> Pick {
+        var pick = listed(p, job, q)
+        if p == .codex {
+            let offered = Set(codexVersions ?? p.versions.map(\.id))
+            let next: [String: [String]] = [astra: [sol, terra], sol: [terra, astra], terra: [sol, astra]]
+            pick.version = ([pick.version] + (next[pick.version] ?? [])).first(where: offered.contains) ?? ""
+        }
+        if let v = environment["DIRECTION_EDITOR_VERSION"], !v.isEmpty { pick.version = v }
+        let effort = environment["DIRECTION_EDITOR_EFFORT"].flatMap { $0.isEmpty ? nil : $0 } ?? pick.effort
+        pick.effort = EditorSetup.fitted(effort, p.efforts(pick.version).map(\.id))
+        return pick
+    }
+}

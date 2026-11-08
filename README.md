@@ -52,7 +52,7 @@ Releases are made with `scripts/release.sh` (see [releasing](docs/releasing.md))
 
 **Script** and **Breakdown** are for when you start from a script or story. The editor writes an A/V script, and the breakdown lists what to shoot.
 
-Settings › Engines › Who edits changes the open film's editor and the one new films start with, and, for each job, its version and effort.
+Settings › Engines › Who edits changes the open film's editor and the one new films start with. Each film's speed and quality (Faster · Balanced · Best, in the editor popover) sets the version and effort for each job and the version for each made request; see [speed and quality](docs/speed-and-quality.md).
 
 ## Do I need API keys?
 

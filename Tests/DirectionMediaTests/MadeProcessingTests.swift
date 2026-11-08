@@ -69,7 +69,7 @@ struct MadeProcessingTests {
         let output = AVAssetReaderTrackOutput(track: try await asset.loadTracks(withMediaType: .video)[0], outputSettings: nil)
         reader.add(output); reader.startReading()
         var n = 0
-        while let sample = output.copyNextSampleBuffer() { n += CMSampleBufferGetNumSamples(sample) }
+        while let sample = await output.nextSample(of: reader) { n += CMSampleBufferGetNumSamples(sample) }
         return n
     }
 
@@ -79,7 +79,7 @@ struct MadeProcessingTests {
         let output = AVAssetReaderTrackOutput(track: try await asset.loadTracks(withMediaType: .video)[0], outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
         reader.add(output); reader.startReading()
         var centers: [Double] = []
-        while let sample = output.copyNextSampleBuffer(), let buffer = CMSampleBufferGetImageBuffer(sample) {
+        while let sample = await output.nextSample(of: reader), let buffer = CMSampleBufferGetImageBuffer(sample) {
             CVPixelBufferLockBaseAddress(buffer, .readOnly)
             let w = CVPixelBufferGetWidth(buffer), h = CVPixelBufferGetHeight(buffer), stride = CVPixelBufferGetBytesPerRow(buffer)
             let bytes = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self)
@@ -125,12 +125,12 @@ struct MadeProcessingTests {
         return CMFormatDescriptionGetMediaSubType(description) == kCMVideoCodecType_HEVC && bits == 10
     }
 
-    static func loudness(_ track: AVAssetTrack, in asset: AVAsset) throws -> Double {
+    static func loudness(_ track: AVAssetTrack, in asset: AVAsset) async throws -> Double {
         let reader = try AVAssetReader(asset: asset)
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsFloatKey: true, AVLinearPCMIsNonInterleaved: false, AVLinearPCMIsBigEndianKey: false])
         reader.add(output); reader.startReading()
         var sum = 0.0, n = 0
-        while let sample = output.copyNextSampleBuffer(), let block = CMSampleBufferGetDataBuffer(sample) {
+        while let sample = await output.nextSample(of: reader), let block = CMSampleBufferGetDataBuffer(sample) {
             var length = 0, pointer: UnsafeMutablePointer<CChar>?
             CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &pointer)
             pointer!.withMemoryRebound(to: Float.self, capacity: length / 4) { for i in 0..<(length / 4) { sum += Double($0[i] * $0[i]) } }
@@ -214,7 +214,7 @@ struct MadeProcessingTests {
         #expect(audio.count == 1)
         if let sound = audio.first {
             #expect(abs(try await sound.load(.timeRange).duration.seconds - 23.0 / 24) < 0.005)
-            #expect(try Self.loudness(sound, in: asset) > 0.05)
+            #expect(try await Self.loudness(sound, in: asset) > 0.05)
         }
     }
 
@@ -242,7 +242,7 @@ struct MadeProcessingTests {
         #expect(audio.count == 1)
         if let sound = audio.first {
             #expect(abs(try await sound.load(.timeRange).duration.seconds - 2) < 0.005)
-            #expect(try Self.loudness(sound, in: asset) > 0.05)
+            #expect(try await Self.loudness(sound, in: asset) > 0.05)
         }
         let reports = progress.values
         #expect(reports.last == 1)

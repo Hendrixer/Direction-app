@@ -10,6 +10,8 @@ struct EditorSetupSheet: View {
     @Bindable var model: FilmModel
     @State private var choice: EditorProgram = .claudeCode
     @State private var asksFirst = false
+    @State private var quality: FilmQuality = .balanced
+    @State private var qualityLoaded = false
     @State private var ownSession = false
     private var programs: EditorPrograms { EditorPrograms.shared }
 
@@ -48,10 +50,13 @@ struct EditorSetupSheet: View {
                 SettingsRow(label: "Start work", first: true, minHeight: 48) {
                     GateSegmented(options: [(false, "Right away"), (true, "Ask me first")], selection: $asksFirst)
                 }
+                SettingsRow(label: "Speed and quality", detail: quality.detail, minHeight: 64) {
+                    StopSlider(stops: FilmQuality.allCases.map { ($0, $0.label) }, selection: $quality, label: "Speed and quality").frame(width: 200)
+                }
             }
             .background(SystemCardBackground())
             .clipShape(RoundedRectangle(cornerRadius: Gate.Radius.card, style: .continuous))
-            SettingsNote("Direction picks the version and effort for each job. Change them in Settings \u{203A} Engines.")
+            SettingsNote("Change the speed and quality anytime the editor isn\u{2019}t working, from the editor button at the top of the window.")
                 .padding(.horizontal, 2)
         }
         .padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 20)
@@ -141,7 +146,7 @@ struct EditorSetupSheet: View {
         SheetFooter {
             Button { ownSession = false } label: { HStack(spacing: 4) { Image(systemName: "chevron.left").font(.system(size: 8, weight: .semibold)); Text("Who\u{2019}s editing?") }.font(.system(size: 12)).foregroundStyle(Gate.Text.secondary) }.buttonStyle(.plain)
         } trailing: {
-            Button { model.chooseEditor(.yourOwn); close() } label: { HStack(spacing: 6) { Text("Done"); KeyHint("\u{2318}\u{21A9}") } }
+            Button { model.chooseEditor(.yourOwn); model.setQuality(quality); close() } label: { HStack(spacing: 6) { Text("Done"); KeyHint("\u{2318}\u{21A9}") } }
                 .buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
         }
     }
@@ -153,6 +158,8 @@ struct EditorSetupSheet: View {
         if let p = model.runs.runsOn.program, programs.install(p) != nil { choice = p }
         else { choice = EditorProgram.allCases.first { programs.install($0) != nil } ?? .claudeCode }
         asksFirst = EditorSetup.asksFirst
+        // Once: a later look for the programs mustn't undo a stop the director just chose.
+        if !qualityLoaded { quality = model.directing.quality ?? EditorSetup.defaultQuality; qualityLoaded = true }
         if programs.install(choice) != nil { programs.checkSignIn(choice) }
     }
 
@@ -160,12 +167,17 @@ struct EditorSetupSheet: View {
         guard foundAny, programs.install(choice) != nil else { programs.refresh(); return }
         model.chooseEditor(EditorRunsOn(rawValue: choice.rawValue) ?? .claudeCode)
         EditorSetup.setAsksFirst(asksFirst)
+        model.setQuality(quality)
         programs.checkSignIn(choice)
         // Right away: the film's work starts now (findWork runs on refresh, once the sheet is closed).
         close()
     }
 
-    private func cancel() { close() }
+    /// The film still starts with the speed and quality shown, as it would from a choice.
+    private func cancel() {
+        if model.directing.quality == nil { model.setQuality(quality) }
+        close()
+    }
     private func close() { model.sheet = nil; model.refresh(force: true) }
 }
 
@@ -188,32 +200,5 @@ struct CopyableCommand: View {
         }
         .padding(.leading, 8).padding(.trailing, 3).frame(height: 26)
         .background(RoundedRectangle(cornerRadius: Gate.Radius.chip).fill(Gate.Surface.sunken).overlay(RoundedRectangle(cornerRadius: Gate.Radius.chip).strokeBorder(Gate.Line.subtle, lineWidth: 1)))
-    }
-}
-
-/// Version: the shipped list, then Other… for any string the program accepts.
-struct VersionSelect: View {
-    var program: EditorProgram
-    @Binding var version: String
-    var minWidth: CGFloat? = nil
-    @State private var otherShown = false
-    @State private var other = ""
-    var body: some View {
-        let known = program.versions
-        let options: [(String, String)] = known.map { ($0.id, $0.name) } + (known.contains { $0.id == version } ? [] : [(version, version)]) + [("\u{0}other", "Other\u{2026}")]
-        GateSelect(options: options, selection: Binding(get: { version }, set: { v in if v == "\u{0}other" { other = known.contains { $0.id == version } ? "" : version; otherShown = true } else { version = v } }), minWidth: minWidth)
-            .gatePopover(isPresented: $otherShown, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Any version \(program.name) accepts").font(.system(size: 11.5)).foregroundStyle(Gate.Text.tertiary)
-                    TextField("", text: $other).gateField().frame(width: 220).onSubmit(commit)
-                    HStack { Spacer(); Button("Use", action: commit).buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction) }
-                }
-                .padding(12).background(Gate.Surface.panel)
-            }
-    }
-    private func commit() {
-        let v = other.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !v.isEmpty { version = v }
-        otherShown = false
     }
 }

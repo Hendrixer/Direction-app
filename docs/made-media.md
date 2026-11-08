@@ -13,7 +13,7 @@ The director's UI never says "generate", "AI", "prompt" or "model". Things are *
 
 ## You don't choose versions
 
-Direction picks the version for every request from what it needs and the director's **Made with** setting (Best, Balanced or Cheapest): the frames it sends, its length, and whether a frame shows a person (ByteDance's Seedance and Seedream refuse those). If a version turns a request down, Direction moves to the next one and the result's `note` says so; say that in your answer. There is no `version` argument. `direction_services` and `direction_estimate` tell you what will be used.
+Direction picks the version for every request from what it needs and the film's **speed and quality** (Faster, Balanced or Best, which the director sets with the editor): the frames it sends, its length, whether a frame shows a person (ByteDance's Seedance and Seedream refuse those), words in quotes in a still's ask (they go to the versions that spell best), and whether a shot's ask is mainly a camera move. If a version turns a request down, Direction moves to the next one and the result's `note` says so; say that in your answer. There is no `version` argument. `direction_services` and `direction_estimate` tell you what will be used.
 
 ## Tools
 
@@ -23,7 +23,7 @@ Returns:
 
 - `services`: OpenRouter (`state: "ready" | "notSet"`) and This Mac (`kinds: ["slowMotion", "upscale"]`, `sharpening: "ready" | "downloadsOnFirstUse" | "downloading" | "unavailable"`).
 - `kinds`: `[{kind, label, version, versionName, service, price?, durations?, lastFrame?, withAPerson?}]`. The version Direction would use now for a typical request of the kind (shots from a first frame); `withAPerson` is the one it would use when a frame shows a person, if different.
-- `madeWith`: `best`, `balanced` or `cheapest`, the director's choice.
+- `quality`: `faster`, `balanced` or `best`, the film's speed and quality.
 - `limits`: `{askAbovePerTurnover, stopAtPerMonth}`. `stopAtPerMonth` is null for no limit.
 - `turnover`: `{id, spent, left}` for the open turnover, or null.
 - `month`: `{spent, left}`.
@@ -33,10 +33,10 @@ What's used:
 | Kind | Version | Price |
 |---|---|---|
 | `music`, `soundEffect` | Lyria 3 Clip | About $0.04 per 30 s clip |
-| `voice` | The first speech version OpenRouter lists | Per character |
-| `still` | Chosen: GPT Image 2.5, Nano Banana 2.1 and others, by Made with | A few cents to about 20 cents per image |
-| `shot`, `extension`, `bridge` | Chosen: Seedance 2.5, MiniMax H3, Wan 3.0 and others, by Made with and whether a frame shows a person | About $0.08 to $0.25 a second |
-| `changedShot` | Chosen: Aleph 2.0, or FLUX Video Edit on Cheapest | About $0.28 a second ($0.56 at least); FLUX Video Edit about $0.03 |
+| `voice` | Chosen: Eleven v4 Turbo, or Eleven v4 at Best | Per character |
+| `still` | Chosen: GPT Image 2.6 for words in it; otherwise GPT Image 2.6 Flare, Nano Banana 2.1 or GPT Image 2.5 Sunburst, by speed and quality | A few cents to about 20 cents per image |
+| `shot`, `extension`, `bridge` | Chosen: Hailuo 3 Max, Wan 3.0, Seedance 2.5 and others, by speed and quality, whether a frame shows a person, sound and camera moves | About $0.08 to $0.25 a second |
+| `changedShot` | Chosen: FLUX Video Edit at Faster and Balanced, Aleph 2.0 at Best | FLUX Video Edit about $0.03 a second; Aleph about $0.28 ($0.56 at least) |
 | `slowMotion` | This Mac (Apple frame interpolation) | Nothing |
 | `upscale` | This Mac (Apple super resolution) up to 1920 × 1080; FLUX Video Upscale above | Nothing on this Mac |
 
