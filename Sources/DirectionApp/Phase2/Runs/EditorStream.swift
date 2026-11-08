@@ -8,7 +8,7 @@ enum StreamEvent: Equatable {
     /// `name` is the program's own tool name: `mcp__direction__direction_watch`, `Read`, or Codex's `direction_watch`.
     case toolStarted(id: String, name: String, input: JSONValue)
     case toolFinished(id: String, isError: Bool, text: String)
-    /// Dollars for this invocation so far (Claude Code's result event).
+    /// Dollars for the session so far (Claude Code's result event): a resumed session's includes what came before.
     case cost(Double)
     /// Tokens for this invocation (Codex's turn.completed).
     case tokens(Int)

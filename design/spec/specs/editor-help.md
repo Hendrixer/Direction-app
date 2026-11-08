@@ -13,7 +13,7 @@ What Direction already does that they built by hand: timecoded notes that reach 
 5. **Where things can go.** Placement is guesswork today ("text never covers my face", "put it where I'm pointing"). `direction_shots` and `direction_frame` add the face box per shot (from the layouts' face tracks) and the free regions left over, and `placeGraphic` warns when a graphic covers a face.
 6. **You in front of things.** Pinnock's "Depth UI": he's cut out and an interface sits behind him. Apple's Vision separates a person from the background on this Mac (`VNGeneratePersonSegmentationRequest`), so a `behind` layer (a graphic or screen placed between the background and the person) is one effect, with no service or download. HyperFrames does the same with a cut-out and its inverse plate.
 7. **Graphics in parallel.** Turnovers with several graphics make them one at a time. Claude Code can hand work to subagents; Direction allows its subagent tool for graphics only, each writing its own folder, and Codex gets the same through its own agents.
-8. **More thinking where it counts.** Pinnock runs Opus at high effort. Settings › Engines › Version and effort now sets it per job (editor.md › Version and effort, per job); notes run at Extra high.
+8. **More thinking where it counts.** Pinnock runs Opus at high effort. The film's speed and quality sets it per job since 2026-11-08 (editor.md › Speed and quality); notes run at High on Balanced and Extra high on Best.
 
 ## Moves in code (built 31 Oct 2026)
 

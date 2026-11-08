@@ -19,6 +19,8 @@ direction bench --project "~/Bench/Launch film copy.direction" --cut "Cut 2" --r
   --previous ~/Bench/reports/launch-film-0.3.3.json --out ~/Bench/reports/launch-film-0.3.4.json
 ```
 
+To compare stops of the film's speed and quality, run the same job on two copies at different stops. To pin one version and effort for every job instead, start Direction with `DIRECTION_EDITOR_VERSION` and `DIRECTION_EDITOR_EFFORT` set.
+
 `--cut` is the cut to score (the latest when left out). `--reference` is the director's own cut. `--previous` is the last release's scorecard for the same film, and `--out` keeps this one.
 
 ## The scorecard
@@ -35,7 +37,7 @@ direction bench --project "~/Bench/Launch film copy.direction" --cut "Cut 2" --r
 | `jumpCuts`, `cutsInsideWords`, `moreCutProblems` | What the cut check finds: the story jumping between two moments of a take or takes framed alike, and sound starting or stopping inside a word (`moreCutProblems`: past the check's list) | lower |
 | `cutPointPrecision`, `cutPointRecall` | The editor's cut points within 3 frames of the director's, and the director's within 3 frames of the editor's | higher |
 | `sameMaterial` | Share of the cut that plays the same moments of the same takes as the director's | higher |
-| `runSeconds`, `toolCalls`, `tokens`, `spend` | What the run cost | lower; flagged when a quarter more |
+| `runSeconds`, `toolCalls`, `tokens`, `spend` | What the run cost. Runs before 0.3.5 counted a resumed session's earlier spend again, so their `spend` is too high | lower; flagged when a quarter more |
 
 The scorecard also shows the pace (shot lengths, overall and by quarter of the cut), each must-keep line, the turnover's notes, and the checks in full. With `--previous`, `worse` lists each measure that got worse, in words: "jumpCuts went from 1 to 3".
 

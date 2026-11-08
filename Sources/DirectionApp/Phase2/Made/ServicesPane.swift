@@ -2,26 +2,19 @@ import SwiftUI
 import AppKit
 import DirectionCore
 
-/// Settings › Engines › OpenRouter (specs/settings.md › 54): the key, how good against how cheap made
-/// things are, and the director's spend limits. Direction picks each request's version itself
-/// (made-media.md › Choosing a version). Both live in the shared suite so the editor's tools follow them.
+/// Settings › Engines › OpenRouter (specs/settings.md › 54): the key and the director's spend limits.
+/// Direction picks each request's version itself, from what it needs and the film's speed and quality
+/// (made-media.md › Choosing a version). The limits live in the shared suite so the editor's tools follow them.
 struct ServicesGroups: View {
     var preview = false
     @State private var state = ServicesState()
     @AppStorage(SharedSettings.SpendKey.askAbove, store: SharedSettings.defaults) private var askAbove = 5.0
     @AppStorage(SharedSettings.SpendKey.stopAt, store: SharedSettings.defaults) private var stopAt = 50.0
-    @AppStorage(SharedSettings.madeQualityKey, store: SharedSettings.defaults) private var quality = MadeQuality.balanced
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsGroup(label: "OpenRouter", note: AnyView(SettingsNote("Your key is kept in your Mac\u{2019}s keychain. The editor never sees it; Direction makes every request."))) { keyRow }
-            SettingsGroup(label: "What the editor makes", note: AnyView(SettingsNote("Direction picks the version for each shot and still from what it needs, and tries the next one if a version turns it down. Frames of your takes are sent to OpenRouter, so they leave this Mac. Slow motion and sharpening happen on this Mac and cost nothing."))) {
-                SettingsRow(label: "Made with", detail: qualityDetail, first: true) {
-                    GateSelect(options: MadeQuality.allCases.map { ($0, $0.label) }, selection: preview ? .constant(.balanced) : $quality)
-                }
-                usesRow
-            }
+            SettingsGroup(label: "OpenRouter", note: AnyView(SettingsNote("Your key is kept in your Mac\u{2019}s keychain, and the editor never sees it. Direction makes every request and picks the version for each from what it needs and the film\u{2019}s speed and quality. Frames of your takes are sent to OpenRouter, so they leave this Mac. Slow motion and sharpening happen on this Mac and cost nothing."))) { keyRow }
             SettingsGroup(label: "Spending", note: AnyView(SettingsNote("Check each version\u{2019}s terms on OpenRouter before you release a film. Some don\u{2019}t cover film or TV."))) {
                 SettingsRow(label: "Ask before spending more than", detail: "The editor prices each turnover\u{2019}s plan first, and asks only when it goes over.", first: true) {
                     GateSelect(options: SharedSettings.askAboveChoices.map { ($0, MadeFormat.money($0) + " per turnover") }, selection: limit($askAbove, preview: 5))
@@ -122,41 +115,6 @@ struct ServicesGroups: View {
         }
         .padding(.leading, 44)
         .onAppear { fieldFocused = true }
-    }
-
-    // MARK: Made with
-
-    private var shown: MadeQuality { preview ? .balanced : quality }
-    private var qualityDetail: String {
-        switch shown {
-        case .best: "The best-rated version for each shot, whatever it costs."
-        case .balanced: "The cheapest of the versions rated close to the best."
-        case .cheapest: "The cheapest version that\u{2019}s still rated good."
-        }
-    }
-
-    /// What Direction would use right now, so the choice isn't blind: "New shots: Seedance 2.5 ·
-    /// with a person: MiniMax H3 · Stills: Nano Banana 2.1". Prices in SF Mono.
-    private var usesRow: some View {
-        let c = state.catalog
-        func pick(_ needs: MadeNeeds) -> MadeVersion? { c.route(needs, quality: shown).first }
-        let shot = pick(MadeNeeds(kind: .shot, firstFrame: true, seconds: 5)), person = pick(MadeNeeds(kind: .shot, firstFrame: true, person: true, seconds: 5))
-        let still = pick(MadeNeeds(kind: .still)), changed = pick(MadeNeeds(kind: .changedShot, seconds: 5))
-        let rows: [(String, MadeKind, MadeVersion?)] = [("New shots", .shot, shot), ("With you in the frame", .shot, person == shot ? nil : person), ("Stills", .still, still), ("Changed shots", .changedShot, changed)]
-        return VStack(alignment: .leading, spacing: 6) {
-            ForEach(rows.filter { $0.2 != nil }, id: \.0) { label, kind, v in
-                HStack(spacing: 8) {
-                    Text(label).foregroundStyle(Gate.Text.secondary).frame(width: 150, alignment: .leading)
-                    Text(v!.name).foregroundStyle(Gate.Text.primary)
-                    Spacer(minLength: 8)
-                    if let price = MadeFormat.priceLine(kind, v!) { MadeText.money(in: price, size: 11.5, mono: 11).foregroundStyle(Gate.Text.tertiary) }
-                }
-                .font(.system(size: 12))
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .overlay(alignment: .top) { SystemHairline() }
-        .accessibilityElement(children: .combine)
     }
 }
 

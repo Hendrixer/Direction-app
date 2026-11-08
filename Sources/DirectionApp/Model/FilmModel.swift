@@ -1001,6 +1001,13 @@ final class FilmModel {
         if directing.editor != c.rawValue { perform { _ = try $0.updateDirectingState(summary: "Who edits: \(c.label)") { $0.editor = c.rawValue } } }
         runs.choice = c
     }
+    /// Speed and quality: the film's own, and what the next new film starts with. A run that hasn't
+    /// started picks it up when it launches.
+    func setQuality(_ q: FilmQuality) {
+        EditorSetup.setDefaultQuality(q)
+        guard store != nil, directing.quality != q else { return }
+        perform { _ = try $0.updateDirectingState(summary: "Speed and quality: \(q.label)") { $0.quality = q } }
+    }
     /// A film just started asks who's editing it, before any of its work starts.
     func askWhoEdits() { if sheet == nil { sheet = .editorSetup } }
     /// Try again: a new run of the same job when Direction starts the editor, else the request to copy.
