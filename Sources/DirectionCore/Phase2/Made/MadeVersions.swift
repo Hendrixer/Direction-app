@@ -53,7 +53,24 @@ public struct MadeVersion: Codable, Hashable, Sendable, Identifiable {
     public var changesVideo: Bool { listing == .video && !upscales && (id.contains("aleph") || id.contains("video-edit")) }
     /// Takes a video as a reference: the changing versions, and those with a "with video input" price (Seedance).
     public var takesVideo: Bool { changesVideo || upscales || skus.keys.contains { $0.contains("video_input") } }
-    public var takesLastFrame: Bool { frames.contains("last_frame") }
+    /// A last frame after a first one, as Direction sends it. Hailuo 3 Max lists both but takes one or the other.
+    public var takesLastFrame: Bool { frames.contains("last_frame") && !Self.oneFrame.contains(id) }
+    /// Takes reference stills (`input_references`) beside its frames.
+    public var takesReferences: Bool { !Self.noReferences.contains(id) }
+    /// Every price it lists is for a shot with sound (Gemini Omni): it always makes sound and turns down
+    /// `generate_audio: false`, so it's never sent.
+    public var alwaysMakesSound: Bool {
+        let seconds = skus.keys.filter { $0.contains("second") }
+        return !seconds.isEmpty && seconds.allSatisfy { $0.contains("with_audio") && !$0.contains("without_audio") }
+    }
+    /// Seed Audio makes sound effects from a description through the speech list (`POST /audio/speech`).
+    public var makesEffects: Bool { id.hasPrefix("bytedance-seed/seed-audio") }
+
+    /// What OpenRouter lists but the version turns down (the paid trials, 8 Nov 2026, docs/speed-and-quality.md):
+    /// Hailuo 3 Max "supports a single keyframe image: send either a first_frame or a last_frame, not both",
+    /// and its provider "does not support image input references".
+    static let oneFrame: Set<String> = ["minimax/hailuo-3-max"]
+    static let noReferences: Set<String> = ["minimax/hailuo-3-max"]
     /// Makes new shots: a video version that neither changes nor enlarges what it's given.
     public var makesShots: Bool { listing == .video && !changesVideo && !upscales && !id.hasPrefix("heygen/") }
     /// Runs on this Mac (slow motion, sharpening). Never billed.
@@ -86,7 +103,7 @@ public struct MadeCatalog: Codable, Sendable, Equatable {
     public init(fetchedAt: Double, versions: [MadeVersion]) { self.fetchedAt = fetchedAt; self.versions = versions }
 
     /// The spec's defaults (made-media.md › Services). Voice takes the first speech version listed.
-    public static let defaults: [MadeKind: String] = [.music: "google/lyria-3-clip", .soundEffect: "google/lyria-3-clip", .still: "google/gemini-3.1-flash-image",
+    public static let defaults: [MadeKind: String] = [.music: "google/lyria-3-clip", .soundEffect: "bytedance-seed/seed-audio", .still: "google/gemini-3.1-flash-image",
                                                       .shot: "google/veo-3.1", .extension: "google/veo-3.1", .bridge: "google/veo-3.1", .changedShot: "runway/aleph-2",
                                                       .slowMotion: MadeVersion.frameInterpolation.id, .upscale: MadeVersion.superResolution.id]
 
@@ -98,6 +115,9 @@ public struct MadeCatalog: Codable, Sendable, Equatable {
         case .changedShot: return versions.filter(\.changesVideo)
         case .shot, .extension: return versions.filter(\.makesShots)
         case .bridge: return versions.filter { $0.makesShots && $0.takesLastFrame }
+        // Seed Audio is listed with the voices but makes effects; the music versions make them too, as music.
+        case .soundEffect: return versions.filter { $0.makesEffects } + versions.filter { $0.listing == .audio }
+        case .voice: return versions.filter { $0.listing == .speech && !$0.makesEffects }
         default: return versions.filter { $0.listing == kind.listing }
         }
     }
@@ -124,6 +144,7 @@ public struct MadeCatalog: Codable, Sendable, Equatable {
     public static let builtIn = MadeCatalog(fetchedAt: 0, versions: [
         MadeVersion(id: "google/lyria-3-clip-preview", name: "Lyria 3 Clip", listing: .audio),
         MadeVersion(id: "openai/gpt-4o-mini-tts-2025-12-15", name: "GPT-4o mini TTS", listing: .speech, pricing: ["prompt": "0.0000006", "completion": "0.000012"], voices: ["alloy"]),
+        MadeVersion(id: "bytedance-seed/seed-audio-1-0", name: "Seed Audio 1.0", listing: .speech, pricing: ["prompt": "0", "completion": "0.0025"]),
         MadeVersion(id: "google/veo-3.1", name: "Veo 3.1", listing: .video, skus: ["duration_seconds_with_audio": "0.40", "duration_seconds_without_audio": "0.20", "duration_seconds_with_audio_4k": "0.60", "duration_seconds_without_audio_4k": "0.40"], durations: [4, 6, 8], resolutions: ["720p", "1080p", "4K"], aspectRatios: ["16:9", "9:16"], frames: ["first_frame", "last_frame"]),
         MadeVersion(id: "runway/aleph-2", name: "Aleph 2.0", listing: .video, skus: ["cents_per_second_output": "28", "minimum_cents_per_generation": "56"], aspectRatios: ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9"]),
         MadeVersion(id: "google/gemini-3.1-flash-image", name: "Nano Banana 2", listing: .image, pricing: ["prompt": "0.0000005", "completion": "0.000003", "image_output": "0.00006"]),
@@ -238,6 +259,11 @@ public enum MadeEstimator {
         switch kind.listing {
         case .audio:
             let s = max(1, seconds ?? clipSeconds)
+            if v.listing == .speech {
+                // Seed Audio's effects: billed per second of sound made (under completion).
+                let per = (v.price("completion") ?? 0) * s + (v.price("request") ?? 0)
+                return MadeEstimate(spend: per * Double(ways), seconds: s, requests: ways, priced: per > 0)
+            }
             if isClipVersion(v) {
                 let n = clips(for: s)
                 let per = v.price("request") ?? perRequest.first { v.id.hasPrefix($0.key) }?.value

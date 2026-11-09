@@ -157,6 +157,77 @@ private struct MadeFixture {
         // As big as the cut already, so it comes in as made.
         #expect(record.kind == .shot && record.first == MadeFrame(assetID: f.assetID, at: 1) && record.spend == 3.2 && record.file.hasSuffix(".mp4") && record.sharpenedFrom == nil)
         #expect(!(try f.media.store.read().asset(record.assetID).video.isEmpty))
+        // It came back with sound (the take it's made of has some); a shot is silent unless sound is asked for.
+        #expect(try f.media.store.read().asset(record.assetID).audio.isEmpty)
+    }
+
+    /// Gemini Omni always makes sound and turns down `generate_audio: false` (the paid trials): it's never sent,
+    /// and the sound comes off on this Mac. A version that turns it down unlisted gets the request again without it.
+    @Test func aVersionThatAlwaysMakesSoundIsNeverAskedForNone() async throws {
+        let movie = try Data(contentsOf: try await MediaFixture.make().source)
+        let turnedDown = data(.object(["error": .object(["message": .string("This model always generates audio with the video. generate_audio cannot be set to false.")])]))
+        let stub = OpenRouterStub { r, n in
+            let path = r.url!.path
+            if r.httpMethod == "POST" && path.hasSuffix("/videos") {
+                let body = (try? JSONDecoder().decode(JSONValue.self, from: r.httpBody ?? Data())) ?? .null
+                return body["generate_audio"] != .null ? (400, turnedDown, [:]) : (202, data(.object(["id": .string("vid-\(n)"), "status": .string("pending")])), [:])
+            }
+            if path.hasSuffix("/content") { return (200, movie, ["Content-Type": "video/mp4"]) }
+            return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "usage": .object(["cost": .number(0.35)])])), [:])
+        }
+        let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        var catalog = MadeCatalog.builtIn; catalog.fetchedAt = Date().timeIntervalSince1970
+        catalog.versions.append(MadeVersion(id: "google/gemini-omni-1.2-flash", name: "Gemini Omni 1.2 Flash", listing: .video, skus: ["duration_seconds_with_audio": "0.104256", "duration_seconds_with_audio_720p": "0.069504"],
+                                            durations: Array(3...15), resolutions: ["720p", "1080p"], aspectRatios: ["16:9", "9:16"], frames: ["first_frame", "last_frame"], makesSound: true))
+        try JSONEncoder.direction.encode(catalog).write(to: try #require(f.overrides.catalog))
+        // From words alone, Balanced picks Gemini Omni.
+        let shot: [String: JSONValue] = ["kind": .string("shot"), "ask": .string("Rain on a window at night."), "seconds": .number(5)]
+        let done = try await f.finish(try await f.make(shot))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+        #expect(stub.bodies("/videos").map { $0["model"].string ?? "" } == ["google/gemini-omni-1.2-flash"] && stub.bodies("/videos")[0]["generate_audio"] == .null)
+        let made = try f.media.store.read().asset(try #require(done.result?["assetID"].string))
+        #expect(made.audio.isEmpty && !made.video.isEmpty)
+
+        // Veo is listed with prices without sound, so it's told; turned down, it's asked again without the setting.
+        var pinned = f; pinned.overrides.version = "google/veo-3.1"
+        let again = try await pinned.finish(try await pinned.make(shot))
+        #expect(again.status == "completed", "\(again.error ?? "")")
+        let veo = stub.bodies("/videos").dropFirst()
+        #expect(veo.map { $0["generate_audio"] } == [.bool(false), .null] && veo.allSatisfy { $0["model"].string == "google/veo-3.1" })
+    }
+
+    /// Sound effects are Seed Audio's, made through the speech list and cut to the length asked; one it turns down
+    /// goes to Lyria, and the result says so.
+    @Test func aSoundEffectIsSeedAudiosAndLyriaTakesWhatItTurnsDown() async throws {
+        let effect = tone(seconds: 6), clip = tone(seconds: 30)
+        let moderated = data(.object(["error": .object(["message": .string("The generated audio was rejected by the provider content moderation.")])]))
+        let stub = OpenRouterStub { r, _ in
+            let path = r.url!.path
+            if path.hasSuffix("audio/speech") {
+                let input = (try? JSONDecoder().decode(JSONValue.self, from: r.httpBody ?? Data()))?["input"].string ?? ""
+                return input.contains("door") ? (400, moderated, [:]) : (200, effect, ["Content-Type": "audio/wav"])
+            }
+            if path.hasSuffix("chat/completions") { return (200, sse(clip, cost: 0.04), ["Content-Type": "text/event-stream"]) }
+            return (404, Data(), [:])
+        }
+        let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
+        let glass: [String: JSONValue] = ["kind": .string("soundEffect"), "ask": .string("A glass shatters on a tile floor."), "seconds": .number(4)]
+        let estimate = try await f.make(glass.merging(["estimateOnly": .bool(true)]) { _, b in b })
+        #expect(estimate["version"].string == "bytedance-seed/seed-audio-1-0" && abs((estimate["spend"].double ?? 0) - 0.01) < 1e-9)
+        let done = try await f.finish(try await f.make(glass))
+        #expect(done.status == "completed", "\(done.error ?? "")")
+        let sent = try #require(stub.bodies("audio/speech").first)
+        #expect(sent["model"].string == "bytedance-seed/seed-audio-1-0" && sent["input"].string == "A sound effect, not speech: A glass shatters on a tile floor." && sent["voice"] == .null)
+        let effectID = try #require(done.result?["assetID"].string)
+        let record = try #require(try f.media.store.madeRecord(effectID))
+        let asset = try f.media.store.read().asset(record.assetID)
+        // 6 s made, 4 s asked: cut to 4 with a fade. No cost came back, so the estimate is counted.
+        #expect(record.kind == .soundEffect && record.version == "bytedance-seed/seed-audio-1-0" && abs(asset.duration.seconds - 4) < 0.05 && abs(record.spend - 0.01) < 1e-9)
+
+        let door = try await f.finish(try await f.make(["kind": .string("soundEffect"), "ask": .string("A heavy wooden door creaks slowly open."), "seconds": .number(4)]))
+        #expect(door.status == "completed", "\(door.error ?? "")")
+        #expect(door.result?["note"].string == "Seed Audio 1.0 wouldn\u{2019}t take what was asked, so this used Lyria 3 Clip.")
+        #expect(stub.bodies("chat/completions").first?["model"].string == "google/lyria-3-clip-preview")
     }
 
     @Test func spendAsksAboveTheTurnoverLimitAndStopsForTheMonth() async throws {

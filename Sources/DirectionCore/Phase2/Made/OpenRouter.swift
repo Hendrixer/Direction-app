@@ -18,8 +18,11 @@ public enum OpenRouter {
         public var pollInterval: Double?
         public var quality: FilmQuality?
         public var refusals: URL?
-        public init(transport: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil, key: String? = nil, service: String? = nil, ledger: URL? = nil, catalog: URL? = nil, limits: SpendLimits? = nil, pollInterval: Double? = nil, quality: FilmQuality? = nil, refusals: URL? = nil) {
-            self.transport = transport; self.key = key; self.service = service; self.ledger = ledger; self.catalog = catalog; self.limits = limits; self.pollInterval = pollInterval; self.quality = quality; self.refusals = refusals
+        /// The one version a made request goes to, whatever it needs, with none to fall back on: for tests and the
+        /// paid trials of versions (docs/speed-and-quality.md). The app never sets it.
+        public var version: String?
+        public init(transport: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil, key: String? = nil, service: String? = nil, ledger: URL? = nil, catalog: URL? = nil, limits: SpendLimits? = nil, pollInterval: Double? = nil, quality: FilmQuality? = nil, refusals: URL? = nil, version: String? = nil) {
+            self.transport = transport; self.key = key; self.service = service; self.ledger = ledger; self.catalog = catalog; self.limits = limits; self.pollInterval = pollInterval; self.quality = quality; self.refusals = refusals; self.version = version
         }
     }
     @TaskLocal public static var overrides = Overrides()
@@ -280,9 +283,27 @@ public enum OpenRouter {
     /// `POST /audio/speech` returns raw audio bytes; the cost comes from the generation record.
     public static func speech(_ body: JSONValue, key: String? = nil) async throws -> (audio: Data, contentType: String, cost: Double?) {
         let reply = try await send("POST", "audio/speech", body: body, key: key, timeout: 300)
-        var cost: Double?
-        if let id = reply.headers["x-generation-id"] { cost = try? await generationCost(id, key: key) }
-        return (reply.data, reply.headers["content-type"] ?? "", cost)
+        return (reply.data, reply.headers["content-type"] ?? "", await cost(reported: nil, id: reply.headers["x-generation-id"], key: key))
+    }
+
+    /// Seconds to wait before each look at the generation record, which appears a little after the reply (tests set none).
+    nonisolated(unsafe) public static var costLookups: [Double] = [1, 2, 4]
+
+    /// What a request cost: the reply's own `usage.cost` when it's more than nothing, else the generation record.
+    /// Stills and Lyria clips came back reporting $0 (the paid trials, 8 Nov 2026), and a
+    /// speech record wasn't there yet when asked at once. Nil when neither says: the estimate is counted then.
+    public static func cost(reported: Double?, id: String?, key: String? = nil) async -> Double? {
+        if let reported, reported > 0 { return reported }
+        guard let id, !id.isEmpty else { DirectionLog.info("No cost came back and no record to look it up in; counting the estimate", "made"); return nil }
+        for wait in costLookups {
+            try? await Task.sleep(for: .seconds(wait))
+            if let c = try? await generationCost(id, key: key), c > 0 {
+                DirectionLog.info("Cost read from the generation record: \(MadeFormat.money(c))", "made")
+                return c
+            }
+        }
+        DirectionLog.info("The generation record gave no cost; counting the estimate", "made")
+        return nil
     }
 
     /// What a finished request cost, from `GET /generation`.
@@ -291,11 +312,12 @@ public enum OpenRouter {
         return json["data"]["total_cost"].double ?? json["data"]["usage"].double
     }
 
-    /// `POST /images`: base64 images in `data[].b64_json`, the cost in `usage.cost`.
+    /// `POST /images`: base64 images in `data[].b64_json`, the cost in `usage.cost` or else the generation record.
     public static func image(_ body: JSONValue, key: String? = nil) async throws -> (image: Data, mediaType: String, cost: Double?) {
-        let json = try await send("POST", "images", body: body, key: key, timeout: 300).json
+        let reply = try await send("POST", "images", body: body, key: key, timeout: 300), json = reply.json
         guard let first = json["data"].array?.first, let b64 = first["b64_json"].string, let image = Data(base64Encoded: b64) else { throw DirectionError("no_image", "OpenRouter sent no image.") }
-        return (image, first["media_type"].string ?? "image/png", json["usage"]["cost"].double)
+        let paid = await cost(reported: json["usage"]["cost"].double, id: json["id"].string ?? reply.headers["x-generation-id"], key: key)
+        return (image, first["media_type"].string ?? "image/png", paid)
     }
 
     public struct VideoJob: Sendable, Equatable {

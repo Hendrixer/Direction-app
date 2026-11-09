@@ -26,9 +26,11 @@ public struct MadeNeeds: Sendable, Equatable {
     public var lettering = false
     /// A shot whose ask is mainly a camera move: an orbit, a push in, a crane (`isCameraMove`).
     public var camera = false
-    public init(kind: MadeKind, firstFrame: Bool = false, lastFrame: Bool = false, person: Bool = false, seconds: Double? = nil, sound: Bool = false, sharpenHere: Bool = true, lettering: Bool = false, camera: Bool = false) {
+    /// Reference stills go with it (`input_references`).
+    public var references = false
+    public init(kind: MadeKind, firstFrame: Bool = false, lastFrame: Bool = false, person: Bool = false, seconds: Double? = nil, sound: Bool = false, sharpenHere: Bool = true, lettering: Bool = false, camera: Bool = false, references: Bool = false) {
         self.kind = kind; self.firstFrame = firstFrame; self.lastFrame = lastFrame; self.person = person; self.seconds = seconds; self.sound = sound; self.sharpenHere = sharpenHere
-        self.lettering = lettering; self.camera = camera
+        self.lettering = lettering; self.camera = camera; self.references = references
     }
 
     /// Words in quotes, "OPEN" or “Grand Opening”: the picture has to spell them. An opening quote follows a
@@ -54,6 +56,7 @@ public enum MadePicks {
     public static let readOn = "2026-11-08"
 
     static let h3Max = "minimax/hailuo-3-max", h3 = "minimax/hailuo-3", wan = "alibaba/wan-3.0", omni = "google/gemini-omni-1.2-flash", seedance = "bytedance/seedance-2.5"
+    static let kling = "kwaivgi/kling-v3.0-pro"
     static let flare = "openai/gpt-image-2.6-flare", sunburst = "openai/gpt-image-2.6-sunburst", sunburst25 = "openai/gpt-image-2.5-sunburst", nanoBanana = "google/gemini-nano-banana-2.1"
     static let aleph = "runway/aleph-2", fluxEdit = "black-forest-labs/flux-video-edit"
 
@@ -91,11 +94,13 @@ public enum MadePicks {
             case .best: return [seedance, wan, h3Max]
             }
         case .bridge:
-            // No board measures first-to-last frames; holding together over time is the nearest.
+            // No board measures first-to-last frames, so the paid trials did (8 Nov 2026): Hailuo 3 Max takes only one
+            // of the two frames; Kling 3.0 Pro showed what made the change (the headphones put on by hand) where Wan 3.0
+            // let them appear, but took four minutes to Wan's two and cost a third more.
             switch q {
-            case .faster: return [h3Max]
-            case .balanced: return [wan, h3Max]
-            case .best: return [seedance, wan, h3Max]
+            case .faster: return [wan, kling]
+            case .balanced: return [kling, wan]
+            case .best: return [seedance, kling, wan]
             }
         case .changedShot:
             // Gemini Omni and Hailuo 3 rate above Aleph at changing video, but neither is proven with a real
@@ -146,13 +151,17 @@ public enum MadeRanking {
 extension MadeCatalog {
     /// The versions to try for a request, in order. Those that can't make it are left out: frames they
     /// don't take, a length they don't offer, a person ByteDance won't take, or a version that refused a
-    /// frame with a person lately (`refusedPeople`). Music and sound effects keep Direction's defaults; a voice is the stop's pick.
+    /// frame with a person lately (`refusedPeople`). Music keeps Direction's default, sound effects go to Seed Audio, and a voice is the stop's pick.
     public func route(_ needs: MadeNeeds, quality: FilmQuality, refusedPeople: Set<String> = []) -> [MadeVersion] {
         let picks = MadePicks.preferred(needs, quality)
         switch needs.kind {
-        case .music, .soundEffect:
-            // Music and sound effects keep Direction's defaults.
-            return defaultVersion(needs.kind).map { [$0] } ?? []
+        case .music:
+            return defaultVersion(.music).map { [$0] } ?? []
+        case .soundEffect:
+            // Seed Audio makes the effect itself; Lyria makes music about it, so it's only there for an ask
+            // Seed Audio turns down (the paid trials, 8 Nov 2026).
+            let seed = versions.first(where: \.makesEffects), lyria = defaultVersion(.music)
+            return [seed, lyria].compactMap { $0 }
         case .voice:
             // The pick for the stop, then Direction's default: never whichever voice OpenRouter happens to list first.
             let listed = listed(.voice)
@@ -169,6 +178,7 @@ extension MadeCatalog {
         let fits = listed(needs.kind).filter { v in
             if needs.firstFrame && v.listing == .video && !v.frames.contains("first_frame") { return false }
             if needs.lastFrame && !v.takesLastFrame { return false }
+            if needs.references && !v.takesReferences { return false }
             if needs.person && (MadeRanking.refusesPeople(v) || refusedPeople.contains(v.id)) { return false }
             if needs.kind.listing == .video, !v.changesVideo, let s = needs.seconds, let longest = v.durations.max(), Double(longest) < s - 0.5 { return false }
             // Sound asked for: a version the list says makes none would come back silent.

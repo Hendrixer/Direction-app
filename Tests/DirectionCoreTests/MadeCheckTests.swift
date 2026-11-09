@@ -22,6 +22,11 @@ struct MadeCheckTests {
         #expect(state.last == .text("It was made from this description: \u{201C}Slow push in. Steam rises from the cup.\u{201D}"))
         #expect(questions["look3"]!.instructions.contains("frame 3 of 5") && !questions["look3"]!.instructions.contains("frame 2"))
         #expect(questions["same"]!.instructions == "Compare frame 1 with frame 5. Is anyone in them still the same person, and is it still the same place?")
+        // A change the description asks for is the shot, not a morph (a wall asked to become a cockpit was called broken).
+        #expect(questions["morph"]!.choices[0].means.hasSuffix("A change the description asks for counts as moving."))
+        #expect(questions["morph"]!.choices[1].means.hasSuffix("between frames, and the description doesn't ask for it.") && questions["same"]!.choices[0].means.hasSuffix("A place the description asks to change is still the same place."))
+        let unasked = MadeChecker.request(kind: .changedShot, ask: "", moments: moments, frames: frames).questions
+        #expect(unasked["morph"]!.choices[1].means.hasSuffix("melts between frames.") && !unasked["morph"]!.choices[0].means.contains("description"))
         // A still is one frame: broken or not, and whether it's what was asked.
         let still = MadeChecker.request(kind: .still, ask: "A coffee cup at dawn.", moments: [0], frames: [frames[0]])
         #expect(Set(still.questions.keys) == ["look1", "asked"] && still.state.prefix(2) == [.text("A still made for a film:"), .image(frames[0])])
