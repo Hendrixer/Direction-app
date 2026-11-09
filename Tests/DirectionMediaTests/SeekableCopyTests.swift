@@ -27,14 +27,31 @@ struct SeekableCopyTests {
     }
 
     /// Three seconds of HEVC from Apple's encoder, a keyframe each second and frames reordered around it, as an iPhone writes.
-    static func appleHEVC(in folder: URL) async throws -> URL {
+    /// Nil when the hardware encoder stays taken: with the whole suite encoding at once it sometimes can't start.
+    static func appleHEVC(in folder: URL) async throws -> URL? {
+        for attempt in 1...5 {
+            do { return try await writeAppleHEVC(in: folder) }
+            catch let e as DirectionError where e.code == "encoder_busy" {
+                if attempt == 5 { return nil }
+                try await Task.sleep(for: .milliseconds(500 * attempt))
+            }
+        }
+        return nil
+    }
+
+    private static func writeAppleHEVC(in folder: URL) async throws -> URL {
         let url = folder.appendingPathComponent("IMG_0001.MOV")
+        try? FileManager.default.removeItem(at: url)
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         // The hardware encoder, as an iPhone's: it reorders frames around each keyframe.
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.hevc, AVVideoWidthKey: 320, AVVideoHeightKey: 180, AVVideoCompressionPropertiesKey: [AVVideoMaxKeyFrameIntervalKey: 30, AVVideoAllowFrameReorderingKey: true],
                                                                           AVVideoEncoderSpecificationKey: [kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder as String: true]])
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA, kCVPixelBufferWidthKey as String: 320, kCVPixelBufferHeightKey as String: 180, kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any]()])
-        writer.add(input); writer.startWriting(); writer.startSession(atSourceTime: .zero)
+        writer.add(input)
+        // The hardware encoder taken by other tests: the writer doesn't start, and it has no frames to give.
+        guard writer.startWriting() else { throw DirectionError("encoder_busy", "The hardware encoder didn\u{2019}t start.") }
+        writer.startSession(atSourceTime: .zero)
+        guard adaptor.pixelBufferPool != nil else { writer.cancelWriting(); throw DirectionError("encoder_busy", "The hardware encoder didn\u{2019}t start.") }
         for i in 0..<90 {
             while !input.isReadyForMoreMediaData { try await Task.sleep(for: .milliseconds(2)); if writer.status == .failed { throw writer.error! } }
             var buffer: CVPixelBuffer?
@@ -125,9 +142,9 @@ struct SeekableCopyTests {
     @Test func applesFramesAroundAKeyframeAreLeftAlone() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("direction-seekable-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true); defer { try? FileManager.default.removeItem(at: folder) }
-        let clip = try await Self.appleHEVC(in: folder)
-        // Busy, the encoder sometimes writes this clip without reordering: then there's nothing here to leave alone.
-        guard try await Self.keyframes(clip).open > 0 else { return }
+        // Busy, the hardware encoder sometimes can't start, or writes this clip without reordering: then there's
+        // nothing here to leave alone.
+        guard let clip = try await Self.appleHEVC(in: folder), try await Self.keyframes(clip).open > 0 else { return }
         #expect(await !SeekableCopy.isNeeded(clip))
     }
 
