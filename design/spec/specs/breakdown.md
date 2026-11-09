@@ -46,6 +46,7 @@ Print Shoot List… prints the shots to shoot setup by setup, with what each nee
 - [ ] "2B, take 2" said in a take's first seconds, or "2B T2.mov", files it in 2B as T2.
 - [ ] A shot is missing only once another shot of its setup has a take.
 - [ ] A shot the editor asks about shows the question on its row, and the Breakdown tab counts it, before the shot is clicked.
+- [ ] While a question is open the editor pill reads "1 question", not Ready; its popover's Answer opens the Breakdown, which opens on the first shot asked about.
 - [ ] A question the director answered on the script is never asked again on the breakdown (the job's brief lists it under Already decided).
 - [ ] Before the OK, a shot named in another shot's words keeps being named right when the shots are numbered again; a number no shot has comes back in `toFix`.
 - [ ] The Breakdown never shows a row number: a shot plays under moments by name and time.

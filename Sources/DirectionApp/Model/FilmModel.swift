@@ -382,6 +382,12 @@ final class FilmModel {
     var draftNotes: [ReviewComment] { sheetNotes.filter { $0.lifecycle == .draft } }
     var inbox: [ReviewComment] { notes.filter(\.inInbox).sorted { $0.createdAt < $1.createdAt } }
     var openQuestions: [EditorQuestion] { questions.filter { $0.answer == nil } }
+    /// The editor's open questions on the script's rows and the breakdown's shots (script.md › Questions),
+    /// and the room they wait in. They're kept on their rows and shots, not with a turnover's.
+    var prepQuestions: (count: Int, room: Room?) {
+        let rows = script?.openQuestions.count ?? 0, shots = breakdown?.shots.filter { $0.question?.isOpen == true }.count ?? 0
+        return (rows + shots, rows > 0 ? .script : shots > 0 ? .breakdown : nil)
+    }
     var openTurnover: Turnover? { turnovers.last { $0.state.isOpen } }
     var lastTurnover: Turnover? { turnovers.last }
     func note(_ id: String?) -> ReviewComment? { id.flatMap { id in notes.first { $0.id == id } } }
@@ -466,7 +472,8 @@ final class FilmModel {
             }
         }
         if cants > 0 { return .cant(cants) }
-        if asks > 0 { return .asks(asks) }
+        // A question on a script row or a breakdown shot: the editor ended its turn to wait for it.
+        if asks + prepQuestions.count > 0 { return .asks(asks + prepQuestions.count) }
         if isDelivering { return .working("Delivering \(delivery.doneCount + 1) of \(delivery.items.count)", delivery.items.isEmpty ? nil : Double(delivery.doneCount) / Double(delivery.items.count)) }
         if isPictureLocked, runs.active?.job == .finish {
             let mine = (directing.finishing ?? []).filter { $0.by.contains("editor") }, done = mine.filter { ["done", "needsYou"].contains($0.state) }.count
