@@ -1,0 +1,14 @@
+{
+  "name": "direction-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cf dev",
+    "deploy": "cf deploy",
+    "scenes": "node tools/scenes.mjs"
+  },
+  "devDependencies": {
+    "cf": "1.0.0-beta.18",
+    "wrangler": "^4.157.0"
+  }
+}
