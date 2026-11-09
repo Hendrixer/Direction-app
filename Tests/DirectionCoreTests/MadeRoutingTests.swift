@@ -70,6 +70,12 @@ struct MadeRoutingTests {
     @Test func bridgesAndReferencesSkipHailuo3MaxAndBridgesFollowTheTrials() {
         let h3Max = Self.catalog.versions.first { $0.id == "minimax/hailuo-3-max" }!
         #expect(!h3Max.takesLastFrame && !h3Max.takesReferences)
+        // Round 2: Hailuo 3 takes references, but not beside a frame.
+        let fromFrameWithReference = MadeNeeds(kind: .shot, firstFrame: true, seconds: 5, references: true)
+        for q in FilmQuality.allCases { #expect(!ids(fromFrameWithReference, q).contains { $0.hasPrefix("minimax/hailuo") }, "\(q)") }
+        let h3 = MadeVersion(id: "minimax/hailuo-3", name: "Hailuo 3", listing: .video, frames: ["first_frame", "last_frame"])
+        #expect(h3.takesReferences && !h3.takesReferencesWithFrames)
+        #expect(MadeVersion(id: "kwaivgi/kling-v3.0-pro", name: "Kling 3.0 Pro", listing: .video).takesReferencesWithFrames)
         #expect(!Self.catalog.listed(.bridge).contains(h3Max))
         let bridge = MadeNeeds(kind: .bridge, firstFrame: true, lastFrame: true, seconds: 5)
         for q in FilmQuality.allCases { #expect(!ids(bridge, q).contains("minimax/hailuo-3-max"), "\(q)") }
@@ -106,9 +112,9 @@ struct MadeRoutingTests {
         #expect(sound.defaultVersion(.soundEffect)?.id == "bytedance-seed/seed-audio-1-0" && sound.listed(.voice).map(\.id) == ["assemblyai/assemblyai-tts-1"])
         // Not listed: Lyria, as before.
         #expect(ids(MadeNeeds(kind: .soundEffect, seconds: 4), .balanced, in: MadeCatalog(fetchedAt: 0, versions: [sound.versions[1]])) == ["google/lyria-3-clip-preview"])
-        // Billed by the second of sound: a 4 s effect is a cent.
+        // Billed by the second of sound it makes, and it chooses the length: priced at the longest made, 10 s.
         let seed = sound.versions[3]
-        #expect(abs(MadeEstimator.estimate(.soundEffect, version: seed, seconds: 4).spend - 0.01) < 1e-9 && MadeEstimator.estimate(.soundEffect, version: seed, seconds: 4).priced)
+        #expect(abs(MadeEstimator.estimate(.soundEffect, version: seed, seconds: 4).spend - 0.025) < 1e-9 && MadeEstimator.estimate(.soundEffect, version: seed, seconds: 4).priced)
         #expect(MadeCatalog.builtIn.defaultVersion(.soundEffect)?.id == "bytedance-seed/seed-audio-1-0" && MadeCatalog.builtIn.defaultVersion(.voice)?.makesEffects == false)
     }
 

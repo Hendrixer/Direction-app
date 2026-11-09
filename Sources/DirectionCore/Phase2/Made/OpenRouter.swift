@@ -324,11 +324,14 @@ public enum OpenRouter {
         public var id: String
         public var status: String
         public var cost: Double?
+        /// The generation record's ID, once the job is done: what it cost when `usage.cost` says nothing.
+        public var generationID: String?
         public var error: String?
         public var urls: Int
         init(_ json: JSONValue) {
             id = json["id"].string ?? ""; status = json["status"].string ?? "pending"
             cost = json["usage"]["cost"].double
+            generationID = json["generation_id"].string
             error = json["error"]["message"].string ?? json["error"].string
             urls = json["unsigned_urls"].array?.count ?? 0
         }

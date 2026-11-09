@@ -145,9 +145,18 @@ Run with `scripts/live-made.sh` (the director's key, a throwaway film, the versi
 
 Also found: Hailuo 3 Max and Wan 3.0 sent shots with sound when asked for none. Direction now takes the sound off any shot made without `sound`.
 
+### Round 2 (8 Nov 2026, evening)
+
+8 requests for $0.11 of the $1.72 planned: three were turned down before anything was made, and one reported $0 (below).
+
+1. **Gemini Omni 1.2 with a real person.** It made the shot in 43 s, with no refusal: the director looks up from the phone and smiles in one continuous move, stays themselves throughout, and leans in further than asked. Its sound came off. It reported a cost of $0 and Direction recorded $0; a finished shot that reports $0 is now looked up in the generation record (`generation_id`), and the estimate ($0.35 here) is counted if that says nothing.
+2. **FLUX Video Edit and Aleph 2.0 turn down a take sent as data** ("Only HTTPS URLs are allowed"), as Hailuo 3 and Seedance did. Every changed shot fails today (nothing is charged), and FLUX Video Upscale is sent the same way. Changed shots need the take at an HTTPS address OpenRouter can fetch: a product decision, since the director's footage would sit there for the minutes it takes.
+3. **References with a first frame** on Hailuo 3: turned down, since MiniMax's Hailuo versions "do not support frame_images and input_references in the same request". A shot from a frame with references now skips every Hailuo.
+4. **What sound and stills cost.** Seed Audio's two effects were read from the generation record: $0.009 for 3.5 s, and $0.024 for 9.5 s made when 4 s was asked (cut to 4). It's paid by the second it makes and chooses the length, so effects are now priced at 10 s ($0.025). The GPT Image still and the Lyria clip had no cost in the record either, so Direction counted their estimates ($0.04 each). OpenRouter lists Lyria at $0, so it may be free for now; the trials now read the key's total before and after a run to settle it.
+5. **Sound effects as the app makes them.** The door creak went through this time, worded "A sound effect, not speech: …" (round 1's was turned down); steady rain came back as steady rain. The music sting was 10 s of guitar.
+
 ## Still to test, with real requests (they cost money: ask first)
 
-1. **Gemini Omni 1.2 and a real person**, now that it's asked without the sound setting.
-2. **FLUX Video Edit and Aleph 2.0 with a take sent as data.** If they turn it down too, changed shots (and FLUX Video Upscale) need the take sent from somewhere OpenRouter can fetch over HTTPS.
-3. **References with a first frame** on a version that takes references (Hailuo 3).
-4. **What a still and a Lyria clip cost**, read back from the generation record.
+1. **Changed shots from an HTTPS address**, once the take has one: FLUX Video Edit and Aleph 2.0 against the same 2 s, and FLUX Video Upscale.
+2. **References beside a first frame** on a version that takes both (Kling 3.0 Pro, Wan 3.0): OpenRouter's guide says `frame_images` win, so whether the reference still shows in the shot.
+3. **Whether the replies that report $0 are charged** (Gemini Omni, GPT Image, Lyria): the key's total before and after the next run says.

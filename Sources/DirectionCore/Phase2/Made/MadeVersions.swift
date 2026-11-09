@@ -55,8 +55,12 @@ public struct MadeVersion: Codable, Hashable, Sendable, Identifiable {
     public var takesVideo: Bool { changesVideo || upscales || skus.keys.contains { $0.contains("video_input") } }
     /// A last frame after a first one, as Direction sends it. Hailuo 3 Max lists both but takes one or the other.
     public var takesLastFrame: Bool { frames.contains("last_frame") && !Self.oneFrame.contains(id) }
-    /// Takes reference stills (`input_references`) beside its frames.
+    /// Takes reference stills (`input_references`).
     public var takesReferences: Bool { !Self.noReferences.contains(id) }
+    /// Takes reference stills and a first or last frame in the same request. MiniMax's Hailuo versions take
+    /// one or the other: "do not support frame_images and input_references in the same request" (the paid
+    /// trials, round 2).
+    public var takesReferencesWithFrames: Bool { takesReferences && !id.hasPrefix("minimax/hailuo") }
     /// Every price it lists is for a shot with sound (Gemini Omni): it always makes sound and turns down
     /// `generate_audio: false`, so it's never sent.
     public var alwaysMakesSound: Bool {
@@ -224,6 +228,8 @@ public struct MadeEstimate: Codable, Hashable, Sendable {
 public enum MadeEstimator {
     /// Lyria 3 Clip makes 30 s clips.
     public static let clipSeconds: Double = 30
+    /// The longest sound effect Seed Audio has made for a few seconds asked (9.5 s, the paid trials).
+    public static let effectSecondsMade: Double = 10
     /// Joins between clips of a longer bed.
     public static let crossfade: Double = 0.5
     /// OpenRouter lists Lyria at zero per token; it bills per clip. Prices Direction knows when the listing doesn't say.
@@ -260,8 +266,9 @@ public enum MadeEstimator {
         case .audio:
             let s = max(1, seconds ?? clipSeconds)
             if v.listing == .speech {
-                // Seed Audio's effects: billed per second of sound made (under completion).
-                let per = (v.price("completion") ?? 0) * s + (v.price("request") ?? 0)
+                // Seed Audio's effects: billed per second of sound made (under completion), and it chooses the
+                // length itself, cut to the length asked afterwards. Priced as the longest it has made.
+                let per = (v.price("completion") ?? 0) * max(s, effectSecondsMade) + (v.price("request") ?? 0)
                 return MadeEstimate(spend: per * Double(ways), seconds: s, requests: ways, priced: per > 0)
             }
             if isClipVersion(v) {

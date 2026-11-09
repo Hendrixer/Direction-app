@@ -597,7 +597,8 @@ extension ToolRuntime {
             progress(job, "Waiting for \(r.version.name)\(label)", 0.1)
             let name = r.version.name, making = r.kind == .changedShot ? "changing the shot" : r.kind == .upscale ? "sharpening the shot" : "making the shot"
             let done = try await OpenRouter.waitForVideo(submitted.id) { [weak self] j in
-                if let c = j.cost { reported.withLock { $0 = c } }
+                // Gemini Omni reports $0 for a shot it made: nothing, not free.
+                if let c = j.cost, c > 0 { reported.withLock { $0 = c } }
                 self?.progress(job, j.status == "in_progress" ? "\(name) is \(making)\(label)" : "Waiting for \(name)\(label)", j.status == "in_progress" ? 0.5 : 0.1)
             }
             progress(job, "Downloading the shot\(label)", 0.8)
@@ -606,7 +607,8 @@ extension ToolRuntime {
             try data.write(to: downloaded)
             defer { try? FileManager.default.removeItem(at: downloaded) }
             let (output, sharpenedFrom) = try await finish(downloaded, r, folder: folder, job: job, label: label)
-            return Piece(url: output, cost: done.cost, way: 1, sharpenedFrom: sharpenedFrom)
+            // A cost of $0 (Gemini Omni) is looked up in the generation record, else the estimate is counted.
+            return Piece(url: output, cost: await OpenRouter.cost(reported: done.cost, id: done.generationID), way: 1, sharpenedFrom: sharpenedFrom)
         } catch let e as DirectionError where e.code == "shot_failed" {
             if let cost = reported.withLock({ $0 }), cost > 0 { throw PaidThenFailed(underlying: e, cost: cost) }
             throw e

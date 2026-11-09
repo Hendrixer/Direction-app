@@ -179,6 +179,7 @@ extension MadeCatalog {
             if needs.firstFrame && v.listing == .video && !v.frames.contains("first_frame") { return false }
             if needs.lastFrame && !v.takesLastFrame { return false }
             if needs.references && !v.takesReferences { return false }
+            if needs.references && (needs.firstFrame || needs.lastFrame) && !v.takesReferencesWithFrames { return false }
             if needs.person && (MadeRanking.refusesPeople(v) || refusedPeople.contains(v.id)) { return false }
             if needs.kind.listing == .video, !v.changesVideo, let s = needs.seconds, let longest = v.durations.max(), Double(longest) < s - 0.5 { return false }
             // Sound asked for: a version the list says makes none would come back silent.

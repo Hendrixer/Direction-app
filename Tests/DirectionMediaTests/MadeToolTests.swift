@@ -173,7 +173,9 @@ private struct MadeFixture {
                 return body["generate_audio"] != .null ? (400, turnedDown, [:]) : (202, data(.object(["id": .string("vid-\(n)"), "status": .string("pending")])), [:])
             }
             if path.hasSuffix("/content") { return (200, movie, ["Content-Type": "video/mp4"]) }
-            return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "usage": .object(["cost": .number(0.35)])])), [:])
+            // Omni reports $0 for a shot it made (the paid trials, round 2); the generation record has the cost.
+            if path.hasSuffix("/generation") { return (200, data(.object(["data": .object(["total_cost": .number(0.35)])])), [:]) }
+            return (200, data(.object(["id": .string("vid"), "status": .string("completed"), "generation_id": .string("gen-1"), "usage": .object(["cost": .number(0)])])), [:])
         }
         let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
         var catalog = MadeCatalog.builtIn; catalog.fetchedAt = Date().timeIntervalSince1970
@@ -185,8 +187,10 @@ private struct MadeFixture {
         let done = try await f.finish(try await f.make(shot))
         #expect(done.status == "completed", "\(done.error ?? "")")
         #expect(stub.bodies("/videos").map { $0["model"].string ?? "" } == ["google/gemini-omni-1.2-flash"] && stub.bodies("/videos")[0]["generate_audio"] == .null)
-        let made = try f.media.store.read().asset(try #require(done.result?["assetID"].string))
+        let madeID = try #require(done.result?["assetID"].string)
+        let made = try f.media.store.read().asset(madeID)
         #expect(made.audio.isEmpty && !made.video.isEmpty)
+        #expect(abs((try f.media.store.madeRecord(madeID)?.spend ?? 0) - 0.35) < 1e-9)
 
         // Veo is listed with prices without sound, so it's told; turned down, it's asked again without the setting.
         var pinned = f; pinned.overrides.version = "google/veo-3.1"
@@ -213,7 +217,8 @@ private struct MadeFixture {
         let f = try await MadeFixture.make(transport: stub.transport); defer { f.media.cleanup() }
         let glass: [String: JSONValue] = ["kind": .string("soundEffect"), "ask": .string("A glass shatters on a tile floor."), "seconds": .number(4)]
         let estimate = try await f.make(glass.merging(["estimateOnly": .bool(true)]) { _, b in b })
-        #expect(estimate["version"].string == "bytedance-seed/seed-audio-1-0" && abs((estimate["spend"].double ?? 0) - 0.01) < 1e-9)
+        // Priced as the longest it has made (10 s), since it chooses the length and is paid by the second made.
+        #expect(estimate["version"].string == "bytedance-seed/seed-audio-1-0" && abs((estimate["spend"].double ?? 0) - 0.025) < 1e-9)
         let done = try await f.finish(try await f.make(glass))
         #expect(done.status == "completed", "\(done.error ?? "")")
         let sent = try #require(stub.bodies("audio/speech").first)
@@ -222,7 +227,7 @@ private struct MadeFixture {
         let record = try #require(try f.media.store.madeRecord(effectID))
         let asset = try f.media.store.read().asset(record.assetID)
         // 6 s made, 4 s asked: cut to 4 with a fade. No cost came back, so the estimate is counted.
-        #expect(record.kind == .soundEffect && record.version == "bytedance-seed/seed-audio-1-0" && abs(asset.duration.seconds - 4) < 0.05 && abs(record.spend - 0.01) < 1e-9)
+        #expect(record.kind == .soundEffect && record.version == "bytedance-seed/seed-audio-1-0" && abs(asset.duration.seconds - 4) < 0.05 && abs(record.spend - 0.025) < 1e-9)
 
         let door = try await f.finish(try await f.make(["kind": .string("soundEffect"), "ask": .string("A heavy wooden door creaks slowly open."), "seconds": .number(4)]))
         #expect(door.status == "completed", "\(door.error ?? "")")

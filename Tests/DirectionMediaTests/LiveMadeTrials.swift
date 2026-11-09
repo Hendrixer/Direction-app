@@ -21,8 +21,11 @@ struct LiveMadeTrials {
     @Test(.enabled(if: LiveMadeTrials.folder != nil), .timeLimit(.minutes(90)))
     func trials() async throws {
         let run = try await Trials.start(folder: Self.folder!, estimateOnly: Self.env["DIRECTION_LIVE_MADE_ESTIMATE"] == "1")
+        // What the key had spent before and after: the true total, for replies that report $0 (round 2).
+        let before = await run.keyUsage()
         // Round 1 (8 Nov 2026) is the first set; round 2 asks what round 1 couldn't answer.
         if Self.env["DIRECTION_LIVE_MADE_ROUND"] == "2" { try await run.round2() } else { try await run.all() }
+        try await run.recordCharged(since: before)
     }
 }
 
@@ -367,6 +370,22 @@ private actor Trials {
             let jpeg = try await MadeMedia.frame(of: video.path, at: t, isImage: false, maxDimension: 640)
             try jpeg.write(to: folder.appendingPathComponent("\(name)-\(label).jpg"))
         }
+    }
+
+    /// The key's total spend so far (`GET /key`, free). Nil for an estimate.
+    func keyUsage() async -> Double? {
+        guard !estimateOnly, let key = overrides.key else { return nil }
+        return try? await OpenRouter.keyInfo(key: key).usage
+    }
+
+    /// What OpenRouter charged the key over the run, read once its records have caught up.
+    func recordCharged(since before: Double?) async throws {
+        guard let before else { return }
+        try await Task.sleep(for: .seconds(30))
+        guard let after = await keyUsage() else { return }
+        results["keyUsage"] = .object(["before": .number(before), "after": .number(after), "charged": .number(after - before)])
+        try save()
+        print("LIVE-MADE OpenRouter charged the key $\(String(format: "%.4f", after - before)) over the run")
     }
 
     func save() throws {
