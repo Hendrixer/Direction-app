@@ -1,6 +1,6 @@
 # Direction's visual system and review comments
 
-The app icon and brand mark are approved exports kept in the repository. Resources/AppIcon.icns is the unmodified app icon; Sources/DirectionApp/Resources/DirectionBrand.png is the unmodified transparent 1024px export used by the interface.
+The app icon and brand mark are approved exports kept in the repository. Resources/AppIcon.icns is the unmodified app icon; Sources/DirectionApp/Resources/BrandMark.png is the chrome D, cut out on transparency, that the interface shows.
 
 ## Interface
 

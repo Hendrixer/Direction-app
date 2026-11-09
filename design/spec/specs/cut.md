@@ -625,7 +625,7 @@ Frame: `screens/22-turnover.html` · Render: `renders/22-turnover@2x.png`
 - [ ] After turnover, the notes become read-only and the Notes badge clears.
 
 ## 23 · Read-back, waiting for your OK
-Frame: `screens/23-readback.html` · Render: `renders/23-readback@2x.png`
+Frame: `23-readback` (a snapshot of the Cut room; no page of its own)
 
 **Arrives from / leads to:**
 - Arrives a few seconds after turnover (frame 22).

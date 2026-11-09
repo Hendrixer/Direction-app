@@ -14,13 +14,12 @@ This folder is the complete design for Direction, built on the Gate design langu
 | `specs/open-questions.md` | Cross-room decisions | Wins over room specs when they disagree. |
 | `specs/editor.md`, `footage-index.md`, `agent-timeline.md`, `looks.md`, `graphics.md`, `made-media.md` | Phase 2: Direction starts the editor; how it sees footage; its timeline; looks, graphics and made media | Frames 54–64 and the editor's tools. `agent-timeline.md` has no frames: it's the editor's side. |
 | `specs/mac.md` | Mac conventions: windows, Settings (⌘,), titlebar double-click, menus, undo, keyboard, Dock, notifications, accessibility | Applies to every room. |
-| `screens/NN-*.html` | One frame per screen or state, 1440×900 pt unless noted | The exact picture to match. |
+| `screens/NN-*.html` | One frame per screen or state, 1440×900 pt unless noted. A few frames have no page: they're snapshots of the app (`frames.js`). | The exact picture to match. |
 | `renders/NN-*@1x.png`, `@2x.png` | Renders of each frame. Only 1x is committed; run `./render.sh` to make the 2x set (needs Google Chrome). | Visual comparison against your build. |
 | `renders/NN-*.layout.json` | Boxes of every `data-c` element: x, y, w, h, color, radius, font | Measurements. No guessing from pixels. |
 | `specs/*.md` | Per-room specs: flow, copy, interactions, keys, motion, accessibility, acceptance checks | Behavior that a picture can't show. |
 | `specs/components.md` | Component inventory mapped to SwiftUI | Build these once, reuse everywhere. |
 | `specs/icons.md` | Each icon id mapped to an SF Symbol | Use SF Symbols in the app, not the SVGs. |
-| `index.html` | Gallery of every frame | Open in a browser to browse. |
 | `render.sh` | Re-renders frames | `./render.sh` or `./render.sh 17-notes-drafts` |
 
 ## How to implement (for the implementing agent)
