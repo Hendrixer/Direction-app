@@ -34,8 +34,8 @@ struct EditorWhoEditsGroup: View {
                 found(runsOn)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            GateSegmented(options: EditorRunsOn.allCases.map { ($0, $0.label) }, selection: Binding(get: { runsOn }, set: { choose($0) }),
-                          images: Dictionary(uniqueKeysWithValues: EditorRunsOn.allCases.compactMap { c in c.program?.icon.map { (c, $0) } }))
+            // The agents found on this Mac, the one chosen even when it's gone, then your own session.
+            GateSelect(options: Self.choices(runsOn, installed: programs.installed).map { ($0, $0.label) }, selection: Binding(get: { runsOn }, set: { choose($0) }))
                 .fixedSize()
                 .accessibilityLabel("Editor runs on")
         }
@@ -70,6 +70,13 @@ struct EditorWhoEditsGroup: View {
                 .onTapGesture { EditorConnection.presentAlert() }
                 .accessibilityAction(named: "How to connect") { EditorConnection.presentAlert() }
         }
+    }
+
+    /// What "Editor runs on" offers: only agents installed here, plus the current choice so it never vanishes.
+    static func choices(_ current: EditorRunsOn, installed: [EditorProgram]) -> [EditorRunsOn] {
+        var list = installed.map(EditorRunsOn.init)
+        if current != .yourOwn, !list.contains(current) { list.append(current) }
+        return list + [.yourOwn]
     }
 
     private func choose(_ c: EditorRunsOn) {

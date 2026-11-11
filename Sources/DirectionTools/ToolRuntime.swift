@@ -156,7 +156,20 @@ public actor ToolRuntime {
         case "direction_measure_audio":
             guard let assetID = a["assetID"].string else {
                 // No take: the cut's mix, as it plays and delivers.
-                let p = try store.read(revision: a["revision"].int), range = a["start"] == .null && a["end"] == .null ? nil : try secondsRange(a)
+                let p = try store.read(revision: a["revision"].int)
+                // Several stretches in one answer, compiled once.
+                if let ranges = a["ranges"].array {
+                    guard !ranges.isEmpty, ranges.count <= 20 else { throw DirectionError("bad_argument", "ranges lists 1 to 20 stretches, each {start, end} in cut seconds.") }
+                    let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory)
+                    var out: [JSONValue] = []
+                    for r in ranges {
+                        let range = try secondsRange(r)
+                        let v = try await SequenceRenderer.loudness(compiled, range: range)
+                        out.append(.object(["start": r["start"], "end": r["end"], "integratedLUFS": v["integratedLUFS"], "truePeakDBTP": v["truePeakDBTP"], "samplePeakDBFS": v["samplePeakDBFS"], "loudest": v["profile"]["loudest"]]))
+                    }
+                    return ToolResponse(.object(["editRevision": .number(Double(p.editRevision)), "ranges": .array(out)]))
+                }
+                let range = a["start"] == .null && a["end"] == .null ? nil : try secondsRange(a)
                 let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory)
                 var value = try await SequenceRenderer.loudness(compiled, range: range)
                 // The whole cut against the target, so one call says whether it's ready and what to do.
@@ -175,9 +188,25 @@ public actor ToolRuntime {
         case "direction_frame":
             if a["assetID"] != .null { return try await sourceFrame(a) }
             let p = try store.read(revision: a["revision"].int)
+            let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory, looks: try? store.lookContext())
+            // Several moments in one answer: each step of the editor's resends everything said so far, so eight frames
+            // in one call cost far less than eight calls.
+            if let times = a["times"].array {
+                let seconds = times.compactMap(\.double)
+                guard !seconds.isEmpty, seconds.count == times.count, seconds.count <= 8, seconds.allSatisfy({ $0.isFinite && $0 >= 0 }) else {
+                    throw DirectionError("invalid_time", "times lists 1 to 8 nonnegative cut seconds.")
+                }
+                let size = min(1920, max(160, a["maxDimension"].int ?? 640))
+                var frames: [JSONValue] = [], paths: [String] = []
+                for s in seconds {
+                    let output = cacheDirectory.appendingPathComponent("Frames").appendingPathComponent(newID("frame") + ".png")
+                    frames.append(try await SequenceRenderer.frame(compiled, at: .init(seconds: s), to: output, maxDimension: size))
+                    paths.append(output.path)
+                }
+                return ToolResponse(.object(["frames": .array(frames), "editRevision": .number(Double(p.editRevision))]), imagePaths: paths)
+            }
             let seconds = a["time"].double ?? 0
             guard seconds.isFinite && seconds >= 0 else { throw DirectionError("invalid_time", "Frame time must be a nonnegative number.") }
-            let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory, looks: try? store.lookContext())
             let output = cacheDirectory.appendingPathComponent("Frames").appendingPathComponent(newID("frame") + ".png")
             let value = try await SequenceRenderer.frame(compiled, at: .init(seconds: seconds), to: output, maxDimension: min(1920, max(160, a["maxDimension"].int ?? 1280)))
             return ToolResponse(value, imagePaths: [output.path])

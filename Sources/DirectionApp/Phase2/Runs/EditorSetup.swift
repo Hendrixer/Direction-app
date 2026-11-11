@@ -18,7 +18,7 @@ enum EditorSetupKey {
 
 extension EditorProgram {
     /// "ClaudeCode", as the settings keys spell it.
-    var keyName: String { self == .claudeCode ? "ClaudeCode" : "Codex" }
+    var keyName: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
 }
 
 /// The jobs, as the editor's picks list them.
@@ -35,9 +35,10 @@ extension EditorJob {
 
 /// Who runs the editor: a program Direction starts, or a session you run yourself.
 enum EditorRunsOn: String, CaseIterable, Sendable {
-    case claudeCode, codex, yourOwn
+    case claudeCode, codex, opencode, gemini, cursor, goose, qwen, copilot, cline, kilo, yourOwn
     var program: EditorProgram? { EditorProgram(rawValue: rawValue) }
     var label: String { program?.name ?? "Your own session" }
+    init(_ program: EditorProgram) { self = EditorRunsOn(rawValue: program.rawValue) ?? .yourOwn }
 }
 
 /// Reads and writes go through here so previews and snapshots keep their values in memory and
@@ -55,13 +56,13 @@ enum EditorSetup {
     }
     /// Whether the director has chosen (the setup sheet shows until then).
     static var isChosen: Bool { value(EditorSetupKey.runsOn) != nil }
-    /// The choice, or the spec's default: Claude Code if installed, else Codex, else your own session.
+    /// The choice, or the spec's default: the first agent installed (Claude Code, then Codex, then the rest in
+    /// EditorProgram's order), else your own session.
     static var runsOn: EditorRunsOn {
         if let raw = value(EditorSetupKey.runsOn) as? String, let c = EditorRunsOn(rawValue: raw) { return c }
         let found = EditorPrograms.shared
-        if found.install(.claudeCode) != nil || !found.checked { return .claudeCode }
-        if found.install(.codex) != nil { return .codex }
-        return .yourOwn
+        if !found.checked { return .claudeCode }
+        return found.installed.first.map(EditorRunsOn.init) ?? .yourOwn
     }
     static func choose(_ c: EditorRunsOn) { put(EditorSetupKey.runsOn, c.rawValue) }
     /// A film's editor: the one chosen for it in Who's editing?, or this setting for a film started before
@@ -127,6 +128,8 @@ enum EditorSetup {
     var changes = 0
 
     func install(_ p: EditorProgram) -> EditorInstall? { installs[p] }
+    /// The agents on this Mac, in EditorProgram's order: the only ones offered.
+    var installed: [EditorProgram] { EditorProgram.allCases.filter { installs[$0] != nil } }
 
     func refresh() {
         guard !checking, !preview else { return }

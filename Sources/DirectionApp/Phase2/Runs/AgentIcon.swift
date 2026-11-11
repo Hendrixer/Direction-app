@@ -9,7 +9,8 @@ extension EditorProgram {
 }
 
 @MainActor private enum AgentIcons {
-    static let images: [EditorProgram: NSImage?] = Dictionary(uniqueKeysWithValues: EditorProgram.allCases.map { p in
+    /// Only Claude Code's and Codex's are shipped; other agents show their name alone.
+    static let images: [EditorProgram: NSImage?] = Dictionary(uniqueKeysWithValues: [EditorProgram.claudeCode, .codex].map { p in
         let name = p == .claudeCode ? "AgentClaudeCode" : "AgentCodex"
         let url = Bundle.module.url(forResource: name, withExtension: "png") ?? Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Agents")
         return (p, url.flatMap(NSImage.init(contentsOf:)))

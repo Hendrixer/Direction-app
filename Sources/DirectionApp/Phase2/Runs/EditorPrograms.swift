@@ -4,24 +4,73 @@ import DirectionCore
 /// The programs Direction starts as the editor, and every command line it runs them with
 /// (specs/editor.md › Programs, How Direction runs a job). Programs change: every flag lives in
 /// this file, and EditorProgramTests runs `--help` and fails when one disappears.
+///
+/// Claude Code and Codex are run on their own command lines, which Direction relies on for strict MCP config,
+/// allowed tools, a sandbox and the result's shape. Every other agent is spoken to over the Agent Client
+/// Protocol (EditorACP.swift). Only the ones installed on this Mac are offered.
 enum EditorProgram: String, CaseIterable, Codable, Sendable {
-    case claudeCode, codex
+    case claudeCode, codex, opencode, gemini, cursor, goose, qwen, copilot, cline, kilo
 
-    var name: String { self == .claudeCode ? "Claude Code" : "Codex" }
-    var command: String { self == .claudeCode ? "claude" : "codex" }
-    var installCommand: String { self == .claudeCode ? "curl -fsSL https://claude.ai/install.sh | bash" : "npm install -g @openai/codex" }
-    /// Brings the copy at `path` up to date: Claude Code updates itself; Codex the way it was installed.
+    var name: String {
+        switch self {
+        case .claudeCode: "Claude Code"; case .codex: "Codex"; case .opencode: "OpenCode"; case .gemini: "Gemini CLI"; case .cursor: "Cursor"
+        case .goose: "Goose"; case .qwen: "Qwen Code"; case .copilot: "GitHub Copilot"; case .cline: "Cline"; case .kilo: "Kilo Code"
+        }
+    }
+    /// Over the Agent Client Protocol, rather than a command line of its own.
+    var usesACP: Bool { self != .claudeCode && self != .codex }
+    /// The commands it's installed as, the usual one first (Cursor's agent was `cursor-agent` before `agent`).
+    var commands: [String] { self == .claudeCode ? ["claude"] : self == .cursor ? ["cursor-agent", "agent"] : [rawValue] }
+    var command: String { commands[0] }
+    /// How it starts speaking ACP on stdin and stdout, newest first: the first its `--help` lists is used.
+    var acpForms: [[String]] {
+        switch self {
+        case .claudeCode, .codex: []
+        case .opencode, .cursor, .goose, .kilo: [["acp"]]
+        case .gemini, .qwen: [["--acp"], ["--experimental-acp"]]
+        case .copilot, .cline: [["--acp"]]
+        }
+    }
+    var installCommand: String {
+        switch self {
+        case .claudeCode: "curl -fsSL https://claude.ai/install.sh | bash"
+        case .codex: "npm install -g @openai/codex"
+        case .opencode: "curl -fsSL https://opencode.ai/install | bash"
+        case .gemini: "npm install -g @google/gemini-cli"
+        case .cursor: "curl https://cursor.com/install -fsS | bash"
+        case .goose: "brew install block-goose-cli"
+        case .qwen: "npm install -g @qwen-code/qwen-code"
+        case .copilot: "npm install -g @github/copilot"
+        case .cline: "npm install -g cline"
+        case .kilo: "npm install -g @kilocode/cli"
+        }
+    }
+    /// Suggested when no agent is installed: the two Direction knows best, then the free and open ones.
+    static let suggested: [EditorProgram] = [.claudeCode, .codex, .opencode, .gemini]
+    /// What to run in Terminal to sign in.
+    var signInCommand: String {
+        switch self {
+        case .claudeCode: "claude"; case .codex: "codex login"; case .opencode: "opencode auth login"; case .gemini: "gemini"
+        case .cursor: "\(command) login"; case .goose: "goose configure"; case .qwen: "qwen"; case .copilot: "copilot"; case .cline: "cline auth"; case .kilo: "kilo auth"
+        }
+    }
+    /// Brings the copy at `path` up to date: Claude Code updates itself; the rest the way they were installed.
     func updateCommand(path: String?) -> String {
         if self == .claudeCode { return "claude update" }
-        return path.map { $0.hasPrefix("/opt/homebrew/") || $0.hasPrefix("/usr/local/Cellar/") } == true ? "brew upgrade codex" : "npm install -g @openai/codex@latest"
+        let brew = path.map { $0.hasPrefix("/opt/homebrew/") || $0.hasPrefix("/usr/local/Cellar/") } == true
+        if self == .codex { return brew ? "brew upgrade codex" : "npm install -g @openai/codex@latest" }
+        if brew { return "brew upgrade \(command)" }
+        return installCommand.hasPrefix("npm install -g ") ? installCommand + "@latest" : installCommand
     }
 
     /// Versions offered in Settings › Engines; "Other…" takes any string the program accepts. Codex's
     /// are the ones its own model menu lists, read from its cache, so they follow the installed Codex.
+    /// An ACP agent runs on the version set in the agent itself.
     var versions: [(id: String, name: String)] {
         switch self {
         case .claudeCode: [("claude-opus-5-5", "Claude Opus 5.5"), ("claude-fable-5-1", "Claude Fable 5.1"), ("claude-sonnet-5-5", "Claude Sonnet 5.5"), ("claude-haiku-5-5", "Claude Haiku 5.5")]
         case .codex: [("", "The program\u{2019}s default")] + Self.codexModels()
+        default: [("", "The version set in \(name)")]
         }
     }
 
@@ -54,6 +103,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     /// GPT-6.1 Sol and Terra default to low). Every Claude version takes all five; each Codex version lists its
     /// own in Codex's cache.
     func efforts(_ version: String, codexCache: URL = Self.codexCache) -> [(id: String, name: String)] {
+        if usesACP { return [("", "The program\u{2019}s default")] }
         var levels = Self.efforts
         if self == .codex, !version.isEmpty, let model = CodexCache.read(codexCache)?.models.first(where: { $0.slug == version }), let listed = model.supported_reasoning_levels {
             // "ultra" hands work to agents of its own; Direction runs one editor at a time and follows what it does.
@@ -137,7 +187,19 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             ]
             if let s = i.session { return ["exec", "resume"] + shared + ["--config", "sandbox_mode=\(toml(sandbox))", s, i.job] }
             return ["exec"] + shared + ["--cd", i.folder.path, "--sandbox", sandbox, i.job]
+        default:
+            // Everything else goes over ACP on stdin (EditorACP.swift).
+            return acpForms.first ?? []
         }
+    }
+
+    /// The conversation for one ACP invocation: the role leads the first message (ACP has no system prompt),
+    /// and a saved session is loaded when the agent can, or the whole job is said again when it can't.
+    func conversation(_ i: Invocation, wholeJob: String) -> ACPConversation {
+        let server = ACPConversation.Server(command: i.helper, args: Self.serverArguments(film: i.film, job: i.kind), env: ["DIRECTION_RUN_ID": i.runID])
+        let first = { (text: String) in i.role + "\n\n---\n\n" + text }
+        return ACPConversation(cwd: i.folder, server: server, prompt: i.session == nil ? first(i.job) : i.job, wholeJob: first(wholeJob), resume: i.session,
+                               permissions: .init(folder: i.folder, scripts: i.scripts))
     }
 
     /// The signed-in check: a job that only replies `ready`, with no tools.
@@ -152,6 +214,8 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             var args = ["exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only", "--ephemeral"]
             if !version.isEmpty { args += ["--model", version] }
             return args + [prompt]
+        default:
+            return acpForms.first ?? []
         }
     }
 
@@ -184,6 +248,12 @@ struct EditorInstall: Equatable, Sendable {
     var program: EditorProgram
     var path: String
     var version: String?
+    /// How this copy starts speaking ACP, from its own `--help`; nil when it lists none (too old for Direction).
+    var acp: [String]? = nil
+    /// Found, and Direction can talk to it.
+    var usable: Bool { !program.usesACP || acp != nil }
+    /// The arguments Direction starts it with for one invocation.
+    func arguments(_ i: EditorProgram.Invocation) -> [String] { program.usesACP ? (acp ?? program.acpForms.first ?? []) : program.arguments(i) }
 }
 
 /// What the ready job said: signed in, not signed in, or no clear answer (too slow, another error).
@@ -196,16 +266,50 @@ enum SignInCheck: Equatable, Sendable {
 /// Finding programs, their versions and the login shell's PATH. Blocking; call off the main actor.
 enum EditorDiscovery {
     static func find(_ program: EditorProgram) -> EditorInstall? {
+        for command in program.commands {
+            guard let path = find(command: command) else { continue }
+            let env = environment(adding: path)
+            var install = EditorInstall(program: program, path: path, version: version(of: path, environment: env))
+            if program.usesACP {
+                // A generic name (Cursor's `agent`) has to be the program it's meant to be.
+                let help = run(path, ["--help"], environment: env, timeout: 15).map { $0.output + "\n" + $0.error } ?? ""
+                if command == "agent", !help.lowercased().contains("cursor") { continue }
+                install.acp = acpForm(program, help: help)
+            }
+            return install
+        }
+        return nil
+    }
+
+    /// The first of the program's ACP forms its help lists: a subcommand (`acp` at the start of a line's word list)
+    /// or a flag (`--acp`, `--experimental-acp`).
+    static func acpForm(_ program: EditorProgram, help: String) -> [String]? {
+        program.acpForms.first { form in
+            guard let word = form.first else { return false }
+            if word.hasPrefix("--") {
+                // The flag itself, not a longer one it starts ("--acp" in "--acp-port").
+                var from = help.startIndex
+                while let r = help.range(of: word, range: from..<help.endIndex) {
+                    if r.upperBound == help.endIndex || !(help[r.upperBound].isLetter || help[r.upperBound].isNumber || help[r.upperBound] == "-" || help[r.upperBound] == "_") { return true }
+                    from = r.upperBound
+                }
+                return false
+            }
+            // "  acp   Start ACP" or "  opencode acp   Start ACP": the subcommand leads the line, or follows the program's name.
+            return help.split(separator: "\n").contains { $0.split(separator: " ", omittingEmptySubsequences: true).prefix(2).contains { String($0) == word } }
+        }
+    }
+
+    static func find(command: String) -> String? {
         let fm = FileManager.default
         // The known folders, then Terminal's own PATH (.zshrc included: nvm, Volta and the like set it up there, and a
         // login shell alone never reads it), then the version managers' folders in case the shell didn't answer.
         let pathFolders = loginPath.split(separator: ":").map(String.init)
-        var path = firstExecutable(program.command, in: EditorProgram.searchFolders + pathFolders)
-        if path == nil { path = firstExecutable(program.command, in: versionManagerFolders()) }
-        if path == nil, let prefix = shell("npm prefix -g")?.trimmingCharacters(in: .whitespacesAndNewlines), !prefix.isEmpty, fm.isExecutableFile(atPath: "\(prefix)/bin/\(program.command)") { path = "\(prefix)/bin/\(program.command)" }
-        if path == nil, let found = shell("command -v \(program.command)")?.split(separator: "\n").last.map(String.init), found.hasPrefix("/"), fm.isExecutableFile(atPath: found) { path = found }
-        guard let path else { return nil }
-        return EditorInstall(program: program, path: path, version: version(of: path, environment: environment(adding: path)))
+        var path = firstExecutable(command, in: EditorProgram.searchFolders + pathFolders)
+        if path == nil { path = firstExecutable(command, in: versionManagerFolders()) }
+        if path == nil, let prefix = shell("npm prefix -g")?.trimmingCharacters(in: .whitespacesAndNewlines), !prefix.isEmpty, fm.isExecutableFile(atPath: "\(prefix)/bin/\(command)") { path = "\(prefix)/bin/\(command)" }
+        if path == nil, let found = shell("command -v \(command)")?.split(separator: "\n").last.map(String.init), found.hasPrefix("/"), fm.isExecutableFile(atPath: found) { path = found }
+        return path
     }
 
     /// The first folder holding `command` as a program, in order.
@@ -335,10 +439,60 @@ enum EditorDiscovery {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("direction-ready-check")
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let seconds = 45
+        if install.program.usesACP { return checkACP(install, folder: folder, seconds: Double(seconds), shellKey: shellKey) }
         guard let r = run(install.path, install.program.readyArguments(version: version), environment: environment(adding: install.path, shellKey: shellKey), timeout: Double(seconds), directory: folder) else {
             return .couldNotCheck("\(install.program.name) didn\u{2019}t answer within \(seconds) seconds")
         }
         return readyAnswer(install.program, output: r.output, error: r.error, status: r.status, path: install.path)
+    }
+
+    /// An ACP agent is signed in when it opens a session: hello, then a new session with no tools, and no prompt,
+    /// so nothing is spent. An agent that needs a sign-in answers the session with ACP's auth_required.
+    static func checkACP(_ install: EditorInstall, folder: URL, seconds: Double, shellKey: Bool) -> SignInCheck {
+        guard let form = install.acp else { return .couldNotCheck("\(install.program.name) \(install.version ?? "") doesn\u{2019}t speak the Agent Client Protocol. In Terminal, run \(install.program.updateCommand(path: install.path))") }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: install.path); p.arguments = form; p.currentDirectoryURL = folder
+        p.environment = environment(adding: install.path, shellKey: shellKey)
+        let input = Pipe(), output = Pipe(), errors = Pipe()
+        _ = fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+        p.standardInput = input; p.standardOutput = output; p.standardError = errors
+        let done = DispatchSemaphore(value: 0)
+        p.terminationHandler = { p in ChildProcesses.ended(p); done.signal() }
+        do { try p.run() } catch { return .couldNotCheck(error.localizedDescription) }
+        ChildProcesses.started(p)
+        nonisolated(unsafe) var conversation = ACPConversation(cwd: folder, server: .init(command: "", args: [], env: [:]), prompt: "", permissions: .init(folder: folder, scripts: false))
+        let answer = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var verdict: SignInCheck?
+        nonisolated(unsafe) var buffer = Data()
+        let writer = input.fileHandleForWriting
+        let send: @Sendable (JSONValue) -> Void = { v in try? writer.write(contentsOf: ACPConversation.line(v)) }
+        // Hello and a session; the session's answer is the verdict. Errors become "not signed in" when they say so.
+        let lock = NSLock()
+        output.fileHandleForReading.readabilityHandler = { h in
+            let d = h.availableData
+            if d.isEmpty { h.readabilityHandler = nil; answer.signal(); return }
+            lock.lock(); defer { lock.unlock() }
+            buffer.append(d)
+            while let nl = buffer.firstIndex(of: 0x0A), verdict == nil {
+                let line = String(decoding: buffer[buffer.startIndex..<nl], as: UTF8.self)
+                buffer.removeSubrange(buffer.startIndex...nl)
+                let step = conversation.checkStep(line)
+                for v in step.send { send(v) }
+                if let v = step.verdict { verdict = v; answer.signal() }
+            }
+        }
+        for v in conversation.start() { send(v) }
+        let timedOut = answer.wait(timeout: .now() + seconds) == .timedOut
+        output.fileHandleForReading.readabilityHandler = nil
+        try? input.fileHandleForWriting.close()
+        if p.isRunning { p.terminate() }
+        _ = done.wait(timeout: .now() + 3)
+        if p.isRunning { kill(p.processIdentifier, SIGKILL) }
+        lock.lock(); defer { lock.unlock() }
+        if let verdict { return verdict }
+        let stderr = String(decoding: errors.fileHandleForReading.availableData, as: UTF8.self)
+        if EditorFailure.reason(stderr) == .notSignedIn { return .notSignedIn(String(stderr.suffix(200))) }
+        return .couldNotCheck(timedOut ? "\(install.program.name) didn\u{2019}t answer within \(Int(seconds)) seconds" : "\(install.program.name) stopped without answering")
     }
 
     /// What the ready job's output says. Its JSON is read, not searched, so a number or an id in a good
@@ -359,6 +513,8 @@ enum EditorDiscovery {
                 if item?["type"] as? String == "agent_message", ((item?["text"] ?? item?["message"]) as? String)?.lowercased().contains("ready") == true { answered = true }
                 if o["type"] as? String == "error", let m = o["message"] as? String { said.append(m) }
                 if let m = (o["error"] as? [String: Any])?["message"] as? String { said.append(m) }
+            default:
+                break
             }
         }
         if answered, status == 0 { return .signedIn }

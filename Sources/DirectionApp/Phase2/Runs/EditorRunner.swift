@@ -3,7 +3,7 @@ import Darwin
 import DirectionCore
 import DirectionTools
 
-/// Starts Claude Code or Codex for each job and follows it (specs/editor.md › How Direction runs a job).
+/// Starts the editor program (Claude Code, Codex, or an agent over ACP) for each job and follows it (specs/editor.md › How Direction runs a job).
 /// App-wide: a film's run keeps working after its window moves on to another film. One run per
 /// film; two films at once; the rest queue. Runs live in each film's store, so they survive relaunch.
 @MainActor final class EditorRunner {
@@ -26,6 +26,9 @@ import DirectionTools
     @MainActor final class LiveRun {
         let runID: String, store: ProjectStore, program: EditorProgram, process: Process
         var claude = ClaudeStreamParser(), codex = CodexStreamParser()
+        /// An ACP agent's side of the conversation, and where Direction's side is written.
+        var acp: ACPConversation?
+        var input: FileHandle?
         var buffer = Data()
         /// Tool calls it has made that haven't answered yet, by id, with the tool's name.
         var pending: [String: String] = [:]
@@ -100,8 +103,13 @@ import DirectionTools
         offlineRetries[run.id]?.cancel(); offlineRetries[run.id] = nil
         // Try again, Resume or back online: a fresh start, with its one restart to come.
         if !restartingStuck { restarted.remove(run.id) }
-        guard let path = programOverride[program] ?? EditorPrograms.shared.install(program)?.path else {
+        let install = EditorPrograms.shared.install(program)
+        guard let path = programOverride[program] ?? install?.path else {
             end(run.id, store: store, outcome: .init(state: .failed, reason: .notInstalled)); return
+        }
+        // An agent too old to speak ACP: found, but Direction can't talk to it.
+        if programOverride[program] == nil, let install, !install.usable {
+            end(run.id, store: store, outcome: .init(state: .failed, reason: .outOfDate, detail: "In Terminal, run \(program.updateCommand(path: install.path))")); return
         }
         guard let helper = helperOverride ?? EditorJobs.helperPath else {
             end(run.id, store: store, outcome: .init(state: .failed, reason: .programQuit, detail: "Direction\u{2019}s tools aren\u{2019}t in this copy of the app. Build it with scripts/build-app.sh.")); return
@@ -139,12 +147,22 @@ import DirectionTools
             let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts, kind: run.job)
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)
-            p.arguments = program.arguments(invocation)
+            p.arguments = programOverride[program] == nil ? (install?.arguments(invocation) ?? program.arguments(invocation)) : program.arguments(invocation)
             p.currentDirectoryURL = folder
             p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id], shellKey: EditorSetup.usesShellKey(program))
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
             let l = LiveRun(runID: run.id, store: store, program: program, process: p)
+            if program.usesACP {
+                // The whole job, for a saved session the agent can't load.
+                let whole = session == nil ? job : ((try? EditorJobs.text(for: run, store: store)).map { $0 + "\n" + job } ?? job)
+                let input = Pipe()
+                // An agent that's gone must not take Direction with it: writes fail instead of raising SIGPIPE.
+                _ = fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+                p.standardInput = input
+                l.input = input.fileHandleForWriting
+                l.acp = program.conversation(invocation, wholeJob: whole)
+            }
             // At the end of a pipe the handler is called again and again with nothing, so each one
             // stops itself there, on its own thread: left to the main queue, a finished run kept a
             // core spinning for as long as the app stayed open.
@@ -166,6 +184,7 @@ import DirectionTools
             }
             try p.run()
             ChildProcesses.started(p)
+            if var conversation = l.acp { let hello = conversation.start(); l.acp = conversation; send(l, hello) }
             DirectionLog.info("Started \(program.name) for \(run.job.rawValue) (run \(run.id), \(run.version.isEmpty ? "default version" : run.version), \(effort.isEmpty ? "default effort" : effort + " effort"), session \(session ?? "new"), pid \(p.processIdentifier)) in \(store.url.lastPathComponent)", "editor")
             live[run.id] = l
             watchForSilence()
@@ -194,9 +213,29 @@ import DirectionTools
         while let nl = l.buffer.firstIndex(of: 0x0A) {
             let line = String(decoding: l.buffer[l.buffer.startIndex..<nl], as: UTF8.self)
             l.buffer.removeSubrange(l.buffer.startIndex...nl)
+            if var conversation = l.acp {
+                let step = conversation.receive(line)
+                l.acp = conversation
+                send(l, step.send)
+                for e in step.events { handle(l, e) }
+                if step.done { endConversation(l) }
+                continue
+            }
             let events = l.program == .claudeCode ? l.claude.parse(line) : l.codex.parse(line)
             for e in events { handle(l, e) }
         }
+    }
+
+    /// Direction's side of an ACP conversation, a line each.
+    private func send(_ l: LiveRun, _ messages: [JSONValue]) {
+        guard let input = l.input else { return }
+        for m in messages { try? input.write(contentsOf: ACPConversation.line(m)) }
+    }
+
+    /// The prompt is answered: the agent's stdin closes, and an agent that stays open after that is ended.
+    private func endConversation(_ l: LiveRun) {
+        try? l.input?.close(); l.input = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { MainActor.assumeIsolated { if l.exited == nil { l.process.terminate() } } }
     }
 
     func handle(_ l: LiveRun, _ e: StreamEvent) {
@@ -389,6 +428,8 @@ import DirectionTools
     /// SIGINT to the program's whole group (it saves its session and stops), SIGTERM if anything is
     /// still there after a few seconds, then SIGKILL. Off the main thread.
     private func interrupt(_ l: LiveRun) {
+        // An ACP agent hears the turn is cancelled first, so it saves the session before the signal.
+        if let cancel = l.acp?.cancel() { send(l, [cancel]) }
         let group = l.process.processIdentifier, steps = stopSteps
         DispatchQueue.global(qos: .userInitiated).async { ChildProcesses.stop(group: group, steps) }
     }

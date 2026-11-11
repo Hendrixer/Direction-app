@@ -1,6 +1,6 @@
 # Editor runs
 
-How Direction starts the editor (Claude Code or Codex), follows it, and shows it working. The product spec is `design/spec/specs/editor.md` (frames 41, 43, 56–58); this page is for whoever changes the code.
+How Direction starts the editor (Claude Code, Codex, or any agent installed on the Mac that speaks the Agent Client Protocol), follows it, and shows it working. The product spec is `design/spec/specs/editor.md` (frames 41, 43, 56–58); this page is for whoever changes the code.
 
 ## Where things live
 
@@ -53,6 +53,7 @@ All flags are in `EditorPrograms.swift`. `EditorJobTests.flagsStillExistInTheIns
 
 - Claude Code: `claude --print <job> --output-format stream-json --verbose --model <v> --mcp-config Editor/.mcp.json --strict-mcp-config --allowedTools mcp__direction,Read,Glob,Grep,Edit(./**),Write(./**)[,Bash] --append-system-prompt <role> --permission-mode dontAsk [--settings <sandbox>] [--resume <session>]`
 - Codex: `codex exec --json --skip-git-repo-check [--model <v>] --config mcp_servers.direction.… --output-schema Editor/.direction/result.schema.json --cd Editor --sandbox workspace-write|read-only <job>`; continue with `codex exec resume … <session> <prompt>`.
+- Agents over ACP (OpenCode, Gemini CLI, Cursor, Goose, Qwen Code, GitHub Copilot, Cline, Kilo Code): the program with the ACP form its `--help` lists (`opencode acp`, `gemini --acp`, …), stdin and stdout piped. `ACPConversation` (EditorACP.swift) is pure: `start()` gives the hello, `receive(line)` gives the events and the lines to write, and the runner writes them. `initialize` → `session/new` (or `session/load` on the saved session) with Direction's MCP server → one `session/prompt` with the role leading it → the prompt's answer ends it. Permission requests follow Claude Code's allowed tools (Direction's tools, reads, edits inside the folder, commands only with scripts on, no web). The sign-in check is the hello and a session, no prompt.
 - The working folder is `<film>.direction/Editor/` (Graphics, Looks, Effects, NOTES.md). Every skill is copied to `Editor/.claude/skills/<skill>/SKILL.md`, and the job names its own from the app bundle's `Resources/Skills` (`scripts/build-app.sh`) or, in development, the checkout's `plugins/direction/skills`.
 - The `direction` helper is `Direction.app/Contents/Helpers/direction`, else the `direction` next to the app's executable (`.build/<config>/direction`), else `~/.local/bin/direction`.
 
@@ -62,4 +63,13 @@ Templates are versioned files (`<!-- direction-job <name> vN -->` on the first l
 
 ## Tests
 
-`Tests/DirectionAppTests/EditorRunsTests.swift`: Claude and Codex streams from canned samples, the activity table, the state machine, templates, command lines, and the runner end to end against `Tests/FakeEditor/fake-claude` (scenarios `done`, `unfinished`, `auth`, `slow`, `crash`, chosen by `Editor/.fake-scenario`). Tests use `EditorPrograms.shared.setPreview` so nothing touches the defaults, and `EditorRunner.shared.programOverride` / `helperOverride` so no real program runs.
+`Tests/DirectionAppTests/EditorRunsTests.swift`: Claude and Codex streams from canned samples, the activity table, the state machine, templates, command lines, and the runner end to end against `Tests/FakeEditor/fake-claude` (scenarios `done`, `unfinished`, `auth`, `slow`, `crash`, chosen by `Editor/.fake-scenario`) and `Tests/FakeEditor/fake-acp`, a stand-in ACP agent (`done`, `unfinished`, `auth`, `slow`, `refusal`) that records the prompt, the MCP servers and every permission answer. `EditorACPTests.swift` plays conversations line by line. With `DIRECTION_LIVE_ACP=1`, every ACP agent installed on this Mac answers the sign-in check (free: no prompt). Tests use `EditorPrograms.shared.setPreview` so nothing touches the defaults, and `EditorRunner.shared.programOverride` / `helperOverride` so no real program runs.
+
+## Fewer steps
+
+Every step an agent takes resends everything said so far, so on an API key a run's cost follows its number of steps more than anything else ("Coded love", 1 Nov 2026: five runs on Opus 5.5, $71 at API prices, $47 of it one round of notes with about 130 steps). The tools answer in fewer, fuller calls:
+
+- A `direction_edit` batch that changes the sound (`gain`, `fade`, `duck`, `audio`, `placeMusic`, `parts`, `loudness`, `syncSound`) with `measure: true` answers with `mix`: the whole mix as it now measures (integrated loudness, true peak, the target's verdict, the loudest stretches, anything over the ceiling). That film had 20 sound edits each followed by a measure. It's asked for rather than always on: measuring a long cut takes seconds, and made the music tests four times slower when every sound edit measured.
+- `direction_measure_audio` takes `ranges` (up to 20 stretches in one answer), and its whole-cut answer has the profile (loudness every second, the loudest stretches, the peaks), so the editor never measures window by window.
+- `direction_frame` takes `times` (up to 8 frames, each its own image, 640 by default). That film had 23 single frames in a row.
+- The skills say so (edit-video, finish), and the finish job says sound edits answer with the mix.

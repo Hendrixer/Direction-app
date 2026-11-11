@@ -139,7 +139,31 @@ extension ToolRuntime {
             guard try store.revision() == made else { throw DirectionError("stale_revision", "The film changed while Direction made the graphics. Read direction_timeline again and send the batch again.") }
             batch.baseEditRevision = made
         }
-        return ToolResponse(try .wrapping(store.edit(batch, validateOnly: validateOnly, asked: asked)))
+        let result = try JSONValue.wrapping(store.edit(batch, validateOnly: validateOnly, asked: asked))
+        // measure: a change to what's heard answers with the mix as it now measures, what the editor would otherwise
+        // measure in its next step (every step resends everything said so far). Asked for, since measuring a long cut
+        // takes seconds.
+        let measure = a["measure"].bool ?? b["measure"].bool ?? false
+        guard measure, !validateOnly, batch.operations.contains(where: { Self.soundOps.contains($0.type) }), case .object(var fields) = result else { return ToolResponse(result) }
+        if let mix = try? await mixNow(batch.sequenceID) { fields["mix"] = mix }
+        return ToolResponse(.object(fields))
+    }
+
+    /// The edit functions that change what's heard.
+    static let soundOps: Set<String> = ["gain", "fade", "duck", "audio", "placeMusic", "parts", "loudness", "syncSound"]
+
+    /// The whole mix at the latest revision, compactly: its loudness and true peak, the target's verdict, the loudest
+    /// stretches and anything over the ceiling. The per-second profile stays with direction_measure_audio.
+    func mixNow(_ sequenceID: String?) async throws -> JSONValue {
+        let p = try store.read()
+        let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequenceID, cacheDirectory: cacheDirectory)
+        let v = try await SequenceRenderer.loudness(compiled)
+        let verdict = LoudnessCheck.verdict(integrated: v["integratedLUFS"].double, truePeak: v["truePeakDBTP"].double ?? -120)
+        return .object([
+            "editRevision": .number(Double(p.editRevision)), "integratedLUFS": v["integratedLUFS"], "truePeakDBTP": v["truePeakDBTP"],
+            "target": .object(["lufs": .number(SharedSettings.loudnessTarget), "truePeakDBTP": .number(SharedSettings.truePeakCeiling), "ready": .bool(verdict.isReady), "says": .string(verdict.words ?? "On target.")]),
+            "loudest": v["profile"]["loudest"], "overCeiling": v["profile"]["overCeiling"],
+        ])
     }
 
     /// What's locked, for the editor's reads: picture lock, and each locked scene with where it plays.

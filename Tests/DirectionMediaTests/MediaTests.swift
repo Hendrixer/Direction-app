@@ -122,6 +122,12 @@ struct MediaIntegrationTests {
         let color = try meanColor(URL(fileURLWithPath: frame.imagePaths[0]))
         #expect(color.0 > color.2 * 2)
         #expect(frame.value["editRevision"].int == p.editRevision)
+        // Several moments in one answer, each its own image: the red head and the blue tail.
+        let two = try await f.runtime.invoke("direction_frame", arguments: .object(["times": .array([.number(0.5), .number(2.5)])]))
+        #expect(two.imagePaths.count == 2 && two.value["frames"].array?.count == 2 && two.value["editRevision"].int == p.editRevision)
+        let head = try meanColor(URL(fileURLWithPath: two.imagePaths[0])), tail = try meanColor(URL(fileURLWithPath: two.imagePaths[1]))
+        #expect(head.0 > head.2 * 2 && tail.2 > tail.0 * 2)
+        await #expect(throws: DirectionError.self) { _ = try await f.runtime.invoke("direction_frame", arguments: .object(["times": .array(Array(repeating: .number(1), count: 9))])) }
     }
 
     @Test func realRippleCutChangesPictureAndExportDuration() async throws {

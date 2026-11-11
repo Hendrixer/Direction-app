@@ -10,10 +10,10 @@ Direction starts the editor itself whenever there's work: footage to log, an ass
 
 | Connection | What happens | Control |
 |---|---|---|
-| **Direction starts it** (default) | Direction runs Claude Code or Codex on this Mac for each job, with Direction's tools connected and a job written for it. | Start, pause, resume, stop, retry. Activity, spend. |
+| **Direction starts it** (default) | Direction runs a coding agent on this Mac for each job (Claude Code, Codex, or any agent below over ACP), with Direction's tools connected and a job written for it. | Start, pause, resume, stop, retry. Activity, spend. |
 | **Your own session** | You run Claude Code or Codex yourself and connect it over MCP: the sheet gives `claude mcp add direction -- "<the app's Helpers/direction>" mcp` and the same for `codex`, or, in a copy built from source, `./scripts/install-local.sh`. Direction shows what it does from its tool calls. | Activity only. Direction can't start, pause or stop it; the pill's popover says "Your own session" and shows the request to copy, as today. |
 
-Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex, Your own session.
+Settings › Engines › "Editor runs on" is a menu of the agents found on this Mac, then Your own session. Only installed agents are offered (2026-11-11); the one chosen stays listed if it's later removed, as "Not installed". A coding agent on the Mac is the one thing Direction requires: the editor is never a cloud agent.
 
 ## Programs
 
@@ -21,6 +21,20 @@ Settings › Engines › "Editor runs on" has three segments: Claude Code, Codex
 |---|---|---|---|
 | Claude Code (`claude`) | `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`, npm global bin, then `zsh -lc 'command -v claude'` | Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, Claude Haiku 5.5, Other… | Claude Opus 5.5 |
 | Codex (`codex`) | the same folders, then `zsh -lc 'command -v codex'` | The program's default, Other… (a text field) | The program's default |
+| OpenCode (`opencode acp`), Gemini CLI (`gemini --acp` or `--experimental-acp`), Cursor (`cursor-agent acp` or `agent acp`), Goose (`goose acp`), Qwen Code (`qwen --acp` or `--experimental-acp`), GitHub Copilot (`copilot --acp`), Cline (`cline --acp`), Kilo Code (`kilo acp`) | the same folders, plus nvm, Volta, Bun, asdf, mise and pnpm; the ACP form is the first one the copy's own `--help` lists, and a copy that lists none is "out of date" with its update command | The version set in the agent itself | The agent's own |
+
+### Agents over ACP
+
+Every agent but Claude Code and Codex is spoken to over the [Agent Client Protocol](https://agentclientprotocol.com) (version 1), newline-delimited JSON-RPC on stdin and stdout (`EditorACP.swift`). Claude Code and Codex keep their own command lines, which Direction relies on for strict MCP config, allowed tools, a sandbox and the result's shape. One invocation is one conversation:
+
+- **Hello and a session.** `initialize` offers no files or terminal of Direction's own, then `session/new` with `cwd` the job's folder and Direction's MCP server (`direction mcp --project … --job …`, `DIRECTION_RUN_ID` in its env), or `session/load` on the saved session when the agent can load one. Its replay is ignored. One it can't load is a new session that hears the whole job and then the continuation.
+- **The prompt.** ACP has no system prompt, so the role leads the first message, then `---`, then the job. The role already asks for the result JSON at the end of every turn, and Direction reads it from the agent's message as it does Claude Code's.
+- **What Direction reads.** `tool_call` and `tool_call_update` become steps, named as Claude Code names them (`mcp__direction__direction_watch` whatever the agent calls it, `Read`, `Edit`, `Bash` for its own), started once their input is known. `usage_update`'s cost is the session's running total. The prompt's answer ends the invocation: the agent's stdin closes, and it is ended if it stays open.
+- **Permission.** `session/request_permission` is answered by the same rules as Claude Code's allowed tools: Direction's tools, reading and searching, and changes inside the job's folder; commands only while Let the editor run scripts is on; never the web. Direction can't sandbox these agents, so an agent that never asks (Goose and Pi by default) runs as it's set up.
+- **Pause, Stop, Quit** send `session/cancel`, then the usual signals.
+- **Signed in** is a hello and a session with no tools and no prompt, so the check spends nothing: a session means signed in, ACP's `auth_required` means not. Each agent's sign-in step names its own command (`opencode auth login`, `gemini`, `goose configure`, and so on).
+- **Versions and effort** are the agent's own; the speed and quality slider still sets made media for the film.
+- **Icons:** only Claude Code's and Codex's ship; other agents show their name alone.
 
 - The version list ships with the app and is updated with it. "Other…" accepts any version string the program accepts.
 - **Signed in** is checked at setup, at every launch while the answer was no, after a sign-in failure, and on **Check again**. Direction runs the program with a job that only replies `ready` (no tools) and reads its answer (Claude Code's result JSON, Codex's events), never searching the reply for error words. It answers "ready": signed in. It says it isn't signed in (an invalid key, "run /login", a 401 status): "Not signed in" with the sign-in step; that answer is remembered. Anything else (no reply within 45 s, another error): "Couldn't check sign-in" with why and **Check again**, remembered as nothing, and the work can start anyway. A run that finishes means signed in. Each answer goes to Direction's log with its reason.
@@ -135,7 +149,7 @@ Frame: `screens/43-settings-editor.html` drew it as the Editor tab's first group
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
-| Who edits | Editor runs on | Seg: Claude Code / Codex / Your own session | Claude Code if installed, else Codex, else Your own session | Which program Direction starts. Sub-label shows what was found: "Claude Code 2.4.1 · signed in", "Not installed. Install it, then come back." with **Copy install command**, or for Your own session "Run Claude Code or Codex yourself. Direction shows what it does but can't start or pause it. How to connect". |
+| Who edits | Editor runs on | Select: the agents found on this Mac, then Your own session | The first agent found, in this order: Claude Code, Codex, OpenCode, Gemini CLI, Cursor, Goose, Qwen Code, GitHub Copilot, Cline, Kilo Code; else Your own session | Which program Direction starts. Sub-label shows what was found: "Claude Code 2.4.1 · signed in", "Not installed. Install it, then come back." with **Copy install command**, or for Your own session "Run Claude Code or Codex yourself. Direction shows what it does but can't start or pause it. How to connect". |
 | Who edits | Start work | Select: Right away / Ask me first | Right away | Sub-label: "When notes are turned over or footage arrives." |
 | Who edits | Let the editor run scripts | Switch | On | Sub-label: "Only inside its own folder in the film, with no internet. Some graphics and looks need it." |
 | Freedom | unchanged | | | |
@@ -185,16 +199,17 @@ Opens on every new film (New Film…, from a script or a story, a dropped folder
 
 - Title (Archivo 22): "Who's editing?"
 - Body (13 text-2): "Direction starts the editor on this Mac whenever this film has work, and you can pause or stop it anytime. It uses your own sign-in."
-- Two program cards side by side (`--raised`, radius 10, padding 14, the same selection ring as the Freedom cards):
+- A card for each agent found on this Mac, two across (`--raised`, radius 10, padding 14, the same selection ring as the Freedom cards). Frame 56 has three:
   - **Claude Code**: "Found · 2.4.1 · signed in" with a green dot (`--approve`). Selected.
-  - **Codex**: "Not installed" text-3, and under it SF Mono 11.5 `npm install -g @openai/codex` with a copy icon.
+  - **Codex**: "Found · 0.164.0".
+  - **OpenCode**: "Found · 2.2.7 · signed in", with no icon (only Claude Code's and Codex's ship).
 - Start work row: seg "Right away / Ask me first".
 - Speed and quality row: the slider (200 wide), its line as the row's detail (Speed and quality, above). Starts on the last one chosen.
 - Under the card, a note (11.5 text-3): "Change the speed and quality anytime the editor isn't working, from the editor button at the top of the window."
 - A text link (text-2, 12): "I'll run my own session instead". It turns the sheet into the MCP instructions (the install script and the "Copy request for your editor" text), with **Done**.
 - Buttons: Cancel (plain) · **Use Claude Code** (steel). The steel label follows the selected card.
 
-States: neither program found shows both cards as "Not installed" with their install commands, and the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Check again** and **Open Terminal**. A check that couldn't tell shows "Found · couldn't check sign-in" and "Direction couldn't check the sign-in: <why>. You can start anyway." with **Check again**.
+States: no agent found (`56-editor-none-found`) changes the body to "The editor is a coding agent on this Mac, and Direction found none. Install one of these, sign in, then check again." and shows Claude Code, Codex, OpenCode and Gemini CLI as "Not installed" with their install commands; the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Check again** and **Open Terminal**. A check that couldn't tell shows "Found · couldn't check sign-in" and "Direction couldn't check the sign-in: <why>. You can start anyway." with **Check again**.
 
 **Acceptance:**
 - [ ] Cancel leaves the film on the Footage step: on the editor in Settings, or with the pill "Editor not set up" when none was ever chosen. Nothing is lost; footage stays.

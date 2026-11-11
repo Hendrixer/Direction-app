@@ -45,7 +45,11 @@ public enum EditorActivityLog {
         switch name {
         case "direction_frame":
             if let asset = a["assetID"].string { return ActivityInput(verb: "Looking at", object: take(asset, c), tool: name) }
-            let t = seconds(a["time"]) ?? 0
+            // Several moments: the first to the last.
+            if let times = a["times"].array?.compactMap({ seconds($0) }), let first = times.min(), let last = times.max(), times.count > 1 {
+                return ActivityInput(verb: "Watching", object: "\(times.count) moments, " + PlainTime.text(first) + "\u{2013}" + PlainTime.text(last), mono: true, time: first, tool: name)
+            }
+            let t = seconds(a["time"]) ?? seconds(a["times"].array?.first ?? .null) ?? 0
             return ActivityInput(verb: "Watching", object: PlainTime.text(t), mono: true, time: t, tool: name)
         case "direction_watch", "direction_preview":
             guard let (s, e) = range(a) else { return ActivityInput(verb: "Watching", object: "the cut", tool: name) }

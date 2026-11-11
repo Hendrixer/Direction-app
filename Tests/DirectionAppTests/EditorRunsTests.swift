@@ -165,6 +165,8 @@ struct EditorActivityTests {
         #expect(watch?.mono == true && watch?.time == SampleFilm.tc(1, 12, 8))
         let frame = activity("direction_frame", ["time": .number(SampleFilm.tc(1, 12, 8))])
         #expect(frame?.verb == "Watching" && frame?.object == "1:12" && frame?.time != nil)
+        let several = activity("direction_frame", ["times": .array([.number(SampleFilm.tc(1, 14)), .number(SampleFilm.tc(1, 12, 8)), .number(SampleFilm.tc(1, 13))])])
+        #expect(several?.object == "3 moments, 1:12\u{2013}1:14" && several?.time == SampleFilm.tc(1, 12, 8))
         let take = activity("direction_frame", ["assetID": .string("take-3b-t1")])
         #expect(take?.verb == "Looking at" && take?.object == "3B T1" && take?.time == nil)
         #expect(activity("direction_contact_sheet", ["assetID": .string("take-2a-t2")])?.object == "2A T2")
@@ -415,6 +417,22 @@ struct EditorJobTests {
             let resume = EditorDiscovery.run(codex.path, ["exec", "resume", "--help"], environment: env, timeout: 30).map { $0.output + $0.error } ?? ""
             for flag in EditorProgram.codexResumeFlags { #expect(resume.contains(flag), "codex exec resume --help no longer lists \(flag)") }
         }
+        // Every ACP agent installed here still lists how it speaks ACP.
+        for p in EditorProgram.allCases where p.usesACP {
+            if let i = EditorDiscovery.find(p) { #expect(i.acp != nil, "\(p.name) \(i.version ?? "") lists none of \(p.acpForms) in --help") }
+        }
+    }
+
+    /// With DIRECTION_LIVE_ACP=1: every ACP agent installed here answers the sign-in check (hello and a session, no
+    /// prompt, so nothing is spent).
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRECTION_LIVE_ACP"] == "1"))
+    func installedACPAgentsAnswerTheSignInCheck() {
+        for p in EditorProgram.allCases where p.usesACP {
+            guard let i = EditorDiscovery.find(p) else { continue }
+            let answer = EditorDiscovery.checkSignedIn(i, version: "")
+            print("LIVE-ACP \(p.name) \(i.version ?? "?") \(i.acp ?? []): \(answer)")
+            if case .couldNotCheck(let why) = answer { Issue.record("\(p.name) couldn't be checked: \(why)") }
+        }
     }
 
     /// A program npm put in an nvm Node is found from the Dock too: Terminal reaches it only through .zshrc, which a
@@ -455,8 +473,61 @@ struct EditorRunnerTests {
         if logged { _ = try store.logDailies(Dailies(scenes: [], takes: ["take-1": TakeInfo(assetID: "take-1")])) }
         try FileManager.default.createDirectory(at: dir.appendingPathComponent("Editor"), withIntermediateDirectories: true)
         let runner = EditorRunner.shared
-        runner.programOverride = [.claudeCode: Self.fake]; runner.helperOverride = "/usr/bin/true"
+        runner.programOverride = [.claudeCode: Self.fake, .opencode: Self.fakeACP]; runner.helperOverride = "/usr/bin/true"
         return (store, dir)
+    }
+    static let fakeACP = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("FakeEditor/fake-acp").path
+    private func startACP(_ job: EditorJob, store: ProjectStore) throws -> EditorRun {
+        let run = EditorRun(job: job, program: "opencode", version: "")
+        try store.saveRun(run)
+        EditorRunner.shared.launch(run, store: store)
+        return run
+    }
+    private func text(_ dir: URL, _ name: String) -> String { (try? String(contentsOf: dir.appendingPathComponent("Editor/\(name)"), encoding: .utf8)) ?? "" }
+
+    /// An agent over ACP: the session with Direction's tools for this job, the role leading the first message, Claude
+    /// Code's permission rules, the session's spend, the result, and its own steps in the activity.
+    @Test func anAgentOverACPFinishesWithItsSessionSpendPermissionsAndActivity() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("done", dir)
+        let run = try startACP(.logFootage, store: store)
+        let r = try await ended(store, run.id)
+        #expect(r.state == .done)
+        #expect(r.session == "fake-acp-session-1" && r.spend == 0.42 && r.summary == "Logged 1 take." && r.invocations == 1)
+        #expect(args(dir) == ["acp"])
+        #expect(text(dir, ".fake-prompt").contains("\n\n---\n\n") && text(dir, ".fake-prompt").hasPrefix(String(EditorJobs.role.prefix(40))))
+        let servers = try JSONDecoder().decode(JSONValue.self, from: Data(text(dir, ".fake-mcp.json").utf8))
+        #expect(servers[0]["name"].string == "direction" && servers[0]["command"].string == "/usr/bin/true")
+        #expect(servers[0]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
+        #expect(servers[0]["env"] == .array([.object(["name": .string("DIRECTION_RUN_ID"), "value": .string(run.id)])]))
+        #expect(text(dir, ".fake-permissions").split(separator: "\n") == ["execute ffmpeg -version yes", "edit Edit /etc/hosts no", "edit Edit NOTES.md yes", "fetch Fetch example.com no", "other direction__direction_log_dailies yes"])
+        #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "its notes" })
+    }
+
+    @Test func pausingAnACPAgentKeepsItsSessionAndResumeLoadsIt() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("slow", dir)
+        let run = try startACP(.logFootage, store: store)
+        _ = try await wait(store, run.id) { $0.state == .working && $0.session != nil }
+        EditorRunner.shared.pause(run.id, store: store)
+        let paused = try await ended(store, run.id)
+        #expect(paused.state == .paused && paused.session == "fake-acp-session-1")
+        _ = try store.logDailies(Dailies(scenes: [], takes: ["take-1": TakeInfo(assetID: "take-1")]))
+        try scenario("done", dir)
+        EditorRunner.shared.launch(paused, store: store, continuation: EditorJobs.continuation("Continue where you stopped.", job: .logFootage))
+        let done = try await wait(store, run.id) { $0.state == .done && !EditorRunner.shared.isLive(run.id) }
+        // The saved session is loaded, its replay ignored, and only the continuation said.
+        #expect(done.invocations == 2 && done.summary == "Logged 1 take." && done.spend == 0.42)
+        #expect(text(dir, ".fake-loaded") == "fake-acp-session-1")
+        #expect(text(dir, ".fake-prompt").hasPrefix("Continue where you stopped."))
+    }
+
+    @Test func anACPAgentThatIsntSignedInSaysSo() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("auth", dir)
+        let r = try await ended(store, try startACP(.logFootage, store: store).id)
+        #expect(r.state == .failed && r.reason == .notSignedIn)
+        #expect(EditorSetup.signedIn(.opencode) == false)
     }
     private func scenario(_ name: String, _ dir: URL) throws { try Data(name.utf8).write(to: dir.appendingPathComponent("Editor/.fake-scenario")) }
     private func args(_ dir: URL) -> [String] { ((try? String(contentsOf: dir.appendingPathComponent("Editor/.fake-args"), encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }

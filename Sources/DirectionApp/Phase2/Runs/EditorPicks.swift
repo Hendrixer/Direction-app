@@ -47,6 +47,8 @@ enum EditorPicks {
     /// version offers at or below the pick. `DIRECTION_EDITOR_VERSION` and `DIRECTION_EDITOR_EFFORT`
     /// replace both for every job, for testing and the bench.
     static func pick(_ p: EditorProgram, _ job: EditorJob, _ q: FilmQuality, environment: [String: String] = ProcessInfo.processInfo.environment, codexVersions: [String]? = nil) -> Pick {
+        // An ACP agent runs on the version and effort set in the agent itself.
+        if p.usesACP { return Pick(version: "", effort: "") }
         var pick = listed(p, job, q)
         if p == .codex {
             let offered = Set(codexVersions ?? p.versions.map(\.id))
