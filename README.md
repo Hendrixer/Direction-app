@@ -112,3 +112,7 @@ swift build           # or open Package.swift in Xcode
 - Delivery is SDR Rec.709. HDR footage (an iPhone's HLG, for example) is copied to SDR inside the film; the original stays as it is.
 - Screening links aren't available yet. To share a cut, export a screening copy with File › Share Cut….
 - Open-source parts are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## License
+
+Direction is fair source under the [Functional Source License, Version 1.1, MIT Future License](LICENSE.md) (FSL-1.1-MIT). You can read, build, change and use it for anything except a competing product, and each version becomes MIT two years after it's released. The Direction name and icon aren't covered by the license.
