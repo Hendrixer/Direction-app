@@ -56,7 +56,7 @@ struct EditorSetupSheet: View {
                     GateSegmented(options: [(false, "Right away"), (true, "Ask me first")], selection: $asksFirst)
                 }
                 SettingsRow(label: "Speed and quality", detail: quality.detail, minHeight: 64) {
-                    StopSlider(stops: FilmQuality.allCases.map { ($0, $0.label) }, selection: $quality, label: "Speed and quality").frame(width: 200)
+                    StopSlider(stops: FilmQuality.allCases.map { ($0, $0.label) }, selection: $quality, label: "Speed and quality").frame(width: 250)
                 }
             }
             .background(SystemCardBackground())

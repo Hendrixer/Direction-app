@@ -174,12 +174,13 @@ Frame: `screens/43-settings-editor.html` drew it as the Editor tab's first group
 Note under Before cutting: "The editor reads the brief before every cut."
 
 ### Speed and quality
-One setting per film, a slider with three stops: **Faster · Balanced · Best** (decided 2026-11-08, replacing the version and effort per job of 2026-11-03 and Made with). The director never chooses a version or an effort: Direction picks both for each job, and the version for each made request, from the film's stop. The picks, their sources and how they're refreshed are in `docs/speed-and-quality.md`.
+One setting per film, a slider with four stops: **Fastest · Faster · Balanced · Best** (decided 2026-11-08 with three, replacing the version and effort per job of 2026-11-03 and Made with; Fastest added 2026-11-11, since Faster kept the strongest version for cutting and wasn't the quick option the director expected). The director never chooses a version or an effort: Direction picks both for each job, and the version for each made request, from the film's stop. The picks, their sources and how they're refreshed are in `docs/speed-and-quality.md`.
 
 - **Where.** The editor popover (frame 41), under How much freedom, and Who's editing? (frame 56) when a film starts. Nowhere in Settings. The film keeps it (`DirectingState.quality`, nil is Balanced); a new film starts with the last one chosen.
 - **When.** Any time the editor isn't working: waiting for an answer and paused count as not working. While it works (Your own session's idle popover), the slider is disabled with "Change it once the editor finishes what it's doing." A run takes the film's version and effort when it starts and keeps them, resumed and continued runs included; a run that hasn't started takes them again when it launches. What a run makes after a change follows the new stop.
-- **The control.** `.slider` with stops: the 4 pt track, steel-8 fill to the knob, the 16 pt steel-9 knob, a 6 pt dot at each stop, and the stops' names under it (11.5, the chosen one text-1 medium, the others text-3). Click or drag anywhere and it lands on the nearest stop; a name picks its stop; ←/→ and VoiceOver move one stop. Under it, one line (11.5 text-3):
-  - Faster: "The editor works quicker and made shots come back sooner. Good for a first pass or a quick cut."
+- **The control.** `.slider` with stops: the 4 pt track, steel-8 fill to the knob, the 16 pt steel-9 knob, a 6 pt dot at each stop, and each stop's name under its dot, on one line (the first from the track's start, the last to its end, the rest centred; 11.5, the chosen one text-1 medium, the others text-3). Click or drag anywhere and it lands on the nearest stop; a name picks its stop; ←/→ and VoiceOver move one stop. Under it, one line (11.5 text-3):
+  - Fastest: "The editor works on a quicker version for everything, and made shots come back sooner. Good for a rough first pass."
+  - Faster: "The editor thinks less while it cuts, and made shots come back sooner. Good for a quick cut."
   - Balanced: "The editor takes its time cutting and answering notes, and moves quickly through the rest."
   - Best: "The editor takes its time on everything, and made shots use the best versions. Slower, and spends more."
 

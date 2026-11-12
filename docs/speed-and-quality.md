@@ -1,36 +1,38 @@
 # Speed and quality
 
-Each film has one setting, **Faster · Balanced · Best**, on a slider in the editor popover and in Who's editing? (specs/editor.md › Speed and quality). The director never chooses a version or an effort. From the film's stop Direction picks:
+Each film has one setting, **Fastest · Faster · Balanced · Best**, on a slider in the editor popover and in Who's editing? (specs/editor.md › Speed and quality). The director never chooses a version or an effort. From the film's stop Direction picks:
 
 - the editor's version and effort for each job (`EditorPicks`, Sources/DirectionApp/Phase2/Runs/EditorPicks.swift);
 - the version for each made request, by what it needs (`MadePicks` and `MadeCatalog.route`, Sources/DirectionCore/Phase2/Made/MadeRouting.swift);
-- the resolution a made shot is made at: 720p where a version lists it (else 768p) at Faster and Balanced, quicker and for about half, which this Mac sharpens to a cut half again as tall or more; 1080p where a version offers it at Best, and on a Mac that can't sharpen.
+- the resolution a made shot is made at: 720p where a version lists it (else 768p) at Fastest, Faster and Balanced, quicker and for about half, which this Mac sharpens to a cut half again as tall or more; 1080p where a version offers it at Best, and on a Mac that can't sharpen.
 
-The picks below were researched on 8 Nov 2026. Refresh them by hand: read the sources again, change the tables in code and here, and say what moved in the commit. Then confirm the editor's picks with the bench (docs/bench.md).
+The picks below were researched on 8 Nov 2026. Fastest was added on 11 Nov 2026: Faster kept Opus 5.5 for cutting, so it wasn't the quick option the director expected; Fastest puts cutting, notes and styles on the second version too (Sonnet 5.5; Sol for Codex, which Faster already uses) and makes media as Faster does. Refresh them by hand: read the sources again, change the tables in code and here, and say what moved in the commit. Then confirm the editor's picks with the bench (docs/bench.md).
 
 ## The editor
 
-The rule behind the table: judgement (cutting, answering notes, a style's taste) stays on the strongest version at every stop, and only its effort moves. The list-like jobs (a breakdown, finishing) move to lighter versions. Nothing that looks at frames runs below Medium.
+The rule behind the table: from Faster up, judgement (cutting, answering notes, a style's taste) stays on the strongest version, and only its effort moves; at Fastest it runs on the second version. The list-like jobs (a breakdown, finishing) move to lighter versions. Nothing that looks at frames runs below Medium.
 
-| Job | Faster | Balanced | Best |
-|---|---|---|---|
-| A/V script | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high |
-| Breakdown | Haiku 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium |
-| Logging takes | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · high |
-| Assembly | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
-| Notes | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
-| Finishing | Haiku 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium |
-| Styles | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
-| Techniques | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high |
+| Job | Fastest | Faster | Balanced | Best |
+|---|---|---|---|---|
+| A/V script | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high |
+| Breakdown | Haiku 5.5 · medium | Haiku 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium |
+| Logging takes | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · high |
+| Assembly | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
+| Notes | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
+| Finishing | Haiku 5.5 · medium | Haiku 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium |
+| Styles | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
+| Techniques | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high |
 
-| Job (Codex) | Faster | Balanced | Best |
-|---|---|---|---|
-| A/V script | GPT-6.1 Terra · medium | GPT-6.1 Sol · medium | GPT-6.1 Sol · high |
-| Breakdown | Terra · low | Terra · medium | Sol · medium |
-| Logging takes | Terra · medium | Terra · medium | Sol · high |
-| Assembly, Notes, Styles | Sol · medium | Sol · high | GPT-6 Astra · high |
-| Finishing | Terra · low | Terra · medium | Sol · medium |
-| Techniques | Terra · medium | Sol · medium | Sol · high |
+| Job (Codex) | Fastest | Faster | Balanced | Best |
+|---|---|---|---|---|
+| A/V script | GPT-6.1 Terra · medium | Terra · medium | GPT-6.1 Sol · medium | Sol · high |
+| Breakdown | Terra · low | Terra · low | Terra · medium | Sol · medium |
+| Logging takes | Terra · medium | Terra · medium | Terra · medium | Sol · high |
+| Assembly, Notes, Styles | Sol · medium | Sol · medium | Sol · high | GPT-6 Astra · high |
+| Finishing | Terra · low | Terra · low | Terra · medium | Sol · medium |
+| Techniques | Terra · medium | Terra · medium | Sol · medium | Sol · high |
+
+On Codex, Fastest and Faster pick the same: cutting there is already on Sol at Faster, and Astra (about 4× Sol) stays at Best.
 
 Why:
 

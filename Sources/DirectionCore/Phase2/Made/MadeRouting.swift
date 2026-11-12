@@ -66,7 +66,7 @@ public enum MadePicks {
             // Words: GPT Image leads every text-rendering board. Otherwise reference fidelity and multi-image edits.
             if n.lettering { return q == .best ? [sunburst, flare] : [flare, sunburst] }
             switch q {
-            case .faster: return [flare, nanoBanana]
+            case .fastest, .faster: return [flare, nanoBanana]
             case .balanced: return [nanoBanana, flare]
             case .best: return [sunburst25, sunburst, flare]
             }
@@ -74,21 +74,21 @@ public enum MadePicks {
             if n.sound {
                 // Hailuo 3 Max makes no sound. Seedance's dialogue rates best; H3's sound sync is next.
                 switch q {
-                case .faster: return [omni, wan]
+                case .fastest, .faster: return [omni, wan]
                 case .balanced: return [wan, omni]
                 case .best: return [seedance, h3, wan]
                 }
             }
             if n.kind == .shot && !n.firstFrame && !n.lastFrame {
                 switch q {
-                case .faster: return [h3Max]
+                case .fastest, .faster: return [h3Max]
                 case .balanced: return [omni, h3Max]
                 case .best: return [wan, omni]
                 }
             }
             if n.camera { return q == .best ? [seedance, h3Max] : [h3Max] }
             switch q {
-            case .faster: return [h3Max]
+            case .fastest, .faster: return [h3Max]
             // With a person, Wan 3.0 draws people best of the versions that take them.
             case .balanced: return n.person ? [wan, h3Max] : [h3Max]
             case .best: return [seedance, wan, h3Max]
@@ -98,7 +98,7 @@ public enum MadePicks {
             // of the two frames; Kling 3.0 Pro showed what made the change (the headphones put on by hand) where Wan 3.0
             // let them appear, but took four minutes to Wan's two and cost a third more.
             switch q {
-            case .faster: return [wan, kling]
+            case .fastest, .faster: return [wan, kling]
             case .balanced: return [kling, wan]
             case .best: return [seedance, kling, wan]
             }
@@ -199,7 +199,7 @@ extension MadeCatalog {
         case .balanced:
             let close = rated.filter { MadeRanking.rating($0) >= MadeRanking.rating(top) - MadeRanking.closeToBest }.sorted { price($0) < price($1) }
             ordered = close + rated.filter { !close.contains($0) }
-        case .faster:
+        case .fastest, .faster:
             // Past the picks, the cheaper versions rated good enough: they're the quick ones too.
             let good = rated.filter { MadeRanking.rating($0) >= MadeRanking.goodEnough }.sorted { price($0) < price($1) }
             ordered = good + rated.filter { !good.contains($0) }

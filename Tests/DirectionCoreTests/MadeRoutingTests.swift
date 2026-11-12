@@ -36,6 +36,14 @@ struct MadeRoutingTests {
     }
 
     /// Faster and Balanced start with Hailuo 3 Max: rated close to the best, quickest by far, and cheap.
+    /// Fastest is about the editor; made shots, stills and sound are Faster's.
+    @Test func fastestMakesWhatFasterMakes() {
+        for needs in [fromFrame, MadeNeeds(kind: .shot, seconds: 5), MadeNeeds(kind: .bridge, firstFrame: true, lastFrame: true, seconds: 5)] {
+            #expect(ids(needs, .fastest) == ids(needs, .faster), "\(needs.kind)")
+        }
+        #expect(MadeEstimator.videoResolution(Self.catalog.versions[3], quality: .fastest) == MadeEstimator.videoResolution(Self.catalog.versions[3], quality: .faster))
+    }
+
     @Test func fasterAndBalancedStartWithTheQuickOne() {
         #expect(ids(fromFrame, .faster).first == "minimax/hailuo-3-max" && ids(fromFrame, .balanced).first == "minimax/hailuo-3-max")
         // Past the picks, Balanced is the cheapest of the best few and Faster the cheapest rated good.
@@ -145,7 +153,7 @@ struct MadeRoutingTests {
             MadeVersion(id: "elevenlabs/eleven-v4", name: "Eleven v4", listing: .speech, voices: ["rachel"]),
         ])
         let voice = MadeNeeds(kind: .voice)
-        #expect(FilmQuality.allCases.map { ids(voice, $0, in: voices).first } == ["elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4"])
+        #expect(FilmQuality.allCases.map { ids(voice, $0, in: voices).first } == ["elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4"])
         // Gone from the list: the first one listed, as before.
         #expect(ids(voice, .best, in: MadeCatalog(fetchedAt: 0, versions: [voices.versions[0]])) == ["assemblyai/assemblyai-tts-1"])
     }

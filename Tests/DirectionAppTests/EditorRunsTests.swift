@@ -1149,13 +1149,24 @@ struct EditorPicksTests {
         FilmQuality.allCases.map { q in let p = EditorPicks.pick(.claudeCode, job, q, environment: none); return p.version.replacingOccurrences(of: "claude-", with: "") + " " + p.effort }
     }
 
-    /// Judgement stays on Opus at every stop and only its effort moves; the list-like jobs move to lighter versions.
+    /// From Faster up, judgement stays on Opus and only its effort moves; Fastest puts it on Sonnet. The list-like
+    /// jobs move to lighter versions.
     @Test func eachJobHasAPickAtEveryStop() {
-        #expect(claude(.assemble) == ["opus-5-5 medium", "opus-5-5 high", "opus-5-5 xhigh"])
+        #expect(FilmQuality.allCases == [.fastest, .faster, .balanced, .best])
+        #expect(claude(.assemble) == ["sonnet-5-5 medium", "opus-5-5 medium", "opus-5-5 high", "opus-5-5 xhigh"])
         #expect(claude(.turnover) == claude(.assemble) && claude(.style) == claude(.assemble))
-        #expect(claude(.breakdown) == ["haiku-5-5 medium", "sonnet-5-5 medium", "opus-5-5 medium"])
-        #expect(claude(.logFootage) == ["sonnet-5-5 medium", "sonnet-5-5 medium", "opus-5-5 high"])
-        #expect(claude(.finish) == ["haiku-5-5 medium", "sonnet-5-5 medium", "opus-5-5 medium"])
+        #expect(claude(.breakdown) == ["haiku-5-5 medium", "haiku-5-5 medium", "sonnet-5-5 medium", "opus-5-5 medium"])
+        #expect(claude(.logFootage) == ["sonnet-5-5 medium", "sonnet-5-5 medium", "sonnet-5-5 medium", "opus-5-5 high"])
+        #expect(claude(.finish) == ["haiku-5-5 medium", "haiku-5-5 medium", "sonnet-5-5 medium", "opus-5-5 medium"])
+        // Codex's cutting is on Sol at Fastest and Faster; Astra, about 4× Sol, only at Best.
+        let codex = FilmQuality.allCases.map { EditorPicks.pick(.codex, .turnover, $0, environment: none, codexVersions: ["gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra"]).version }
+        #expect(codex == ["gpt-6.1-sol", "gpt-6.1-sol", "gpt-6.1-sol", "gpt-6-astra"])
+        // Fastest is never slower than Faster: the same version or a lighter one, at the same effort or less.
+        for job in EditorJob.allCases {
+            let rank = ["claude-haiku-5-5": 0, "claude-sonnet-5-5": 1, "claude-opus-5-5": 2]
+            let fastest = EditorPicks.pick(.claudeCode, job, .fastest, environment: none), faster = EditorPicks.pick(.claudeCode, job, .faster, environment: none)
+            #expect(rank[fastest.version]! <= rank[faster.version]!, "\(job)")
+        }
         #expect(Set(EditorJob.byFilm) == Set(EditorJob.allCases) && EditorJob.byFilm.count == EditorJob.allCases.count)
         // Nothing runs below medium on Claude, and every job has a version at every stop.
         for job in EditorJob.allCases {
