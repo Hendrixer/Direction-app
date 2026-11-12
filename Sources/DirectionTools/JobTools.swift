@@ -44,7 +44,7 @@ extension ToolCatalog {
     /// tool's description short (Claude Code keeps 2,048 characters); instructions are kept whole.
     public static func reference(for job: EditorJob) -> String {
         let own = names(for: job)
-        return definitions.filter { own.contains($0.name) }.map { "### " + call($0, film: true) + "\n" + $0.description }.joined(separator: "\n\n")
+        return definitions.filter { own.contains($0.name) }.map { scriptNames("### " + call($0, film: true) + "\n" + $0.description) }.joined(separator: "\n\n")
     }
 
     /// One tool as a script calls it, every argument typed. film: the server was started for a film (a job's always
@@ -109,8 +109,15 @@ extension ToolCatalog {
             guard full != runName, let d = definitions.first(where: { $0.name == full }) else {
                 throw DirectionError("unknown_tool", "Direction has no tool \(name). direction.help() lists them.")
             }
-            return .object(["call": .string(call(d, film: job != nil)), "description": .string(d.description)])
+            return .object(["call": .string(job == nil ? call(d) : scriptNames(call(d, film: true))), "description": .string(job == nil ? d.description : scriptNames(d.description))])
         })
+    }
+
+    /// Text an editor Direction started reads, with Direction's tools named as a script calls them: `direction_watch`
+    /// becomes `direction.watch`. direction_run stays, the one tool it has. An editor that read `direction_turnover_update`
+    /// in its job tried calling it directly (2026-11-11), a step lost.
+    public static func scriptNames(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\bdirection_(?!run\b)([a-z][a-z_]*[a-z])\b"#, with: "direction.$1", options: .regularExpression)
     }
 
     /// A description's first sentence, for a line in the list.

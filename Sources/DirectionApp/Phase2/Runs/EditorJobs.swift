@@ -21,7 +21,8 @@ enum EditorJobs {
     static func fill(_ template: String, _ values: [String: String]) -> String {
         var out = template.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.hasPrefix("<!-- direction-job") }.joined(separator: "\n")
         for (k, v) in values { out = out.replacingOccurrences(of: "{{\(k)}}", with: v) }
-        return out.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
+        // Its only tool is direction_run: every other tool is named as a script calls it.
+        return ToolCatalog.scriptNames(out.trimmingCharacters(in: .whitespacesAndNewlines)) + "\n"
     }
 
     /// The role, then the job's tools in full as the functions a script calls (its only tool is direction_run). Only
@@ -290,7 +291,9 @@ enum EditorJobs {
         var ours: Set<String> = []
         if let skills = skillsFolder(), let names = try? fm.contentsOfDirectory(atPath: skills.path) {
             for name in names {
-                guard let text = try? Data(contentsOf: skills.appendingPathComponent(name).appendingPathComponent("SKILL.md")) else { continue }
+                // The editor's copy names the tools as its scripts call them; the plugin's own stays as it is.
+                guard let original = try? String(contentsOf: skills.appendingPathComponent(name).appendingPathComponent("SKILL.md"), encoding: .utf8) else { continue }
+                let text = Data(ToolCatalog.scriptNames(original).utf8)
                 let target = folder.appendingPathComponent(".claude/skills/\(name)/SKILL.md")
                 try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try text.write(to: target, options: .atomic)

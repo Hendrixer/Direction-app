@@ -394,7 +394,7 @@ struct EditorJobTests {
         let file = try store.addLicense(from: license)
         let text = try EditorJobs.text(for: run, store: store)
         #expect(text.contains("> Featuring\n> Maya Chen\n>\n> Camera\n> Sam Ortiz") && text.contains("{op: \"credits\"}") && text.contains(file.path))
-        #expect(text.contains("direction_measure_audio") && text.contains("direction_check") && text.contains("{op: \"loudness\"}") && !text.contains("{{"))
+        #expect(text.contains("direction.measure_audio") && text.contains("direction.check") && !text.contains("direction_measure_audio") && text.contains("{op: \"loudness\"}") && !text.contains("{{"))
     }
 
     @Test func commandLinesUseOnlyTheCheckedFlags() {
@@ -611,6 +611,9 @@ struct EditorRunnerTests {
         #expect(mcp["mcpServers"]["direction"]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
         #expect(mcp["mcpServers"]["direction"]["env"]["DIRECTION_RUN_ID"].string == run.id)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/.claude/skills/start-project/SKILL.md").path))
+        // The editor's copy of a skill names the tools as its scripts call them.
+        let skill = try String(contentsOf: dir.appendingPathComponent("Editor/.claude/skills/edit-video/SKILL.md"), encoding: .utf8)
+        #expect(skill.contains("direction.watch") && !skill.contains("direction_watch"))
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/NOTES.md").path))
         #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "its notes" })
     }
@@ -1282,5 +1285,5 @@ struct EditorPicksTests {
         ScreenText(assetID: "cam", shotID: shot.id, start: 10, end: 20, lines: ["Draft v3"]),
     ])
     let withScreen = try EditorJobs.text(for: run, store: store)
-    #expect(withScreen.contains("On screen: AI is the last thing humans will ever invent \u{00B7} Planning \u{00B7} Draft v3 (2 stretches over time: direction_screen_text with assetID)"))
+    #expect(withScreen.contains("On screen: AI is the last thing humans will ever invent \u{00B7} Planning \u{00B7} Draft v3 (2 stretches over time: direction.screen_text with assetID)"))
 }

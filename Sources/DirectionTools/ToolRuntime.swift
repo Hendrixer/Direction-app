@@ -154,6 +154,7 @@ public actor ToolRuntime {
             }
             return ToolResponse(try .wrapping(job))
         case "direction_measure_audio":
+            if a["levels"] != .null { return try await levels(a) }
             guard let assetID = a["assetID"].string else {
                 // No take: the cut's mix, as it plays and delivers.
                 let p = try store.read(revision: a["revision"].int)
@@ -336,6 +337,32 @@ public actor ToolRuntime {
     private func baseRevision(_ a: JSONValue) throws -> Int { try requiredInt(a, "baseEditRevision") }
     private func requiredInt(_ a: JSONValue, _ key: String) throws -> Int { guard let n = a[key].double, n.isFinite, n.rounded() == n, let v = a[key].int, v >= 0 else { throw DirectionError("invalid_arguments", "\(key) must be a nonnegative integer.") }; return v }
     private func optionalTime(_ value: JSONValue) throws -> MediaTime? { guard value != .null else { return nil }; guard let v = value.double, v.isFinite && v >= 0 else { throw DirectionError("invalid_time", "Time must be a nonnegative number of seconds.") }; return .init(seconds: v) }
+    /// measure_audio's levels: every frame (or `every` seconds) over a stretch, of the cut's mix or a take's track.
+    private func levels(_ a: JSONValue) async throws -> ToolResponse {
+        let l = a["levels"], p = try store.read(revision: a["revision"].int)
+        guard let start = l["start"].double, let end = l["end"].double, start.isFinite, end.isFinite, start >= 0, end > start else { throw DirectionError("invalid_range", "levels takes {start, end} in seconds, with 0 \u{2264} start < end.") }
+        var asset: MediaAsset?, frameRate = 30.0
+        if let id = a["assetID"].string { asset = try p.asset(id); frameRate = asset?.video.first?.frameRate ?? 30 }
+        else { frameRate = try p.sequence(a["sequenceID"].string).frameRate.value }
+        let every = l["every"].double ?? 1 / max(1, frameRate)
+        guard every.isFinite, every >= 0.005 else { throw DirectionError("bad_argument", "every is at least 0.005 s.") }
+        guard (end - start) / every <= Double(Levels.most) else {
+            throw DirectionError("bad_argument", "That\u{2019}s \(Int(((end - start) / every).rounded(.up))) windows; levels gives up to \(Levels.most). Measure a shorter stretch, or a longer every.")
+        }
+        if let asset {
+            guard let track = a["trackID"].int.flatMap(Int32.init(exactly:)) ?? asset.audio.first?.id else { throw DirectionError("no_audio", "The source has no audio.") }
+            let v = try await AudioProcessor.levels(asset: asset, trackID: track, start: start, end: end, every: every, directory: cacheDirectory.appendingPathComponent("Audio"))
+            guard case .object(var o) = v.json else { return ToolResponse(v.json) }
+            o["assetID"] = .string(asset.id); o["audioTrackID"] = .number(Double(track))
+            return ToolResponse(.object(o))
+        }
+        let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory)
+        let v = try await SequenceRenderer.levels(compiled, range: MediaRange(start: start, end: end), every: every)
+        guard case .object(var o) = v.json else { return ToolResponse(v.json) }
+        o["editRevision"] = .number(Double(p.editRevision))
+        return ToolResponse(.object(o))
+    }
+
     private func secondsRange(_ a: JSONValue) throws -> MediaRange { guard let start = a["start"].double, let end = a["end"].double, start.isFinite && end.isFinite && start >= 0 && end > start else { throw DirectionError("invalid_range", "Provide start/end seconds, with 0 ≤ start < end.") }; return .init(start: start, end: end) }
 }
 

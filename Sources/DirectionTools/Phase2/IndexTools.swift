@@ -14,7 +14,7 @@ extension ToolCatalog {
             definition("direction_index", "Look at footage: find every shot, make each take's contact sheet, note the sounds, describe each shot and make it all searchable. Runs as a job (poll direction_job) at background priority, take by take in footage order; it starts by itself when footage arrives if Settings › Engines says so. How shots are described is the director's choice in Settings, not yours. assetIDs limits it to those takes (and retries failed ones); force looks again from scratch; cancel stops this process's index job. Returns the job and each state's count.", ["assetIDs": list(string), "force": bool, "cancel": bool], readOnly: false),
             definition("direction_shots", "Read the shots Direction found, in take order: source range (seconds and timecode), description, size, movement, people (what's visible, never names: map them to names yourself), setting, flags, the sounds in the shot, the gist of any text on screen (onScreen; direction_screen_text has all of it, with times), and small keyframe paths (10%, 50%, 90%). Filter by assetID or sceneID; page with offset and limit. Each take's index state is waiting, looking, done or failed. Log takes from these before watching anything.", ["assetID": string, "sceneID": string, "offset": integer, "limit": integer]),
             definition("direction_contact_sheet", "One image of a take: frames (4–36, default 16) evenly across it, or across range {start,end} in source seconds, each labeled with its source timecode, plus the time of each cell. Use it to see a whole take at a glance, then direction_frame with assetID and time for a real frame.", ["assetID": string, "range": range, "frames": integer], required: ["assetID"]),
-            definition("direction_watch", "The closest thing to watching: a filmstrip of a passage of the cut, start to end in cut seconds (at revision, default the current edit), frames 8–24 (default 12), with timecodes, the words spoken in it, the sounds, and where the cuts fall. Watch every passage you changed before delivering a cut.", ["start": number, "end": number, "revision": integer, "sequenceID": string, "frames": integer], required: ["start", "end"]),
+            definition("direction_watch", "The closest thing to watching: a filmstrip of a passage of the cut, start to end in cut seconds (at revision, default the current edit), frames 8–24 (default 12), with timecodes, the words spoken in it, the sounds, and where the cuts fall. Watch every passage you changed before delivering a cut: changed: true (instead of start and end) watches each passage the open notes turnover changed that you haven't watched since, a filmstrip each (8 frames unless frames says), up to 8 in one call.", ["start": number, "end": number, "revision": integer, "sequenceID": string, "frames": integer, "changed": bool, "turnoverID": string]),
             definition("direction_screen_text", "Read the text on screen in a take over time (a screen recording, slides, a whiteboard, a sign), read by Apple's text recognition on this Mac when the footage was looked at: each stretch with its source range and its lines, top to bottom. A stretch spanning the whole shot is text that stayed on screen throughout (a window title, a slide's heading). range {start, end} in source seconds keeps the stretches that overlap it. Use it to cut to a screen recording when it shows what's being said, and to caption screen recordings by what they show.", ["assetID": string, "range": range], required: ["assetID"]),
             definition("direction_search_footage", "Search footage by what's in it (\"Maya laughing\", \"wide of the ridge at dusk\", \"the pricing slide\"): ranks shots by the meaning of their descriptions, lines and text on screen blended with exact words (0.6 meaning, 0.4 words), best shot per take first, with a score, why it matched (picture, words, both, or screen: text read off the picture, and then start–end is when that text is on screen), the matching text and keyframe paths. similarTo: a shotID ranks by how alike the pictures are instead. wordsOnly searches the transcripts alone. Runs on this Mac; the query never leaves it.", ["query": string, "sceneID": string, "circledOnly": bool, "wordsOnly": bool, "similarTo": string, "limit": integer]),
         ]
@@ -96,6 +96,7 @@ extension ToolRuntime {
             return ToolResponse(.object(["assetID": .string(asset.id), "take": .string(label(asset.id, try store.dailies(), [asset.id: asset])), "columns": .number(Double(layout.columns)), "rows": .number(Double(layout.rows)), "cells": .array(cells), "path": .string(path), "order": .string("Cells read left to right, top to bottom.")]), imagePaths: [try pngCopy(path)])
 
         case "direction_watch":
+            if a["changed"].bool == true { return try await watchChanged(a) }
             return try await watch(a)
 
         case "direction_search_footage":
@@ -133,6 +134,26 @@ extension ToolRuntime {
     }
 
     // MARK: Watching
+
+    /// Every passage the open notes turnover changed that hasn't been watched since: a filmstrip each, in one answer.
+    private func watchChanged(_ a: JSONValue) async throws -> ToolResponse {
+        guard let t = try a["turnoverID"].string.flatMap({ id in try store.turnovers().first { $0.id == id } }) ?? store.turnovers().last(where: { $0.kind == "notes" && $0.state.isOpen }) else {
+            throw DirectionError("no_turnover", "There\u{2019}s no notes turnover open to watch the changes of. Give start and end to watch a passage.")
+        }
+        let passages = try unwatched(turnoverID: t.id)
+        guard !passages.isEmpty else { return ToolResponse(.object(["passages": .array([]), "watched": .string("Every passage you changed is watched.")])) }
+        let most = 8, duration = try store.read().sequence(a["sequenceID"].string).duration.seconds
+        var out: [JSONValue] = [], images: [String] = []
+        for p in passages.prefix(most) {
+            var args: [String: JSONValue] = ["start": .number(max(0, p.start - 0.5)), "end": .number(min(duration, max(p.end + 0.5, p.start + 1))), "frames": .number(Double(a["frames"].int ?? 8))]
+            if let s = a["sequenceID"].string { args["sequenceID"] = .string(s) }
+            let r = try await watch(.object(args))
+            out.append(r.value); images += r.imagePaths
+        }
+        var value: [String: JSONValue] = ["passages": .array(out)]
+        if passages.count > most { value["more"] = .string("\(passages.count - most) more not watched yet: call again.") }
+        return ToolResponse(.object(value), imagePaths: images)
+    }
 
     private func watch(_ a: JSONValue) async throws -> ToolResponse {
         let p = try store.read(revision: a["revision"].int), sequence = try p.sequence(a["sequenceID"].string)

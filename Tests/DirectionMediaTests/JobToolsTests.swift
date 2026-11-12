@@ -17,7 +17,9 @@ struct JobToolsTests {
             let reference = ToolCatalog.reference(for: job)
             for name in own {
                 let d = try #require(ToolCatalog.definitions.first { $0.name == name })
-                #expect(reference.contains("### direction.\(ToolCatalog.scriptName(name))(") && reference.contains(d.description), "\(job): \(name)")
+                #expect(reference.contains("### direction.\(ToolCatalog.scriptName(name))(") && reference.contains(ToolCatalog.scriptNames(d.description)), "\(job): \(name)")
+                // Every other tool is named as a script calls it.
+                #expect(!reference.contains("direction_\(ToolCatalog.scriptName(name))"), "\(job): \(name)")
             }
             // help() lists the rest, a line each.
             let rest = try ToolCatalog.help(.object([:]), job: job)
@@ -30,6 +32,12 @@ struct JobToolsTests {
         #expect(ToolCatalog.names(for: .finish).isSuperset(of: ["direction_measure_audio", "direction_frame", "direction_edit", "direction_finishing", "direction_graphic", "direction_watch", "direction_looks", "direction_library", "direction_copy"]))
         #expect(ToolCatalog.names(for: .turnover).isSuperset(of: ["direction_import", "direction_cancel_job", "direction_feedback_reply", "direction_cuts", "direction_restore", "direction_preview"]))
         for job in [EditorJob.assemble, .turnover] { #expect(ToolCatalog.names(for: job).isSuperset(of: ["direction_cut_points", "direction_check"]), "\(job)") }
+    }
+
+    /// What the editor reads names tools as its scripts call them, so it never tries one as a tool of its own.
+    @Test func toolsAreNamedAsAScriptCallsThem() {
+        #expect(ToolCatalog.scriptNames("Call `direction_watch`, then direction_edit_catalog; direction_run stays, as do mcp__direction__direction_watch and my_direction_x.")
+                == "Call `direction.watch`, then direction.edit_catalog; direction_run stays, as do mcp__direction__direction_watch and my_direction_x.")
     }
 
     @Test func helpGivesAnyToolInFull() throws {
