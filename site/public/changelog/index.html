@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Changelog — Direction</title>
-<meta name="description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.5, one setting for speed and quality.">
+<meta name="description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.6, a faster editor.">
 <link rel="canonical" href="https://givedirection.ai/changelog/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#000000">
@@ -18,13 +18,13 @@
 <meta property="og:site_name" content="Direction">
 <meta property="og:url" content="https://givedirection.ai/changelog/">
 <meta property="og:title" content="Changelog — Direction">
-<meta property="og:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.5, one setting for speed and quality.">
+<meta property="og:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.6, a faster editor.">
 <meta property="og:image" content="https://givedirection.ai/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Changelog — Direction">
-<meta name="twitter:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.5, one setting for speed and quality.">
+<meta name="twitter:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.6, a faster editor.">
 <meta name="twitter:image" content="https://givedirection.ai/og.jpg">
 <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/css/site.css">
@@ -52,7 +52,7 @@
     <h1 class="display">What's new in Direction.</h1>
     <p class="lede">Direction checks for a new version once a day and updates itself. Here's what each one brought.</p>
     <div class="cl-links">
-      <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg">Download 0.3.5</a>
+      <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg">Download 0.3.6</a>
       <a class="btn ghost sm" href="/changelog/feed.xml"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="12.5" r="1.6" fill="currentColor"/><path d="M2 7a7 7 0 0 1 7 7M2 2.5A11.5 11.5 0 0 1 13.5 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Follow</a>
       <a class="btn ghost sm" href="https://github.com/Hendrixer/Direction-app/releases">Releases on GitHub ↗</a>
     </div>
@@ -60,9 +60,32 @@
 
   <ol class="cl-list">
 
-    <li class="cl-entry latest" id="0.3.5">
+    <li class="cl-entry latest" id="0.3.6">
       <div class="cl-when">
         <i class="gem"></i>
+        <a class="cl-ver" href="#0.3.6">0.3.6</a>
+        <time datetime="2026-11-12">November 12, 2026</time>
+      </div>
+      <article class="cl-body">
+        <h2 class="display">A faster editor</h2>
+        
+        <div class="cl-prose"><p>The editor now gets through the same notes in far less time. On one film, three notes that took almost four minutes at the fastest setting took 80 seconds, and at the best setting they went from nearly 19 minutes to 9.</p>
+<p>Most of that time used to go on things Direction can do itself. It now hands the editor what it always reads first (the notes, the cut, its own notes from last time) as the work starts, tells it what each of its tools answers with, and lets it carry what it has worked out from one step to the next. The editor spends its time on your film.</p>
+<h3>A Fastest setting</h3>
+<p>Speed and quality has a fourth stop, <strong>Fastest</strong>. Cutting, notes and styles run on a lighter, quicker version of your editor. Use it for a first pass, or when you want an answer in a minute or two.</p>
+<h3>Three editors to choose from</h3>
+<p>Direction works with <strong>Claude Code</strong>, <strong>Codex</strong> and <strong>Gemini CLI</strong>. It finds the ones on your Mac and offers those. Every new film asks who's editing, and the film keeps its editor.</p>
+<h3>Words where they're really spoken</h3>
+<p>The times Direction keeps for each word used to include the silence before it, by up to two seconds at the start of a sentence. Every word now starts and ends where its sound does. Cuts on a word land on the word, pauses are found where they really are, and Direction no longer warns about a cut "inside a word" that was in silence. Films you already have are put right the first time you open them.</p></div>
+        <div class="cl-mores"><details class="cl-more"><summary><span>Improvements</span><span class="n">5</span></summary><div class="cl-more-body"><ul><li><strong>The editor works inside tighter limits.</strong> Claude Code and Gemini CLI no longer run commands on your Mac, and Codex runs them only inside the film's working folder. The editor does its work through Direction, with short scripts that run in a sealed space with no way to your files or the network.</li><li><strong>The editor looks before it delivers.</strong> Every passage it changed is put in front of it before a cut can be delivered.</li><li><strong>The Cut room stays on your cut.</strong> After you accept the last answer, the picture, the timeline and the note tools stay where they were. A <strong>Lock scenes</strong> button opens the scene tiles when you want them.</li><li><strong>The slider can change any time the editor isn't working</strong>, and each stop's name sits under its dot.</li><li><strong>Direction is fair source.</strong> The code is open to read and build, under the Functional Source License, and each release becomes MIT-licensed after two years.</li></ul></div></details>
+<details class="cl-more"><summary><span>Fixes</span><span class="n">4</span></summary><div class="cl-more-body"><ul><li><strong>A long change in a read-back</strong> is written under its plan instead of being squeezed into a narrow column.</li><li><strong>The editor no longer says Ready</strong> while it's waiting on a question about the script or the breakdown.</li><li><strong>Made shots come in silent</strong> unless you asked for sound, and a shot whose price wasn't reported is looked up instead of counted as free.</li><li><strong>Removing words</strong> next to each other takes the pause between them too, with no scrap of room tone left behind.</li></ul></div></details></div>
+        <a class="cl-gh" href="https://github.com/Hendrixer/Direction-app/releases/tag/v0.3.6">Direction 0.3.6 on GitHub <span aria-hidden="true">↗</span></a>
+      </article>
+    </li>
+
+    <li class="cl-entry" id="0.3.5">
+      <div class="cl-when">
+        <i class="gem grey"></i>
         <a class="cl-ver" href="#0.3.5">0.3.5</a>
         <time datetime="2026-11-08">November 8, 2026</time>
       </div>

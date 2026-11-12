@@ -5,8 +5,26 @@
   <id>https://givedirection.ai/changelog/</id>
   <link href="https://givedirection.ai/changelog/"/>
   <link rel="self" href="https://givedirection.ai/changelog/feed.xml"/>
-  <updated>2026-11-08T12:00:00Z</updated>
+  <updated>2026-11-12T12:00:00Z</updated>
   <author><name>Direction</name></author>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.6</id>
+    <title>0.3.6: A faster editor</title>
+    <link href="https://givedirection.ai/changelog/#0.3.6"/>
+    <updated>2026-11-12T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;The editor now gets through the same notes in far less time. On one film, three notes that took almost four minutes at the fastest setting took 80 seconds, and at the best setting they went from nearly 19 minutes to 9.&lt;/p&gt;
+&lt;p&gt;Most of that time used to go on things Direction can do itself. It now hands the editor what it always reads first (the notes, the cut, its own notes from last time) as the work starts, tells it what each of its tools answers with, and lets it carry what it has worked out from one step to the next. The editor spends its time on your film.&lt;/p&gt;
+&lt;h3&gt;A Fastest setting&lt;/h3&gt;
+&lt;p&gt;Speed and quality has a fourth stop, &lt;strong&gt;Fastest&lt;/strong&gt;. Cutting, notes and styles run on a lighter, quicker version of your editor. Use it for a first pass, or when you want an answer in a minute or two.&lt;/p&gt;
+&lt;h3&gt;Three editors to choose from&lt;/h3&gt;
+&lt;p&gt;Direction works with &lt;strong&gt;Claude Code&lt;/strong&gt;, &lt;strong&gt;Codex&lt;/strong&gt; and &lt;strong&gt;Gemini CLI&lt;/strong&gt;. It finds the ones on your Mac and offers those. Every new film asks who's editing, and the film keeps its editor.&lt;/p&gt;
+&lt;h3&gt;Words where they're really spoken&lt;/h3&gt;
+&lt;p&gt;The times Direction keeps for each word used to include the silence before it, by up to two seconds at the start of a sentence. Every word now starts and ends where its sound does. Cuts on a word land on the word, pauses are found where they really are, and Direction no longer warns about a cut "inside a word" that was in silence. Films you already have are put right the first time you open them.&lt;/p&gt;
+&lt;h3&gt;Improvements&lt;/h3&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;The editor works inside tighter limits.&lt;/strong&gt; Claude Code and Gemini CLI no longer run commands on your Mac, and Codex runs them only inside the film's working folder. The editor does its work through Direction, with short scripts that run in a sealed space with no way to your files or the network.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;The editor looks before it delivers.&lt;/strong&gt; Every passage it changed is put in front of it before a cut can be delivered.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;The Cut room stays on your cut.&lt;/strong&gt; After you accept the last answer, the picture, the timeline and the note tools stay where they were. A &lt;strong&gt;Lock scenes&lt;/strong&gt; button opens the scene tiles when you want them.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;The slider can change any time the editor isn't working&lt;/strong&gt;, and each stop's name sits under its dot.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Direction is fair source.&lt;/strong&gt; The code is open to read and build, under the Functional Source License, and each release becomes MIT-licensed after two years.&lt;/li&gt;&lt;/ul&gt;
+&lt;h3&gt;Fixes&lt;/h3&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;A long change in a read-back&lt;/strong&gt; is written under its plan instead of being squeezed into a narrow column.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;The editor no longer says Ready&lt;/strong&gt; while it's waiting on a question about the script or the breakdown.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Made shots come in silent&lt;/strong&gt; unless you asked for sound, and a shot whose price wasn't reported is looked up instead of counted as free.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Removing words&lt;/strong&gt; next to each other takes the pause between them too, with no scrap of room tone left behind.&lt;/li&gt;&lt;/ul&gt;</content>
+  </entry>
   <entry>
     <id>https://givedirection.ai/changelog/#0.3.5</id>
     <title>0.3.5: One setting for speed and quality</title>
