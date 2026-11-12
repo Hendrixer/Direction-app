@@ -66,7 +66,12 @@ struct CutRoomTests {
         #expect(m.primaryAction?.title == "Turn over" && m.primaryAction?.count == "1")
         m.notes.removeAll { $0.id == "note-8" }
         for n in 1...7 { ChangesFixtures.accept(m, n) }
-        #expect(m.showsLockBar && m.primaryAction?.title == "Lock picture\u{2026}")
+        // Everything accepted: Lock picture, and the cut stays on screen until the director opens the scene tiles.
+        #expect(m.canLockScenes && !m.showsLockBar && m.primaryAction?.title == "Lock picture\u{2026}")
+        m.changes.lockingScenes = true
+        #expect(m.showsLockBar)
+        m.mark()
+        #expect(!m.changes.lockingScenes && !m.showsLockBar)
         let r = SampleFilm.make()
         SampleFilm.withTurnover(r, state: .readBack, readBack: true)
         #expect(r.primaryAction?.title == "Start cutting")

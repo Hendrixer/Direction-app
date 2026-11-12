@@ -51,18 +51,26 @@ struct AnsweredHeader: View {
         }
         .padding(.horizontal, 16).frame(height: 34)
         .contentShape(Rectangle())
-        Group {
-            if folds {
-                Button { withAnimation(gateAnimation(Gate.Motion.settle)) { model.changes.showAllAnswers.toggle() } } label: { line }
-                    .buttonStyle(.plain)
-                    .help(folded ? "Show every answer in \(cut)" : "Fold the answered notes")
-            } else {
-                line.accessibilityAddTraits(.isHeader)
+        HStack(spacing: 0) {
+            Group {
+                if folds {
+                    Button { withAnimation(gateAnimation(Gate.Motion.settle)) { model.changes.showAllAnswers.toggle() } } label: { line }
+                        .buttonStyle(.plain)
+                        .help(folded ? "Show every answer in \(cut)" : "Fold the answered notes")
+                } else {
+                    line.accessibilityAddTraits(.isHeader)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Answered in \(cut), \(model.answersLine)")
+            // Everything accepted: the scene tiles, to lock what's right, when the director wants them.
+            if model.canLockScenes && !model.changes.lockingScenes {
+                Button { withAnimation(gateAnimation(Gate.Motion.glide)) { model.changes.lockingScenes = true } } label: { Label("Lock scenes", systemImage: "lock") }
+                    .buttonStyle(.gate(.ghost, .small)).padding(.trailing, 10)
+                    .help("Lock the scenes that are right, so the editor won\u{2019}t recut them")
             }
         }
         .hairlineBorder(.bottom)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Answered in \(cut), \(model.answersLine)")
     }
 }
 

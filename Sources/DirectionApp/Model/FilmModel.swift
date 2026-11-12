@@ -672,6 +672,7 @@ final class FilmModel {
     /// (another room, Play changes) it waits to be written too, so no hidden row takes the keyboard.
     func mark() {
         guard duration > 0 else { return }
+        changes.lockingScenes = false
         let t = min(position, max(0, duration - 1 / fps))
         if let c = addNote(text: "", time: t, state: .draft) {
             // Only a watch's marks are written one after another (saveWriting).
