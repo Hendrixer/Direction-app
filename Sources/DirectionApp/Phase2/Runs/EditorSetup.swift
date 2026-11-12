@@ -9,7 +9,6 @@ enum EditorSetupKey {
     static let quality = "filmQuality"
     /// "rightAway" | "askFirst"
     static let startWork = "editorStartWork"
-    static let scripts = "editorRunsScripts"
     /// true once the ready job answered; false after a sign-in failure; absent until checked.
     static func signedIn(_ p: EditorProgram) -> String { "editorSignedIn." + p.rawValue }
     /// true when the program has no sign-in of its own and works with the API key the shell sets.
@@ -18,7 +17,7 @@ enum EditorSetupKey {
 
 extension EditorProgram {
     /// "ClaudeCode", as the settings keys spell it.
-    var keyName: String { self == .claudeCode ? "ClaudeCode" : "Codex" }
+    var keyName: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
 }
 
 /// The jobs, as the editor's picks list them.
@@ -35,9 +34,10 @@ extension EditorJob {
 
 /// Who runs the editor: a program Direction starts, or a session you run yourself.
 enum EditorRunsOn: String, CaseIterable, Sendable {
-    case claudeCode, codex, yourOwn
+    case claudeCode, codex, gemini, yourOwn
     var program: EditorProgram? { EditorProgram(rawValue: rawValue) }
     var label: String { program?.name ?? "Your own session" }
+    init(_ program: EditorProgram) { self = EditorRunsOn(rawValue: program.rawValue) ?? .yourOwn }
 }
 
 /// Reads and writes go through here so previews and snapshots keep their values in memory and
@@ -55,13 +55,13 @@ enum EditorSetup {
     }
     /// Whether the director has chosen (the setup sheet shows until then).
     static var isChosen: Bool { value(EditorSetupKey.runsOn) != nil }
-    /// The choice, or the spec's default: Claude Code if installed, else Codex, else your own session.
+    /// The choice, or the spec's default: the first agent installed (Claude Code, then Codex, then Gemini CLI), else
+    /// your own session.
     static var runsOn: EditorRunsOn {
         if let raw = value(EditorSetupKey.runsOn) as? String, let c = EditorRunsOn(rawValue: raw) { return c }
         let found = EditorPrograms.shared
-        if found.install(.claudeCode) != nil || !found.checked { return .claudeCode }
-        if found.install(.codex) != nil { return .codex }
-        return .yourOwn
+        if !found.checked { return .claudeCode }
+        return found.installed.first.map(EditorRunsOn.init) ?? .yourOwn
     }
     static func choose(_ c: EditorRunsOn) { put(EditorSetupKey.runsOn, c.rawValue) }
     /// A film's editor: the one chosen for it in Who's editing?, or this setting for a film started before
@@ -99,8 +99,6 @@ enum EditorSetup {
     static func setDefaultQuality(_ q: FilmQuality) { put(EditorSetupKey.quality, q.rawValue) }
     static var asksFirst: Bool { value(EditorSetupKey.startWork) as? String == "askFirst" }
     static func setAsksFirst(_ on: Bool) { put(EditorSetupKey.startWork, on ? "askFirst" : "rightAway") }
-    static var runsScripts: Bool { value(EditorSetupKey.scripts) as? Bool ?? true }
-    static func setRunsScripts(_ on: Bool) { put(EditorSetupKey.scripts, on) }
     static func signedIn(_ p: EditorProgram) -> Bool? { value(EditorSetupKey.signedIn(p)) as? Bool }
     static func setSignedIn(_ p: EditorProgram, _ on: Bool?) { put(EditorSetupKey.signedIn(p), on) }
     static func usesShellKey(_ p: EditorProgram) -> Bool { value(EditorSetupKey.shellKey(p)) as? Bool ?? false }
@@ -127,6 +125,8 @@ enum EditorSetup {
     var changes = 0
 
     func install(_ p: EditorProgram) -> EditorInstall? { installs[p] }
+    /// The agents on this Mac, in EditorProgram's order: the only ones offered.
+    var installed: [EditorProgram] { EditorProgram.allCases.filter { installs[$0] != nil } }
 
     func refresh() {
         guard !checking, !preview else { return }

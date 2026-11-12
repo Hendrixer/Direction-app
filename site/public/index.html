@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Direction — Direct the film in your head</title>
+<meta name="description" content="A Mac app for filmmakers. Write the brief, circle takes and give notes in your own words, and every cut comes back answered. You never touch a timeline. Open source.">
+<link rel="canonical" href="https://givedirection.ai/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="application-name" content="Direction">
+<meta name="apple-mobile-web-app-title" content="Direction">
+<link rel="icon" href="/img/glyph.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<!-- Sharing: Open Graph (iMessage, Slack, LinkedIn, Facebook) and X -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Direction">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://givedirection.ai/">
+<meta property="og:title" content="Direction — Direct the film in your head">
+<meta property="og:description" content="A Mac app for filmmakers. Write the brief, circle takes and give notes in your own words. Every cut comes back answered.">
+<meta property="og:image" content="https://givedirection.ai/og.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Direction: Direct the film in your head. A woman beside a telescope on a ridge at dusk.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Direction — Direct the film in your head">
+<meta name="twitter:description" content="A Mac app for filmmakers. Write the brief, circle takes and give notes in your own words. Every cut comes back answered.">
+<meta name="twitter:image" content="https://givedirection.ai/og.jpg">
+<meta name="twitter:image:alt" content="Direction: Direct the film in your head. A woman beside a telescope on a ridge at dusk.">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://givedirection.ai/#website",
+      "url": "https://givedirection.ai/",
+      "name": "Direction",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://givedirection.ai/#app",
+      "name": "Direction",
+      "url": "https://givedirection.ai/",
+      "description": "A Mac app for directing films. Write the brief, circle takes and give notes in your own words; your editor, Claude Code or Codex running on your Mac, logs the footage, cuts every version, answers every note and delivers the film.",
+      "applicationCategory": "MultimediaApplication",
+      "applicationSubCategory": "Video editing",
+      "operatingSystem": "macOS 26 or later, Apple silicon",
+      "downloadUrl": "https://updates.givedirection.ai/Direction.dmg",
+      "image": "https://givedirection.ai/og.jpg",
+      "sameAs": ["https://github.com/Hendrixer/Direction-app"]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "Does my footage leave my Mac?", "acceptedAnswer": { "@type": "Answer", "text": "Your original files stay where they are and are never changed. To make its decisions, the editor reads what Direction gives it (logs, transcripts and frames) through your own Claude or ChatGPT plan." } },
+        { "@type": "Question", "name": "Claude Code or Codex?", "acceptedAnswer": { "@type": "Answer", "text": "Either. Each new film asks who's editing and keeps that editor, with your last choice already picked. You can pause or stop the editor at any time." } },
+        { "@type": "Question", "name": "Do I need an OpenRouter key?", "acceptedAnswer": { "@type": "Answer", "text": "Only to make shots, stills, music and sound effects. It's paid per use, and you set the limits in Settings. Everything else, from logging to delivery, runs without one." } },
+        { "@type": "Question", "name": "What does it deliver?", "acceptedAnswer": { "@type": "Answer", "text": "A master, a web copy and captions, in SDR Rec. 709. HDR footage is converted to SDR inside the film; your originals stay as they are." } }
+      ]
+    }
+  ]
+}
+</script>
+<link rel="preload" href="fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="img/ridge-near.svg" as="image" fetchpriority="high">
+<link rel="stylesheet" href="css/site.css">
+<script>document.documentElement.classList.replace('no-js', 'js')</script>
+</head>
+<body>
+
+<!-- Picture on this page is drawn stand-in art (site/tools/scenes.mjs) until real frames from a film made in Direction replace it. -->
+
+<header class="nav" id="nav">
+  <a class="brand" href="#top" aria-label="Direction, back to top"><img src="img/glyph.svg" alt="" width="22" height="22">Direction</a>
+  <nav class="nav-links" aria-label="Sections">
+    <a href="#production">How it works</a>
+    <a href="#notes">Notes</a>
+    <a href="#learn">Learn</a>
+    <a href="#make">Make</a>
+    <a href="#features">Features</a>
+    <a href="/changelog/">Changelog</a>
+  </nav>
+  <a class="gh" href="https://github.com/Hendrixer/Direction-app" aria-label="Direction on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg></a>
+  <!-- Download: the signed DMG Sparkle publishes (docs/releasing.md). Live once the first release is published. -->
+  <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg" data-download>Download</a>
+</header>
+
+<main id="top">
+
+  <!-- ============ Title card ============ -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-frame">
+      <div class="pic" aria-hidden="true">
+        <div class="layer l-sky"><img src="img/ridge-sky.svg" alt="" fetchpriority="high" decoding="async"></div>
+        <div class="layer l-far"><img src="img/ridge-far.svg" alt="" fetchpriority="high" decoding="async"></div>
+        <div class="haze"></div>
+        <div class="layer l-near"><img src="img/ridge-near.svg" alt="" fetchpriority="high" decoding="async"></div>
+        <div class="shade"></div>
+      </div>
+      <span class="hud tl" aria-hidden="true"><i class="rec"></i><span>A003</span><span id="tc">00:01:48:12</span></span>
+      <span class="hud tr" aria-hidden="true">First Light · Sc. 3 · Take 2</span>
+      <div class="hero-copy">
+        <h1 class="display rise" id="hero-title"><span>Direct the film</span><span class="dim">in your head.</span></h1>
+        <p class="hero-sub rise">Direction is a Mac app for making films the way directors do. Write the brief, circle the takes, give notes in your own words, and every cut comes back answered. You never touch a timeline.</p>
+        <div class="hero-cta rise">
+          <a class="btn steel" href="https://updates.givedirection.ai/Direction.dmg" data-download><svg viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M10.3 7.4c0-1.5 1.2-2.2 1.3-2.3-.7-1-1.8-1.2-2.2-1.2-.9-.1-1.8.6-2.3.6-.5 0-1.2-.5-2-.5-1 0-2 .6-2.5 1.5-1.1 1.9-.3 4.6.8 6.1.5.7 1.1 1.6 1.9 1.5.8 0 1-.5 2-.5s1.2.5 2 .5 1.3-.8 1.8-1.5c.6-.8.8-1.6.8-1.7 0 0-1.6-.6-1.6-2.4ZM8.8 2.9c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.8.9-.4.4-.7 1.1-.6 1.8.7.1 1.4-.3 1.8-.8Z"/></svg>Download for Mac</a>
+          <a class="btn ghost" href="#production">See it work <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 2v10M3 8l4 4 4-4"/></svg></a>
+        </div>
+      </div>
+      <div class="hero-meta" aria-label="Requirements">
+        <span>Apple silicon · macOS 26 · Open source</span>
+        <a href="https://github.com/Hendrixer/Direction-app">View the code on GitHub ↗</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ The premise ============ -->
+  <section class="premise" aria-label="How Direction works">
+    <div class="wrap">
+      <p class="big" id="premise">Every film has a director and an editor. You watch the cut and say what you feel: <q>let it breathe</q>, <q>this is too polite</q>. Your editor knows what that means, makes the change, and tells you what it did.</p>
+    </div>
+  </section>
+
+  <!-- ============ The production ============ -->
+  <section class="production" id="production" aria-labelledby="prod-title">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="label">The production</span>
+        <h2 class="display h2" id="prod-title">From brief to delivery.</h2>
+        <p class="lede">The steps you already know, in the order a film is made. Your editor does the work between them.</p>
+      </div>
+
+      <div class="prod-grid">
+        <ol class="steps">
+          <li class="step on" data-step="1">
+            <span class="idx"><b>01</b> Brief</span>
+            <h3>Say what the film is.</h3>
+            <p>What it's about, how it should feel, and its shape: as shot, 16:9, 9:16, 1:1 or 4:5. Then choose who's editing.</p>
+            <div class="slot"></div>
+          </li>
+          <li class="step" data-step="2">
+            <span class="idx"><b>02</b> Dailies</span>
+            <h3>Circle the takes you want.</h3>
+            <p>Your editor watches and logs every take: what's in frame, what's said, where focus drifts. You circle the ones worth using.</p>
+            <div class="slot"></div>
+          </li>
+          <li class="step" data-step="3">
+            <span class="idx"><b>03</b> Cut</span>
+            <h3>Watch it. Say what you'd say.</h3>
+            <p>Your editor cuts an assembly from your circled takes. Pin a note to a moment, a range or part of the frame.</p>
+            <div class="slot"></div>
+          </li>
+          <li class="step" data-step="4">
+            <span class="idx"><b>04</b> Turnover</span>
+            <h3>Hear your notes read back.</h3>
+            <p>Before it cuts, your editor tells you what it heard and what it plans to do. Change anything, then let it work.</p>
+            <div class="slot"></div>
+          </li>
+          <li class="step" data-step="5">
+            <span class="idx"><b>05</b> Finish</span>
+            <h3>Lock picture. Deliver.</h3>
+            <p>Lock scenes as they're done, then picture. Direction delivers a master, a web copy and captions.</p>
+            <div class="slot"></div>
+          </li>
+        </ol>
+
+        <div class="stage" aria-hidden="true">
+          <div class="win" id="win" data-step="1">
+            <div class="tb">
+              <div class="lights"><i></i><i></i><i></i></div>
+              <div class="crumb">First Light <span>/</span> <em id="crumb-cut">Brief</em></div>
+              <div class="rooms"><span data-room="dailies">Dailies</span><span data-room="cut">Cut</span><span data-room="finish">Finish</span></div>
+              <div class="agent" id="agent"><i class="gem grey"></i><span>Waiting for footage</span><span class="meter"><i></i></span></div>
+            </div>
+            <div class="win-body"><div class="screens" id="screens">
+
+              <!-- Room 1: the brief -->
+              <div class="scr s-brief on" data-s="1">
+                <div class="brief">
+                  <div><span class="k">New film</span><h4>First Light</h4></div>
+                  <div class="f"><span class="k">What's the film?</span><p>Maya spent two winters building a telescope in her garage. This is the night she carries it up the ridge.</p></div>
+                  <div class="f"><span class="k">How should it feel?</span><p>Patient and cold. Warm only at the very end.</p></div>
+                  <div class="f"><span class="k">Shape</span><div class="seg" id="seg"><span>As shot</span><span class="on">16:9</span><span>9:16</span><span>1:1</span><span>4:5</span></div></div>
+                  <div class="f"><span class="k">Who's editing?</span><div class="who"><span class="on">Claude Code</span><span>Codex</span></div></div>
+                </div>
+                <div class="shape"><div class="frame" id="shape"><div class="pic"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async"></div></div><span class="tc" id="shape-tc">16 : 9</span></div>
+              </div>
+
+              <!-- Room 2: dailies -->
+              <div class="scr s-dailies" data-s="2">
+                <div class="d-head"><b>Sc. 3 · The ridge</b><span class="muted">8 takes · 3 circled</span><span class="sp"></span><span class="chip">All</span><span class="chip d">Circled</span></div>
+                <div class="d-grid">
+                  <figure class="take"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async"><span class="tk">3A-1</span><span class="du">0:42</span></div><figcaption><i class="gem"></i>Wide. She tops the hill, left to right.</figcaption></figure>
+                  <figure class="take c"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async" style="--z:1.12"><span class="tk">3A-2</span><span class="du">0:51</span></div><figcaption><i class="gem"></i>Wide. Cleaner walk; holds on the scope.</figcaption><svg class="ring" viewBox="0 0 200 118" preserveAspectRatio="none"><path pathLength="1" d="M34 10C96-2 182 4 195 42C205 82 168 113 100 113C32 113 3 96 5 58C7 25 44 7 118 7"/></svg></figure>
+                  <figure class="take c"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async" style="--z:2.2"><span class="tk">3B-1</span><span class="du">0:38</span></div><figcaption><i class="gem"></i>Medium. Sets the tripod; looks back once.</figcaption><svg class="ring" viewBox="0 0 200 118" preserveAspectRatio="none"><path pathLength="1" d="M40 6C110 0 190 10 196 50C200 90 160 114 96 114C36 114 2 92 6 54C10 22 50 9 126 9"/></svg></figure>
+                  <figure class="take"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async" style="--z:2.35;filter:blur(1.2px)"><span class="tk">3B-2</span><span class="du">0:29</span></div><figcaption><i class="gem"></i>Medium. Soft until 0:12.</figcaption></figure>
+                  <figure class="take"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async" style="--z:4.2"><span class="tk">3C-1</span><span class="du">0:22</span></div><figcaption><i class="gem"></i>Close. Eye to the eyepiece; breath shows.</figcaption></figure>
+                  <figure class="take c"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async" style="--z:4.6"><span class="tk">3C-2</span><span class="du">0:31</span></div><figcaption><i class="gem"></i>Close. She smiles at 0:19.</figcaption><svg class="ring" viewBox="0 0 200 118" preserveAspectRatio="none"><path pathLength="1" d="M30 12C92 0 186 6 194 46C202 86 164 112 98 112C30 112 4 94 6 60C8 26 40 8 112 6"/></svg></figure>
+                  <figure class="take"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async" style="--z:2.4;--o:69% 54%"><span class="tk">3D-1</span><span class="du">0:18</span></div><figcaption><i class="gem"></i>Wild. The sun goes under.</figcaption></figure>
+                  <figure class="take"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async" style="--z:3;--o:24% 12%"><span class="tk">3D-2</span><span class="du">0:30</span></div><figcaption><i class="gem"></i>Wild. Stars, a 30 s hold.</figcaption></figure>
+                </div>
+              </div>
+
+              <!-- Room 3: the cut, with a note going in -->
+              <div class="scr s-cut" data-s="3">
+                <div class="c-view">
+                  <div class="c-pic">
+                    <div class="pic"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async"></div>
+                    <div class="region"><span>1 · Region</span><i></i><i></i><i></i><i></i></div>
+                    <span class="hud">00:01:48 · 16:9</span>
+                  </div>
+                </div>
+                <div class="c-side">
+                  <h5>Notes on Cut 1</h5>
+                  <div class="c-note">
+                    <div class="at"><i class="pin"></i>At <span class="chip d">00:01:48</span><span class="sp" style="flex:1"></span><span class="faint">Region</span></div>
+                    <p id="typed"><span></span><i class="caret"></i></p>
+                    <div class="c-tags"><span>Feeling</span><span>Story</span><span>Pace</span><span class="on">Picture</span><span>Sound</span></div>
+                  </div>
+                  <div class="c-prev">
+                    <div><b>2</b><span>Start on the wind, before the picture.</span></div>
+                    <div><b>3</b><span>Too many star shots. Keep <span class="m clip">3D-2</span> and lose the rest.</span></div>
+                  </div>
+                </div>
+                <div class="strip">
+                  <div class="sc" style="flex-grow:.8"><img src="img/street.svg" alt="" loading="lazy"><span>1 Cold open</span></div>
+                  <div class="sc" style="flex-grow:1.1"><img src="img/garage.svg" alt="" loading="lazy"><span>2 Two winters</span></div>
+                  <div class="sc cur" style="flex-grow:1.4"><img src="img/ridge.svg" alt="" loading="lazy"><span>3 The ridge</span></div>
+                  <div class="sc" style="flex-grow:.9"><img src="img/face.svg" alt="" loading="lazy"><span>4 First light</span></div>
+                  <div class="sc" style="flex-grow:.7"><img src="img/ridge-sky.svg" alt="" loading="lazy"><span>5 After</span></div>
+                  <i class="head" style="left:55%"></i>
+                  <i class="pin mkr" style="left:55%"></i>
+                </div>
+              </div>
+
+              <!-- Room 4: the read back -->
+              <div class="scr s-turn" data-s="4">
+                <div class="t-sheet">
+                  <div class="t-head"><i class="gem"></i><b>Here's what I heard</b><span class="muted">Cut 1 · 3 notes</span></div>
+                  <div class="t-row"><span class="n">1</span><p class="dn">Let her be small here. She's alone up there.</p><p class="rb"><i class="gem"></i>Stay on the wide, 3A-2, for her whole line, and hold it two seconds past it.</p></div>
+                  <div class="t-row"><span class="n">2</span><p class="dn">Start on the wind, before the picture.</p><p class="rb"><i class="gem"></i>Bring the wind in under black, a second before the first frame.</p></div>
+                  <div class="t-row"><span class="n">3</span><p class="dn">Too many star shots. Keep <span class="m clip">3D-2</span> and lose the rest.</p><p class="rb"><i class="gem"></i>Keep the 30-second hold, 3D-2, and cut the other two.</p></div>
+                  <div class="t-foot"><span class="muted">About 4 minutes</span><span class="ui-btn">Change something</span><span class="ui-btn steel">Go ahead</span></div>
+                </div>
+              </div>
+
+              <!-- Room 5: finish -->
+              <div class="scr s-finish" data-s="5">
+                <div class="f-top"><b>Cut 6</b><span class="muted">3:22</span><span class="sp"></span><span class="chip ok">Picture locked</span></div>
+                <div class="strip">
+                  <div class="sc" style="flex-grow:.55"><img src="img/street.svg" alt="" loading="lazy"><span>1 Cold open</span></div>
+                  <div class="sc" style="flex-grow:1.2"><img src="img/garage.svg" alt="" loading="lazy"><span>2 Two winters</span></div>
+                  <div class="sc" style="flex-grow:1.4"><img src="img/ridge.svg" alt="" loading="lazy"><span>3 The ridge</span></div>
+                  <div class="sc" style="flex-grow:.9"><img src="img/face.svg" alt="" loading="lazy"><span>4 First light</span></div>
+                  <div class="sc" style="flex-grow:.7"><img src="img/ridge-sky.svg" alt="" loading="lazy"><span>5 After</span></div>
+                </div>
+                <div class="f-list">
+                  <div class="f-row"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy"></div><div class="what"><b>Master</b><span>First Light.mov · Rec. 709 · 3:22</span><div class="bar"><i></i></div></div><span class="state"><span class="chip ok">Done</span></span></div>
+                  <div class="f-row"><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" style="--z:1.3"></div><div class="what"><b>Web copy</b><span>First Light (web).mp4 · smaller, for sharing</span><div class="bar"><i></i></div></div><span class="state"><span class="chip ok">Done</span></span></div>
+                  <div class="f-row"><div class="thumb" style="display:grid;place-items:center;background:var(--sunken)"><span class="mono faint" style="font-size:11px">CC</span></div><div class="what"><b>Captions</b><span>First Light.srt · from the transcript</span><div class="bar"><i></i></div></div><span class="state"><span class="chip ok">Done</span></span></div>
+                </div>
+              </div>
+
+            </div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Notes, answered ============ -->
+  <section class="notes" id="notes" aria-labelledby="notes-title">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="label">Notes, answered</span>
+        <h2 class="display h2" id="notes-title">Say it the way you'd say it.</h2>
+        <p class="lede">Name a take, a sound, a transition or an effect with <span class="m at">@</span> and your editor uses that one. Every note is answered in the next cut, and Play changes shows only what changed.</p>
+      </div>
+
+      <div class="n-grid" id="player">
+        <div class="n-stage">
+          <div class="n-pic" aria-hidden="true">
+            <div class="n-layer" data-l="street"><img src="img/street.svg" alt="" loading="lazy" decoding="async"></div>
+            <div class="n-layer" data-l="face"><img src="img/face.svg" alt="" loading="lazy" decoding="async"></div>
+            <div class="n-layer" data-l="garage"><div class="zoom"><img src="img/garage.svg" alt="" loading="lazy" decoding="async"></div></div>
+            <div class="n-layer on" data-l="ridge"><div class="zoom"><img src="img/ridge.svg" alt="" loading="lazy" decoding="async"></div></div>
+            <div class="n-leak"></div>
+            <div class="region"><span>3 · Region</span><i></i><i></i><i></i><i></i></div>
+            <div class="n-ab"><span data-ab="a">A · Hold on her</span><span data-ab="b">B · Window and back</span></div>
+            <div class="n-audio">
+              <div class="lane"><span>Dialogue</span><svg viewBox="0 0 400 26" preserveAspectRatio="none"><g class="wave" id="wave-d"></g></svg></div>
+              <div class="lane music"><span class="lane-name"><i class="m music"></i>Low strings</span><svg viewBox="0 0 400 26" preserveAspectRatio="none"><g class="wave" id="wave-m"></g><path class="gain" id="gain" pathLength="1" d="M0 4H132L144 13H276L288 4H400"/></svg></div>
+            </div>
+            <span class="hud tl"><i class="gem"></i><span>Cut 4</span><span class="mono" id="n-tc">00:00:04</span></span>
+            <span class="hud tr"><span class="chip a" id="n-chip">−4.2 s</span></span>
+          </div>
+          <div class="strip n-strip" aria-hidden="true">
+            <div class="sc" data-sc="1" style="flex-grow:.8"><img src="img/street.svg" alt="" loading="lazy"><span>1 Cold open</span></div>
+            <div class="sc" data-sc="2" style="flex-grow:1.1"><img src="img/garage.svg" alt="" loading="lazy"><span>2 Two winters</span></div>
+            <div class="sc" data-sc="3" style="flex-grow:1.4"><img src="img/ridge.svg" alt="" loading="lazy"><span>3 The ridge</span></div>
+            <div class="sc" data-sc="4" style="flex-grow:.9"><img src="img/face.svg" alt="" loading="lazy"><span>4 First light</span></div>
+            <div class="sc" data-sc="5" style="flex-grow:.7"><img src="img/ridge-sky.svg" alt="" loading="lazy"><span>5 After</span></div>
+          </div>
+        </div>
+
+        <div>
+          <ol class="n-list" id="n-list">
+            <li><button class="note on" data-n="1" aria-pressed="true">
+              <span class="said"><b>1</b><span>Cold open takes too long to get to her face.</span></span>
+              <span class="ans"><span><span class="a"><i class="gem"></i><span><b>Cold open.</b> Cut the second street wide; we're on her face by 0:09.</span></span></span></span>
+              <i class="bar"></i>
+            </button></li>
+            <li><button class="note" data-n="2" aria-pressed="false">
+              <span class="said"><b>2</b><span>I want to feel how tired she was here. Let it sit.</span></span>
+              <span class="ans"><span><span class="a"><i class="gem"></i><span><b>Two winters.</b> Two ways: A holds on her, B cuts to the window and back. Pick one.</span></span></span></span>
+              <i class="bar"></i>
+            </button></li>
+            <li><button class="note" data-n="3" aria-pressed="false">
+              <span class="said"><b>3</b><span>Tighter on her. The sky is winning.</span></span>
+              <span class="ans"><span><span class="a"><i class="gem"></i><span><b>The ridge.</b> Reframed to 1.6× on Maya; the sky is now a third of the frame.</span></span></span></span>
+              <i class="bar"></i>
+            </button></li>
+            <li><button class="note" data-n="4" aria-pressed="false">
+              <span class="said"><b>4</b><span>The piano is too sure of itself. Try <span class="m music">Low strings</span> under her line.</span></span>
+              <span class="ans"><span><span class="a"><i class="gem"></i><span><b>The ridge.</b> Low strings from your library in place of the piano, 6 dB under her line and back up at the cut.</span></span></span></span>
+              <i class="bar"></i>
+            </button></li>
+            <li><button class="note" data-n="5" aria-pressed="false">
+              <span class="said"><b>5</b><span>Go into the ridge with <span class="m transition">Light leak</span>.</span></span>
+              <span class="ans"><span><span class="a"><i class="gem"></i><span><b>Two winters → The ridge.</b> Light leak from your techniques, 14 frames, on the cut into the ridge.</span></span></span></span>
+              <i class="bar"></i>
+            </button></li>
+          </ol>
+          <div class="n-foot"><span class="ui-btn">▶&nbsp; Play changes</span><span>52 s of changes to watch</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Learn ============ -->
+  <section class="learn" id="learn" aria-labelledby="learn-title">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="label">Learn from what you love</span>
+        <h2 class="display h2" id="learn-title">Show it work you admire.</h2>
+        <p class="lede">Your editor studies other people's films the way you would, then keeps what it learned for every film you make.</p>
+      </div>
+      <div class="learn-grid">
+        <article class="lcard rv">
+          <div class="lc-vis grain" id="study">
+            <div class="field"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span class="url">youtube.com/watch?v=night-drive</span><span class="chip a st">Studying</span></div>
+            <div class="study-head"><div class="thumb"><img src="img/street.svg" alt="" loading="lazy"></div><div><b>Night Drive</b><span>A video you like · 4:12</span></div></div>
+            <dl class="measure">
+              <div><dt>Shots</dt><dd>142</dd></div>
+              <div><dt>Average shot</dt><dd>1.8 s</dd></div>
+              <div><dt>Cuts a minute</dt><dd>34</dd></div>
+              <div><dt>Words a minute</dt><dd>168</dd></div>
+              <div><dt>Music under the voice</dt><dd>−18 dB</dd></div>
+              <div><dt>Loudness</dt><dd>−14 LUFS</dd></div>
+            </dl>
+            <div class="saved"><i class="gem"></i><span>Saved as a style: <b>Night Drive</b></span></div>
+            <ul class="rules">
+              <li><span class="k">Pace</span>Cut every 1.5 to 2 seconds; never hold past 6.</li>
+              <li><span class="k">Sound</span>Music sits 18 dB under the voice and stops for the lines that land.</li>
+              <li><span class="k">Captions</span>Three words at a time, upper case, lower third.</li>
+            </ul>
+          </div>
+          <div class="lc-text">
+            <h3>It learns a style.</h3>
+            <p>Paste a link to a video or drop in the file. Direction measures it: the pace, the words a minute, where the music sits. Your editor writes it up as a style, with rules, values and parts to reuse. Name the style in a brief and the film follows it.</p>
+          </div>
+        </article>
+
+        <article class="lcard rv">
+          <div class="lc-vis grain" id="technique">
+            <div class="tut">
+              <div class="tf"><div class="tf-view"><img src="img/garage.svg" alt="" loading="lazy"></div><div class="tf-tl"><i style="width:46%"></i><i style="width:30%;margin-left:48%"></i><i class="fx" style="width:12%;margin-left:40%"></i></div><span>0:06 · the result</span></div>
+              <div class="tf"><div class="tf-view panel"><i></i><i style="width:62%"></i><i style="width:40%"></i><i style="width:74%"></i></div><div class="tf-tl"><i style="width:60%"></i><i class="fx" style="width:18%;margin-left:52%"></i></div><span>1:20 · the settings</span></div>
+              <div class="tf"><div class="tf-view grid"><img src="img/ridge.svg" alt="" loading="lazy"></div><div class="tf-tl"><i style="width:80%"></i></div><span>3:45 · the masks</span></div>
+            </div>
+            <div class="tut-cap"><span class="k">Tutorial · 9:41</span><span class="faint">Grid flash transition</span></div>
+            <div class="learned">
+              <div class="flash" id="flash"><img class="fa" src="img/garage.svg" alt="" loading="lazy"><img class="fb" src="img/ridge.svg" alt="" loading="lazy"><div class="cells"></div></div>
+              <div class="learned-meta">
+                <span class="m transition">Grid flash</span>
+                <span class="faint">Transition · in your library</span>
+                <span class="vars"><span class="chip">Big</span><span class="chip">From the middle</span><span class="chip">Negative</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="lc-text">
+            <h3>It learns a move.</h3>
+            <p>Show it a tutorial for a transition or an effect, from Premiere, Resolve, After Effects or CapCut. Your editor works out how it's built, rebuilds it from Direction's own pieces and keeps it in your library. From then on it's <span class="m transition">Grid flash</span> in any note.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Make ============ -->
+  <section class="make" id="make" aria-labelledby="make-title">
+    <div class="wrap make-grid">
+      <div class="make-text rv">
+        <span class="label">Made, not shot</span>
+        <h2 class="display h2" id="make-title">The shot you didn't get.</h2>
+        <p class="lede">An establishing shot, an insert, a sky at dusk, a beat more of a calm shot. Add your OpenRouter key and your editor can make it, matched to the shots around it. Music and sound effects too.</p>
+        <ul class="ticks">
+          <li>It searches your footage first. A real take beats a made one.</li>
+          <li>Stills before motion, more than one way, every frame judged before it goes in.</li>
+          <li>Every made shot says what it cost, and nothing is spent past your limits.</li>
+        </ul>
+      </div>
+      <div class="make-vis rv">
+        <div class="mk-win grain">
+          <div class="mk-row"><b class="n">6</b><p>We need the town before the ridge. We never shot it.</p></div>
+          <div class="mk-row rb"><i class="gem"></i><p>Nothing in the footage shows the town. I'll make an establishing shot: the town's lights from the ridge, wide, at dusk, 5 s. <span class="cost">About $1.10</span></p></div>
+          <div class="ways">
+            <figure><div class="thumb"><img src="img/street.svg" alt="" loading="lazy" style="--z:1.25;--o:50% 70%;filter:saturate(.8) brightness(.9)"></div><figcaption>Still, way 1</figcaption></figure>
+            <figure class="pick"><div class="thumb"><img src="img/street.svg" alt="" loading="lazy" style="--z:1.05;--o:50% 60%"></div><figcaption>Still, way 2 · picked</figcaption></figure>
+            <figure class="shot"><div class="thumb"><img src="img/street.svg" alt="" loading="lazy" style="--o:50% 60%"><span class="play"></span></div><figcaption>Shot from way 2 · 5 s</figcaption></figure>
+          </div>
+          <div class="strip mk-strip">
+            <div class="sc" style="flex-grow:1.1"><img src="img/garage.svg" alt="" loading="lazy"><span>2 Two winters</span></div>
+            <div class="sc made" style="flex-grow:.55"><img src="img/street.svg" alt="" loading="lazy"><span>Made · 5 s</span></div>
+            <div class="sc" style="flex-grow:1.4"><img src="img/ridge.svg" alt="" loading="lazy"><span>3 The ridge</span></div>
+          </div>
+          <div class="limits"><span>Made with <b>Balanced</b></span><span>Ask above <b>$5</b> a turnover</span><span>Stop at <b>$40</b> a month</span><span class="spent">$1.06 spent</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Before the shoot ============ -->
+  <section class="prep" id="prep" aria-labelledby="prep-title">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="label">Before the shoot</span>
+        <h2 class="display h2" id="prep-title">Start from a script, or just a story.</h2>
+        <p class="lede">Your editor writes an A/V script, what we see beside what we hear, and breaks it into the shots you need. Each comes with a board, so you know what to shoot before you roll.</p>
+      </div>
+
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c9daf5" stop-opacity=".95"/><stop offset="1" stop-color="#6f8fc8" stop-opacity=".55"/></linearGradient>
+        <radialGradient id="spill"><stop offset="0" stop-color="#9fb7e0" stop-opacity=".22"/><stop offset="1" stop-color="#9fb7e0" stop-opacity="0"/></radialGradient>
+      </defs></svg>
+
+      <div class="prep-grid">
+        <div class="av rv">
+          <div class="av-head"><span>PICTURE</span><span>SOUND</span></div>
+          <div class="av-row">
+            <div><span class="slug">Int. Garage — Night</span>Wide. Maya at the bench, the window blue behind her. <span class="shot chip">3A</span></div>
+            <div><span class="who">MAYA (V.O.)</span>Two winters. Most of it was waiting for glue to dry.</div>
+          </div>
+          <div class="av-row">
+            <div><span class="slug">Int. Garage — Night</span>Close. Her face in the laptop's light. A slow push. <span class="shot chip">3B</span></div>
+            <div>Room tone. The laptop fan.</div>
+          </div>
+          <div class="av-row">
+            <div><span class="slug">Int. Garage — Night</span>Insert. Her hands seat the eyepiece. <span class="shot chip">4A</span></div>
+            <div>A ratchet, once. Then quiet.</div>
+          </div>
+          <div class="av-row">
+            <div><span class="slug">Ext. Ridge — Dusk</span>Wide. She steps back from the telescope and waits. <span class="shot chip">5B</span></div>
+            <div>Music enters, low. It stays under her line.</div>
+          </div>
+        </div>
+
+        <div class="boards">
+          <!-- Board style: near-black ground, one-weight grey outlines, dark fills, one near-white lit edge, a cool screen-glow light. -->
+          <figure class="board rv">
+            <svg viewBox="0 0 320 180" aria-label="Board: wide of the garage, Maya at the bench by the window">
+              <rect x="38" y="26" width="74" height="92" class="glow"/>
+              <path class="ink faint" d="M75 26v92M38 72h74"/>
+              <path d="M38 118L112 118L178 180L0 180Z" fill="url(#spill)"/>
+              <path class="ink faint" d="M0 146H320"/>
+              <path class="ink" d="M180 112h118v6H180z M188 118v40 M290 118v40"/>
+              <path class="fill" d="M206 106l64-10 2 6-64 10z"/><path class="ink" d="M206 106l64-10 2 6-64 10z"/>
+              <path class="fill" d="M128 180c-2-26 4-46 18-54-3-9-1-20 9-24 11-4 21 3 22 13 1 7-2 12-6 14 14 6 22 24 22 51z"/>
+              <path class="ink" d="M128 180c-2-26 4-46 18-54-3-9-1-20 9-24 11-4 21 3 22 13 1 7-2 12-6 14 14 6 22 24 22 51z"/>
+              <path class="lit" d="M128 178c-2-24 4-43 18-52M146 126c-3-9-1-20 9-24"/>
+            </svg>
+            <figcaption><b>3A</b><span>Wide · Static</span></figcaption>
+          </figure>
+          <figure class="board rv">
+            <svg viewBox="0 0 320 180" aria-label="Board: close on Maya's profile, lit by the screen">
+              <rect x="14" y="44" width="56" height="84" rx="3" class="glow"/>
+              <circle cx="90" cy="86" r="70" fill="url(#spill)"/>
+              <g transform="translate(-28 -52) scale(.2)">
+                <path class="fill" d="M1010 1080C1000 980 960 930 930 900C900 870 880 830 884 780C860 770 850 750 862 735C850 722 852 705 866 700C858 690 856 676 868 664C850 650 838 636 846 618C858 600 870 594 872 570C876 470 940 380 1050 360C1170 340 1290 400 1330 520C1360 610 1340 700 1300 760C1280 800 1290 860 1330 920C1360 960 1400 1010 1420 1080Z"/>
+                <circle class="fill" cx="1312" cy="420" r="84"/>
+                <path class="ink" vector-effect="non-scaling-stroke" d="M1010 1080C1000 980 960 930 930 900C900 870 880 830 884 780C860 770 850 750 862 735C850 722 852 705 866 700C858 690 856 676 868 664C850 650 838 636 846 618C858 600 870 594 872 570C876 470 940 380 1050 360C1170 340 1290 400 1330 520C1360 610 1340 700 1300 760C1280 800 1290 860 1330 920C1360 960 1400 1010 1420 1080Z"/>
+                <path class="ink" vector-effect="non-scaling-stroke" d="M1240 360a84 84 0 1 1 140 110"/>
+                <path class="lit" vector-effect="non-scaling-stroke" d="M960 925C935 900 900 870 884 780C860 770 850 750 862 735C850 722 852 705 866 700C858 690 856 676 868 664C850 650 838 636 846 618C858 600 870 594 872 570C876 470 930 395 1000 370"/>
+              </g>
+            </svg>
+            <figcaption><b>3B</b><span>Close · Push in</span></figcaption>
+          </figure>
+          <figure class="board rv">
+            <svg viewBox="0 0 320 180" aria-label="Board: insert of hands seating the eyepiece">
+              <rect x="250" y="12" width="58" height="38" rx="3" class="glow"/>
+              <circle cx="262" cy="40" r="96" fill="url(#spill)"/>
+              <g transform="rotate(-9 160 110)">
+                <rect class="fill" x="22" y="100" width="236" height="42" rx="4"/><rect class="ink" x="22" y="100" width="236" height="42" rx="4"/>
+                <rect class="fill" x="254" y="95" width="16" height="52" rx="3"/><rect class="ink" x="254" y="95" width="16" height="52" rx="3"/>
+                <path class="ink faint" d="M70 100v42 M120 100v42"/>
+                <rect class="fill" x="170" y="86" width="34" height="14" rx="2"/><rect class="ink" x="170" y="86" width="34" height="14" rx="2"/>
+                <rect class="fill" x="177" y="46" width="20" height="40" rx="2"/><rect class="ink" x="177" y="46" width="20" height="40" rx="2"/>
+                <rect class="fill" x="173" y="38" width="28" height="10" rx="2"/><rect class="ink" x="173" y="38" width="28" height="10" rx="2"/>
+                <path class="fill" d="M64 4L116 46C130 40 156 44 170 54L170 82C150 92 126 88 110 74L40 26Z"/>
+                <path class="ink" d="M64 4L116 46C130 40 156 44 170 54L170 82C150 92 126 88 110 74L40 26"/>
+                <rect class="fill" x="160" y="52" width="46" height="9" rx="4.5"/><rect class="ink" x="160" y="52" width="46" height="9" rx="4.5"/>
+                <rect class="fill" x="160" y="62" width="48" height="9" rx="4.5"/><rect class="ink" x="160" y="62" width="48" height="9" rx="4.5"/>
+                <rect class="fill" x="160" y="72" width="44" height="9" rx="4.5"/><rect class="ink" x="160" y="72" width="44" height="9" rx="4.5"/>
+                <path class="lit" d="M24 100H256 M201 38v8 M197 50v34 M184 52h18 M186 62h20"/>
+              </g>
+            </svg>
+            <figcaption><b>4A</b><span>Insert · Static</span></figcaption>
+          </figure>
+          <figure class="board rv">
+            <svg viewBox="0 0 320 180" aria-label="Board: wide of the ridge at dusk, Maya beside the telescope">
+              <circle cx="232" cy="96" r="54" fill="url(#spill)"/>
+              <circle class="ink faint" cx="232" cy="100" r="9"/>
+              <path class="ink faint" d="M0 98c40-8 70-14 110-6s70 4 110-4 70-6 100 0"/>
+              <path class="ink faint" d="M0 112c50-10 90-4 140-8s90-10 180-2"/>
+              <path class="fill" d="M0 180V150C60 134 110 124 170 124S270 136 320 150V180Z"/>
+              <path class="ink" d="M0 150C60 134 110 124 170 124S270 136 320 150"/>
+              <path class="lit" d="M168 124c30 0 60 4 90 12"/>
+              <g transform="translate(166 124) scale(.32)">
+                <path class="fill" d="M-5 0L-4 -30L-9 -31L-11 -56Q-11 -66 -4 -68L4 -68Q11 -66 11 -56L9 -31L4 -30L5 0L1.5 0L0 -26L-1.5 0Z M0 -70a8 8 0 1 0 0 -16a8 8 0 1 0 0 16Z M30 0L42 -44L44 -44L33 0Z M58 0L46 -44L44 -44L55 0Z M34 -47L76 -96L82 -91L40 -42Z"/>
+                <path class="ink" vector-effect="non-scaling-stroke" d="M-5 0L-4 -30L-9 -31L-11 -56Q-11 -66 -4 -68L4 -68Q11 -66 11 -56L9 -31L4 -30L5 0 M0 -70a8 8 0 1 0 0 -16a8 8 0 1 0 0 16Z M30 0L43 -44L56 0 M34 -47L76 -96L82 -91L40 -42Z"/>
+                <path class="lit" vector-effect="non-scaling-stroke" d="M11 -56L9 -31 M8 -78a8 8 0 0 1 0 0 M82 -91L40 -42"/>
+              </g>
+            </svg>
+            <figcaption><b>5B</b><span>Wide · Dusk</span></figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Features ============ -->
+  <section class="features" id="features" aria-labelledby="feat-title">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="label">And the rest</span>
+        <h2 class="display h2" id="feat-title">Everything else an editor does.</h2>
+      </div>
+      <div class="bento">
+        <article class="tile w2 rv">
+          <div class="tv tv-search"><div class="q"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="typed" data-text="wide of the ridge at dusk">wide of the ridge at dusk</span></div>
+            <div class="res"><figure><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy"></div><figcaption>3A-2 · picture</figcaption></figure><figure><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" style="--z:1.6;--o:40% 60%"></div><figcaption>5B-1 · picture</figcaption></figure><figure><div class="thumb"><img src="img/ridge.svg" alt="" loading="lazy" style="--z:2.2;--o:69% 54%"></div><figcaption>3D-1 · picture</figcaption></figure></div></div>
+          <h3>Find any shot by what's in it.</h3>
+          <p>Ask for the wide of the ridge at dusk and get it. The search runs on your Mac and never leaves it.</p>
+        </article>
+        <article class="tile rv">
+          <div class="tv tv-shapes"><div class="sf"><img src="img/ridge.svg" alt="" loading="lazy"></div></div>
+          <h3>Every shape from one cut.</h3>
+          <p>16:9, 9:16, 1:1 or 4:5. Your editor reframes to fill the frame.</p>
+        </article>
+        <article class="tile rv">
+          <div class="tv tv-words"><p>So I glued the <s>um, the</s> mirror cell in place <s>and then, you know,</s> and waited.</p><p class="faint">Two winters, <s>basically,</s> waiting for glue.</p></div>
+          <h3>Cut by deleting words.</h3>
+          <p>Strike words in the transcript and the footage goes with them, on every camera.</p>
+        </article>
+        <article class="tile rv">
+          <div class="tv tv-look"><img src="img/ridge.svg" alt="" loading="lazy"><div class="graded"><img src="img/ridge.svg" alt="" loading="lazy"></div><i class="split"></i></div>
+          <h3>A look for the whole film.</h3>
+          <p>Your editor proposes a grade and holds it shot to shot.</p>
+        </article>
+        <article class="tile rv">
+          <div class="tv tv-sync"><div class="wv"><span>A cam</span><svg viewBox="0 0 200 24" preserveAspectRatio="none"><g class="w1"></g></svg></div><div class="wv"><span>Recorder</span><svg viewBox="0 0 200 24" preserveAspectRatio="none"><g class="w2"></g></svg></div><span class="chip ok">In sync</span></div>
+          <h3>Sound synced for you.</h3>
+          <p>Cameras and a sound recorder, matched by their sound as the footage comes in.</p>
+        </article>
+        <article class="tile rv">
+          <div class="tv tv-ab"><div class="ab"><div class="thumb"><img src="img/garage.svg" alt="" loading="lazy" style="--z:1.5;--o:45% 80%"></div><span>A</span></div><div class="ab"><div class="thumb"><img src="img/garage.svg" alt="" loading="lazy" style="--z:1.6;--o:25% 42%"></div><span>B</span></div></div>
+          <h3>Two ways, when it could go either way.</h3>
+          <p>Watch both, then pick one.</p>
+        </article>
+        <article class="tile w2 rv">
+          <div class="tv tv-gfx"><img src="img/face.svg" alt="" loading="lazy"><div class="l3"><b>Maya Okafor</b><span>Telescope maker</span></div><div class="cap">Most of it was waiting for glue to dry.</div></div>
+          <h3>Titles, lower thirds and captions.</h3>
+          <p>Drawn on your Mac, in your style's fonts and colors. Captions come straight from the transcript.</p>
+        </article>
+        <article class="tile rv">
+          <div class="tv tv-ask"><div class="bubble"><i class="gem ion"></i><p>Her line on the ridge: take 2 or take 4?</p></div><div class="opts"><span class="chip">Take 2</span><span class="chip d">Take 4</span></div></div>
+          <h3>It asks when it isn't sure.</h3>
+          <p>One clear question, not a guess.</p>
+        </article>
+        <article class="tile rv">
+          <div class="tv tv-outside"><div class="who"><i>S</i><div><b>Sam · Producer</b><p>Can we see the telescope earlier?</p></div></div><div class="opts"><span class="chip ui">Not now</span><span class="chip ui on">Accept</span></div></div>
+          <h3>Notes from outside.</h3>
+          <p>A producer's or client's notes wait in their own inbox until you accept them.</p>
+        </article>
+        <article class="tile rv">
+          <div class="tv tv-slow"><svg viewBox="0 0 200 70" aria-hidden="true"><path d="M0 50C40 50 60 50 80 20S130 20 140 20 170 50 200 50" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="mono">0.25×</span></div>
+          <h3>Slow motion and sharpening.</h3>
+          <p>Made on your Mac. No key, no cost.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ On your Mac ============ -->
+  <section class="local" id="local" aria-labelledby="local-title">
+    <div class="wrap local-grid">
+      <div class="rv">
+        <div class="sec-head" style="margin-bottom:0">
+          <span class="label">On your Mac</span>
+          <h2 class="display h2" id="local-title">Your film is a folder on your Mac.</h2>
+          <p class="lede">Back it up, move it or archive it, like anything else on your Mac.</p>
+        </div>
+        <div class="path"><svg viewBox="0 0 22 18" aria-hidden="true"><path d="M1 3a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="oklch(0.62 0.09 245)"/><path d="M1 6h20v9a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" fill="oklch(0.72 0.1 245)"/></svg>~/Movies/Direction/<b>First Light.direction</b></div>
+      </div>
+      <div class="facts rv">
+        <div><span class="k">Footage</span><h3>Linked, never changed.</h3><p>Your original files stay where they are. Direction works from them and never writes to them.</p></div>
+        <div><span class="k">Rendering</span><h3>Made on your Mac.</h3><p>Cutting, color, sound, titles and export run on Apple silicon. Transcription uses Apple's on-device speech.</p></div>
+        <div><span class="k">The editor</span><h3>Your own plan.</h3><p>Claude Code or Codex, signed in with your Claude or ChatGPT account. No API keys to buy or paste.</p></div>
+        <div><span class="k">Keys</span><h3>In your keychain.</h3><p>Optional extras keep their keys in your Mac's keychain. Never in a film, never shown to the editor.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ End credits ============ -->
+  <section class="end" id="get" aria-labelledby="end-title">
+    <div class="wrap">
+      <div class="end-hero">
+        <div class="mark" id="mark" aria-hidden="true"><img src="img/mark-chrome.webp" alt="" loading="lazy" decoding="async" width="768" height="768"></div>
+        <h2 class="display" id="end-title">Direct your next film.</h2>
+        <p class="lede">Download Direction for your Mac and sign in your editor with your own Claude or ChatGPT plan. It keeps itself up to date.</p>
+        <div class="hero-cta">
+          <a class="btn steel" href="https://updates.givedirection.ai/Direction.dmg" download>Download for Mac</a>
+        </div>
+        <span class="req">Apple silicon · macOS 26 or later · Claude Code or Codex</span>
+        <a class="oss grain" href="https://github.com/Hendrixer/Direction-app"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg><span><b>Direction is open source.</b> Read the code, build it yourself, or send a fix.</span><span class="arrow">↗</span></a>
+      </div>
+
+      <div class="faq">
+        <details><summary>Does my footage leave my Mac?</summary><p>Your original files stay where they are and are never changed. To make its decisions, the editor reads what Direction gives it (logs, transcripts and frames) through your own Claude or ChatGPT plan.</p></details>
+        <details><summary>Claude Code or Codex?</summary><p>Either. Each new film asks who's editing and keeps that editor, with your last choice already picked. You can pause or stop the editor at any time.</p></details>
+        <details><summary>Do I need an OpenRouter key?</summary><p>Only to make shots, stills, music and sound effects. It's paid per use, and you set the limits in Settings. Everything else, from logging to delivery, runs without one.</p></details>
+        <details><summary>What does it deliver?</summary><p>A master, a web copy and captions, in SDR Rec. 709. HDR footage is converted to SDR inside the film; your originals stay as they are.</p></details>
+      </div>
+
+      <footer class="foot">
+        <a class="brand" href="#top"><img src="img/glyph.svg" alt="" width="22" height="22">Direction</a>
+        <p class="roll"><b>Directed by</b> you<br><b>Edited by</b> Claude Code or Codex<br><b>Made on</b> a Mac</p>
+        <p class="roll"><a href="/changelog/">Changelog</a> · <a href="https://github.com/Hendrixer/Direction-app">GitHub</a> · © 2026</p>
+      </footer>
+    </div>
+  </section>
+</main>
+
+<script src="js/site.js" defer></script>
+<script src="js/mark.js" defer></script>
+</body>
+</html>

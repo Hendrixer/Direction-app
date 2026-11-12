@@ -28,20 +28,25 @@ struct EditorSetupSheet: View {
 
     // MARK: Choosing a program
 
-    private var foundAny: Bool { EditorProgram.allCases.contains { programs.install($0) != nil } }
+    private var foundAny: Bool { !programs.installed.isEmpty }
+    /// The agents found on this Mac; with none, the ones worth installing, each with its command.
+    private var shown: [EditorProgram] { foundAny ? programs.installed : EditorProgram.suggested }
 
     @ViewBuilder private var chooser: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Who\u{2019}s editing?").font(Gate.Font.brand(size: 22, width: 120)).foregroundStyle(Gate.Text.primary).accessibilityAddTraits(.isHeader)
-            Text("Direction starts the editor on this Mac whenever this film has work, and you can pause or stop it anytime. It uses your own sign-in.")
+            Text(foundAny || !programs.checked
+                 ? "Direction starts the editor on this Mac whenever this film has work, and you can pause or stop it anytime. It uses your own sign-in."
+                 : "The editor is a coding agent on this Mac, and Direction found none. Install one of these, sign in, then check again.")
                 .font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).cssLineHeight(1.5, size: 13).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 490, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 22).padding(.top, 22).padding(.bottom, 6)
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(EditorProgram.allCases, id: \.self) { p in card(p) }
+            // Two across, as many rows as there are agents.
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10, alignment: .top), GridItem(.flexible(), spacing: 10, alignment: .top)], alignment: .leading, spacing: 10) {
+                ForEach(shown, id: \.self) { p in card(p) }
             }
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .contain).accessibilityLabel("Who edits")
@@ -51,7 +56,7 @@ struct EditorSetupSheet: View {
                     GateSegmented(options: [(false, "Right away"), (true, "Ask me first")], selection: $asksFirst)
                 }
                 SettingsRow(label: "Speed and quality", detail: quality.detail, minHeight: 64) {
-                    StopSlider(stops: FilmQuality.allCases.map { ($0, $0.label) }, selection: $quality, label: "Speed and quality").frame(width: 200)
+                    StopSlider(stops: FilmQuality.allCases.map { ($0, $0.label) }, selection: $quality, label: "Speed and quality").frame(width: 250)
                 }
             }
             .background(SystemCardBackground())
@@ -116,7 +121,7 @@ struct EditorSetupSheet: View {
         guard EditorSetup.signedIn(choice) == false || why != nil else { return nil }
         return AnyView(HStack(spacing: 10) {
             if let why { Text("Direction couldn\u{2019}t check the sign-in: \(why). You can start anyway.").font(Gate.Font.body).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true) }
-            else { EditorStopBody(text: "Open Terminal, run \(choice == .claudeCode ? "claude" : "codex login"), and sign in.", program: choice) }
+            else { EditorStopBody(text: "Open Terminal, run \(choice.signInCommand), and sign in.", program: choice) }
             Spacer(minLength: 8)
             Button { programs.checkSignIn(choice, force: true) } label: { Text("Check again") }.buttonStyle(.gate).disabled(programs.signingIn.contains(choice))
             if why == nil { Button { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) } label: { Label("Open Terminal", systemImage: "terminal") }.buttonStyle(.gate) }
@@ -156,7 +161,7 @@ struct EditorSetupSheet: View {
     private func load() {
         programs.refreshIfNeeded()
         if let p = model.runs.runsOn.program, programs.install(p) != nil { choice = p }
-        else { choice = EditorProgram.allCases.first { programs.install($0) != nil } ?? .claudeCode }
+        else { choice = programs.installed.first ?? .claudeCode }
         asksFirst = EditorSetup.asksFirst
         // Once: a later look for the programs mustn't undo a stop the director just chose.
         if !qualityLoaded { quality = model.directing.quality ?? EditorSetup.defaultQuality; qualityLoaded = true }
@@ -165,7 +170,7 @@ struct EditorSetupSheet: View {
 
     private func confirm() {
         guard foundAny, programs.install(choice) != nil else { programs.refresh(); return }
-        model.chooseEditor(EditorRunsOn(rawValue: choice.rawValue) ?? .claudeCode)
+        model.chooseEditor(EditorRunsOn(choice))
         EditorSetup.setAsksFirst(asksFirst)
         model.setQuality(quality)
         programs.checkSignIn(choice)

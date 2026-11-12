@@ -204,13 +204,13 @@ What it recommends (`EngineAdvice`):
 - **Editor:** the chosen program while it's installed, else whichever is (Claude Code first). Your own session is left alone.
 - Use Recommended sets those three and nothing else. Defaults already follow it: a Mac with 32 GB or more starts on Best.
 
-**Who edits**: as specified in `editor.md › 43` (Editor runs on, Version, Effort, Start work, Let the editor run scripts).
+**Who edits**: as specified in `editor.md › 43` (Editor runs on, Version, Effort, Start work).
 
 **Transcription** and **Looking at footage**
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
-| Transcription | Transcribe with | Seg: Apple / Whisper | Apple | Apple: "Fast and built into macOS. Runs on this Mac." Whisper: "Slower, with tighter word times for cutting on a single word. Runs on this Mac." Stored in the `dev.direction.shared` defaults suite, so the editor's tools use it too. |
+| Transcription | Transcribe with | Seg: Apple / Whisper | Apple | Apple: "Fast and built into macOS. Runs on this Mac." Whisper: "Whisper on this Mac’s graphics chip. It tidies speech, so false starts and repeated lines can drop out." (Word times are the same either way: Direction holds every word to the take’s own sound, footage-index.md.) Stored in the `dev.direction.shared` defaults suite, so the editor's tools use it too. |
 | Transcription | Whisper version | Select: Large v3 Turbo / Large v3 | Large v3 Turbo | Sub-label: "Fast. Nearly as accurate as Large v3. Downloaded · 1.6 GB." or "Slower, and a little more accurate. Downloads 3.1 GB the first time it's used." Disabled while Apple is chosen. |
 | Transcription | mlx-whisper (only while Whisper is chosen) | Chip "Ready", or **Copy Command** | — | Ready shows the path (`~/.local/bin/mlx_whisper`). Missing: "mlx-whisper isn't installed" / "Install it in Terminal with pip install mlx-whisper. Until then, Apple transcribes." Missing ffmpeg: "Whisper needs ffmpeg" / "brew install ffmpeg". |
 | Looking at footage | Look with | Seg: This Mac / OpenRouter | This Mac | This Mac: "Private and free. Footage never leaves this Mac." OpenRouter: "Sends three small frames of each shot to a vision version through OpenRouter. Needs your key under OpenRouter below." |

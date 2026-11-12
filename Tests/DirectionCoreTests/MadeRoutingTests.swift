@@ -36,6 +36,14 @@ struct MadeRoutingTests {
     }
 
     /// Faster and Balanced start with Hailuo 3 Max: rated close to the best, quickest by far, and cheap.
+    /// Fastest is about the editor; made shots, stills and sound are Faster's.
+    @Test func fastestMakesWhatFasterMakes() {
+        for needs in [fromFrame, MadeNeeds(kind: .shot, seconds: 5), MadeNeeds(kind: .bridge, firstFrame: true, lastFrame: true, seconds: 5)] {
+            #expect(ids(needs, .fastest) == ids(needs, .faster), "\(needs.kind)")
+        }
+        #expect(MadeEstimator.videoResolution(Self.catalog.versions[3], quality: .fastest) == MadeEstimator.videoResolution(Self.catalog.versions[3], quality: .faster))
+    }
+
     @Test func fasterAndBalancedStartWithTheQuickOne() {
         #expect(ids(fromFrame, .faster).first == "minimax/hailuo-3-max" && ids(fromFrame, .balanced).first == "minimax/hailuo-3-max")
         // Past the picks, Balanced is the cheapest of the best few and Faster the cheapest rated good.
@@ -65,6 +73,59 @@ struct MadeRoutingTests {
         #expect(ids(fromFrame, .faster, in: catalog).first == "minimax/hailuo-3-max")
     }
 
+    /// What the paid trials found (8 Nov 2026): Hailuo 3 Max takes one frame, never both, and no references, so
+    /// bridges and shots with references skip it; a bridge goes to Kling 3.0 Pro, or Wan 3.0 when quicker matters.
+    @Test func bridgesAndReferencesSkipHailuo3MaxAndBridgesFollowTheTrials() {
+        let h3Max = Self.catalog.versions.first { $0.id == "minimax/hailuo-3-max" }!
+        #expect(!h3Max.takesLastFrame && !h3Max.takesReferences)
+        // Round 2: Hailuo 3 takes references, but not beside a frame.
+        let fromFrameWithReference = MadeNeeds(kind: .shot, firstFrame: true, seconds: 5, references: true)
+        for q in FilmQuality.allCases { #expect(!ids(fromFrameWithReference, q).contains { $0.hasPrefix("minimax/hailuo") }, "\(q)") }
+        let h3 = MadeVersion(id: "minimax/hailuo-3", name: "Hailuo 3", listing: .video, frames: ["first_frame", "last_frame"])
+        #expect(h3.takesReferences && !h3.takesReferencesWithFrames)
+        #expect(MadeVersion(id: "kwaivgi/kling-v3.0-pro", name: "Kling 3.0 Pro", listing: .video).takesReferencesWithFrames)
+        #expect(!Self.catalog.listed(.bridge).contains(h3Max))
+        let bridge = MadeNeeds(kind: .bridge, firstFrame: true, lastFrame: true, seconds: 5)
+        for q in FilmQuality.allCases { #expect(!ids(bridge, q).contains("minimax/hailuo-3-max"), "\(q)") }
+        #expect(ids(bridge, .faster).prefix(2) == ["alibaba/wan-3.0", "kwaivgi/kling-v3.0-pro"])
+        #expect(ids(bridge, .balanced).prefix(2) == ["kwaivgi/kling-v3.0-pro", "alibaba/wan-3.0"])
+        #expect(ids(bridge, .best).prefix(3) == ["bytedance/seedance-2.5", "kwaivgi/kling-v3.0-pro", "alibaba/wan-3.0"])
+        var withPerson = bridge; withPerson.person = true
+        #expect(ids(withPerson, .best).first == "kwaivgi/kling-v3.0-pro")
+        // A shot from a frame keeps it, unless references go with it.
+        var referenced = fromFrame; referenced.references = true
+        #expect(ids(fromFrame, .faster).first == "minimax/hailuo-3-max")
+        for q in FilmQuality.allCases { #expect(!ids(referenced, q).contains("minimax/hailuo-3-max"), "\(q)") }
+    }
+
+    /// Gemini Omni lists prices only with sound, and turns down being asked for none.
+    @Test func aVersionPricedOnlyWithSoundAlwaysMakesIt() {
+        let omni = MadeVersion(id: "google/gemini-omni-1.2-flash", name: "Gemini Omni 1.2 Flash", listing: .video, skus: ["duration_seconds_with_audio": "0.104256", "duration_seconds_with_audio_720p": "0.069504", "duration_seconds_with_audio_4k": "0.208512"])
+        let veo = MadeVersion(id: "google/veo-3.1", name: "Veo 3.1", listing: .video, skus: ["duration_seconds_with_audio": "0.40", "duration_seconds_without_audio": "0.20"])
+        let kling = MadeVersion(id: "kwaivgi/kling-v3.0-pro", name: "Kling", listing: .video, skus: ["duration_seconds": "0.112", "duration_seconds_with_audio": "0.168"])
+        #expect(omni.alwaysMakesSound && !veo.alwaysMakesSound && !kling.alwaysMakesSound && !Self.catalog.versions.contains(where: \.alwaysMakesSound))
+    }
+
+    /// Sound effects go to Seed Audio, which makes the sound itself (Lyria makes music about it), with Lyria
+    /// behind it for an ask Seed Audio turns down. Seed Audio is never a voice.
+    @Test func soundEffectsGoToSeedAudioThenLyria() {
+        let sound = MadeCatalog(fetchedAt: 0, versions: [
+            MadeVersion(id: "google/lyria-3-pro-preview", name: "Lyria 3 Pro", listing: .audio),
+            MadeVersion(id: "google/lyria-3-clip-preview", name: "Lyria 3 Clip", listing: .audio),
+            MadeVersion(id: "assemblyai/assemblyai-tts-1", name: "AssemblyAI TTS 1", listing: .speech, voices: ["aai-jane"]),
+            MadeVersion(id: "bytedance-seed/seed-audio-1-0", name: "Seed Audio 1.0", listing: .speech, pricing: ["prompt": "0", "completion": "0.0025"]),
+        ])
+        #expect(ids(MadeNeeds(kind: .soundEffect, seconds: 4), .balanced, in: sound) == ["bytedance-seed/seed-audio-1-0", "google/lyria-3-clip-preview"])
+        #expect(ids(MadeNeeds(kind: .music, seconds: 30), .balanced, in: sound) == ["google/lyria-3-clip-preview"])
+        #expect(sound.defaultVersion(.soundEffect)?.id == "bytedance-seed/seed-audio-1-0" && sound.listed(.voice).map(\.id) == ["assemblyai/assemblyai-tts-1"])
+        // Not listed: Lyria, as before.
+        #expect(ids(MadeNeeds(kind: .soundEffect, seconds: 4), .balanced, in: MadeCatalog(fetchedAt: 0, versions: [sound.versions[1]])) == ["google/lyria-3-clip-preview"])
+        // Billed by the second of sound it makes, and it chooses the length: priced at the longest made, 10 s.
+        let seed = sound.versions[3]
+        #expect(abs(MadeEstimator.estimate(.soundEffect, version: seed, seconds: 4).spend - 0.025) < 1e-9 && MadeEstimator.estimate(.soundEffect, version: seed, seconds: 4).priced)
+        #expect(MadeCatalog.builtIn.defaultVersion(.soundEffect)?.id == "bytedance-seed/seed-audio-1-0" && MadeCatalog.builtIn.defaultVersion(.voice)?.makesEffects == false)
+    }
+
     /// Stills: words go to GPT Image, which spells best; otherwise the stop's pick for keeping a frame.
     @Test func stillsFollowWhatTheyNeed() {
         let stills = MadeCatalog(fetchedAt: 0, versions: [
@@ -92,7 +153,7 @@ struct MadeRoutingTests {
             MadeVersion(id: "elevenlabs/eleven-v4", name: "Eleven v4", listing: .speech, voices: ["rachel"]),
         ])
         let voice = MadeNeeds(kind: .voice)
-        #expect(FilmQuality.allCases.map { ids(voice, $0, in: voices).first } == ["elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4"])
+        #expect(FilmQuality.allCases.map { ids(voice, $0, in: voices).first } == ["elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4-turbo", "elevenlabs/eleven-v4"])
         // Gone from the list: the first one listed, as before.
         #expect(ids(voice, .best, in: MadeCatalog(fetchedAt: 0, versions: [voices.versions[0]])) == ["assemblyai/assemblyai-tts-1"])
     }

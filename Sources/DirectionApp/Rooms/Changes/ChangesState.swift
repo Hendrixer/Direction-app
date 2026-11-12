@@ -40,6 +40,8 @@ final class ChangesState {
     var confirmAcceptAll = false
     /// The lock bar's selected tile.
     var lockSceneID: String?
+    /// The director opened the scene tiles (Lock scenes) to lock what's right; the room never opens them on its own.
+    var lockingScenes = false
     var lockAnchorID: String?
     var unlockSceneID: String?
     /// The A/B card the director clicked (it gets the ring and the sound).

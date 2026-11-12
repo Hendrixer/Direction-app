@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <mask id="cut">
+      <rect width="100" height="100" fill="#fff"/>
+      <!-- the edit cut: a wedge through the bowl, top-right -->
+      <polygon points="-1.4,-12 1.4,-12 2.9,-52 -2.9,-52" fill="#000" transform="translate(52 50) rotate(44)"/>
+    </mask>
+  </defs>
+  <path fill="#fff" fill-rule="evenodd" mask="url(#cut)" d="M15 8H52C76.3 8 92 26.8 92 50S76.3 92 52 92H15Q8 92 8 85V15Q8 8 15 8ZM39 31Q35 31 35 35V65Q35 69 39 69H50C62 69 69 61 69 50S62 31 50 31Z"/>
+</svg>

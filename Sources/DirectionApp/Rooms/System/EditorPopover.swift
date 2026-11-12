@@ -83,7 +83,9 @@ struct EditorPopover: View {
             let detail = model.editorStatus?.detail ?? model.openTurnover?.phase
             let lead = model.openTurnover?.kind == "assembly" ? "Building the assembly from your circled takes." : "Cutting \(nextCut)."
             return [lead, detail.map { $0.hasSuffix(".") ? $0 : $0 + "." }].compactMap { $0 }.joined(separator: " ")
-        case .asks(let n): return "I need your call on \(n == 1 ? "one thing" : "\(n) things") before I finish \(nextCut)."
+        case .asks(let n):
+            if let room = prepRoom(n) { return "I need your call on \(n == 1 ? "one thing" : "\(n) things") in the \(room == .script ? "script" : "breakdown") before I go on." }
+            return "I need your call on \(n == 1 ? "one thing" : "\(n) things") before I finish \(nextCut)."
         case .cant: return model.openQuestions.first { $0.kind == "cant" }?.text ?? "I can\u{2019}t do one of your notes as written."
         case .stopped:
             if let r = model.runs.failed { return [EditorStopCopy.title(r.reason ?? .stoppedWithoutFinishing, run: r), model.runs.stopBody(r, film: model)].filter { !$0.isEmpty }.joined(separator: " ") }
@@ -109,6 +111,12 @@ struct EditorPopover: View {
         case .script: "Your script is in"
         case .breakdown: "You OK\u{2019}d the script"
         }
+    }
+
+    /// Every one of the `n` questions is on the script or the breakdown: the room they wait in.
+    private func prepRoom(_ n: Int) -> Room? {
+        let prep = model.prepQuestions
+        return prep.count == n ? prep.room : nil
     }
 
     private var currentNoteNumber: String? {
@@ -148,9 +156,11 @@ struct EditorPopover: View {
             Button("Watch it") { model.showEditorPopover = false; model.watchThrough() }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .readBackReady:
             Button("Open read-back") { model.notesTab = .sheet; open(.cut) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
-        case .asks:
-            // Before the first cut the assembly's questions wait in Dailies; after, in the Cut room.
-            Button("Answer") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .cut) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
+        case .asks(let n):
+            // The script's and the breakdown's questions wait on their rows and shots. Before the first cut
+            // the assembly's wait in Dailies; after, in the Cut room.
+            if let room = prepRoom(n) { Button("Answer") { open(room) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction) }
+            else { Button("Answer") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .cut) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction) }
         case .cant:
             Button("Show me") { model.notesTab = .questions; open(model.cuts.isEmpty ? .dailies : .cut) }.buttonStyle(.gate(.normal, .small)).keyboardShortcut(.defaultAction)
         case .waiting where !model.runs.startsEditor:
@@ -230,11 +240,12 @@ struct EditorPopover: View {
 
     // MARK: Speed and quality
 
-    /// The film's own. Locked while the editor works or has work under way (waiting on an answer, paused):
-    /// the run keeps the stop it started with, and so do the shots it makes.
+    /// The film's own. Locked only while the editor works (editor.md › Speed and quality): a run waiting
+    /// for an answer or paused goes on with the version and effort it started with; what it makes from
+    /// then on follows the new stop.
     private var speedAndQuality: some View {
         let working: Bool = { if case .working = pill { return true }; if case .assembling = pill { return true }; return false }()
-        let locked = working || model.runs.runs.contains { $0.invocations > 0 && [.starting, .working, .waitingForYou, .paused].contains($0.state) }
+        let locked = working || model.runs.isWorking
         return section {
             SectionLabel("Speed and quality")
             SpeedQualityControl(quality: Binding(get: { model.directing.speedAndQuality }, set: { model.setQuality($0) }))

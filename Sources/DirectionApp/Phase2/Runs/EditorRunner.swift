@@ -3,7 +3,7 @@ import Darwin
 import DirectionCore
 import DirectionTools
 
-/// Starts Claude Code or Codex for each job and follows it (specs/editor.md › How Direction runs a job).
+/// Starts the editor program (Claude Code, Codex, or an agent over ACP) for each job and follows it (specs/editor.md › How Direction runs a job).
 /// App-wide: a film's run keeps working after its window moves on to another film. One run per
 /// film; two films at once; the rest queue. Runs live in each film's store, so they survive relaunch.
 @MainActor final class EditorRunner {
@@ -26,6 +26,9 @@ import DirectionTools
     @MainActor final class LiveRun {
         let runID: String, store: ProjectStore, program: EditorProgram, process: Process
         var claude = ClaudeStreamParser(), codex = CodexStreamParser()
+        /// An ACP agent's side of the conversation, and where Direction's side is written.
+        var acp: ACPConversation?
+        var input: FileHandle?
         var buffer = Data()
         /// Tool calls it has made that haven't answered yet, by id, with the tool's name.
         var pending: [String: String] = [:]
@@ -45,6 +48,10 @@ import DirectionTools
         let began = Date().timeIntervalSince1970
         var askedAt: Double?
         var waitsForOK = false
+        /// Its turnover's read-back when it began, so one posted from inside a script can be told apart.
+        var readBackAtStart: [ReadBackLine] = []
+        /// Scripts in flight that import, whose long work happens inside a call.
+        var importing: Set<String> = []
         /// The last time the program said anything, in awake time (a Mac asleep isn't a program saying nothing),
         /// and whether this silence was logged yet.
         var lastHeard = ProcessInfo.processInfo.systemUptime { didSet { quietLogged = false } }
@@ -58,6 +65,9 @@ import DirectionTools
     /// Finishing runs while Direction does its own steps first (FinishingPass), before the program starts: the
     /// pass, so Stop and Quit reach it.
     private var preparing: [String: Task<Void, Never>] = [:]
+    /// Which of those are reading what the editor reads first (EditorOpening), by the read's own mark: Pause ends
+    /// one at once, since nothing has started.
+    private var reading: [String: UUID] = [:]
     func isLive(_ runID: String) -> Bool { live[runID] != nil || preparing[runID] != nil }
     /// Tests hold it weakly to see it let go once the run is over.
     func liveRun(_ runID: String) -> LiveRun? { live[runID] }
@@ -83,7 +93,7 @@ import DirectionTools
     // MARK: Launch
 
     /// Starts the program for a run: its first job text, or `continuation` on the saved session.
-    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false, prepared: Bool = false) {
+    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false, prepared: Bool = false, opening: String? = nil) {
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
@@ -96,12 +106,23 @@ import DirectionTools
                 run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = pick.version; $0.effort = pick.effort }) ?? run
             }
         }
-        guard live[run.id] == nil, preparing[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
+        // A run left by an agent Direction no longer runs starts over with the film's editor: its session was that agent's.
+        if EditorProgram(rawValue: run.program) == nil, let p = EditorSetup.runsOn(film: state?.editor).program {
+            let pick = EditorPicks.pick(p, run.job, state?.speedAndQuality ?? .balanced)
+            run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = pick.version; $0.effort = pick.effort; $0.session = nil }) ?? run
+        }
+        guard live[run.id] == nil, preparing[run.id] == nil else { return }
+        guard let program = EditorProgram(rawValue: run.program) else { end(run.id, store: store, outcome: .init(state: .failed, reason: .notInstalled)); return }
         offlineRetries[run.id]?.cancel(); offlineRetries[run.id] = nil
         // Try again, Resume or back online: a fresh start, with its one restart to come.
         if !restartingStuck { restarted.remove(run.id) }
-        guard let path = programOverride[program] ?? EditorPrograms.shared.install(program)?.path else {
+        let install = EditorPrograms.shared.install(program)
+        guard let path = programOverride[program] ?? install?.path else {
             end(run.id, store: store, outcome: .init(state: .failed, reason: .notInstalled)); return
+        }
+        // An agent too old to speak ACP: found, but Direction can't talk to it.
+        if programOverride[program] == nil, let install, !install.usable {
+            end(run.id, store: store, outcome: .init(state: .failed, reason: .outOfDate, detail: "In Terminal, run \(program.updateCommand(path: install.path))")); return
         }
         guard let helper = helperOverride ?? EditorJobs.helperPath else {
             end(run.id, store: store, outcome: .init(state: .failed, reason: .programQuit, detail: "Direction\u{2019}s tools aren\u{2019}t in this copy of the app. Build it with scripts/build-app.sh.")); return
@@ -121,6 +142,27 @@ import DirectionTools
             }
             return
         }
+        // What the editor would read first, read for it (EditorOpening): then this starts again with it in hand.
+        if opening == nil {
+            guard let folder = try? EditorJobs.prepareFolder(film: store.url, job: run.job) else {
+                end(run.id, store: store, outcome: .init(state: .failed, reason: .programQuit, detail: "Direction couldn\u{2019}t make the editor\u{2019}s folder in the film.")); return
+            }
+            if run.state != .starting { _ = try? store.updateRun(run.id) { $0.state = .starting }; onChange?(store.url) }
+            let runID = run.id, continuing = continuation != nil && run.session != nil
+            let mine = UUID()
+            reading[runID] = mine
+            preparing[runID] = Task { @MainActor in
+                let text = await EditorOpening.text(for: run, store: store, folder: folder, continuing: continuing)
+                // Paused meanwhile, and perhaps resumed: the entry is gone or another's, and this one ends here.
+                guard self.reading[runID] == mine else { return }
+                self.reading[runID] = nil
+                self.preparing[runID] = nil
+                // Stopped or paused meanwhile: it stays that way.
+                guard !Task.isCancelled, let again = try? store.run(runID), again.state == .starting || again.state == .queued else { self.onChange?(store.url); self.pump(); return }
+                self.launch(again, store: store, continuation: continuation, restartingStuck: restartingStuck, prepared: true, opening: text)
+            }
+            return
+        }
         do {
             let folder = try EditorJobs.prepareFolder(film: store.url, job: run.job)
             let mcp = folder.appendingPathComponent(".mcp.json"), schema = folder.appendingPathComponent(".direction/result.schema.json")
@@ -134,17 +176,30 @@ import DirectionTools
             else if session != nil, run.sessionSpend == nil, let spent = run.spend { run = (try? store.updateRun(run.id) { $0.sessionSpend = spent }) ?? run }
             var job = try (session == nil ? EditorJobs.text(for: run, store: store) : continuation!)
             if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
+            if let opening, !opening.isEmpty { job += "\n" + opening }
             // The run's own, once it has started; an older run without one reads its job's.
             let effort = run.effort ?? EditorPicks.pick(program, run.job, state?.speedAndQuality ?? .balanced).effort
-            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts, kind: run.job)
+            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role(for: run.job, program: program), version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, kind: run.job)
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)
-            p.arguments = program.arguments(invocation)
+            p.arguments = programOverride[program] == nil ? (install?.arguments(invocation) ?? program.arguments(invocation)) : program.arguments(invocation)
             p.currentDirectoryURL = folder
-            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id], shellKey: EditorSetup.usesShellKey(program))
+            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id], shellKey: EditorSetup.usesShellKey(program),
+                                                        fallback: program == .gemini ? EditorDiscovery.geminiHomeEnvironment() : [:])
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
             let l = LiveRun(runID: run.id, store: store, program: program, process: p)
+            l.readBackAtStart = run.turnoverID.flatMap { try? store.turnover($0) }?.readBack ?? []
+            if program.usesACP {
+                // The whole job, for a saved session the agent can't load.
+                let whole = session == nil ? job : ((try? EditorJobs.text(for: run, store: store)).map { $0 + "\n" + job } ?? job)
+                let input = Pipe()
+                // An agent that's gone must not take Direction with it: writes fail instead of raising SIGPIPE.
+                _ = fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+                p.standardInput = input
+                l.input = input.fileHandleForWriting
+                l.acp = program.conversation(invocation, wholeJob: whole)
+            }
             // At the end of a pipe the handler is called again and again with nothing, so each one
             // stops itself there, on its own thread: left to the main queue, a finished run kept a
             // core spinning for as long as the app stayed open.
@@ -166,6 +221,15 @@ import DirectionTools
             }
             try p.run()
             ChildProcesses.started(p)
+            if var conversation = l.acp {
+                let hello = conversation.start(); l.acp = conversation; send(l, hello)
+                // An agent that never opens a session would otherwise wait for the silence watch.
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.sessionWithin) { MainActor.assumeIsolated {
+                    guard l.exited == nil, l.process.isRunning, l.acp?.sessionID == nil, l.intent == .none else { return }
+                    l.failures.append("\(l.program.name) didn\u{2019}t open a session within \(Int(Self.sessionWithin)) seconds.")
+                    self.stopFirmly(l)
+                } }
+            }
             DirectionLog.info("Started \(program.name) for \(run.job.rawValue) (run \(run.id), \(run.version.isEmpty ? "default version" : run.version), \(effort.isEmpty ? "default effort" : effort + " effort"), session \(session ?? "new"), pid \(p.processIdentifier)) in \(store.url.lastPathComponent)", "editor")
             live[run.id] = l
             watchForSilence()
@@ -194,16 +258,49 @@ import DirectionTools
         while let nl = l.buffer.firstIndex(of: 0x0A) {
             let line = String(decoding: l.buffer[l.buffer.startIndex..<nl], as: UTF8.self)
             l.buffer.removeSubrange(l.buffer.startIndex...nl)
+            if var conversation = l.acp {
+                let step = conversation.receive(line)
+                l.acp = conversation
+                send(l, step.send)
+                for e in step.events { handle(l, e) }
+                if step.done { endConversation(l) }
+                continue
+            }
             let events = l.program == .claudeCode ? l.claude.parse(line) : l.codex.parse(line)
             for e in events { handle(l, e) }
         }
     }
 
+    /// Direction's side of an ACP conversation, a line each.
+    private func send(_ l: LiveRun, _ messages: [JSONValue]) {
+        guard let input = l.input else { return }
+        for m in messages { try? input.write(contentsOf: ACPConversation.line(m)) }
+    }
+
+    /// The prompt is answered: the agent's stdin closes, and an agent that stays open after that is ended, with
+    /// everything it started.
+    private func endConversation(_ l: LiveRun) {
+        try? l.input?.close(); l.input = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { MainActor.assumeIsolated { if l.process.isRunning { self.stopFirmly(l) } } }
+    }
+
+    /// SIGTERM to the program's whole group, then SIGKILL. Off the main thread.
+    private func stopFirmly(_ l: LiveRun) {
+        let group = l.process.processIdentifier
+        DispatchQueue.global(qos: .userInitiated).async { ChildProcesses.stop(group: group, ChildProcesses.firmly) }
+    }
+
+    /// How long an ACP agent has to open its session, and to hear a cancelled turn before the signal.
+    static var sessionWithin: Double = 120
+    static var cancelGrace: Double = 1.5
+
     func handle(_ l: LiveRun, _ e: StreamEvent) {
         switch e {
-        case .session(let s): _ = try? l.store.updateRun(l.runID) { if $0.session != s { $0.session = s } }
+        // A new session counts its spend from nothing (an ACP agent that couldn't load the saved one).
+        case .session(let s): _ = try? l.store.updateRun(l.runID) { if $0.session != s { if $0.session != nil { $0.sessionSpend = nil }; $0.session = s } }
         case .toolStarted(let id, let name, let input):
             l.pending[id] = name
+            if name.hasSuffix(ToolCatalog.runName), let code = input["code"].string, code.contains("import(") || code.contains("direction_import") { l.importing.insert(id) }
             if let r = try? l.store.run(l.runID), r.state == .starting { _ = try? l.store.updateRun(l.runID) { $0.state = .working } }
             // Asking: anything the director does from here on answers it, even before the program exits.
             let tool = name.hasPrefix("mcp__direction__") ? String(name.dropFirst("mcp__direction__".count)) : name
@@ -216,7 +313,8 @@ import DirectionTools
                 _ = try? l.store.recordActivity(a, runID: l.runID)
             }
         case .toolFinished(let id, let isError, let text):
-            l.pending[id] = nil
+            if l.pending[id]?.hasSuffix(ToolCatalog.runName) == true { noteAsked(l) }
+            l.pending[id] = nil; l.importing.remove(id)
             if isError { DirectionLog.warning("A tool call in run \(l.runID) failed: \(text.prefix(600))", "editor") }
             if isError, EditorFailure.isSpendCap(text) { l.spendCap = EditorFailure.amount(text).map { "\($0) spent on services this month." } ?? "This month\u{2019}s limit for services is reached." }
             if l.pauseWhenIdle, l.pending.isEmpty { l.pauseWhenIdle = false; interrupt(l) }
@@ -224,6 +322,20 @@ import DirectionTools
         case .tokens(let t): l.tokens = (l.tokens ?? 0) + t
         case .result(let text, let isError): l.result = text; if isError { l.failures.append(text) }
         case .failure(let m): l.failures.append(m)
+        }
+    }
+
+    /// A script's calls aren't in the program's stream, so what it asked is read from the film: a question for this
+    /// run's turnover since the invocation began, or a read-back posted since then on a turnover that waits for the
+    /// OK (the director may already have given it).
+    private func noteAsked(_ l: LiveRun) {
+        guard let run = try? l.store.run(l.runID) else { return }
+        if let at = ((try? l.store.questions()) ?? []).filter({ $0.turnoverID == run.turnoverID && $0.createdAt >= l.began }).map(\.createdAt).min() {
+            l.askedAt = min(l.askedAt ?? at, at)
+        }
+        if let id = run.turnoverID, let t = try? l.store.turnover(id), t.waitForOK, !t.readBack.isEmpty, t.readBack != l.readBackAtStart {
+            l.askedAt = l.askedAt ?? Date().timeIntervalSince1970
+            l.waitsForOK = true
         }
     }
 
@@ -301,9 +413,11 @@ import DirectionTools
     /// Quiet this long, it's stuck: Direction stops it and starts it again on its session, once a run, telling it
     /// which step it was on. Stuck again, the run stops and says so (hang recovery).
     nonisolated(unsafe) static var restartAfter: Double = 15 * 60
-    /// While it waits on a call that does its long work inside the call (an import copying a whole file), the
-    /// program is quiet because the call is, so it has this long instead.
+    /// While it waits on a call that does its long work inside the call (an import copying a whole file, or a script
+    /// that imports), the program is quiet because the call is, so it has this long instead.
     nonisolated(unsafe) static var restartAfterLongCall: Double = 2 * 60 * 60
+    /// While it waits on a script: each of its calls may take up to 10 minutes (DirectionMCPServer.limited).
+    nonisolated(unsafe) static var restartAfterScript: Double = 30 * 60
     private var restarted: Set<String> = []
     private var silenceTimer: Timer?
     private func watchForSilence() {
@@ -315,8 +429,9 @@ import DirectionTools
         if live.isEmpty { silenceTimer?.invalidate(); silenceTimer = nil; return }
         for l in live.values where l.intent == .none && !l.finished && !waitsForReadBackOK(l) {
             let quiet = now - l.lastHeard, minutes = Int(quiet / 60)
-            let longCall = l.pending.values.contains { name in DirectionMCPServer.unlimited.contains { name.hasSuffix($0) } }
-            if quiet >= (longCall ? Self.restartAfterLongCall : Self.restartAfter) {
+            let longCall = !l.importing.isEmpty || l.pending.values.contains { name in DirectionMCPServer.unlimited.contains { name.hasSuffix($0) } }
+            let script = l.pending.values.contains { $0.hasSuffix(ToolCatalog.runName) }
+            if quiet >= (longCall ? Self.restartAfterLongCall : script ? Self.restartAfterScript : Self.restartAfter) {
                 recover(l, step: lastStep(l), minutes: minutes)
                 continue
             }
@@ -355,7 +470,7 @@ import DirectionTools
     /// What the program hears when it's started again after getting stuck.
     static func restartNote(_ step: String, minutes: Int) -> String {
         let m = max(minutes, 1)
-        return "Direction stopped you and started you again: you\u{2019}d said nothing for \(m == 1 ? "a minute" : "\(m) minutes"), and your last step was \u{201C}\(step)\u{201D}. Don\u{2019}t do it the same way again. If it was one of Direction\u{2019}s tools, it may get stuck on the same thing: try a shorter passage or fewer frames, or look at what you added there last (an effect or a graphic that never finishes). If it was a command you ran, give it a time limit. Then carry on where you were."
+        return "Direction stopped you and started you again: you\u{2019}d said nothing for \(m == 1 ? "a minute" : "\(m) minutes"), and your last step was \u{201C}\(step)\u{201D}. Don\u{2019}t do it the same way again. If it was one of Direction\u{2019}s tools, it may get stuck on the same thing: try a shorter passage or fewer frames, or look at what you added there last (an effect or a graphic that never finishes). If it was a script, make it do less at once. Then carry on where you were."
     }
 
     // MARK: Control
@@ -363,6 +478,8 @@ import DirectionTools
     /// Interrupts after the current tool call (SIGINT; the program saves its session). Edits made stay.
     func pause(_ runID: String, store: ProjectStore) {
         _ = try? store.updateRun(runID) { if $0.state.isOpen { $0.state = .paused } }
+        // Still reading what the editor reads first: nothing has started, and Resume starts it again.
+        if reading[runID] != nil, let task = preparing[runID] { task.cancel(); preparing[runID] = nil; reading[runID] = nil }
         guard let l = live[runID] else { onChange?(store.url); return }
         l.intent = .pause
         if l.pending.isEmpty { interrupt(l) }
@@ -389,8 +506,11 @@ import DirectionTools
     /// SIGINT to the program's whole group (it saves its session and stops), SIGTERM if anything is
     /// still there after a few seconds, then SIGKILL. Off the main thread.
     private func interrupt(_ l: LiveRun) {
-        let group = l.process.processIdentifier, steps = stopSteps
-        DispatchQueue.global(qos: .userInitiated).async { ChildProcesses.stop(group: group, steps) }
+        // An ACP agent hears the turn is cancelled first, and has a moment to save the session before the signal.
+        let cancel = l.acp?.cancel()
+        if let cancel { send(l, [cancel]) }
+        let group = l.process.processIdentifier, steps = stopSteps, grace = cancel == nil ? 0 : Self.cancelGrace
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + grace) { ChildProcesses.stop(group: group, steps) }
     }
 
     /// Quitting: pause every working run and keep its session; the next launch offers Resume.
@@ -410,8 +530,11 @@ import DirectionTools
             l.intent = .quit
             _ = try? l.store.updateRun(l.runID) { $0.state = .paused; $0.reason = .pausedByQuit; $0.pausedByQuit = true }
         }
+        // Gemini CLI hears the turn is cancelled, and have a moment to save, before the signals.
+        var cancelled = false
+        for l in working { if let cancel = l.acp?.cancel() { send(l, [cancel]); cancelled = true } }
         let groups = working.map(\.process.processIdentifier), steps = stopSteps
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + (cancelled ? Self.cancelGrace : 0)) {
             DispatchQueue.concurrentPerform(iterations: groups.count) { ChildProcesses.stop(group: groups[$0], steps) }
             DispatchQueue.main.async { MainActor.assumeIsolated { done() } }
         }

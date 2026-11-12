@@ -257,11 +257,17 @@ extension ToolRuntime {
         // A changed shot keeps the take's own sound, so it never asks for any.
         let sound = kind.isMadeShot && kind != .changedShot && a["sound"].bool == true
         let needs = MadeNeeds(kind: kind, firstFrame: first != nil, lastFrame: last != nil, person: person, seconds: seconds, sound: sound, sharpenHere: sharpenHere,
-                              lettering: kind == .still && MadeNeeds.hasLettering(ask), camera: [.shot, .extension].contains(kind) && MadeNeeds.isCameraMove(ask))
+                              lettering: kind == .still && MadeNeeds.hasLettering(ask), camera: [.shot, .extension].contains(kind) && MadeNeeds.isCameraMove(ask),
+                              references: !references.isEmpty)
         let quality = FilmQuality.forMade(try? store.directingState())
         // Shots made smaller than the cut need this Mac to sharpen them; one that can't asks for the full size.
         let madeSharpensHere = MadeProcessing.sharpeningStatus(width: 1280, height: 720) != .unsupported
-        let route = catalog.route(needs, quality: quality, refusedPeople: person ? MadeRefusals.refusedPeople() : [])
+        var route = catalog.route(needs, quality: quality, refusedPeople: person ? MadeRefusals.refusedPeople() : [])
+        // A test or a paid trial names the version itself (OpenRouter.Overrides.version); the app never does.
+        if let pinned = OpenRouter.overrides.version {
+            guard let v = catalog.versions.first(where: { $0.id == pinned }) else { throw DirectionError("unknown_version", "OpenRouter lists no \(pinned).") }
+            route = [v]
+        }
         guard let version = route.first else {
             let why = person && kind.isPicture ? " that takes a frame with a person in it" : last != nil ? " that takes a last frame" : seconds.map { " that makes \(Int($0)) seconds" } ?? ""
             throw DirectionError("unknown_version", "OpenRouter lists no version for \(kind.label.lowercased())\(why). Try it shorter, or without the frame.")
@@ -363,6 +369,7 @@ extension ToolRuntime {
                 let label = r.ways > 1 ? " (\(Character(UnicodeScalar(64 + way)!)))" : ""
                 func once(_ r: MadeRequest) async throws -> Piece {
                     switch r.kind {
+                    case .soundEffect where r.version.makesEffects: try await makeEffect(r, folder: folder, scratch: scratch, job: job, label: label)
                     case .music, .soundEffect: try await makeAudio(r, folder: folder, scratch: scratch, job: job, label: label)
                     case .voice: try await makeVoice(r, folder: folder, job: job, label: label)
                     case .shot, .extension, .bridge, .changedShot: try await makeShot(r, folder: folder, scratch: scratch, job: job, label: label)
@@ -491,15 +498,36 @@ extension ToolRuntime {
             let reply: OpenRouter.AudioReply
             do { reply = try await OpenRouter.audioChat(body) }
             catch where i > 0 { throw PaidThenFailed(underlying: error, cost: reported ? cost : nil) }
+            let paid = await OpenRouter.cost(reported: reply.cost, id: reply.id)
             let (data, ext) = MadeMedia.assemble(reply.audio)
             let file = scratch.appendingPathComponent(UUID().uuidString + "." + ext)
             try data.write(to: file)
             files.append(file)
-            if let c = reply.cost { cost += c } else { reported = false }
+            if let c = paid { cost += c } else { reported = false }
         }
         let output = folder.appendingPathComponent(MadeMedia.fileName(r.kind, asked: r.ask, ext: "wav"))
         try MadeMedia.join(files, crossfade: MadeEstimator.crossfade, length: r.seconds, to: output)
         return Piece(url: output, cost: reported ? cost : nil, way: 1)
+    }
+
+    /// Sound effects from Seed Audio: `POST /audio/speech` with the effect described. It makes the sound as long as the
+    /// sound is; one longer than asked is cut to the length with a short fade, and a shorter one is kept as it is.
+    private func makeEffect(_ r: MadeRequest, folder: URL, scratch: URL, job: JobRecord, label: String) async throws -> Piece {
+        progress(job, "Making the sound with \(r.version.name)\(label)", 0.2)
+        func body(_ format: String) -> JSONValue {
+            .object(["model": .string(r.version.id), "input": .string("A sound effect, not speech: \(r.ask)"), "response_format": .string(format)])
+        }
+        let reply: (audio: Data, contentType: String, cost: Double?)
+        do { reply = try await OpenRouter.speech(body("mp3")) }
+        catch let e as DirectionError where e.message.localizedCaseInsensitiveContains("format") { reply = try await OpenRouter.speech(body("pcm")) }
+        let (data, ext) = MadeMedia.assemble(reply.audio, contentType: reply.contentType)
+        let made = scratch.appendingPathComponent(UUID().uuidString + "." + ext)
+        try data.write(to: made)
+        defer { try? FileManager.default.removeItem(at: made) }
+        let output = folder.appendingPathComponent(MadeMedia.fileName(.soundEffect, asked: r.ask, ext: "wav"))
+        do { try MadeMedia.join([made], crossfade: 0, length: r.seconds, to: output) }
+        catch { throw PaidThenFailed(underlying: error, cost: reply.cost) }
+        return Piece(url: output, cost: reply.cost, way: 1)
     }
 
     /// Voice: `POST /audio/speech` with the words. mp3 where the version offers it, else raw PCM wrapped as WAV.
@@ -543,7 +571,8 @@ extension ToolRuntime {
             body["aspect_ratio"] = .string(r.aspect)
             if let d = r.estimate.duration { body["duration"] = .number(Double(d)) }
             if let res = r.estimate.resolution { body["resolution"] = .string(res) }
-            body["generate_audio"] = .bool(r.sound)
+            // One that always makes sound (Gemini Omni) turns down `false`; its sound is taken off on this Mac when none was asked.
+            if !r.version.alwaysMakesSound { body["generate_audio"] = .bool(r.sound) }
             var frames: [JSONValue] = []
             for (source, role) in [(r.first, "first_frame"), (r.last, "last_frame")] {
                 guard let source else { continue }
@@ -554,7 +583,13 @@ extension ToolRuntime {
             if !frames.isEmpty { body["frame_images"] = .array(frames) }
             if !r.references.isEmpty { body["input_references"] = .array(try await references(r)) }
         }
-        let submitted = try await OpenRouter.submitVideo(.object(body))
+        let submitted: OpenRouter.VideoJob
+        do { submitted = try await OpenRouter.submitVideo(.object(body)) }
+        catch let e as DirectionError where e.code == "openrouter_error" && e.message.contains("generate_audio") && body["generate_audio"] != nil {
+            // A version the list doesn't mark as always making sound, but that does: sent again without the setting. A turned-down request costs nothing.
+            body["generate_audio"] = nil
+            submitted = try await OpenRouter.submitVideo(.object(body))
+        }
         // Sent, so paid for from here on, a cancel or a lost poll included, unless OpenRouter itself says it
         // couldn't make the shot. The cost is the last one a poll reported.
         let reported = OSAllocatedUnfairLock<Double?>(initialState: nil)
@@ -562,7 +597,8 @@ extension ToolRuntime {
             progress(job, "Waiting for \(r.version.name)\(label)", 0.1)
             let name = r.version.name, making = r.kind == .changedShot ? "changing the shot" : r.kind == .upscale ? "sharpening the shot" : "making the shot"
             let done = try await OpenRouter.waitForVideo(submitted.id) { [weak self] j in
-                if let c = j.cost { reported.withLock { $0 = c } }
+                // Gemini Omni reports $0 for a shot it made: nothing, not free.
+                if let c = j.cost, c > 0 { reported.withLock { $0 = c } }
                 self?.progress(job, j.status == "in_progress" ? "\(name) is \(making)\(label)" : "Waiting for \(name)\(label)", j.status == "in_progress" ? 0.5 : 0.1)
             }
             progress(job, "Downloading the shot\(label)", 0.8)
@@ -571,7 +607,8 @@ extension ToolRuntime {
             try data.write(to: downloaded)
             defer { try? FileManager.default.removeItem(at: downloaded) }
             let (output, sharpenedFrom) = try await finish(downloaded, r, folder: folder, job: job, label: label)
-            return Piece(url: output, cost: done.cost, way: 1, sharpenedFrom: sharpenedFrom)
+            // A cost of $0 (Gemini Omni) is looked up in the generation record, else the estimate is counted.
+            return Piece(url: output, cost: await OpenRouter.cost(reported: done.cost, id: done.generationID), way: 1, sharpenedFrom: sharpenedFrom)
         } catch let e as DirectionError where e.code == "shot_failed" {
             if let cost = reported.withLock({ $0 }), cost > 0 { throw PaidThenFailed(underlying: e, cost: cost) }
             throw e
@@ -590,7 +627,16 @@ extension ToolRuntime {
         if r.kind != .upscale, let s = await Self.videoSize(input), Double(r.cut.height) >= Double(s.height) * 1.5, await sharpeningReady(s, job: job) {
             steps.sharpenTo = r.cut; size = s
         }
-        if steps == MadeProcessing.Steps() { return (try asMade(), nil) }
+        // Shots are silent unless sound was asked for, whatever the version sends back (Hailuo 3 Max and Wan 3.0 sent
+        // sound with shots asked without it, Gemini Omni always does). A changed shot plays over its take's own sound.
+        let silent = !r.sound && r.kind != .upscale
+        steps.keepSound = !silent
+        if steps == MadeProcessing.Steps(keepSound: steps.keepSound) {
+            guard silent, await MadeProcessing.hasSound(input) else { return (try asMade(), nil) }
+            let out = named("mp4")
+            do { try await MadeProcessing.withoutSound(input, to: out); return (out, nil) }
+            catch { try? FileManager.default.removeItem(at: out); return (try asMade(), nil) }
+        }
         let output = named("mov")
         let phase = steps.sharpenTo != nil ? "Sharpening the shot on this Mac\(label)" : "Joining the shot\(label)"
         progress(job, phase, 0.85)

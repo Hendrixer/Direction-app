@@ -37,16 +37,23 @@ struct StopSlider<Value: Hashable>: View {
                 })
             }
             .frame(height: 18)
-            HStack(spacing: 0) {
-                ForEach(stops.indices, id: \.self) { k in
-                    Button { choose(k) } label: {
-                        Text(stops[k].1).font(.system(size: 11.5, weight: k == index ? .medium : .regular))
-                            .foregroundStyle(k == index ? Gate.Text.primary : Gate.Text.tertiary)
+            // Each name under its own dot: the first starts at the track's start, the last ends at its end, the
+            // rest are centred on theirs. One line each.
+            GeometryReader { g in
+                let span = max(1, g.size.width - 16)
+                ZStack(alignment: .topLeading) {
+                    ForEach(stops.indices, id: \.self) { k in
+                        let name = Button { choose(k) } label: {
+                            Text(stops[k].1).font(.system(size: 11.5, weight: k == index ? .medium : .regular))
+                                .foregroundStyle(k == index ? Gate.Text.primary : Gate.Text.tertiary).lineLimit(1).fixedSize()
+                        }.buttonStyle(.plain)
+                        if k == 0 { name.frame(width: g.size.width, alignment: .leading) }
+                        else if k == stops.count - 1 { name.frame(width: g.size.width, alignment: .trailing) }
+                        else { name.frame(width: 0).offset(x: 8 + span * CGFloat(k) / CGFloat(last)) }
                     }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, alignment: k == 0 ? .leading : k == stops.count - 1 ? .trailing : .center)
                 }
             }
+            .frame(height: 15)
         }
         .opacity(enabled ? 1 : Gate.Component.Button.disabledOpacity)
         .accessibilityElement()
@@ -65,7 +72,7 @@ struct StopSlider<Value: Hashable>: View {
     }
 }
 
-/// A film's speed and quality (specs/editor.md › Speed and quality): Faster · Balanced · Best, and what the
+/// A film's speed and quality (specs/editor.md › Speed and quality): Fastest · Faster · Balanced · Best, and what the
 /// stop means in a line.
 struct SpeedQualityControl: View {
     @Binding var quality: FilmQuality

@@ -1,7 +1,7 @@
-<!-- direction-job turnover v3 -->
+<!-- direction-job turnover v4 -->
 # Cut {{cutName}} of "{{film}}"
 
-Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
+Follow the `{{skill}}` skill. Its playbook is at the end of this message, under Read for you, with what you’d read first; if it isn’t there, read `{{skillPath}}` in this folder.
 
 The director turned over {{noteCount}} on {{baseCut}}: turnover {{turnoverNumber}} (id `{{turnoverID}}`). Read them in full with `direction_turnovers`.
 

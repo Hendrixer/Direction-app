@@ -9,7 +9,7 @@ Shared:
 ## 34 · Locking scenes
 Frame: `screens/34-lock-scenes.html` · Render: `renders/34-lock-scenes@2x.png`
 
-**Arrives from / leads to:** 29, once every answer is accepted. The lock bar replaces the transport in the Cut room once every answer is accepted and nothing new is written. "Lock picture…" leads to 35.
+**Arrives from / leads to:** 29, once every answer is accepted. Then "Lock scenes" (ghost, small, with a lock) sits at the right of the sheet's "Answered in Cut N" line, and the cut stays on screen with its transport, strip and note tools: a scene can be locked from its chip's menu or ⌘L there too. Lock scenes puts the lock bar in place of the transport, with "Done" at the right of the Scenes line; Done, Esc, a new note or leaving the room puts the cut back. Until 2026-11-12 the lock bar took over on its own when the last answer was accepted, and it read as the cut breaking. "Lock picture…" leads to 35.
 
 **Layout:**
 - Stage rows: viewer (picture at 88% width), lock head, lock bar.

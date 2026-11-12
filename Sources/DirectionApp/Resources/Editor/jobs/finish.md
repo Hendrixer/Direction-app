@@ -1,7 +1,7 @@
-<!-- direction-job finish v5 -->
+<!-- direction-job finish v7 -->
 # Finish "{{film}}"
 
-Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
+Follow the `{{skill}}` skill. Its playbook is at the end of this message, under Read for you, with what you’d read first; if it isn’t there, read `{{skillPath}}` in this folder.
 
 The director locked picture on {{lockedCut}}. The cut is final: every shot, cutaway and their timing stay exactly as they are, and anything that would change them fails with `picture_locked`. Color and sound are open to you, and so are the graphics over the picture (captions, titles, lower thirds, credits) placed with `placeGraphic` on V2 and up, moved or removed. Locked scenes are the same.
 
@@ -11,7 +11,7 @@ Direction has already done the steps that come out the same every time, and says
 
 1. Read the checklist with `direction_finishing` (it also has the director's credits and the licenses on file) and the brief with `direction_brief`.
 2. Balance and match shots across scenes. The look is the director's; never change it.
-3. Mix: dialogue first, music under. Music under dialogue: {{ducking}}. `direction_measure_audio` with no `assetID` gives the whole mix and how it moves over the cut (its `profile`); balance the tracks with `gain`, `duck` and `audio`, then run `loudness` again.
+3. Mix: dialogue first, music under. Music under dialogue: {{ducking}}. `direction_measure_audio` with no `assetID` gives the whole mix and how it moves over the cut (its `profile`); balance the tracks with `gain`, `duck` and `audio` (with `measure: true` a sound edit answers with the mix as it now measures, so you don't measure in a step of its own; clip by clip, measure and set them all in one `direction_run` script), then run `loudness` again.
 4. Captions: watch them with `direction_watch` for a line break that splits a phrase or a word the transcript got wrong, and fix those. Names go in `needsYou` for the director to check.
 5. {{credits}}
 6. Licenses are the director's. {{licenses}} Say which tracks still need one.

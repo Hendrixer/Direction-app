@@ -28,20 +28,33 @@ extension ToolRuntime {
     /// once every passage its edits changed has been watched with `direction_watch` at or after the
     /// revision that changed it. Ranges get a half-second of slack, since later edits can shift them.
     func checkWatched(turnoverID: String, revision: Int?) throws {
-        guard let t = try store.turnovers().first(where: { $0.id == turnoverID }), t.kind == "notes" else { return }
+        let missing = try unwatched(turnoverID: turnoverID, revision: revision)
+        guard missing.isEmpty else {
+            let list = missing.prefix(8).map { String(format: "%.1f\u{2013}%.1f s", $0.start, $0.end) }.joined(separator: ", ")
+            throw DirectionError("not_watched", "Watch every passage you changed before delivering: direction_watch with changed: true watches the \(missing.count) not watched yet (\(list)\(missing.count > 8 ? ", \u{2026}" : "")) in one call. Then deliver.")
+        }
+    }
+
+    /// The passages a notes turnover's edits changed that haven't been watched at or after the revision that changed
+    /// them, overlapping ones joined. Ranges get a half-second of slack, since later edits can shift them.
+    func unwatched(turnoverID: String, revision: Int? = nil) throws -> [(start: Double, end: Double)] {
+        guard let t = try store.turnovers().first(where: { $0.id == turnoverID }), t.kind == "notes" else { return [] }
         let final = try revision ?? store.read().editRevision
         let watched = try store.watchedRanges(since: t.createdAt)
-        var missing: [JSONValue] = []
+        var missing: [(start: Double, end: Double)] = []
         for record in try store.editRecords(after: t.baseRevision, through: final) where record.committed {
             for change in record.operations.flatMap(\.changes) {
                 let start = change.new.start - 0.5, end = change.new.end + 0.5
                 guard !watched.contains(where: { $0.revision >= record.editRevision && $0.start < end && $0.end > start }) else { continue }
-                missing.append(.object(["start": .number(change.new.start), "end": .number(change.new.end), "revision": .number(Double(record.editRevision))]))
+                missing.append((change.new.start, change.new.end))
             }
         }
-        guard missing.isEmpty else {
-            throw DirectionError("not_watched", "Watch every passage you changed with direction_watch before delivering. Not watched: \(missing.count) passage\(missing.count == 1 ? "" : "s"), starting \(missing.compactMap { $0["start"].double }.map { String(format: "%.1f s", $0) }.prefix(4).joined(separator: ", ")).")
+        // Joined where they touch or nearly do, so one filmstrip covers a cluster of edits.
+        var joined: [(start: Double, end: Double)] = []
+        for m in missing.sorted(by: { $0.start < $1.start }) {
+            if let last = joined.last, m.start <= last.end + 1 { joined[joined.count - 1].end = max(last.end, m.end) } else { joined.append(m) }
         }
+        return joined
     }
 
     func invokeDirecting(_ name: String, _ a: JSONValue) throws -> ToolResponse? {

@@ -48,7 +48,9 @@ private struct BreakdownPage: View {
         rowNumber = Dictionary(script.rows.enumerated().map { ($0.element.id, $0.offset + 1) }, uniquingKeysWith: { a, _ in a })
         plays = PlaysAt(script)
         shotsIn = Dictionary(grouping: breakdown.shots, by: \.setupID).mapValues { $0.sorted { $0.code.localizedStandardCompare($1.code) == .orderedAscending } }
-        _selected = State(initialValue: preview?.shot.flatMap { code in breakdown.shot(code: code)?.id } ?? breakdown.shots.first?.id)
+        // The room opens on the first shot the editor asks about, where its choices are, else the first shot.
+        let asked = breakdown.shots.first { $0.question?.isOpen == true }
+        _selected = State(initialValue: preview?.shot.flatMap { code in breakdown.shot(code: code)?.id } ?? asked?.id ?? breakdown.shots.first?.id)
     }
 
     private var setups: [BreakdownSetup] { breakdown.setups.sorted { $0.number < $1.number } }

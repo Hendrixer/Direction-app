@@ -1,0 +1,74 @@
+<!doctype html>
+<!-- Built by site/tools/changelog.mjs from site/changelog/*.md. Edit those, not public/changelog/index.html. -->
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Changelog — Direction</title>
+<meta name="description" content="{{description}}">
+<link rel="canonical" href="https://givedirection.ai/changelog/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="/img/glyph.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="application/atom+xml" title="Direction changelog" href="/changelog/feed.xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Direction">
+<meta property="og:url" content="https://givedirection.ai/changelog/">
+<meta property="og:title" content="Changelog — Direction">
+<meta property="og:description" content="{{description}}">
+<meta property="og:image" content="https://givedirection.ai/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Changelog — Direction">
+<meta name="twitter:description" content="{{description}}">
+<meta name="twitter:image" content="https://givedirection.ai/og.jpg">
+<link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/site.css">
+<link rel="stylesheet" href="/css/changelog.css">
+<script>document.documentElement.classList.replace('no-js', 'js')</script>
+</head>
+<body class="cl">
+
+<header class="nav" id="nav">
+  <a class="brand" href="/" aria-label="Direction, home"><img src="/img/glyph.svg" alt="" width="22" height="22">Direction</a>
+  <nav class="nav-links" aria-label="Sections">
+    <a href="/#production">How it works</a>
+    <a href="/#learn">Learn</a>
+    <a href="/#make">Make</a>
+    <a href="/#features">Features</a>
+    <a href="/changelog/" aria-current="page">Changelog</a>
+  </nav>
+  <a class="gh" href="https://github.com/Hendrixer/Direction-app" aria-label="Direction on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg></a>
+  <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg">Download</a>
+</header>
+
+<main>
+  <header class="cl-head">
+    <span class="label">Changelog</span>
+    <h1 class="display">What's new in Direction.</h1>
+    <p class="lede">Direction checks for a new version once a day and updates itself. Here's what each one brought.</p>
+    <div class="cl-links">
+      <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg">Download {{latest}}</a>
+      <a class="btn ghost sm" href="/changelog/feed.xml"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="12.5" r="1.6" fill="currentColor"/><path d="M2 7a7 7 0 0 1 7 7M2 2.5A11.5 11.5 0 0 1 13.5 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Follow</a>
+      <a class="btn ghost sm" href="https://github.com/Hendrixer/Direction-app/releases">Releases on GitHub ↗</a>
+    </div>
+  </header>
+
+  <ol class="cl-list">
+{{entries}}
+  </ol>
+</main>
+
+<footer class="foot cl-foot">
+  <a class="brand" href="/"><img src="/img/glyph.svg" alt="" width="22" height="22">Direction</a>
+  <p class="roll"><a href="/">Home</a> · <a href="https://github.com/Hendrixer/Direction-app">GitHub</a> · © 2026</p>
+</footer>
+
+<script src="/js/changelog.js" defer></script>
+<script src="/js/mark.js" defer></script>
+</body>
+</html>

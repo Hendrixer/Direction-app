@@ -90,10 +90,25 @@ struct LoudnessTests {
         #expect(silent["integratedLUFS"] == .null && silent["note"].string != nil)
         // Gain in the cut moves the mix by as much.
         let clipID = try #require(store.read().sequences[0].clips.first?.id)
-        _ = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString), "summary": .string("Down 6 dB"),
-                                                                     "operations": .array([.object(["op": .string("gain"), "target": .string(clipID), "dB": .number(-6)])])]))
+        let down = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString), "summary": .string("Down 6 dB"), "measure": .bool(true),
+                                                                     "operations": .array([.object(["op": .string("gain"), "target": .string(clipID), "dB": .number(-6)])])])).value
         let lower = try await runtime.invoke("direction_measure_audio", arguments: .object([:])).value
         #expect(abs(try #require(lower["integratedLUFS"].double) + 29.17) < 0.03, "\(lower)")
+        // A sound change asked to measure answers with the mix as it now measures, so the editor needn't measure after it.
+        #expect(down["mix"]["integratedLUFS"] == lower["integratedLUFS"] && down["mix"]["truePeakDBTP"] == lower["truePeakDBTP"] && down["mix"]["target"]["ready"] != .null, "\(down["mix"])")
+        #expect(down["mix"]["editRevision"].int == (try store.revision()))
+        // Several stretches in one call, each measured as it would be alone.
+        let both = try await runtime.invoke("direction_measure_audio", arguments: .object(["ranges": .array([.object(["start": .number(1), "end": .number(3)]), .object(["start": .number(4.2), "end": .number(6)])])])).value
+        let first = try #require(both["ranges"].array?.first), second = try #require(both["ranges"].array?.last)
+        #expect(abs(try #require(first["integratedLUFS"].double) + 29) < 0.03 && second["integratedLUFS"] == .null && both["ranges"].array?.count == 2, "\(both)")
+        // A batch only checked, not made, changes nothing to measure.
+        let checked = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "validateOnly": .bool(true),
+                                                                     "operations": .array([.object(["op": .string("gain"), "target": .string(clipID), "dB": .number(-3)])])])).value
+        #expect(checked["mix"] == .null)
+        // Not asked: no measuring, so a sound edit on a long cut stays quick.
+        let quick = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString),
+                                                                     "operations": .array([.object(["op": .string("gain"), "target": .string(clipID), "dB": .number(-6)])])])).value
+        #expect(quick["mix"] == .null)
         // And up: gain over 0 dB is heard as louder, not held at the take's own level.
         _ = try await runtime.invoke("direction_edit", arguments: .object(["baseEditRevision": .number(Double(try store.revision())), "idempotencyKey": .string(UUID().uuidString), "summary": .string("Up 6 dB"),
                                                                      "operations": .array([.object(["op": .string("gain"), "target": .string(clipID), "dB": .number(6)])])]))

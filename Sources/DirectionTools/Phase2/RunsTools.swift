@@ -14,6 +14,8 @@ extension ToolRuntime {
     /// started the editor or you did (specs/editor.md › Tool call → Activity).
     func noteToolCall(_ name: String, _ a: JSONValue) {
         guard EditorActivityLog.isEnabled else { return }
+        // A script is one row, what it does; of its own calls only the changes show.
+        if ScriptRunner.running, ToolCatalog.definitions.first(where: { $0.name == name })?.readOnly != false { return }
         EditorActivityLog.record(name, a, store: store, runID: EditorActivityLog.runID)
     }
 }

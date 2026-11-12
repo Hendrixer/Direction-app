@@ -55,6 +55,12 @@ if ! $dry_run; then
     || fail "notarytool can't use the keychain profile \"$notary_profile\". Save your App Store Connect API key once with: xcrun notarytool store-credentials $notary_profile --key <AuthKey_….p8> --key-id <key ID> --issuer <issuer ID> (docs/releasing.md)."
 fi
 [ -x "$sparkle_bin/generate_appcast" ] || fail "Sparkle's tools aren't in .build/artifacts. Run: swift package resolve"
+# The changelog is the source of a release's notes: site/changelog/<version>.md becomes the update's "What's new"
+# when there's no notes file of its own (site/README.md).
+if [ -z "$notes" ] && [ ! -f "$releases/Direction-$version.md" ] && [ -f "site/changelog/$version.md" ] && command -v node >/dev/null; then
+  mkdir -p "$releases"
+  node site/tools/changelog.mjs sparkle "$version" > "$releases/Direction-$version.md"
+fi
 if [ -z "$notes" ] && [ -f "$releases/Direction-$version.md" ]; then notes="$releases/Direction-$version.md"; fi
 [ -z "$notes" ] || [ -f "$notes" ] || fail "No release notes at $notes."
 if [ -f "$releases/$dmg_name" ]; then fail "$releases/$dmg_name is already made. A new release needs a new version."; fi
@@ -134,6 +140,8 @@ spctl --assess --type execute "$app" || fail "Gatekeeper doesn't accept the app.
 mkdir -p "$releases"
 cp "$dist/$dmg_name" "$releases/"
 if [ -n "$notes" ] && [ "$notes" != "$releases/Direction-$version.md" ]; then cp "$notes" "$releases/Direction-$version.md"; fi
+# The commit this was built from, for publish-release.sh to tag.
+git rev-parse HEAD > "$releases/Direction-$version.commit"
 "$sparkle_bin/generate_appcast" --account "$sparkle_account" --download-url-prefix "$download_prefix" --link "$website" \
   --embed-release-notes --maximum-deltas 0 "$releases"
 

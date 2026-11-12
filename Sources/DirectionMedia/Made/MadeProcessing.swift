@@ -9,6 +9,29 @@ import DirectionCore
 /// a take's range as a small file to send to a service, and the steps that bring a made shot up to the
 /// cut (trims, Apple's super resolution, slow motion), written as 10-bit HEVC.
 public enum MadeProcessing {
+    // MARK: Taking the sound off
+
+    /// Whether a file has a sound track.
+    public static func hasSound(_ url: URL) async -> Bool {
+        ((try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)) ?? []).isEmpty == false
+    }
+
+    /// The file's picture as it is, without its sound: the video tracks copied untouched into a new .mp4. For a
+    /// made shot that came back with sound nobody asked for.
+    public static func withoutSound(_ input: URL, to output: URL) async throws {
+        let asset = AVURLAsset(url: input), composition = AVMutableComposition()
+        for track in try await asset.loadTracks(withMediaType: .video) {
+            let (range, transform) = try await track.load(.timeRange, .preferredTransform)
+            guard let copy = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
+            try copy.insertTimeRange(range, of: track, at: range.start)
+            copy.preferredTransform = transform
+        }
+        guard !composition.tracks.isEmpty, let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
+            throw DirectionError("no_picture", "\(input.lastPathComponent) has no picture to keep.")
+        }
+        try await export.export(to: output, as: .mp4)
+    }
+
     // MARK: Sending a range
 
     /// A range of a take as a small H.264 .mp4 (no sound) to send to a service. Longest side ≤ maxDimension,

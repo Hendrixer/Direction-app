@@ -16,7 +16,7 @@ extension EditorRunsModel {
         var body: String
         switch run.reason ?? .stoppedWithoutFinishing {
         case .notInstalled: body = "Direction couldn\u{2019}t find \(program.name) on this Mac."
-        case .notSignedIn: body = "Open Terminal, run \(program == .claudeCode ? "claude" : "codex login"), and sign in. Then try again."
+        case .notSignedIn: body = "Open Terminal, run \(program.signInCommand), and sign in. Then try again."
         case .outOfDate: body = "It\u{2019}s older than Direction needs. In Terminal, run \(program.updateCommand(path: EditorPrograms.shared.install(program)?.path)), then try again."
         case .offline: body = "It will try again when this Mac is back online."
         case .programQuit: return run.detail ?? "It quit without saying why."
@@ -148,7 +148,7 @@ struct EditorStopBody: View {
         }
     }
     private var styled: Text {
-        let command = program == .claudeCode ? "claude" : "codex login"
+        let command = program.signInCommand
         guard let r = text.range(of: "run \(command),") else { return Text(text) }
         let before = String(text[..<r.lowerBound]) + "run ", after = String(text[text.index(r.upperBound, offsetBy: -1)...])
         return Text("\(before)\(Text(command).font(.system(size: 12, design: .monospaced)))\(after)")

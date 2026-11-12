@@ -1,0 +1,96 @@
+#!/usr/bin/python3 -I
+# A stand-in for an agent speaking the Agent Client Protocol on stdin and stdout (EditorRunnerTests). It runs in
+# the film's Editor folder, records what Direction sends there, and plays the scenario in .fake-scenario:
+# done, unfinished, auth, slow, refusal.
+import json, os, signal, sys
+
+folder = os.getcwd()
+def path(name): return os.path.join(folder, name)
+def read(name, default=""):
+    try:
+        with open(path(name)) as f: return f.read().strip()
+    except OSError: return default
+def write(name, text):
+    with open(path(name), "w") as f: f.write(text)
+def append(name, text):
+    with open(path(name), "a") as f: f.write(text + "\n")
+
+write(".fake-args", "\n".join(sys.argv[1:]) + "\n")
+write(".fake-run-id", os.environ.get("DIRECTION_RUN_ID", "") + "\n")
+scenario = read(".fake-scenario", "done")
+signal.signal(signal.SIGINT, lambda *_: sys.exit(130))
+
+def send(o):
+    sys.stdout.write(json.dumps(o) + "\n"); sys.stdout.flush()
+def update(u): send({"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": session, "update": u}})
+
+cancelled = False
+next_id = 100
+def message():
+    global cancelled
+    line = sys.stdin.readline()
+    if not line: sys.exit(0)
+    o = json.loads(line)
+    append(".fake-received", json.dumps(o))
+    if o.get("method") == "session/cancel": cancelled = True
+    return o
+
+def ask(kind, title, raw, locations=None):
+    """Asks Direction's permission and records what it said."""
+    global next_id
+    next_id += 1
+    call = {"toolCallId": "p%d" % next_id, "title": title, "kind": kind, "rawInput": raw}
+    if locations: call["locations"] = [{"path": p} for p in locations]
+    send({"jsonrpc": "2.0", "id": next_id, "method": "session/request_permission", "params": {"sessionId": session, "toolCall": call, "options": [
+        {"optionId": "yes", "name": "Allow", "kind": "allow_once"}, {"optionId": "always", "name": "Always", "kind": "allow_always"},
+        {"optionId": "no", "name": "Reject", "kind": "reject_once"}]}})
+    while True:
+        o = message()
+        if o.get("id") == next_id and "result" in o:
+            outcome = o["result"]["outcome"]
+            append(".fake-permissions", "%s %s %s" % (kind, title, outcome.get("optionId", outcome["outcome"])))
+            return
+
+session = "fake-acp-session-1"
+while True:
+    o = message()
+    method, rid = o.get("method"), o.get("id")
+    if method == "initialize":
+        send({"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": True}, "authMethods": []}})
+    elif method == "session/new":
+        if scenario == "auth":
+            send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32000, "message": "Authentication required"}})
+            continue
+        write(".fake-mcp.json", json.dumps(o["params"]["mcpServers"]))
+        send({"jsonrpc": "2.0", "id": rid, "result": {"sessionId": session}})
+    elif method == "session/load":
+        write(".fake-loaded", o["params"]["sessionId"])
+        session = o["params"]["sessionId"]
+        # A loaded session replays what was said before; none of it is this turn's.
+        update({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "{\"finished\": false, \"summary\": \"old\", \"needsYou\": []}"}})
+        send({"jsonrpc": "2.0", "id": rid, "result": {}})
+    elif method == "session/prompt":
+        write(".fake-prompt", o["params"]["prompt"][0]["text"])
+        update({"sessionUpdate": "tool_call", "toolCallId": "t1", "title": "Read NOTES.md", "kind": "read", "status": "pending", "locations": [{"path": path("NOTES.md")}]})
+        update({"sessionUpdate": "tool_call_update", "toolCallId": "t1", "status": "completed", "content": [{"type": "content", "content": {"type": "text", "text": "# Notes between runs"}}]})
+        if scenario == "slow":
+            # Between steps, as a turn usually is: a pause cancels the turn (or the signal ends it first).
+            while not cancelled: message()
+            send({"jsonrpc": "2.0", "id": rid, "result": {"stopReason": "cancelled"}})
+            continue
+        if scenario == "refusal":
+            send({"jsonrpc": "2.0", "id": rid, "result": {"stopReason": "refusal"}})
+            continue
+        ask("execute", "ffmpeg -version", {"command": "ffmpeg -version"})
+        ask("edit", "Edit /etc/hosts", {"path": "/etc/hosts"}, ["/etc/hosts"])
+        ask("edit", "Edit NOTES.md", {"path": "NOTES.md"}, [path("NOTES.md")])
+        ask("fetch", "Fetch example.com", {"url": "https://example.com"})
+        ask("other", "direction__direction_log_dailies", {"takes": {}})
+        update({"sessionUpdate": "tool_call", "toolCallId": "t3", "title": "direction__direction_log_dailies", "kind": "other", "status": "pending"})
+        update({"sessionUpdate": "tool_call_update", "toolCallId": "t3", "status": "in_progress", "rawInput": {"takes": {}}})
+        update({"sessionUpdate": "tool_call_update", "toolCallId": "t3", "status": "completed", "rawOutput": {"ok": True}})
+        update({"sessionUpdate": "usage_update", "used": 1200, "size": 200000, "cost": {"amount": 0.42, "currency": "USD"}})
+        finished = "true" if scenario == "done" else "false"
+        update({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Done.\n{\"finished\": %s, " % finished}})
+        update({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "\"summary\": \"Logged 1 take.\", \"needsYou\": []}"}})
+        send({"jsonrpc": "2.0", "id": rid, "result": {"stopReason": "end_turn"}})

@@ -99,6 +99,7 @@ struct CutRoom: View {
         if state.reelOpen { model.closeReel() }
         model.comparingNoteID = nil
         state.comparingCuts = false
+        state.lockingScenes = false
     }
 
     // MARK: Keys
@@ -287,6 +288,7 @@ struct CutRoom: View {
         if ui.editingNoteID != nil { model.stopWriting(); return .handled }
         if model.notesTab != .sheet { model.notesTab = .sheet; return .handled }
         if model.watchedCutID != nil { model.watch(model.latestCut); return .handled }
+        if state.lockingScenes { state.lockingScenes = false; return .handled }
         return .ignored
     }
 
@@ -350,17 +352,20 @@ extension FilmModel {
         if acceptable > 0 {
             return PrimaryAction(title: "Accept", icon: "checkmark", count: String(acceptable), help: "Accept every answer still to look at (\u{2318}\u{21A9})") { self.changes.confirmAcceptAll = true }
         }
-        if showsLockBar {
+        if canLockScenes {
             return PrimaryAction(title: "Lock picture\u{2026}", icon: "lock.fill", enabled: picturelockBlockers.isEmpty) { self.sheet = .lockPicture }
         }
         return PrimaryAction(title: "Turn over", icon: "arrow.right", enabled: false, help: "Write a note first") {}
     }
 
-    /// The lock bar replaces the transport once every answer is accepted and nothing new is written (34).
-    var showsLockBar: Bool {
+    /// Everything in the latest cut is accepted and nothing new is written: scenes can be locked, and the picture (34).
+    var canLockScenes: Bool {
         !isPictureLocked && !cuts.isEmpty && toReview.isEmpty && reviewCut?.id == latestCut?.id && !reviewAnswers.isEmpty
             && readyNotes.isEmpty && draftNotes.isEmpty && notesTurnover == nil && comparingNoteID == nil && !changes.comparingCuts
     }
+    /// The scene tiles in place of the cut and its strip, only once the director opens them with Lock scenes. The room
+    /// used to switch on its own when the last answer was accepted, which read as the cut breaking (2026-11-12).
+    var showsLockBar: Bool { changes.lockingScenes && canLockScenes }
 
     /// ⌘L: the lock bar's selected scene, else the scene under the playhead.
     func toggleLockOnCurrentScene() {

@@ -10,16 +10,23 @@ enum RunsFixtures {
             "43-settings-editor": { settings() },
             "56-editor-setup": { setup() },
             "56-editor-not-signed-in": { setup(signedIn: false) },
+            "56-editor-none-found": { setup(found: false) },
             "57-editor-working": { working() },
             "58-editor-stopped": { stopped() },
         ]
     }
 
-    /// Claude Code 2.4.1 found and signed in; Codex not installed.
-    static func previewPrograms(chosen: Bool, signedIn: Bool = true) {
-        var values: [String: Any] = [EditorSetupKey.signedIn(.claudeCode): signedIn]
+    /// Claude Code 2.4.1 found and signed in, Codex and Gemini CLI found too (only installed agents are offered);
+    /// `found: false`, none at all.
+    static func previewPrograms(chosen: Bool, signedIn: Bool = true, found: Bool = true) {
+        var values: [String: Any] = [EditorSetupKey.signedIn(.claudeCode): signedIn, EditorSetupKey.signedIn(.gemini): true]
         if chosen { values[EditorSetupKey.runsOn] = EditorRunsOn.claudeCode.rawValue }
-        EditorPrograms.shared.setPreview([.claudeCode: EditorInstall(program: .claudeCode, path: "/Users/you/.local/bin/claude", version: "2.4.1")], values: values)
+        let installs: [EditorProgram: EditorInstall] = found ? [
+            .claudeCode: EditorInstall(program: .claudeCode, path: "/Users/you/.local/bin/claude", version: "2.4.1"),
+            .codex: EditorInstall(program: .codex, path: "/opt/homebrew/bin/codex", version: "0.164.0"),
+            .gemini: EditorInstall(program: .gemini, path: "/opt/homebrew/bin/gemini", version: "1.2.0", acp: ["--acp"]),
+        ] : [:]
+        EditorPrograms.shared.setPreview(installs, values: values)
     }
 
     // MARK: 43
@@ -35,8 +42,8 @@ enum RunsFixtures {
 
     /// Over the Footage step (frame 04's state): nothing set up yet, so the pill says so.
     /// Who's editing? for a new film; not signed in: the sign-in step, with Check again.
-    private static func setup(signedIn: Bool = true) -> SnapshotScene {
-        previewPrograms(chosen: false, signedIn: signedIn)
+    private static func setup(signedIn: Bool = true, found: Bool = true) -> SnapshotScene {
+        previewPrograms(chosen: false, signedIn: signedIn, found: found)
         let m = StartFixtures.newFilm()
         m.project?.assets = []; m.dailies = Dailies(); m.displayed = m.project
         m.runs.previewStarts = true; m.runs.previewReady = false

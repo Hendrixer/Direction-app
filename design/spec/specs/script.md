@@ -74,3 +74,4 @@ Three columns under the titlebar, like the other rooms.
 - [ ] Bringing in a script from the start screen leaves the room bar on Script.
 - [ ] A story's rows read one line of beat each (a treatment's by its title, without its number and times); clicking a beat shows it whole, and selecting a row never changes its height.
 - [ ] An open question is one line on its row; Answer… opens the sheet's Questions at it.
+- [ ] While a question is open the editor pill reads "1 question", not Ready; its popover's Answer opens the Script room.

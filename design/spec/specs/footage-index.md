@@ -85,6 +85,14 @@ Measured on the director's 3:12 talking-head take on an M4 Max, against Whisper 
 
 Most of Apple's difference is verbatim speech Whisper tidies away: false starts and a repeated phrase ("it transitioned that large. I think", "I think we should"), which an editor wants for finding retakes, plus "7" for "seven". Turbo's one real slip: "in finite time" as "by nighttime". Settings › Footage says this in each choice's line.
 
+### Word times held to the sound
+
+Both engines put the silence before a phrase inside that phrase's first word. On the director's 2:24 narration with 48 pauses (2026-11-12), 27 of Apple's 247 word starts and 36 of Whisper's 244 sat in silence, up to 2 s early; the ends were right. The editor found cuts "inside a word" that were in silence, half the real pause time was missing from the pauses it's offered, and it measured the sound itself to time its cuts.
+
+So when a transcript is made or imported, Direction holds each word to the take's own sound (`WordEdges`): the level every 10 ms, speech being what's well over the take's quietest fifth of a second and within 30 dB of its speech. A word's end comes back to where its sound stops (plus 60 ms), and its start goes forward to where that sound began after the pause before it (less 30 ms). Edges only move inward, a word keeps at least 80 ms, and a word with no sound found, or a take where speech can't be told from the room (music throughout), stays as the engine gave it. After, 1 start of 247 sits in silence (by 0.24 s), and the gaps between words cover 67 of the 71 seconds of real pauses, where they covered 29.
+
+Transcripts from before are checked once, the first time the film is opened or a tool reads its words (ids, text and the chosen track unchanged; about a second for an hour of sound). Whisper no longer has the better times, only sometimes the better words.
+
 ### Logging in batches
 
 The editor logs footage in runs of up to 20 takes, each a fresh session, so no run grows past what one session can hold, and the director can circle while the rest is still being looked at.
@@ -144,14 +152,14 @@ A screen recording, slides, a whiteboard or a sign can be found by what it says.
 | `direction_shots` | `assetID?`, `sceneID?`, `offset`, `limit` | Shots with range, description, size, movement, people, flags, sounds, the gist of their text on screen, and small keyframe paths |
 | `direction_contact_sheet` | `assetID`, `range?`, `frames` (4–36, default 16) | One image grid with source timecodes, and the time of each cell |
 | `direction_frame` (extended) | `assetID` and `time` (source seconds), or the existing cut `time` | A real frame of a take, not only of the cut |
-| `direction_watch` | `start`, `end` (cut seconds), `revision?`, `frames` (8–24, default 12) | A filmstrip image of the passage with timecodes, the words in it, sounds, and where the cuts fall. The closest thing to watching. |
+| `direction_watch` | `start`, `end` (cut seconds), `revision?`, `frames` (8–24, default 12); or `changed: true` | A filmstrip image of the passage with timecodes, the words in it, sounds, and where the cuts fall. The closest thing to watching. `changed: true` watches every passage the open notes turnover changed that hasn't been watched since, a filmstrip each (8 frames), up to 8 in one call. |
 | `direction_sync_takes` | `force?` | A job that finds takes in sync by their sound and writes `syncGroups` to Dailies |
 | `direction_screen_text` | `assetID`, `range?` | The take's text on screen: stretches with source ranges and their lines, largest text first |
 | `direction_search_footage` | `query`, `sceneID?`, `circledOnly?`, `limit` (default 12) | Ranked shots with a score, why they matched (`picture`, `words`, `both` or `screen`), and keyframe paths; a `screen` hit's range is when the text is on screen |
 
 - Search ranks by the similarity of the query's sentence embedding to each shot's description, lines and text on screen, blended with FTS5 scores (0.6 meaning, 0.4 exact words), best shot per take first. `similarTo: shotID` ranks by Vision feature-print distance instead.
 - `direction_dailies` gains an `index` field per take: `waiting`, `looking`, `done` or `failed`.
-- **Check your work.** Every skill that cuts ends with: watch every passage you changed with `direction_watch` before delivering. The turnover's finishing tool refuses delivery if a changed range was never watched in that run, with `not_watched` and the ranges.
+- **Check your work.** Every skill that cuts ends with: watch every passage you changed with `direction_watch` before delivering. The turnover's finishing tool refuses delivery if a changed range was never watched in that run, with `not_watched`, the ranges, and that `changed: true` watches them all in one call.
 
 ## The director's side
 

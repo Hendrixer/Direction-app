@@ -39,3 +39,25 @@ fetch() { curl -fsS --doh-url https://cloudflare-dns.com/dns-query "$@"; }
 fetch -o /dev/null "$host/Direction-$version.dmg" || fail "$host/Direction-$version.dmg doesn't download yet."
 fetch "$host/appcast.xml" | grep -q "Direction-$version.dmg" || fail "$host/appcast.xml doesn't offer $version yet (the cache may still hold the old feed)."
 printf '\nPublished Direction %s:\n  %s/Direction.dmg\n  %s/appcast.xml\n' "$version" "$host" "$host"
+
+# MARK: GitHub and the changelog, from site/changelog/<version>.md
+
+changelog="site/changelog/$version.md"
+if [ ! -f "$changelog" ]; then
+  printf '\nThere is no %s, so there is no tag, GitHub release or changelog entry yet. Write it, then run this again.\n' "$changelog" >&2
+  exit 0
+fi
+command -v gh >/dev/null || fail "The GitHub CLI isn't installed (brew install gh), so v$version isn't tagged or released on GitHub."
+title="Direction $(node site/tools/changelog.mjs title "$version")"
+commit="$(cat "$releases/Direction-$version.commit" 2>/dev/null || git rev-parse HEAD)"
+if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then git tag -a "v$version" "$commit" -m "$title"; fi
+git push origin "v$version"
+if ! gh release view "v$version" >/dev/null 2>&1; then
+  notes_file="$(mktemp)"
+  node site/tools/changelog.mjs notes "$version" > "$notes_file"
+  gh release create "v$version" "$dmg#Direction-$version.dmg (Apple silicon, macOS 26)" --verify-tag --latest \
+    --title "$title" --notes-file "$notes_file"
+fi
+(cd site && node tools/changelog.mjs && npx --no-install cf deploy --message "Changelog: $version" >/dev/null) \
+  || fail "The changelog didn't deploy. Run: cd site && node tools/changelog.mjs && npx cf deploy"
+printf '  https://github.com/Hendrixer/Direction-app/releases/tag/v%s\n  https://givedirection.ai/changelog/#%s\n' "$version" "$version"

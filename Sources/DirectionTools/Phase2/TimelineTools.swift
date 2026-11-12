@@ -6,7 +6,7 @@ import DirectionMedia
 // OpenTimelineIO and changes it only through direction_edit; no tool takes a timeline document.
 extension ToolCatalog {
     static var timelineDefinitions: [ToolDefinition] { [
-        definition("direction_timeline", "Read the cut: a compact outline, a row per clip with its id (edit functions refer to those ids, and an edit point is \"<left clip>|<right clip>\"), its times, take and effects, plus locks: whether picture is locked and every locked scene with where it plays, so you know before editing what you can't recut. V1 is the story, V2+ overlays (graphics, cutaways, made shots); A1 is V1's own sound, A2 music, A3 effects. otio: true adds the cut as OpenTimelineIO JSON (read-only): every item's id in metadata.direction.id, effect params in metadata.direction.params and keys (cut seconds) in metadata.direction.keys, markers for scenes and notes. cut names a saved cut (\"Cut 3\" or its id); revision pins one; range limits the items to those overlapping {start, end} seconds. You may save the document and analyze it in a script, but changes go only through direction_edit.", ["cut": string, "revision": integer, "sequenceID": string, "range": record(["start": number, "end": number], required: ["start", "end"]), "otio": bool, "outlineOnly": noted(bool, "Older: the outline is all you get unless otio is true.")]),
+        definition("direction_timeline", "Read the cut: a compact outline, a row per clip with its id (edit functions refer to those ids, and an edit point is \"<left clip>|<right clip>\"), its times, take and effects (each effect\u{2019}s id, for setEffect and removeEffect, is in effects), plus locks: whether picture is locked and every locked scene with where it plays, so you know before editing what you can't recut. V1 is the story, V2+ overlays (graphics, cutaways, made shots); A1 is V1's own sound, A2 music, A3 effects. otio: true adds the cut as OpenTimelineIO JSON (read-only): every item's id in metadata.direction.id, effect params in metadata.direction.params and keys (cut seconds) in metadata.direction.keys, markers for scenes and notes. cut names a saved cut (\"Cut 3\" or its id); revision pins one; range limits the items to those overlapping {start, end} seconds. You may save the document and analyze it in a script, but changes go only through direction_edit.", ["cut": string, "revision": integer, "sequenceID": string, "range": record(["start": number, "end": number], required: ["start", "end"]), "otio": bool, "outlineOnly": noted(bool, "Older: the outline is all you get unless otio is true.")]),
         definition("direction_edit_catalog", "Every edit function with its arguments, every effect and transition with its parameters' ranges and defaults, the error codes, and the custom shader effects in the film's Effects folder that compile. op narrows it to what you're about to use: names of edit functions, effects or transitions, like \"gain\" or \"addEffect, blur, dissolve\".", ["op": noted(string, "One name, or several separated by commas: edit functions (gain), effects (blur, filter.grain) or transitions (dissolve).")]),
     ] }
 }
@@ -36,6 +36,11 @@ extension ToolRuntime {
             var outline = doc.outline
             if let line = locks["line"].string { outline += "\n" + line }
             var value: [String: JSONValue] = ["cut": .string(cutName), "editRevision": .number(Double(p.editRevision)), "sequenceID": .string(s.id), "outline": .string(outline), "locks": locks]
+            // Each effect's id, which setEffect and removeEffect take: the outline names effects but has no room for
+            // their ids, and an editor spent three steps digging them out of the whole document (2026-11-11).
+            let shown = s.clips.filter { c in range.map { c.start < $0.end && c.end > $0.start } ?? true }
+            let effects: [JSONValue] = shown.flatMap { c in (c.effects ?? []).map { .object(["clipID": .string(c.id), "effectID": .string($0.id), "name": .string($0.name)]) } }
+            if !effects.isEmpty { value["effects"] = .array(effects) }
             // The whole document only when asked: it's nine tenths of the answer, and the outline has the ids.
             if a["otio"].bool == true && a["outlineOnly"].bool != true { value["otio"] = doc.otio }
             return ToolResponse(.object(value))
@@ -139,7 +144,31 @@ extension ToolRuntime {
             guard try store.revision() == made else { throw DirectionError("stale_revision", "The film changed while Direction made the graphics. Read direction_timeline again and send the batch again.") }
             batch.baseEditRevision = made
         }
-        return ToolResponse(try .wrapping(store.edit(batch, validateOnly: validateOnly, asked: asked)))
+        let result = try JSONValue.wrapping(store.edit(batch, validateOnly: validateOnly, asked: asked))
+        // measure: a change to what's heard answers with the mix as it now measures, what the editor would otherwise
+        // measure in its next step (every step resends everything said so far). Asked for, since measuring a long cut
+        // takes seconds.
+        let measure = a["measure"].bool ?? b["measure"].bool ?? false
+        guard measure, !validateOnly, batch.operations.contains(where: { Self.soundOps.contains($0.type) }), case .object(var fields) = result else { return ToolResponse(result) }
+        if let mix = try? await mixNow(batch.sequenceID) { fields["mix"] = mix }
+        return ToolResponse(.object(fields))
+    }
+
+    /// The edit functions that change what's heard.
+    static let soundOps: Set<String> = ["gain", "fade", "duck", "audio", "placeMusic", "parts", "loudness", "syncSound"]
+
+    /// The whole mix at the latest revision, compactly: its loudness and true peak, the target's verdict, the loudest
+    /// stretches and anything over the ceiling. The per-second profile stays with direction_measure_audio.
+    func mixNow(_ sequenceID: String?) async throws -> JSONValue {
+        let p = try store.read()
+        let compiled = try await SequenceRenderer.compile(project: p, sequenceID: sequenceID, cacheDirectory: cacheDirectory)
+        let v = try await SequenceRenderer.loudness(compiled)
+        let verdict = LoudnessCheck.verdict(integrated: v["integratedLUFS"].double, truePeak: v["truePeakDBTP"].double ?? -120)
+        return .object([
+            "editRevision": .number(Double(p.editRevision)), "integratedLUFS": v["integratedLUFS"], "truePeakDBTP": v["truePeakDBTP"],
+            "target": .object(["lufs": .number(SharedSettings.loudnessTarget), "truePeakDBTP": .number(SharedSettings.truePeakCeiling), "ready": .bool(verdict.isReady), "says": .string(verdict.words ?? "On target.")]),
+            "loudest": v["profile"]["loudest"], "overCeiling": v["profile"]["overCeiling"],
+        ])
     }
 
     /// What's locked, for the editor's reads: picture lock, and each locked scene with where it plays.

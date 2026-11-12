@@ -1,7 +1,7 @@
-<!-- direction-job style v3 -->
+<!-- direction-job style v4 -->
 # Make a style for the director
 
-Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
+Follow the `{{skill}}` skill. Its playbook is at the end of this message, under Read for you, with what you’d read first; if it isn’t there, read `{{skillPath}}` in this folder.
 
 The director asked for a style. In their words:
 

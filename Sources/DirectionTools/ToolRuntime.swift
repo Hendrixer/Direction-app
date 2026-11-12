@@ -32,10 +32,46 @@ public actor ToolRuntime {
         }
     }
 
+    /// Transcripts made before word times were held to the sound (WordEdges) are checked once, the first time a
+    /// tool that reads words runs: the takes four at a time, an hour of sound in about a second each. One whose
+    /// file can't be read waits for another day.
+    private var wordsChecked: Task<Void, Never>?
+    static let readsWords: Set<String> = ["direction_transcript", "direction_timeline", "direction_cut_points", "direction_check", "direction_watch", "direction_edit", "direction_remove_range", "direction_edit_transcript", "direction_search_footage", "direction_dailies", "direction_feedback", "direction_turnovers"]
+    public func checkWordEdges(waiting seconds: Double? = nil) async {
+        if wordsChecked == nil {
+            wordsChecked = Task { [store, cacheDirectory] in
+                guard let old = try? store.transcripts().filter({ $0.edges == nil && !$0.words.isEmpty }), !old.isEmpty, let p = try? store.read() else { return }
+                let started = Date(), directory = cacheDirectory.appendingPathComponent("Audio")
+                var done = 0
+                await withTaskGroup(of: Bool.self) { group in
+                    var waiting = old[...]
+                    func next() {
+                        guard let t = waiting.popFirst() else { return }
+                        group.addTask {
+                            guard let asset = try? p.asset(t.assetID), let tight = try? await WordEdges.tighten(t, asset: asset, directory: directory) else { return false }
+                            return (try? store.retime(tight, from: t.words)) == true
+                        }
+                    }
+                    for _ in 0..<4 { next() }
+                    for await ok in group { if ok { done += 1 }; next() }
+                }
+                DirectionLog.info("Checked the word times of \(done) of \(old.count) transcript\(old.count == 1 ? "" : "s") against the sound in \(String(format: "%.1f", Date().timeIntervalSince(started))) s", "media")
+            }
+        }
+        guard let seconds, let checking = wordsChecked else { await wordsChecked?.value; return }
+        // A call waits a little for it, then goes on with the words as they are; the check finishes behind it.
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await checking.value }
+            group.addTask { try? await Task.sleep(for: .seconds(seconds)) }
+            await group.next(); group.cancelAll()
+        }
+    }
+
     private func dispatch(_ name: String, _ a: JSONValue) async throws -> ToolResponse {
         noteToolCall(name, a)
         try Task.checkCancellation()
         try ToolCatalog.validate(a, for: name)
+        if Self.readsWords.contains(name) { await checkWordEdges(waiting: 20) }
         if let path = a["projectPath"].string {
             let requested = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL.resolvingSymlinksInPath()
             guard requested.path == store.url.resolvingSymlinksInPath().path else { throw DirectionError("project_mismatch", "The requested project differs from this bound runtime.") }
@@ -123,7 +159,11 @@ public actor ToolRuntime {
             let timed: [JSONValue] = words.map { .object(["id": .string($0.id), "text": .string($0.text), "start": .number(($0.range.start.seconds * 100).rounded() / 100), "end": .number(($0.range.end.seconds * 100).rounded() / 100)]) }
             return ToolResponse(.object(["editRevision": .number(Double(p.editRevision)), "words": .array(timed), "total": .number(Double(all.count)), "nextOffset": next < all.count ? .number(Double(next)) : .null]))
         case "direction_import_transcript":
-            let t = try a["transcript"].decode(SourceTranscript.self); try store.saveTranscript(t)
+            var t = try a["transcript"].decode(SourceTranscript.self)
+            // Its words held to the take's sound, when the take can be read.
+            let given = t
+            if let asset = try? store.read().asset(t.assetID), let tight = try? await WordEdges.tighten(t, asset: asset, directory: cacheDirectory.appendingPathComponent("Audio")) { t = tight }
+            do { try store.saveTranscript(t) } catch { t = given; try store.saveTranscript(given) }
             return ToolResponse(.object(["assetID": .string(t.assetID), "wordCount": .number(Double(t.words.count))]))
         case "direction_transcribe":
             let p = try store.read(), asset = try p.asset(a.requiredString("assetID"))
@@ -144,19 +184,37 @@ public actor ToolRuntime {
             let useWhisper = engine == .whisper, fallbackNote = note
             let phase = engine == .whisper ? (WhisperTranscriber.isDownloaded(model) ? "Transcribing with Whisper" : "Downloading the Whisper model") : "Preparing local speech model"
             let job = try startJob(kind: "transcription", revision: p.editRevision, phase: phase, assetID: asset.id) {
-                let transcript = useWhisper
+                let heard = useWhisper
                     ? try await WhisperTranscriber.transcribe(asset: asset, trackID: track, language: language, model: model, directory: directory)
                     : try await LocalTranscriber.transcribe(asset: asset, trackID: track, language: language, directory: directory)
-                try store.saveTranscript(transcript)
+                // Each word where its sound starts and stops (WordEdges): an engine puts the pause before a phrase
+                // inside its first word.
+                var transcript = (try? await WordEdges.tighten(heard, asset: asset, directory: directory)) ?? heard
+                // The engine's own words if the held ones can't be kept, rather than no transcript.
+                do { try store.saveTranscript(transcript) } catch { transcript = heard; try store.saveTranscript(heard) }
                 var result: [String: JSONValue] = ["assetID": .string(asset.id), "audioTrackID": .number(Double(track)), "wordCount": .number(Double(transcript.words.count)), "provider": .string(transcript.provider)]
                 if let fallbackNote { result["note"] = .string(fallbackNote) }
                 return .object(result)
             }
             return ToolResponse(try .wrapping(job))
         case "direction_measure_audio":
+            if a["levels"] != .null { return try await levels(a) }
             guard let assetID = a["assetID"].string else {
                 // No take: the cut's mix, as it plays and delivers.
-                let p = try store.read(revision: a["revision"].int), range = a["start"] == .null && a["end"] == .null ? nil : try secondsRange(a)
+                let p = try store.read(revision: a["revision"].int)
+                // Several stretches in one answer, compiled once.
+                if let ranges = a["ranges"].array {
+                    guard !ranges.isEmpty, ranges.count <= 20 else { throw DirectionError("bad_argument", "ranges lists 1 to 20 stretches, each {start, end} in cut seconds.") }
+                    let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory)
+                    var out: [JSONValue] = []
+                    for r in ranges {
+                        let range = try secondsRange(r)
+                        let v = try await SequenceRenderer.loudness(compiled, range: range)
+                        out.append(.object(["start": r["start"], "end": r["end"], "integratedLUFS": v["integratedLUFS"], "truePeakDBTP": v["truePeakDBTP"], "samplePeakDBFS": v["samplePeakDBFS"], "loudest": v["profile"]["loudest"]]))
+                    }
+                    return ToolResponse(.object(["editRevision": .number(Double(p.editRevision)), "ranges": .array(out)]))
+                }
+                let range = a["start"] == .null && a["end"] == .null ? nil : try secondsRange(a)
                 let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory)
                 var value = try await SequenceRenderer.loudness(compiled, range: range)
                 // The whole cut against the target, so one call says whether it's ready and what to do.
@@ -175,9 +233,25 @@ public actor ToolRuntime {
         case "direction_frame":
             if a["assetID"] != .null { return try await sourceFrame(a) }
             let p = try store.read(revision: a["revision"].int)
+            let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory, looks: try? store.lookContext())
+            // Several moments in one answer: each step of the editor's resends everything said so far, so eight frames
+            // in one call cost far less than eight calls.
+            if let times = a["times"].array {
+                let seconds = times.compactMap(\.double)
+                guard !seconds.isEmpty, seconds.count == times.count, seconds.count <= 8, seconds.allSatisfy({ $0.isFinite && $0 >= 0 }) else {
+                    throw DirectionError("invalid_time", "times lists 1 to 8 nonnegative cut seconds.")
+                }
+                let size = min(1920, max(160, a["maxDimension"].int ?? 640))
+                var frames: [JSONValue] = [], paths: [String] = []
+                for s in seconds {
+                    let output = cacheDirectory.appendingPathComponent("Frames").appendingPathComponent(newID("frame") + ".png")
+                    frames.append(try await SequenceRenderer.frame(compiled, at: .init(seconds: s), to: output, maxDimension: size))
+                    paths.append(output.path)
+                }
+                return ToolResponse(.object(["frames": .array(frames), "editRevision": .number(Double(p.editRevision))]), imagePaths: paths)
+            }
             let seconds = a["time"].double ?? 0
             guard seconds.isFinite && seconds >= 0 else { throw DirectionError("invalid_time", "Frame time must be a nonnegative number.") }
-            let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory, looks: try? store.lookContext())
             let output = cacheDirectory.appendingPathComponent("Frames").appendingPathComponent(newID("frame") + ".png")
             let value = try await SequenceRenderer.frame(compiled, at: .init(seconds: seconds), to: output, maxDimension: min(1920, max(160, a["maxDimension"].int ?? 1280)))
             return ToolResponse(value, imagePaths: [output.path])
@@ -217,9 +291,14 @@ public actor ToolRuntime {
             }
             return ToolResponse(try .wrapping(job))
         case "direction_job":
-            var job = try store.job(a.requiredString("jobID"))
-            if !job.isTerminal && job.ownerPID != getpid() && kill(job.ownerPID, 0) != 0 && errno == ESRCH { job.status = "interrupted"; job.phase = "The process running this job exited"; job.updatedAt = Date().timeIntervalSince1970; try store.saveJob(job) }
-            return ToolResponse(try .wrapping(job))
+            // wait: stay until it's over, up to that many seconds, so one step waits instead of several asking.
+            let until = Date().addingTimeInterval(min(240, max(0, a["wait"].double ?? 0)))
+            while true {
+                var job = try store.job(a.requiredString("jobID"))
+                if !job.isTerminal && job.ownerPID != getpid() && kill(job.ownerPID, 0) != 0 && errno == ESRCH { job.status = "interrupted"; job.phase = "The process running this job exited"; job.updatedAt = Date().timeIntervalSince1970; try store.saveJob(job) }
+                if job.isTerminal || Date() >= until { return ToolResponse(try .wrapping(job)) }
+                try await Task.sleep(for: .milliseconds(250))
+            }
         case "direction_jobs": return ToolResponse(try .wrapping(store.jobs()))
         case "direction_cancel_job":
             let id = try a.requiredString("jobID"), job = try store.job(id)
@@ -307,6 +386,32 @@ public actor ToolRuntime {
     private func baseRevision(_ a: JSONValue) throws -> Int { try requiredInt(a, "baseEditRevision") }
     private func requiredInt(_ a: JSONValue, _ key: String) throws -> Int { guard let n = a[key].double, n.isFinite, n.rounded() == n, let v = a[key].int, v >= 0 else { throw DirectionError("invalid_arguments", "\(key) must be a nonnegative integer.") }; return v }
     private func optionalTime(_ value: JSONValue) throws -> MediaTime? { guard value != .null else { return nil }; guard let v = value.double, v.isFinite && v >= 0 else { throw DirectionError("invalid_time", "Time must be a nonnegative number of seconds.") }; return .init(seconds: v) }
+    /// measure_audio's levels: every frame (or `every` seconds) over a stretch, of the cut's mix or a take's track.
+    private func levels(_ a: JSONValue) async throws -> ToolResponse {
+        let l = a["levels"], p = try store.read(revision: a["revision"].int)
+        guard let start = l["start"].double, let end = l["end"].double, start.isFinite, end.isFinite, start >= 0, end > start else { throw DirectionError("invalid_range", "levels takes {start, end} in seconds, with 0 \u{2264} start < end.") }
+        var asset: MediaAsset?, frameRate = 30.0
+        if let id = a["assetID"].string { asset = try p.asset(id); frameRate = asset?.video.first?.frameRate ?? 30 }
+        else { frameRate = try p.sequence(a["sequenceID"].string).frameRate.value }
+        let every = l["every"].double ?? 1 / max(1, frameRate)
+        guard every.isFinite, every >= 0.005 else { throw DirectionError("bad_argument", "every is at least 0.005 s.") }
+        guard (end - start) / every <= Double(Levels.most) else {
+            throw DirectionError("bad_argument", "That\u{2019}s \(Int(((end - start) / every).rounded(.up))) windows; levels gives up to \(Levels.most). Measure a shorter stretch, or a longer every.")
+        }
+        if let asset {
+            guard let track = a["trackID"].int.flatMap(Int32.init(exactly:)) ?? asset.audio.first?.id else { throw DirectionError("no_audio", "The source has no audio.") }
+            let v = try await AudioProcessor.levels(asset: asset, trackID: track, start: start, end: end, every: every, directory: cacheDirectory.appendingPathComponent("Audio"))
+            guard case .object(var o) = v.json else { return ToolResponse(v.json) }
+            o["assetID"] = .string(asset.id); o["audioTrackID"] = .number(Double(track))
+            return ToolResponse(.object(o))
+        }
+        let compiled = try await SequenceRenderer.compile(project: p, sequenceID: a["sequenceID"].string, cacheDirectory: cacheDirectory)
+        let v = try await SequenceRenderer.levels(compiled, range: MediaRange(start: start, end: end), every: every)
+        guard case .object(var o) = v.json else { return ToolResponse(v.json) }
+        o["editRevision"] = .number(Double(p.editRevision))
+        return ToolResponse(.object(o))
+    }
+
     private func secondsRange(_ a: JSONValue) throws -> MediaRange { guard let start = a["start"].double, let end = a["end"].double, start.isFinite && end.isFinite && start >= 0 && end > start else { throw DirectionError("invalid_range", "Provide start/end seconds, with 0 ≤ start < end.") }; return .init(start: start, end: end) }
 }
 

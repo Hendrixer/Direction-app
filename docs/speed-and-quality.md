@@ -1,36 +1,38 @@
 # Speed and quality
 
-Each film has one setting, **Faster · Balanced · Best**, on a slider in the editor popover and in Who's editing? (specs/editor.md › Speed and quality). The director never chooses a version or an effort. From the film's stop Direction picks:
+Each film has one setting, **Fastest · Faster · Balanced · Best**, on a slider in the editor popover and in Who's editing? (specs/editor.md › Speed and quality). The director never chooses a version or an effort. From the film's stop Direction picks:
 
 - the editor's version and effort for each job (`EditorPicks`, Sources/DirectionApp/Phase2/Runs/EditorPicks.swift);
 - the version for each made request, by what it needs (`MadePicks` and `MadeCatalog.route`, Sources/DirectionCore/Phase2/Made/MadeRouting.swift);
-- the resolution a made shot is made at: 720p where a version lists it (else 768p) at Faster and Balanced, quicker and for about half, which this Mac sharpens to a cut half again as tall or more; 1080p where a version offers it at Best, and on a Mac that can't sharpen.
+- the resolution a made shot is made at: 720p where a version lists it (else 768p) at Fastest, Faster and Balanced, quicker and for about half, which this Mac sharpens to a cut half again as tall or more; 1080p where a version offers it at Best, and on a Mac that can't sharpen.
 
-The picks below were researched on 8 Nov 2026. Refresh them by hand: read the sources again, change the tables in code and here, and say what moved in the commit. Then confirm the editor's picks with the bench (docs/bench.md).
+The picks below were researched on 8 Nov 2026. Fastest was added on 11 Nov 2026: Faster kept Opus 5.5 for cutting, so it wasn't the quick option the director expected; Fastest puts cutting, notes and styles on the second version too (Sonnet 5.5; Sol for Codex, which Faster already uses) and makes media as Faster does. Refresh them by hand: read the sources again, change the tables in code and here, and say what moved in the commit. Then confirm the editor's picks with the bench (docs/bench.md).
 
 ## The editor
 
-The rule behind the table: judgement (cutting, answering notes, a style's taste) stays on the strongest version at every stop, and only its effort moves. The list-like jobs (a breakdown, finishing) move to lighter versions. Nothing that looks at frames runs below Medium.
+The rule behind the table: from Faster up, judgement (cutting, answering notes, a style's taste) stays on the strongest version, and only its effort moves; at Fastest it runs on the second version. The list-like jobs (a breakdown, finishing) move to lighter versions. Nothing that looks at frames runs below Medium.
 
-| Job | Faster | Balanced | Best |
-|---|---|---|---|
-| A/V script | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high |
-| Breakdown | Haiku 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium |
-| Logging takes | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · high |
-| Assembly | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
-| Notes | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
-| Finishing | Haiku 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium |
-| Styles | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
-| Techniques | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high |
+| Job | Fastest | Faster | Balanced | Best |
+|---|---|---|---|---|
+| A/V script | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high |
+| Breakdown | Haiku 5.5 · medium | Haiku 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium |
+| Logging takes | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · high |
+| Assembly | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
+| Notes | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
+| Finishing | Haiku 5.5 · medium | Haiku 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium |
+| Styles | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high | Opus 5.5 · xhigh |
+| Techniques | Sonnet 5.5 · medium | Sonnet 5.5 · medium | Opus 5.5 · medium | Opus 5.5 · high |
 
-| Job (Codex) | Faster | Balanced | Best |
-|---|---|---|---|
-| A/V script | GPT-6.1 Terra · medium | GPT-6.1 Sol · medium | GPT-6.1 Sol · high |
-| Breakdown | Terra · low | Terra · medium | Sol · medium |
-| Logging takes | Terra · medium | Terra · medium | Sol · high |
-| Assembly, Notes, Styles | Sol · medium | Sol · high | GPT-6 Astra · high |
-| Finishing | Terra · low | Terra · medium | Sol · medium |
-| Techniques | Terra · medium | Sol · medium | Sol · high |
+| Job (Codex) | Fastest | Faster | Balanced | Best |
+|---|---|---|---|---|
+| A/V script | GPT-6.1 Terra · medium | Terra · medium | GPT-6.1 Sol · medium | Sol · high |
+| Breakdown | Terra · low | Terra · low | Terra · medium | Sol · medium |
+| Logging takes | Terra · medium | Terra · medium | Terra · medium | Sol · high |
+| Assembly, Notes, Styles | Sol · medium | Sol · medium | Sol · high | GPT-6 Astra · high |
+| Finishing | Terra · low | Terra · low | Terra · medium | Sol · medium |
+| Techniques | Terra · medium | Terra · medium | Sol · medium | Sol · high |
+
+On Codex, Fastest and Faster pick the same: cutting there is already on Sol at Faster, and Astra (about 4× Sol) stays at Best.
 
 Why:
 
@@ -88,11 +90,12 @@ After the picks, the Artificial Analysis ratings order the rest, as before.
 | Shot that's mainly a camera move | Hailuo 3 Max | Hailuo 3 Max | Seedance 2.5; with a person, Hailuo 3 Max |
 | Shot from words alone | Hailuo 3 Max | Gemini Omni 1.2 Flash | Wan 3.0 |
 | Shot with sound | Gemini Omni 1.2 Flash | Wan 3.0 | Seedance 2.5; with a person, Hailuo 3 |
-| Bridge (first and last frames) | Hailuo 3 Max | Wan 3.0 | Seedance 2.5; with a person, Wan 3.0 |
+| Bridge (first and last frames) | Wan 3.0 | Kling 3.0 Pro | Seedance 2.5; with a person, Kling 3.0 Pro |
 | Changed shot | FLUX Video Edit | FLUX Video Edit | Aleph 2.0 |
 | Voice | Eleven v4 Turbo | Eleven v4 Turbo | Eleven v4 |
+| Sound effect | Seed Audio 1.0 | Seed Audio 1.0 | Seed Audio 1.0 |
 
-Music (Lyria 3 Clip), sound effects (Lyria 3 Clip) and sharpening (this Mac, FLUX Video Upscale above 1080p) didn't change.
+Music (Lyria 3 Clip) and sharpening (this Mac, FLUX Video Upscale above 1080p) didn't change. Lyria takes a sound effect only when Seed Audio turns it down. Shots with references skip Hailuo 3 Max, which takes none. The bridge and sound effect rows changed after the paid trials (below).
 
 Why:
 
@@ -104,7 +107,8 @@ Why:
 - **People.** Seedance refuses them. Wan 3.0 rates best at human anatomy of the versions that take people.
 - **Words and camera moves are read from the ask.** Words in quotes (after a space, starting right after the quote, so 12" isn't words) and camera-move phrases (an orbit around, a push in, a crane shot; not "crane" alone).
 - **Camera moves never go to Hailuo 3.** Its camera control rates far below the rest, and it's the version whose orbits failed.
-- **Bridges.** No board measures first-to-last-frame shots; consistency over time is the nearest measure.
+- **Bridges.** No board measures first-to-last-frame shots, so the paid trials did. Hailuo 3 Max takes only one of the two frames. Kling 3.0 Pro showed what made the change (the director puts the headphones on); Wan 3.0 let them appear. Kling took four minutes and cost $0.56, Wan two minutes and $0.43, so Faster takes Wan.
+- **Sound effects.** Lyria 3 Clip is a music version: asked for five effects, it made five pieces of music. Seed Audio 1.0 made the effects themselves, for well under a cent each.
 - **Stills.**
   - GPT Image leads every text-rendering board.
   - For keeping a frame and following several references, GPT Image 2.5 Sunburst rates best and Nano Banana 2.1 is close at about a sixth of the price.
@@ -129,12 +133,32 @@ Sources, all read 8 Nov 2026:
   - …/image-edit/multi-image-edit
   - …/text-to-image/text-rendering
 
+## The paid trials (8 Nov 2026)
+
+Run with `scripts/live-made.sh` (the director's key, a throwaway film, the version pinned, everything through Direction's own request path). 24 trials for $1.79 of the $5.79 planned: most failures were turned down before anything was made, and those cost nothing. Each finding below changed Direction or its picks.
+
+1. **Gemini Omni 1.2 with a real person.** Not answered yet: Omni turned down every request before looking at it, because Direction asked for a shot without sound and Omni always makes sound ("generate_audio cannot be set to false"). Omni lists prices only with sound, so Direction no longer sends the setting to it, takes the sound off afterwards, and asks any other version that turns the setting down again without it.
+2. **Changing a take with other versions.** Hailuo 3 and Seedance 2.5 turn down a take sent as data ("Only HTTPS URLs are allowed"); Omni took it, then failed without saying why. Direction sends every changed shot this way, so the changing versions (FLUX Video Edit, Aleph 2.0) need the same test before changed shots can be trusted.
+3. **Bridges with the director at both ends.** Kling 3.0 Pro and Wan 3.0 made clean bridges (the check agreed); Kling's showed the cause of the change, Wan's didn't. Hailuo 3 Max turned it down: it takes one keyframe, not two. Omni turned it down for the sound setting (1). The bridge picks changed.
+4. **Hailuo 3 Max on the asks that failed on Hailuo 3.** Both worked, in about 15 s each. The orbit went round the director, though the hair changed seen from the side (the check missed it). The cockpit morph was what was asked, but the check called it broken; the check now treats a change the ask describes as the shot, not a fault.
+5. **References on a shot from a frame.** Not answered yet: Hailuo 3 Max takes no references at all ("does not support image input references"), so shots with references now skip it. OpenRouter's guide says `frame_images` win over `input_references`; a version that takes references has to show whether they still reach it.
+6. **GPT Image's quality setting and price.** Direction sends no quality setting. Flare and Sunburst both made a clean 1536 × 864 still for a 16:9 film, alike to the eye. Both replies reported a cost of $0, as did every Lyria clip, so Direction's record said nothing was spent. Direction now looks up the generation record when a reply reports no cost, and counts the estimate if that says nothing either.
+7. **Sound effects.** Seed Audio 1.0 made a glass shattering, thunder, footsteps on gravel and a camera shutter as sound, at their own lengths (0.6 to 7 s); its service turned the door creak down. Lyria 3 Clip made music for all five, 4 s each. Sound effects now go to Seed Audio, with Lyria behind it for an ask it turns down.
+
+Also found: Hailuo 3 Max and Wan 3.0 sent shots with sound when asked for none. Direction now takes the sound off any shot made without `sound`.
+
+### Round 2 (8 Nov 2026, evening)
+
+8 requests for $0.11 of the $1.72 planned: three were turned down before anything was made, and one reported $0 (below).
+
+1. **Gemini Omni 1.2 with a real person.** It made the shot in 43 s, with no refusal: the director looks up from the phone and smiles in one continuous move, stays themselves throughout, and leans in further than asked. Its sound came off. It reported a cost of $0 and Direction recorded $0; a finished shot that reports $0 is now looked up in the generation record (`generation_id`), and the estimate ($0.35 here) is counted if that says nothing.
+2. **FLUX Video Edit and Aleph 2.0 turn down a take sent as data** ("Only HTTPS URLs are allowed"), as Hailuo 3 and Seedance did. Every changed shot fails today (nothing is charged), and FLUX Video Upscale is sent the same way. Changed shots need the take at an HTTPS address OpenRouter can fetch: a product decision, since the director's footage would sit there for the minutes it takes.
+3. **References with a first frame** on Hailuo 3: turned down, since MiniMax's Hailuo versions "do not support frame_images and input_references in the same request". A shot from a frame with references now skips every Hailuo.
+4. **What sound and stills cost.** Seed Audio's two effects were read from the generation record: $0.009 for 3.5 s, and $0.024 for 9.5 s made when 4 s was asked (cut to 4). It's paid by the second it makes and chooses the length, so effects are now priced at 10 s ($0.025). The GPT Image still and the Lyria clip had no cost in the record either, so Direction counted their estimates ($0.04 each). OpenRouter lists Lyria at $0, so it may be free for now; the trials now read the key's total before and after a run to settle it.
+5. **Sound effects as the app makes them.** The door creak went through this time, worded "A sound effect, not speech: …" (round 1's was turned down); steady rain came back as steady rain. The music sting was 10 s of guitar.
+
 ## Still to test, with real requests (they cost money: ask first)
 
-1. **Gemini Omni 1.2 and a real person.** Make one shot and one changed shot from a frame of the director, and check that a refusal is caught as one.
-2. **Changing video with other versions.** Send a take as video to Omni 1.2, Hailuo 3 and Seedance 2.5. If they take it, they can replace FLUX Video Edit and Aleph for changed shots.
-3. **Bridges with the director at both ends.** Make them on Hailuo 3 Max, Wan 3.0, Omni 1.2 and Kling 3.0 Pro, and judge each with the made-shot check.
-4. **Hailuo 3 Max on the asks that failed on Hailuo 3.** The orbits and the morphs.
-5. **References on shots that start from a frame.** OpenRouter says `frame_images` wins over `input_references`, so the references may not reach the version.
-6. **GPT Image's quality setting and price.** Check what Direction actually gets and pays.
-7. **Sound effects.** Seed Audio 1.0 against Lyria 3 Clip, on five effects.
+1. **Changed shots from an HTTPS address**, once the take has one: FLUX Video Edit and Aleph 2.0 against the same 2 s, and FLUX Video Upscale.
+2. **References beside a first frame** on a version that takes both (Kling 3.0 Pro, Wan 3.0): OpenRouter's guide says `frame_images` win, so whether the reference still shows in the shot.
+3. **Whether the replies that report $0 are charged** (Gemini Omni, GPT Image, Lyria): the key's total before and after the next run says.

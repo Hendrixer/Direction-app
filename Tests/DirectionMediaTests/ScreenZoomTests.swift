@@ -77,8 +77,13 @@ func writeScreenMovie(to url: URL) async throws {
         let scale = try #require(t.keys?["scale"]), x = try #require(t.keys?["x"]), y = try #require(t.keys?["y"])
         // Two zooms, all the way in on the small cursor and less on the wider typing, back out at the new page
         // between them, each toward its corner of the screen.
-        let v = scale.map(\.v)
-        #expect(v.count == 7 && v[0] == 1 && v[3] == 1 && v[6] == 1 && v[1] == 2 && v[2] == 2 && (1.6...1.95).contains(v[4]) && v[4] == v[5] && scale[3].t < 3.5)
+        // A busy Mac can sample the screen a beat late and leave a hold too short to see between the zoom out and the
+        // next zoom in (1.0 at 3.5, 1.0 at 3.65): keys of one value under a quarter second apart count as one. The zoom
+        // out is at the new page (3.2 s), or the look after it (3.5 s) when that frame was dropped.
+        let keys = scale.enumerated().filter { i, k in i == 0 || !(k.v == scale[i - 1].v && k.t - scale[i - 1].t < 0.25) }.map(\.element)
+        let v = keys.map(\.v)
+        #expect(v.count == 7 && v[0] == 1 && v[3] == 1 && v[6] == 1 && v[1] == 2 && v[2] == 2 && (1.6...1.95).contains(v[4]) && v[4] == v[5] && keys[3].t <= 3.55,
+                "scale \(scale.map { "\($0.v)@\($0.t)" })")
         #expect(x.contains { $0.v > 0.1 } && y.contains { $0.v > 0.1 } && x.contains { $0.v < -0.1 } && y.contains { $0.v < -0.1 })
     }
 

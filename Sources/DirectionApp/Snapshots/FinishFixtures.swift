@@ -38,6 +38,7 @@ enum FinishFixtures {
         let m = allAccepted(room: .cut)
         lock(m, [1, 2, 5])
         m.changes.lockSceneID = "scene-3"
+        m.changes.lockingScenes = true
         m.position = SampleFilm.tc(1, 30, 0)
         return m
     }

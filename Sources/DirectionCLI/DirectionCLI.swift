@@ -7,7 +7,7 @@ import DirectionReports
 
 @main
 struct DirectionCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Bench.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self, Reap.self])
+    static let configuration = CommandConfiguration(commandName: "direction", abstract: "Native, local video editing and contextual review for agents.", version: "0.2.0", subcommands: [Create.self, Inspect.self, Import.self, Cut.self, Comment.self, Feedback.self, Audio.self, Transcribe.self, Transcript.self, Export.self, Bench.self, Frame.self, Call.self, Tools.self, API.self, MCP.self, KeyCommand.self, Reap.self, Script.self])
 }
 
 struct ProjectOptions: ParsableArguments {
@@ -236,7 +236,7 @@ struct API: AsyncParsableCommand {
 struct MCP: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "mcp", abstract: "Serve the official MCP stdio transport for an external agent.")
     @OptionGroup var options: OptionalProjectOptions
-    @Option(help: "The job Direction started the editor for (assemble, turnover, finish…): only its tools are listed, with direction_more_tools for the rest.") var job: String?
+    @Option(help: "The job Direction started the editor for (assemble, turnover, finish…): only direction_run is listed, and its scripts call the job's tools and the rest.") var job: String?
     func run() async throws {
         let job = try job.map { name in
             guard let job = EditorJob(rawValue: name) else { throw ValidationError("Unknown job \(name): use one of \(EditorJob.allCases.map(\.rawValue).joined(separator: ", ")).") }
@@ -264,6 +264,11 @@ func stopsItsProgramsWhenStopped() {
     }
 }
 nonisolated(unsafe) private var stoppers: [DispatchSourceSignal] = []
+
+struct Script: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "script", abstract: "Direction starts this to run one of the editor\u{2019}s scripts, closed off by macOS\u{2019}s sandbox, asking for each tool call on stdout.", shouldDisplay: false)
+    func run() throws { ScriptHost.serve() }
+}
 
 struct Reap: ParsableCommand {
     static let configuration = CommandConfiguration(commandName: "reap", abstract: "Direction starts this with a pipe: when the pipe closes, the programs it listed are stopped.", shouldDisplay: false)

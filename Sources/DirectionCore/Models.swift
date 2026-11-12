@@ -324,6 +324,9 @@ public struct SourceTranscript: Codable, Hashable, Sendable {
     public var words: [TranscriptWord]
     /// The most recently chosen track is used for this source's text edits.
     public var selectedAt: Double?
+    /// Set once the words' times were held to the take's own sound (WordEdges, in DirectionMedia): an engine puts
+    /// the silence before a phrase inside its first word.
+    public var edges: Int?
     public init(assetID: String, audioTrackID: Int32, language: String = "en-US", provider: String = "imported", words: [TranscriptWord]) { self.assetID = assetID; self.audioTrackID = audioTrackID; self.language = language; self.provider = provider; self.words = words }
 
     /// Whisper stuck in a loop ("I'm going to go into too much detail on this, but I'm going…" to the

@@ -26,7 +26,7 @@ The way people get good results from video services (2026) is the same everywher
 | Kind | Label | For | Made with | Version |
 |---|---|---|---|---|
 | `music` | Music | Beds and stings | OpenRouter | Lyria 3 Clip |
-| `soundEffect` | Sound effect | Rain on glass, a door | OpenRouter | Lyria 3 Clip |
+| `soundEffect` | Sound effect | Rain on glass, a door | OpenRouter | Seed Audio 1.0; Lyria 3 Clip for an ask it turns down |
 | `voice` | Voice | Scratch narration, temp lines | OpenRouter | Chosen: Eleven v4 Turbo, or Eleven v4 at Best |
 | `still` | Still | Plates, backgrounds, a shot's first frame | OpenRouter | Chosen (below) |
 | `shot` | New shot | Inserts, B-roll, establishing shots, a pickup | OpenRouter | Chosen |
@@ -40,13 +40,13 @@ The way people get good results from video services (2026) is the same everywher
 
 Nobody picks versions: there are dozens, they change monthly, and what's best depends on the request. The director chooses one thing, the film's **speed and quality** (editor.md › Speed and quality): **Faster**, **Balanced** (the default) or **Best**. Direction then picks each request's version (`MadeCatalog.route`) from that and what the request needs. The picks and their sources are in `docs/speed-and-quality.md` › Made picture and sound.
 
-1. **What can make it.** From OpenRouter's list, the versions for the kind that take the frames it sends (`supported_frame_images`; a last frame always comes with a first), offer its length, and take a person if a frame shows one.
+1. **What can make it.** From OpenRouter's list, the versions for the kind that take the frames it sends (`supported_frame_images`; a last frame always comes with a first), offer its length, and take a person if a frame shows one. Where a version turns down what it's listed for, Direction knows it (`MadeVersion.oneFrame`, `noReferences`, from the paid trials of 8 Nov 2026): Hailuo 3 Max takes a first or a last frame but never both, so it makes no bridges, and takes no references, so a shot with references skips it. Every Hailuo version turns down references beside a first or last frame (`takesReferencesWithFrames`, round 2), so a shot from a frame with references skips them all.
 2. **A person in a frame.** Direction looks at every frame and reference it will send, on this Mac (Vision's faces and bodies; the back of a head counts). ByteDance's service (Seedance, Seedream) refuses input images that may show a real person unless that person was registered with ByteDance, so those are left out. A version that turned down a frame with a person is skipped for a week (`made-refusals.json` beside the spend ledger).
 3. **What it needs.** Words in quotes in a still's ask ("a sign that says "OPEN"") go to the versions that spell best; a shot whose ask is mainly a camera move (an orbit, a push in, a crane) never goes to Hailuo 3; sound asked for skips versions the list says make none; with a person in a frame, Wan 3.0 draws people best of the versions that take them.
 4. **The stop's picks, then how good.** The research's picks for the stop and the need are tried first (`MadePicks`), in order. After them, ratings from the Artificial Analysis arenas, read 31 Oct 2026, order the rest (`MadeRanking.ratings`): Best the best rated, Balanced the cheapest within 50 of the best, Faster the cheapest rated at least 1000. Versions without a rating come after every rated one, and versions OpenRouter lists no price for come after every priced one, picks included. Faster and Balanced make shots at 720p where a version lists it (else 768p), which this Mac sharpens to a cut half again as tall or more; Best, and a Mac that can't sharpen, make 1080p where the version can.
 5. **If it's turned down.** A request a version refuses for what's in it (a person, a policy) goes to the next one, up to two more, and the result's `note` says so: "Seedance 2.5 wouldn't take a frame with a person in it, so this used MiniMax H3." A refusal costs nothing. The next version is checked against both limits and the spend question's yes again; if it would pass one, the job ends with `spend_over_limit` or `spend_cap` and nothing more is sent.
 
-The editor never names a version; `direction_services` tells it what Direction would use. Music keeps the default in the table.
+The editor never names a version; `direction_services` tells it what Direction would use. Music keeps the default in the table. Sound effects go to Seed Audio, which makes the sound itself; Lyria, a music version, made music about every effect it was asked for (the paid trials), so it only takes an effect Seed Audio turns down.
 
 - **New shot** starts from words, from a `first` frame, or from `first` and `last` frames. A frame is a still or a moment of a take. With references, the version sees up to four frames of the film.
 - **Extended shot** continues a take from its out point (`side: tail`: the take's frame at `end` is the first frame). Direction drops the one frame that would repeat, so the join is seamless. Leading into a take (`side: head`) isn't possible: OpenRouter turns down a last frame without a first one, so the editor makes a still for the first frame and a bridge from it.
@@ -54,7 +54,7 @@ The editor never names a version; `direction_services` tells it what Direction w
 - **Changed shot** sends the range itself (up to 10 seconds; `from: {assetID, start, end}`) to a version that changes video (Aleph 2.0 or FLUX Video Edit). The made clip is the same length as the range, with no sound; it goes on V2 over the original, and the take's own sound keeps playing.
 - **Slow motion** makes the in-between frames for a range of a take (`factor` 2, 3 or 4) with Apple's frame interpolation. It costs nothing.
 - **Sharpened** enlarges a range up to the cut's size. On this Mac it uses Apple's super resolution (4×, then fitted to the cut); the first use downloads Apple's sharpening files once. FLUX Video Upscale is the paid alternative.
-- **Sound:** shots are made silent unless `sound: true` (cheaper on most versions). Ambience is usually better from the footage or a sound effect.
+- **Sound:** shots are made silent unless `sound: true` (cheaper on most versions). Ambience is usually better from the footage or a sound effect. Some versions send sound anyway (Hailuo 3 Max and Wan 3.0 did), and Gemini Omni always makes it and turns down being asked for none, so Direction takes the sound off a shot nobody asked sound for (Finishing a made shot).
 - **Two ways:** `ways` is 1 or 2, and up to 4 for stills.
 
 ### Finishing a made shot
@@ -62,7 +62,8 @@ The editor never names a version; `direction_services` tells it what Direction w
 After a new shot, extended shot, bridge or changed shot downloads, and before it enters the film:
 1. **Sharpen** on this Mac when the cut is at least 1.5× taller than the clip and this Mac can (`VTSuperResolutionScaler`, 4×, inputs up to 1920 × 1080), then fit it to the cut. Written as HEVC 10-bit. If the sharpening files can't be had, the clip comes in as made and the result says "not sharpened".
 2. **Join** an extended shot: drop its first frame (tail) or last frame (head).
-3. The provenance records both: "Sharpened from 1280 × 720 on this Mac".
+3. **Silence** a shot made without `sound`: its sound track is dropped. With nothing else to do, the picture is copied as it is, without re-encoding.
+4. The provenance records the sharpening: "Sharpened from 1280 × 720 on this Mac".
 
 ## Services
 
@@ -70,17 +71,18 @@ Every paid service goes through **OpenRouter**: one key, one bill, many versions
 
 | Kinds | OpenRouter call | Notes |
 |---|---|---|
-| music, soundEffect | `POST /chat/completions` with `modalities: ["text","audio"]`, `stream: true`; audio arrives in `delta.audio` chunks | Lyria makes 30 s clips; longer beds are clips joined by Direction. |
+| music | `POST /chat/completions` with `modalities: ["text","audio"]`, `stream: true`; audio arrives in `delta.audio` chunks | Lyria makes 30 s clips; longer beds are clips joined by Direction. |
+| soundEffect | `POST /audio/speech` with `input: "A sound effect, not speech: <ask>"` | Seed Audio makes the sound as long as it is; one longer than asked is cut to the length with a short fade. Lyria, for an ask Seed Audio turns down, is asked as music is. |
 | voice | `POST /audio/speech` | |
 | still | `POST /images` | References as `input_references` image parts. |
-| shot, extension, bridge | `POST /videos`, poll `GET /videos/{id}`, download `GET /videos/{id}/content` | Frames as `frame_images` (`first_frame`, `last_frame`); references as `input_references` image parts; `generate_audio` from `sound`. |
-| changedShot | `POST /videos` with the range as `input_references: [{type: "video_url", video_url: {url}}]` | The range is sent as an H.264 data URL, 1280 wide at most, under 16 MB. |
-| upscale (OpenRouter) | `POST /videos` with the range as a `video_url` reference and `upscale_factor` | FLUX Video Upscale. |
+| shot, extension, bridge | `POST /videos`, poll `GET /videos/{id}`, download `GET /videos/{id}/content` | Frames as `frame_images` (`first_frame`, `last_frame`); references as `input_references` image parts; `generate_audio` from `sound`, except to a version listed only with sound (Gemini Omni). A version that turns the setting down is asked again without it. |
+| changedShot | `POST /videos` with the range as `input_references: [{type: "video_url", video_url: {url}}]` | The range is sent as an H.264 data URL, 1280 wide at most, under 16 MB. Every version that changes a take turns a data URL down ("Only HTTPS URLs are allowed": FLUX Video Edit, Aleph 2.0, Hailuo 3, Seedance 2.5 in the paid trials), so changed shots fail until the take is sent from an HTTPS address. Nothing is charged for the refusal. |
+| upscale (OpenRouter) | `POST /videos` with the range as a `video_url` reference and `upscale_factor` | FLUX Video Upscale. Sent as a data URL like a changed shot, so it's expected to be turned down the same way (not yet tried). |
 | looking at footage | `POST /chat/completions` with keyframes and `response_format: {type: "json_schema"}` | Only when Settings › Footage › Look with is OpenRouter. |
 
 - Versions come from OpenRouter's lists (`GET /models?output_modalities=audio|speech|image`, `GET /videos/models`), cached for a day. From `/videos/models` Direction keeps each version's durations, resolutions, aspect ratios, `supported_frame_images`, `upscale_factor` and pricing SKUs.
 - **Which versions change video:** versions whose listing has no durations and no frame images, or a SKU priced "with video input" (Aleph 2.0, FLUX Video Edit, Seedance). Changed shots go to those that return the range changed (Aleph, FLUX Video Edit).
-- **Estimates** come from each version's listed price: per second of video at the chosen resolution and sound, with any per-generation minimum; per clip; per image; per token. **Spend** is what OpenRouter reports (`usage.cost`). The month's total is Direction's own record.
+- **Estimates** come from each version's listed price: per second of video at the chosen resolution and sound, with any per-generation minimum; per clip; per image; per token. **Spend** is what OpenRouter reports (`usage.cost`). A reply that reports no cost (stills, Lyria clips and Gemini Omni's shots reported $0 in the paid trials) is looked up in OpenRouter's generation record, which appears a few seconds later (a finished video job names it in `generation_id`); if that says nothing either, the estimate is counted, never zero. Seed Audio's effects are paid by the second it makes and it chooses the length (3.5 s and 9.5 s for 4 s asked), so they're priced at 10 s. The month's total is Direction's own record.
 - OpenRouter's video services aren't covered by zero data retention; the Services note says frames and ranges sent for a shot leave this Mac.
 - The key is stored in the macOS Keychain as Direction's own item, readable by the Direction app and its bundled `direction` tool. It never appears in the film, the logs, or any tool's arguments or results.
 - Saving the key tests it with `GET /key` and shows Ready with the credits left, or the error.

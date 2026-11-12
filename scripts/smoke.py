@@ -188,16 +188,16 @@ with MCP() as mcp:
         job = json.loads(mcp.tool("direction_job", {"jobID": job["id"]})["content"][0]["text"])
     check(job["status"] == "completed" and Path(job["result"]["path"]).is_file(), "MCP preview job renders and can be polled to completion")
 
-# Started for one job, the server lists that job's tools and direction_more_tools, which runs the rest.
+# Started for one job, the server lists direction_run alone: every step is a script, and help has the rest.
 with MCP("--job", "script") as mcp:
     mcp.request("initialize", {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "Direction verification", "version": "1"}})
     mcp.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
     names = [t["name"] for t in mcp.request("tools/list", {})["tools"]]
-    check("direction_script" in names and "direction_more_tools" in names and "direction_inspect" not in names and len(names) < len(listing["tools"]) / 3, "A job's tool list has its own tools and direction_more_tools")
-    others = json.loads(mcp.tool("direction_more_tools")["content"][0]["text"])
-    check(any(t["name"] == "direction_inspect" for t in others["tools"]), "direction_more_tools lists the tools the job wasn't given")
-    inspected = mcp.tool("direction_more_tools", {"name": "direction_inspect", "arguments": {}})
-    check(not inspected.get("isError") and json.loads(inspected["content"][0]["text"])["project"]["editRevision"] >= 1, "direction_more_tools runs a tool the job wasn't given")
+    check(names == ["direction_run"], "A job's tool list is direction_run alone")
+    ran = mcp.tool("direction_run", {"does": "Checking the film", "code": 'const rest = direction.help(); const p = direction.inspect({}); return {inspectListed: rest.tools.some(t => t.name === "inspect"), scriptListed: rest.tools.some(t => t.name === "script"), revision: p.project.editRevision}'})
+    answer = json.loads(ran["content"][0]["text"])
+    check(not ran.get("isError") and answer["result"]["inspectListed"] and not answer["result"]["scriptListed"], "direction.help() lists the tools the job wasn't given")
+    check(answer["result"]["revision"] >= 1 and answer["calls"] == 2, "A script runs a tool the job wasn't given, checked like a direct call")
 
 report = {"passed": len(checks), "checks": checks, "project": str(project), "export": str(run / "portrait.mp4"), "mcpProtocol": initialized["protocolVersion"]}
 (artifacts / "smoke-report.json").write_text(json.dumps(report, indent=2) + "\n")

@@ -45,7 +45,11 @@ public enum EditorActivityLog {
         switch name {
         case "direction_frame":
             if let asset = a["assetID"].string { return ActivityInput(verb: "Looking at", object: take(asset, c), tool: name) }
-            let t = seconds(a["time"]) ?? 0
+            // Several moments: the first to the last.
+            if let times = a["times"].array?.compactMap({ seconds($0) }), let first = times.min(), let last = times.max(), times.count > 1 {
+                return ActivityInput(verb: "Watching", object: "\(times.count) moments, " + PlainTime.text(first) + "\u{2013}" + PlainTime.text(last), mono: true, time: first, tool: name)
+            }
+            let t = seconds(a["time"]) ?? seconds(a["times"].array?.first ?? .null) ?? 0
             return ActivityInput(verb: "Watching", object: PlainTime.text(t), mono: true, time: t, tool: name)
         case "direction_watch", "direction_preview":
             guard let (s, e) = range(a) else { return ActivityInput(verb: "Watching", object: "the cut", tool: name) }
@@ -72,6 +76,11 @@ public enum EditorActivityLog {
             return ActivityInput(verb: "Searching footage for", object: "\u{201C}\(q)\u{201D}", tool: name)
         case "direction_edit":
             return edit(name, a, c)
+        case "direction_run":
+            // The editor's own few words: "Evening out the narration".
+            let does = (a["does"].string ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            guard let space = does.firstIndex(of: " ") else { return ActivityInput(verb: does.isEmpty ? "Working through" : does, object: does.isEmpty ? "several steps at once" : "", tool: name) }
+            return ActivityInput(verb: String(does[..<space]), object: String(does[does.index(after: space)...]), tool: name)
         case "direction_make":
             if a["estimateOnly"].bool == true { return ActivityInput(verb: "Pricing", object: madeKind(a["kind"].string), tool: name) }
             let kind = madeKind(a["kind"].string ?? a["type"].string)
@@ -84,6 +93,9 @@ public enum EditorActivityLog {
             let what = a["name"].string ?? a["title"].string ?? "a graphic"
             let note = noteLabel(a, c)
             return ActivityInput(verb: "Drawing", object: note.map { "\(what) for \($0)" } ?? what, time: seconds(a["at"]) ?? seconds(a["start"]), tool: name)
+        case "direction_copy":
+            let to = a["to"].string.map { ($0 as NSString).lastPathComponent } ?? "a file"
+            return ActivityInput(verb: "Bringing in", object: a["font"].string.map { "the font \($0)" } ?? to, tool: name)
         case "direction_make_look":
             return ActivityInput(verb: "Making a look", object: noteLabel(a, c).map { "for \($0)" } ?? (a["name"].string ?? "for the film"), tool: name)
         case "direction_turnover_update":

@@ -69,8 +69,23 @@ struct EditorStreamTests {
         #expect(RunStateMachine.outcome(RunStateMachine.Exit(status: 1, failures: ["error: unknown option '--no-session-persistence'"])).reason == .outOfDate)
         #expect(EditorFailure.reason("ffmpeg: unknown encoder 'libx265'") == nil)
         #expect(EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "error: unknown option '--tools'", status: 1) == .couldNotCheck("Claude Code is out of date for Direction. In Terminal, run claude update"))
-        #expect(EditorProgram.codex.updateCommand(path: "/opt/homebrew/bin/codex") == "brew upgrade codex")
+        // Where the program really is says how it was installed: a Homebrew formula's Cellar, or npm under any Node
+        // (Homebrew's own included), never the folder its link sits in.
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("direction-brew-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fm = FileManager.default
+        try? fm.createDirectory(at: root.appendingPathComponent("Cellar/codex/0.164.0/bin"), withIntermediateDirectories: true)
+        try? fm.createDirectory(at: root.appendingPathComponent("lib/node_modules/@google/gemini-cli/dist"), withIntermediateDirectories: true)
+        try? fm.createDirectory(at: root.appendingPathComponent("bin"), withIntermediateDirectories: true)
+        fm.createFile(atPath: root.appendingPathComponent("Cellar/codex/0.164.0/bin/codex").path, contents: Data())
+        fm.createFile(atPath: root.appendingPathComponent("lib/node_modules/@google/gemini-cli/dist/index.js").path, contents: Data())
+        try? fm.createSymbolicLink(atPath: root.appendingPathComponent("bin/codex").path, withDestinationPath: "../Cellar/codex/0.164.0/bin/codex")
+        try? fm.createSymbolicLink(atPath: root.appendingPathComponent("bin/gemini").path, withDestinationPath: "../lib/node_modules/@google/gemini-cli/dist/index.js")
+        #expect(EditorProgram.codex.updateCommand(path: root.appendingPathComponent("bin/codex").path) == "brew upgrade codex")
+        #expect(EditorProgram.gemini.updateCommand(path: root.appendingPathComponent("bin/gemini").path) == "npm install -g @google/gemini-cli@latest")
         #expect(EditorProgram.codex.updateCommand(path: "/Users/you/.npm-global/bin/codex") == "npm install -g @openai/codex@latest")
+        // An ACP agent on the older protocol is out of date too.
+        #expect(EditorFailure.reason(ACPConversation.oldProtocol + " (version 0)") == .outOfDate)
         #expect(EditorStopCopy.title(.outOfDate, run: nil) == "The editor needs updating.")
     }
 
@@ -80,7 +95,9 @@ struct EditorStreamTests {
         #expect(DeveloperTools.isPlaceholder("/usr/bin/python3") == !DeveloperTools.installed)
         #expect(!DeveloperTools.isPlaceholder("/opt/homebrew/bin/python3") && !DeveloperTools.isPlaceholder("/usr/bin/sips"))
         #expect(EditorJobs.noDeveloperTools.contains("`python3`") && EditorJobs.noDeveloperTools.contains("`git`"))
-        #expect(EditorJobs.role.contains("developer tools") == !DeveloperTools.installed)
+        #expect(EditorJobs.role(for: .finish, program: .codex).contains("developer tools") == !DeveloperTools.installed)
+        // Only Codex runs commands.
+        #expect(!EditorJobs.role(for: .finish, program: .claudeCode).contains("developer tools") && !EditorJobs.role(for: .finish, program: .gemini).contains("developer tools"))
     }
 
     /// A downloaded copy opened from its disk image offers to move to Applications; one in place doesn't.
@@ -165,6 +182,8 @@ struct EditorActivityTests {
         #expect(watch?.mono == true && watch?.time == SampleFilm.tc(1, 12, 8))
         let frame = activity("direction_frame", ["time": .number(SampleFilm.tc(1, 12, 8))])
         #expect(frame?.verb == "Watching" && frame?.object == "1:12" && frame?.time != nil)
+        let several = activity("direction_frame", ["times": .array([.number(SampleFilm.tc(1, 14)), .number(SampleFilm.tc(1, 12, 8)), .number(SampleFilm.tc(1, 13))])])
+        #expect(several?.object == "3 moments, 1:12\u{2013}1:14" && several?.time == SampleFilm.tc(1, 12, 8))
         let take = activity("direction_frame", ["assetID": .string("take-3b-t1")])
         #expect(take?.verb == "Looking at" && take?.object == "3B T1" && take?.time == nil)
         #expect(activity("direction_contact_sheet", ["assetID": .string("take-2a-t2")])?.object == "2A T2")
@@ -354,7 +373,13 @@ struct EditorJobTests {
         #expect(EditorRunner.finished(style, store: store))
         let more = EditorJobs.continuation("I approved your read-back. Cut it.", job: .turnover)
         #expect(more.hasPrefix("I approved your read-back.") && !more.contains("{{"))
-        #expect(!EditorJobs.role.contains("{{") && EditorJobs.role.contains("\"finished\""))
+        for job in EditorJob.allCases {
+            let role = EditorJobs.role(for: job)
+            #expect(!role.contains("{{") && role.contains("\"finished\"") && role.contains("direction_run") && !role.contains("direction_more_tools"), "\(job)")
+            // The job's tools, in full, as a script calls them.
+            #expect(role.contains("## Direction\u{2019}s tools for this job") && role.contains("### direction.brief("), "\(job)")
+        }
+        #expect(EditorJobs.role(for: .finish).contains("### direction.edit(") && !EditorJobs.role(for: .script).contains("### direction.edit("))
     }
 
     @Test func theFinishJobCarriesTheDirectorsCreditsAndLicenses() throws {
@@ -369,20 +394,24 @@ struct EditorJobTests {
         let file = try store.addLicense(from: license)
         let text = try EditorJobs.text(for: run, store: store)
         #expect(text.contains("> Featuring\n> Maya Chen\n>\n> Camera\n> Sam Ortiz") && text.contains("{op: \"credits\"}") && text.contains(file.path))
-        #expect(text.contains("direction_measure_audio") && text.contains("direction_check") && text.contains("{op: \"loudness\"}") && !text.contains("{{"))
+        #expect(text.contains("direction.measure_audio") && text.contains("direction.check") && !text.contains("direction_measure_audio") && text.contains("{op: \"loudness\"}") && !text.contains("{{"))
     }
 
     @Test func commandLinesUseOnlyTheCheckedFlags() {
-        let i = EditorProgram.Invocation(job: "Do the job.", role: "Be the editor.", version: "claude-opus-5-5", session: nil, folder: URL(fileURLWithPath: "/f/Editor"), mcpConfig: URL(fileURLWithPath: "/f/Editor/.mcp.json"), schema: URL(fileURLWithPath: "/f/Editor/.direction/result.schema.json"), helper: "/A/direction", film: URL(fileURLWithPath: "/f"), runID: "run-1", scripts: true)
+        let i = EditorProgram.Invocation(job: "Do the job.", role: "Be the editor.", version: "claude-opus-5-5", session: nil, folder: URL(fileURLWithPath: "/f/Editor"), mcpConfig: URL(fileURLWithPath: "/f/Editor/.mcp.json"), schema: URL(fileURLWithPath: "/f/Editor/.direction/result.schema.json"), helper: "/A/direction", film: URL(fileURLWithPath: "/f"), runID: "run-1")
         let claude = EditorProgram.claudeCode.arguments(i)
         #expect(Array(claude.prefix(2)) == ["--print", "Do the job."])
         for flag in claude where flag.hasPrefix("--") { #expect(EditorProgram.claudeFlags.contains(flag), "\(flag) isn't in claudeFlags") }
-        #expect(claude.contains("--strict-mcp-config") && claude.contains("mcp__direction,Read,Glob,Grep,Edit(./**),Write(./**),Bash"))
-        var resumed = i; resumed.session = "s-1"; resumed.scripts = false
+        // No shell: Direction's tool and the files in its folder, and only those offered.
+        #expect(claude.contains("--strict-mcp-config") && claude.contains("mcp__direction,Read,Glob,Grep,Edit(./**),Write(./**)"))
+        #expect(claude.firstIndex(of: "--tools").map { claude[$0 + 1] } == "Read,Glob,Grep,Edit,Write" && !claude.joined().contains("Bash") && !claude.contains("--settings"))
+        var resumed = i; resumed.session = "s-1"
         let again = EditorProgram.claudeCode.arguments(resumed)
         #expect(again.suffix(2) == ["--resume", "s-1"] && !again.joined().contains("Bash"))
+        // Codex has no system prompt to add to: the role leads its first message. Its commands keep to its sandbox.
         let codex = EditorProgram.codex.arguments(i)
-        #expect(codex.first == "exec" && codex.last == "Do the job.")
+        #expect(codex.first == "exec" && codex.last == "Be the editor.\n\n---\n\nDo the job.")
+        #expect(codex.firstIndex(of: "--sandbox").map { codex[$0 + 1] } == "workspace-write" && codex.contains("mcp_servers.direction.tool_timeout_sec=3600"))
         for flag in codex where flag.hasPrefix("--") { #expect(EditorProgram.codexExecFlags.contains(flag), "\(flag) isn't in codexExecFlags") }
         #expect(codex.contains("mcp_servers.direction.args=[\"mcp\",\"--project\",\"/f\"]"))
         var finishing = i; finishing.kind = .finish
@@ -391,7 +420,7 @@ struct EditorJobTests {
         let codexAgain = EditorProgram.codex.arguments(resumed)
         #expect(Array(codexAgain.prefix(2)) == ["exec", "resume"] && codexAgain.suffix(2) == ["s-1", "Do the job."])
         for flag in codexAgain where flag.hasPrefix("--") { #expect(EditorProgram.codexResumeFlags.contains(flag), "\(flag) isn't in codexResumeFlags") }
-        #expect(codexAgain.contains("sandbox_mode=\"read-only\""))
+        #expect(codexAgain.contains("sandbox_mode=\"workspace-write\""))
         // No effort chosen: the program decides. Chosen: Claude Code's flag, Codex's config key, on resume too.
         #expect(!claude.contains("--effort") && !codex.joined().contains("model_reasoning_effort"))
         var harder = i; harder.effort = "high"
@@ -414,6 +443,22 @@ struct EditorJobTests {
             for flag in EditorProgram.codexExecFlags { #expect(exec.contains(flag), "codex exec --help no longer lists \(flag)") }
             let resume = EditorDiscovery.run(codex.path, ["exec", "resume", "--help"], environment: env, timeout: 30).map { $0.output + $0.error } ?? ""
             for flag in EditorProgram.codexResumeFlags { #expect(resume.contains(flag), "codex exec resume --help no longer lists \(flag)") }
+        }
+        // Every ACP agent installed here still lists how it speaks ACP.
+        for p in EditorProgram.allCases where p.usesACP {
+            if let i = EditorDiscovery.find(p) { #expect(i.acp != nil, "\(p.name) \(i.version ?? "") lists none of \(p.acpForms) in --help") }
+        }
+    }
+
+    /// With DIRECTION_LIVE_ACP=1: Gemini CLI, when it is installed here, answers the sign-in check (hello and a session, no
+    /// prompt, so nothing is spent).
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRECTION_LIVE_ACP"] == "1"))
+    func installedACPAgentsAnswerTheSignInCheck() {
+        for p in EditorProgram.allCases where p.usesACP {
+            guard let i = EditorDiscovery.find(p) else { continue }
+            let answer = EditorDiscovery.checkSignedIn(i, version: "")
+            print("LIVE-ACP \(p.name) \(i.version ?? "?") \(i.acp ?? []): \(answer)")
+            if case .couldNotCheck(let why) = answer { Issue.record("\(p.name) couldn't be checked: \(why)") }
         }
     }
 
@@ -455,8 +500,81 @@ struct EditorRunnerTests {
         if logged { _ = try store.logDailies(Dailies(scenes: [], takes: ["take-1": TakeInfo(assetID: "take-1")])) }
         try FileManager.default.createDirectory(at: dir.appendingPathComponent("Editor"), withIntermediateDirectories: true)
         let runner = EditorRunner.shared
-        runner.programOverride = [.claudeCode: Self.fake]; runner.helperOverride = "/usr/bin/true"
+        runner.programOverride = [.claudeCode: Self.fake, .gemini: Self.fakeACP]; runner.helperOverride = "/usr/bin/true"
         return (store, dir)
+    }
+    static let fakeACP = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("FakeEditor/fake-acp").path
+    private func startACP(_ job: EditorJob, store: ProjectStore) throws -> EditorRun {
+        let run = EditorRun(job: job, program: "gemini", version: "")
+        try store.saveRun(run)
+        EditorRunner.shared.launch(run, store: store)
+        return run
+    }
+    private func text(_ dir: URL, _ name: String) -> String { (try? String(contentsOf: dir.appendingPathComponent("Editor/\(name)"), encoding: .utf8)) ?? "" }
+
+    /// An agent over ACP: the session with Direction's tools for this job, the role leading the first message, Claude
+    /// Code's permission rules, the session's spend, the result, and its own steps in the activity.
+    @Test func anAgentOverACPFinishesWithItsSessionSpendPermissionsAndActivity() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("done", dir)
+        let run = try startACP(.logFootage, store: store)
+        let r = try await ended(store, run.id)
+        #expect(r.state == .done)
+        #expect(r.session == "fake-acp-session-1" && r.spend == 0.42 && r.summary == "Logged 1 take." && r.invocations == 1)
+        #expect(args(dir) == ["--acp"])
+        #expect(text(dir, ".fake-prompt").contains("\n\n---\n\n") && text(dir, ".fake-prompt").hasPrefix(String(EditorJobs.role(for: .logFootage).prefix(40))))
+        let servers = try JSONDecoder().decode(JSONValue.self, from: Data(text(dir, ".fake-mcp.json").utf8))
+        #expect(servers[0]["name"].string == "direction" && servers[0]["command"].string == "/usr/bin/true")
+        #expect(servers[0]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
+        #expect(servers[0]["env"] == .array([.object(["name": .string("DIRECTION_RUN_ID"), "value": .string(run.id)])]))
+        // Gemini CLI's commands are refused even with scripts on: Direction can't sandbox them.
+        #expect(text(dir, ".fake-permissions").split(separator: "\n") == ["execute ffmpeg -version no", "edit Edit /etc/hosts no", "edit Edit NOTES.md yes", "fetch Fetch example.com no", "other direction__direction_log_dailies yes"])
+        #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "its notes" })
+    }
+
+    /// Gemini CLI reads the first .env from its folder up: Direction's own empty one ends the search in the job's folder,
+    /// stays from one run to the next, and the home folder's settings are passed on instead, under what's already set.
+    @Test func geminiReadsNoEnvFromTheFoldersAbove() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("gemini-env-\(UUID().uuidString).direction")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let folder = try EditorJobs.prepareFolder(film: dir, job: .logFootage)
+        #expect(try Data(contentsOf: folder.appendingPathComponent(".gemini/.env")) == EditorJobs.geminiStop)
+        _ = try EditorJobs.prepareFolder(film: dir, job: .logFootage)
+        #expect(EditorJobs.isGeminiStop(folder.appendingPathComponent(".gemini")))
+        let home = dir.appendingPathComponent("home")
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".gemini"), withIntermediateDirectories: true)
+        #expect(EditorDiscovery.geminiHomeEnvironment(home: home.path).isEmpty)
+        try "OTHER=x\n".write(to: home.appendingPathComponent(".env"), atomically: true, encoding: .utf8)
+        try "# mine\nexport GEMINI_API_KEY=\"abc 123\"\nGOOGLE_CLOUD_PROJECT=film # the project\nDEBUG=1\nnot a line\n".write(to: home.appendingPathComponent(".gemini/.env"), atomically: true, encoding: .utf8)
+        #expect(EditorDiscovery.geminiHomeEnvironment(home: home.path) == ["GEMINI_API_KEY": "abc 123", "GOOGLE_CLOUD_PROJECT": "film"])
+        let env = EditorDiscovery.environment(adding: "/usr/bin/true", extra: [:], fallback: ["PATH": "/nowhere", "DIRECTION_FALLBACK_ONLY": "yes"])
+        #expect(env["DIRECTION_FALLBACK_ONLY"] == "yes" && env["PATH"] != "/nowhere")
+    }
+
+    @Test func pausingAnACPAgentKeepsItsSessionAndResumeLoadsIt() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("slow", dir)
+        let run = try startACP(.logFootage, store: store)
+        _ = try await wait(store, run.id) { $0.state == .working && $0.session != nil }
+        EditorRunner.shared.pause(run.id, store: store)
+        let paused = try await ended(store, run.id)
+        #expect(paused.state == .paused && paused.session == "fake-acp-session-1")
+        _ = try store.logDailies(Dailies(scenes: [], takes: ["take-1": TakeInfo(assetID: "take-1")]))
+        try scenario("done", dir)
+        EditorRunner.shared.launch(paused, store: store, continuation: EditorJobs.continuation("Continue where you stopped.", job: .logFootage))
+        let done = try await wait(store, run.id) { $0.state == .done && !EditorRunner.shared.isLive(run.id) }
+        // The saved session is loaded, its replay ignored, and only the continuation said.
+        #expect(done.invocations == 2 && done.summary == "Logged 1 take." && done.spend == 0.42)
+        #expect(text(dir, ".fake-loaded") == "fake-acp-session-1")
+        #expect(text(dir, ".fake-prompt").hasPrefix("Continue where you stopped."))
+    }
+
+    @Test func anACPAgentThatIsntSignedInSaysSo() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("auth", dir)
+        let r = try await ended(store, try startACP(.logFootage, store: store).id)
+        #expect(r.state == .failed && r.reason == .notSignedIn)
+        #expect(EditorSetup.signedIn(.gemini) == false)
     }
     private func scenario(_ name: String, _ dir: URL) throws { try Data(name.utf8).write(to: dir.appendingPathComponent("Editor/.fake-scenario")) }
     private func args(_ dir: URL) -> [String] { ((try? String(contentsOf: dir.appendingPathComponent("Editor/.fake-args"), encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
@@ -489,10 +607,13 @@ struct EditorRunnerTests {
         #expect(a.first == "--print" && a.contains("stream-json") && a.contains("--strict-mcp-config") && a.contains("claude-opus-5-5"))
         #expect((try? String(contentsOf: dir.appendingPathComponent("Editor/.fake-run-id"), encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) == run.id)
         let mcp = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: dir.appendingPathComponent("Editor/.mcp.json")))
-        // Started for this job: its own tools, with direction_more_tools for the rest.
+        // Started for this job: direction_run alone, the job's tools in its role.
         #expect(mcp["mcpServers"]["direction"]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
         #expect(mcp["mcpServers"]["direction"]["env"]["DIRECTION_RUN_ID"].string == run.id)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/.claude/skills/start-project/SKILL.md").path))
+        // The editor's copy of a skill names the tools as its scripts call them.
+        let skill = try String(contentsOf: dir.appendingPathComponent("Editor/.claude/skills/edit-video/SKILL.md"), encoding: .utf8)
+        #expect(skill.contains("direction.watch") && !skill.contains("direction_watch"))
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/NOTES.md").path))
         #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "its notes" })
     }
@@ -595,6 +716,29 @@ struct EditorRunnerTests {
     /// An import copies a whole file inside its call, so an editor waiting on one is quiet because the call is: it
     /// isn't stuck until a much longer time. The director's own Stop is what they asked for, so it isn't logged as
     /// an error (nor reported).
+    /// A script is one call to the program, so it has longer than a single call (each of its calls may take 10
+    /// minutes), and a script that imports has an import's time.
+    @Test func aScriptInFlightHasLongerAndOneThatImportsHasAnImportsTime() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("slow", dir)
+        let run = try start(.logFootage, store: store)
+        _ = try await wait(store, run.id) { $0.state == .working && $0.session != nil }
+        let live = try #require(EditorRunner.shared.liveRun(run.id))
+        let script = { (code: String) in JSONValue.object(["does": .string("Bringing in the takes"), "code": .string(code)]) }
+        EditorRunner.shared.handle(live, .toolStarted(id: "s-1", name: "mcp__direction__direction_run", input: script("return direction.timeline({})")))
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + EditorRunner.restartAfter + 60)
+        #expect(live.intent == .none, "past a call's 15 minutes, a script isn't stuck yet")
+        EditorRunner.shared.handle(live, .toolFinished(id: "s-1", isError: false, text: "{}"))
+        EditorRunner.shared.handle(live, .toolStarted(id: "s-2", name: "mcp__direction__direction_run", input: script("return direction.import({path: \"/tmp/take.mov\"})")))
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + EditorRunner.restartAfterScript + 60)
+        #expect(live.intent == .none, "a script that imports has an import's time")
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + EditorRunner.restartAfterLongCall + 1)
+        #expect(live.intent == .restart)
+        _ = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        EditorRunner.shared.stop(run.id, store: store)
+        _ = try await ended(store, run.id)
+    }
+
     @Test func anImportInFlightIsntSilenceAndAStopIsntAnError() async throws {
         let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
         let before = EditorRunner.restartAfter
@@ -863,6 +1007,58 @@ struct EditorRunnerTests {
         _ = try await ended(store, run.id)
     }
 
+    /// The same when the read-back was made inside a script: the program's stream shows only direction_run, so
+    /// Direction reads from the film that it waits for the OK.
+    @Test func aReadBackMadeInAScriptStillWaitsForTheOK() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let (m, t, note) = try readBackFilm(store); defer { m.close() }
+        try scenario("readback-script", dir)
+        let run = try start(.turnover, store: store, turnoverID: t.id)
+        try await asked(dir, store, run.id)
+        try readBack(store, t, note, "Reframe to about 1.6\u{00D7}; sky down to a third.")
+        _ = try store.approveReadBack(turnoverID: t.id)
+        try scenario("slow", dir)
+        try go(dir)
+        let waited = try await wait(store, run.id) { !$0.state.isActive && !EditorRunner.shared.isLive(run.id) && $0.endedAt != nil }
+        #expect(try waited.state == .waitingForYou && waited.askedForOK == true && store.turnover(t.id).state == .cutting)
+        m.refresh(force: true)
+        _ = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        #expect(jobText(dir).hasPrefix("I approved your read-back. Cut it."), "\(jobText(dir))")
+        // The continuation carries what it would read again.
+        #expect(jobText(dir).contains("## Read for you") && jobText(dir).contains("`direction.turnovers({})` answered") && jobText(dir).contains("`direction.questions({})` answered") && !jobText(dir).contains("playbook (`"))
+        EditorRunner.shared.stop(run.id, store: store)
+        _ = try await ended(store, run.id)
+    }
+
+    /// A job starts with what its editor would read first: the playbook without its front matter, its notes, the
+    /// turnover and the cut, each as the script call it answers. Only tools that change nothing are read.
+    @Test func aJobStartsWithWhatItsEditorWouldReadFirst() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let (m, t, _) = try readBackFilm(store); defer { m.close() }
+        let folder = try EditorJobs.prepareFolder(film: store.url, job: .turnover)
+        try "# Notes between runs\n\nThe narration is the story; cut on its pauses.\n".write(to: folder.appendingPathComponent("NOTES.md"), atomically: true, encoding: .utf8)
+        let run = EditorRun(job: .turnover, program: "claudeCode", version: "claude-opus-5-5", turnoverID: t.id)
+        let text = await EditorOpening.text(for: run, store: store, folder: folder, continuing: false)
+        #expect(text.hasPrefix("## Read for you") && text.contains("### The `take-turnover` playbook") && !text.contains("\nname: take-turnover"))
+        #expect(text.contains("cut on its pauses") && text.contains("### `direction.turnovers({})` answered") && text.contains(t.id) && text.contains("### `direction.timeline({})` answered"))
+        // As a script calls them, never as tools of their own.
+        #expect(!text.contains("direction_turnovers") && !text.contains("direction_timeline"))
+        for job in EditorJob.allCases {
+            for read in EditorOpening.reads(job, hasScript: true, hasStyle: true) + EditorOpening.readsAgain(job) {
+                #expect(ToolCatalog.definitions.first { $0.name == read.name }?.readOnly == true && ToolCatalog.names(for: job).contains(read.name), "\(job): \(read.name)")
+            }
+        }
+        // The film is as it was.
+        #expect(try store.turnover(t.id).state == t.state && store.revision() == 1)
+        // And the run's first message has it.
+        try scenario("slow", dir)
+        let started = try start(.turnover, store: store, turnoverID: t.id)
+        _ = try await wait(store, started.id) { $0.state == .working }
+        #expect(jobText(dir).contains("## Read for you") && jobText(dir).contains("### The `take-turnover` playbook"))
+        EditorRunner.shared.stop(started.id, store: store)
+        _ = try await ended(store, started.id)
+    }
+
     private func pid(_ dir: URL, _ name: String) async throws -> pid_t {
         for _ in 0..<100 {
             if let text = try? String(contentsOf: dir.appendingPathComponent("Editor/\(name)"), encoding: .utf8), let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)) { return pid }
@@ -883,8 +1079,14 @@ struct EditorRunnerTests {
         let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
         try scenario("straggler", dir)
         let run = try start(.logFootage, store: store)
-        weak var live = EditorRunner.shared.liveRun(run.id)
-        #expect(live != nil)
+        // The program starts once Direction has read what the editor would read first.
+        // It's over in a few milliseconds, so look often; the mark it leaves shows it was there.
+        weak var live: EditorRunner.LiveRun?
+        var seen = false
+        for _ in 0..<3_000 where !seen {
+            if let l = EditorRunner.shared.liveRun(run.id) { live = l; seen = true } else { await Task.yield(); try await Task.sleep(for: .milliseconds(1)) }
+        }
+        #expect(seen)
         let straggler = try await pid(dir, ".fake-straggler")
         #expect(try await ended(store, run.id).state == .done)
         #expect(try await gone(straggler))
@@ -987,13 +1189,24 @@ struct EditorPicksTests {
         FilmQuality.allCases.map { q in let p = EditorPicks.pick(.claudeCode, job, q, environment: none); return p.version.replacingOccurrences(of: "claude-", with: "") + " " + p.effort }
     }
 
-    /// Judgement stays on Opus at every stop and only its effort moves; the list-like jobs move to lighter versions.
+    /// From Faster up, judgement stays on Opus and only its effort moves; Fastest puts it on Sonnet. The list-like
+    /// jobs move to lighter versions.
     @Test func eachJobHasAPickAtEveryStop() {
-        #expect(claude(.assemble) == ["opus-5-5 medium", "opus-5-5 high", "opus-5-5 xhigh"])
+        #expect(FilmQuality.allCases == [.fastest, .faster, .balanced, .best])
+        #expect(claude(.assemble) == ["sonnet-5-5 medium", "opus-5-5 medium", "opus-5-5 high", "opus-5-5 xhigh"])
         #expect(claude(.turnover) == claude(.assemble) && claude(.style) == claude(.assemble))
-        #expect(claude(.breakdown) == ["haiku-5-5 medium", "sonnet-5-5 medium", "opus-5-5 medium"])
-        #expect(claude(.logFootage) == ["sonnet-5-5 medium", "sonnet-5-5 medium", "opus-5-5 high"])
-        #expect(claude(.finish) == ["haiku-5-5 medium", "sonnet-5-5 medium", "opus-5-5 medium"])
+        #expect(claude(.breakdown) == ["haiku-5-5 medium", "haiku-5-5 medium", "sonnet-5-5 medium", "opus-5-5 medium"])
+        #expect(claude(.logFootage) == ["sonnet-5-5 medium", "sonnet-5-5 medium", "sonnet-5-5 medium", "opus-5-5 high"])
+        #expect(claude(.finish) == ["haiku-5-5 medium", "haiku-5-5 medium", "sonnet-5-5 medium", "opus-5-5 medium"])
+        // Codex's cutting is on Sol at Fastest and Faster; Astra, about 4× Sol, only at Best.
+        let codex = FilmQuality.allCases.map { EditorPicks.pick(.codex, .turnover, $0, environment: none, codexVersions: ["gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra"]).version }
+        #expect(codex == ["gpt-6.1-sol", "gpt-6.1-sol", "gpt-6.1-sol", "gpt-6-astra"])
+        // Fastest is never slower than Faster: the same version or a lighter one, at the same effort or less.
+        for job in EditorJob.allCases {
+            let rank = ["claude-haiku-5-5": 0, "claude-sonnet-5-5": 1, "claude-opus-5-5": 2]
+            let fastest = EditorPicks.pick(.claudeCode, job, .fastest, environment: none), faster = EditorPicks.pick(.claudeCode, job, .faster, environment: none)
+            #expect(rank[fastest.version]! <= rank[faster.version]!, "\(job)")
+        }
         #expect(Set(EditorJob.byFilm) == Set(EditorJob.allCases) && EditorJob.byFilm.count == EditorJob.allCases.count)
         // Nothing runs below medium on Claude, and every job has a version at every stop.
         for job in EditorJob.allCases {
@@ -1109,5 +1322,5 @@ struct EditorPicksTests {
         ScreenText(assetID: "cam", shotID: shot.id, start: 10, end: 20, lines: ["Draft v3"]),
     ])
     let withScreen = try EditorJobs.text(for: run, store: store)
-    #expect(withScreen.contains("On screen: AI is the last thing humans will ever invent \u{00B7} Planning \u{00B7} Draft v3 (2 stretches over time: direction_screen_text with assetID)"))
+    #expect(withScreen.contains("On screen: AI is the last thing humans will ever invent \u{00B7} Planning \u{00B7} Draft v3 (2 stretches over time: direction.screen_text with assetID)"))
 }

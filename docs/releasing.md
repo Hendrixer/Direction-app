@@ -37,13 +37,16 @@ The files are in the R2 bucket `direction-releases`, on the Cloudflare account t
 ## Each release
 
 ```sh
-# Optional: what's new, in Markdown. Sparkle shows it when it offers the update.
-$EDITOR build/releases/Direction-0.3.0.md
+# What's new, in Markdown: the changelog entry. It becomes Sparkle's "What's new", the GitHub release
+# and the version's entry on givedirection.ai/changelog (site/README.md says how it's written).
+$EDITOR site/changelog/0.3.6.md
 
-scripts/release.sh 0.3.0          # build, sign, notarize, staple, DMG, feed: about 10 minutes
-open build/releases/Direction-0.3.0.dmg   # drag it to Applications and open it; this is what people get
-scripts/publish-release.sh 0.3.0  # upload the DMG, then the feed; from now on, copies are offered 0.3.0
+scripts/release.sh 0.3.6          # build, sign, notarize, staple, DMG, feed: about 10 minutes
+open build/releases/Direction-0.3.6.dmg   # drag it to Applications and open it; this is what people get
+scripts/publish-release.sh 0.3.6  # upload the DMG, then the feed; tag v0.3.6, make the GitHub release, deploy the changelog
 ```
+
+- **The tag and GitHub release.** `publish-release.sh` tags the commit `release.sh` built (`build/releases/Direction-<version>.commit`) as `v<version>` and pushes only the tag. Then it makes the GitHub release, with the changelog entry as its notes and the DMG attached, and redeploys the site with the new changelog entry. Without `site/changelog/<version>.md` it publishes the update and stops there.
 
 - **Versions.** The version you give is what people see. The build number is the number of commits on `HEAD`, so it goes up with every release. Sparkle compares build numbers, so release from the same branch each time.
 - **`build/releases`** keeps every DMG and `appcast.xml`, and `generate_appcast` rebuilds the feed from what's there. If the folder is lost, the next feed lists only the new release. Sparkle only needs the newest, so this is fine.

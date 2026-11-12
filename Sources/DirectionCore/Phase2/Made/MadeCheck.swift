@@ -88,12 +88,15 @@ public enum MadeChecker {
             ])
         }
         if n > 1 {
+            // A change the description asks for (a wall turning into a cockpit) is the shot, not a fault: the check
+            // called one broken (the paid trials, 8 Nov 2026).
+            let asked = ask.isEmpty ? "" : " A change the description asks for counts as moving."
             q["morph"] = .init("Frames 1 to \(n) are moments of one shot, in order. Do the things in it move the way real things move?", [
-                ("moves", "People, objects and the place keep their shape and identity; what changes comes from motion, the camera moving, or light."),
-                ("morphs", "Something changes shape or turns into something else, appears from nothing, vanishes, or melts between frames."),
+                ("moves", "People, objects and the place keep their shape and identity; what changes comes from motion, the camera moving, or light.\(asked)"),
+                ("morphs", "Something changes shape or turns into something else, appears from nothing, vanishes, or melts between frames\(ask.isEmpty ? "" : ", and the description doesn't ask for it")."),
             ])
             q["same"] = .init("Compare frame 1 with frame \(n). Is anyone in them still the same person, and is it still the same place?", [
-                ("same", "The same people (face, hair, clothes) in the same place. A camera move that shows more of the place is still the same place, and a shot with no people can be the same."),
+                ("same", "The same people (face, hair, clothes) in the same place. A camera move that shows more of the place is still the same place, and a shot with no people can be the same.\(ask.isEmpty ? "" : " A place the description asks to change is still the same place.")"),
                 ("drifted", "Someone's face, hair or clothes have turned into a different person's, or the place has become a different place."),
             ])
         }

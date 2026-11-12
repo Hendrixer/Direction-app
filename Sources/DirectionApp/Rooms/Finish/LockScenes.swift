@@ -23,6 +23,7 @@ struct LockStage: View {
                 Text("Scenes").font(Gate.Font.brandS).foregroundStyle(Gate.Text.primary)
                 Text(help).font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
                 Spacer(minLength: 0)
+                Button("Done") { withAnimation(gateAnimation(Gate.Motion.glide)) { model.changes.lockingScenes = false } }.buttonStyle(.gate(.ghost, .small)).help("Back to the cut (Esc)")
             }
             .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 10)
             LockBar(model: model).padding(.horizontal, 24).padding(.bottom, 24)

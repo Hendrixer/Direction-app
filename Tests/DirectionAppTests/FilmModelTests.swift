@@ -163,6 +163,26 @@ struct FilmModelTests {
         #expect(m.badge(for: .cut)?.0 == "2")
     }
 
+    /// A question on a breakdown shot or a script row is the editor waiting on the director: the pill
+    /// counts it instead of saying Ready, and the popover's Answer goes to the room it waits in.
+    @Test func aQuestionOnTheBreakdownOrTheScriptIsntReady() {
+        let m = SampleFilm.make()
+        #expect(m.pill == .ready && m.prepQuestions.count == 0)
+        var asked = BreakdownShot(id: "shot-2A", code: "2A", setupID: "setup-2", rowIDs: [], what: "The app on the Mac.", seconds: 58, source: .screen)
+        asked.question = PrepQuestion(text: "Which film should be open on the Mac?", choices: [.init(id: "demo", label: "A demo film")])
+        var b = Breakdown()
+        b.shots = [BreakdownShot(id: "shot-1A", code: "1A", setupID: "setup-1", rowIDs: [], what: "At the desk.", seconds: 58, source: .shoot), asked]
+        m.breakdown = b
+        #expect(m.pill == .asks(1) && m.prepQuestions.room == .breakdown)
+        b.shots[1].question?.answeredAt = 1
+        m.breakdown = b
+        #expect(m.pill == .ready)
+        var s = PrepFixtures.script()
+        s.rows[0].question = PrepQuestion(text: "Is this the film\u{2019}s name?", choices: [])
+        m.script = s
+        #expect(m.pill == .asks(1) && m.prepQuestions.room == .script)
+    }
+
     @Test func pillTellsTheTruthAboutTheEditor() {
         let m = SampleFilm.make()
         #expect(m.pill == .ready)

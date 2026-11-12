@@ -1,4 +1,5 @@
-// Every frame in the spec, in flow order. index.html reads this; so can tools.
+// Every frame in the spec, in flow order. The app's snapshots (Sources/DirectionApp/Snapshots) register a scene
+// for each id, and tools can read it. A frame with no page in screens/ is a snapshot of the app only.
 // size defaults to 1440x900 (main window, points). spec = file in specs/ that documents the frame.
 window.FRAMES = [
   { id: "01-films-empty", group: "Start", title: "Films, first launch", spec: "start.md" },

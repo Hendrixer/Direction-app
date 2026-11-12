@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Direction changelog</title>
+  <subtitle>What's new in Direction, the Mac app for directing films.</subtitle>
+  <id>https://givedirection.ai/changelog/</id>
+  <link href="https://givedirection.ai/changelog/"/>
+  <link rel="self" href="https://givedirection.ai/changelog/feed.xml"/>
+  <updated>2026-11-08T12:00:00Z</updated>
+  <author><name>Direction</name></author>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.5</id>
+    <title>0.3.5: One setting for speed and quality</title>
+    <link href="https://givedirection.ai/changelog/#0.3.5"/>
+    <updated>2026-11-08T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;Each film now has one slider: &lt;strong&gt;Faster&lt;/strong&gt;, &lt;strong&gt;Balanced&lt;/strong&gt; or &lt;strong&gt;Best&lt;/strong&gt;. It's in the editor's popover, and in Who's editing? when you start a film.&lt;/p&gt;
+&lt;p&gt;Direction decides how hard the editor thinks about each job, and which service makes each shot, still or voice. You never choose those by hand. Faster and Balanced make shots quicker and for about half the price. Best uses the strongest of everything.&lt;/p&gt;
+&lt;h3&gt;Fixes&lt;/h3&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Spending adds up right.&lt;/strong&gt; When the editor picked up where it left off, Direction counted what it had already spent a second time. Spending is now counted once. Runs from before this update keep their old totals.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Reading footage can't freeze.&lt;/strong&gt; With many video and sound files read at once (as few as 8 on some Macs), every read could stop for good. Now they all keep going. A read that does get stuck is given up after 30 seconds, and Direction says which file stopped answering. Before, it could crash the app.&lt;/li&gt;&lt;/ul&gt;</content>
+  </entry>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.4</id>
+    <title>0.3.4: Finish in Final Cut Pro or DaVinci Resolve</title>
+    <link href="https://givedirection.ai/changelog/#0.3.4"/>
+    <updated>2026-11-07T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;&lt;strong&gt;File › Export for an Editing App…&lt;/strong&gt; writes a folder that Final Cut Pro and DaVinci Resolve both open, so a colorist or a finishing editor can take the film from there. You can also add it to what Deliver makes. The folder holds:&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;your cut, on the same frames, with every take's original timecode;&lt;/li&gt;&lt;li&gt;titles and effects that only Direction can draw, as finished clips in their place;&lt;/li&gt;&lt;li&gt;each sound track as its own file;&lt;/li&gt;&lt;li&gt;your look, as a file a colorist can load;&lt;/li&gt;&lt;li&gt;a read-me that says what the colorist should redo.&lt;/li&gt;&lt;/ul&gt;
+&lt;p&gt;Nothing comes back into Direction.&lt;/p&gt;
+&lt;h3&gt;Cleaner cuts&lt;/h3&gt;
+&lt;p&gt;The editor can now see where a take is good to cut: when someone blinks, at the peak of a movement, or in a pause between words. It cuts there instead of at a guessed time. Before you lock the picture, Direction points out jump cuts and sound that stops in the middle of a word.&lt;/p&gt;
+&lt;h3&gt;Music that fits&lt;/h3&gt;
+&lt;p&gt;Direction hears where each beat and bar of a song falls, and where the song changes, so a note can say "start the music at bar 9". To fit a song to the length of your cut, the editor joins it between two bars that sound alike. The song keeps its intro and its real ending, with no click and no jump in level.&lt;/p&gt;
+&lt;h3&gt;Captions, credits and loudness, done for you&lt;/h3&gt;
+&lt;p&gt;Before the editor finishes a cut, Direction lays the captions from what's said, rolls your credits after the last shot, and sets the sound to your loudness target. Deliver can save the captions as files (SRT and WebVTT) for YouTube and other players.&lt;/p&gt;
+&lt;h3&gt;Improvements&lt;/h3&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;A lighter editor.&lt;/strong&gt; Each job gives the editor only the tools it needs, so there's less for it to read at every step.&lt;/li&gt;&lt;/ul&gt;</content>
+  </entry>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.3</id>
+    <title>0.3.3: Codex is found wherever you installed it</title>
+    <link href="https://givedirection.ai/changelog/#0.3.3"/>
+    <updated>2026-11-06T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;If you installed Codex with nvm, Volta, bun, asdf or mise, Direction now finds it the way your Terminal does, even when you open Direction from the Dock. It no longer says Codex isn't installed when it is.&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.2</id>
+    <title>0.3.2: Notes start the moment you point</title>
+    <link href="https://givedirection.ai/changelog/#0.3.2"/>
+    <updated>2026-11-06T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;There are four tools under the picture: mark a moment, mark a stretch, draw a box, or write a note on the whole cut. Each one puts a note on the sheet right away, and you write it in its own row. Every note shows what it points at, a ✕ removes it, and you can still move its stretch or its box.&lt;/p&gt;
+&lt;h3&gt;You can see the editor working&lt;/h3&gt;
+&lt;p&gt;The editor's button spins while it works. Its steps read plainly, like "Watching 0:10" or "Writing a new effect", with how long each one has taken.&lt;/p&gt;
+&lt;h3&gt;Nothing gets stuck for good&lt;/h3&gt;
+&lt;p&gt;A frame, a step or a file that stops answering is given up on, and the editor carries on. An editor that goes quiet for a long time is started again where it was. If it gets stuck again, Direction says so and offers Try again.&lt;/p&gt;
+&lt;h3&gt;Improvements&lt;/h3&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Times you can read.&lt;/strong&gt; Times show as minutes and seconds, like 0:23. Frames appear only while you step through frames. A film's shape reads as a word (Vertical, Wide, Square), never "9:16" beside the time.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Crash reports, only if you say yes.&lt;/strong&gt; Turn them on in Settings › General, or say yes once after Direction closes unexpectedly. Reports never include your footage, your name or your Mac's name.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Fewer buttons.&lt;/strong&gt; The layout picker is gone. To change how the screen and the camera share the frame, write a note.&lt;/li&gt;&lt;/ul&gt;</content>
+  </entry>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.1</id>
+    <title>0.3.1: A Breakdown you can shoot from</title>
+    <link href="https://givedirection.ai/changelog/#0.3.1"/>
+    <updated>2026-11-05T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;Each shot in the Breakdown now says three things in plain words: what we see, how to shoot it (where the camera goes and how long to record), and what it's for. Shots name the moments they play under, with their times, and each setup's notes read in full.&lt;/p&gt;
+&lt;h3&gt;Improvements&lt;/h3&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Signing in.&lt;/strong&gt; Direction checks your editor's sign-in properly. When it can't tell, it says why and you can check again, and you can always start anyway.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Video links just work.&lt;/strong&gt; Direction brings its own video downloader and keeps it up to date, so a YouTube link works without installing anything.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Fewer surprises on a new Mac.&lt;/strong&gt; No more prompt to install Apple's developer tools. Opened from the disk image, Direction offers to move itself to Applications. An editor that needs updating says how.&lt;/li&gt;&lt;/ul&gt;</content>
+  </entry>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.0</id>
+    <title>0.3.0: The first release</title>
+    <link href="https://givedirection.ai/changelog/#0.3.0"/>
+    <updated>2026-11-04T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;Direction 0.3 is the first version you can download and open like any other Mac app. It's signed, notarized by Apple, and it keeps itself up to date: it checks for a new version once a day.&lt;/p&gt;
+&lt;p&gt;Everything a film needs is there. Write the brief and choose who's editing, Claude Code or Codex. Bring in footage and circle the takes you want. Watch each cut, give notes in your own words, and get every note answered in the next one. Then lock picture and deliver a master, a web copy and captions.&lt;/p&gt;</content>
+  </entry>
+</feed>
