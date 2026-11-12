@@ -35,7 +35,7 @@ extension EditorJob {
 
 /// Who runs the editor: a program Direction starts, or a session you run yourself.
 enum EditorRunsOn: String, CaseIterable, Sendable {
-    case claudeCode, codex, opencode, gemini, cursor, goose, qwen, copilot, cline, kilo, yourOwn
+    case claudeCode, codex, gemini, yourOwn
     var program: EditorProgram? { EditorProgram(rawValue: rawValue) }
     var label: String { program?.name ?? "Your own session" }
     init(_ program: EditorProgram) { self = EditorRunsOn(rawValue: program.rawValue) ?? .yourOwn }
@@ -56,8 +56,8 @@ enum EditorSetup {
     }
     /// Whether the director has chosen (the setup sheet shows until then).
     static var isChosen: Bool { value(EditorSetupKey.runsOn) != nil }
-    /// The choice, or the spec's default: the first agent installed (Claude Code, then Codex, then the rest in
-    /// EditorProgram's order), else your own session.
+    /// The choice, or the spec's default: the first agent installed (Claude Code, then Codex, then Gemini CLI), else
+    /// your own session.
     static var runsOn: EditorRunsOn {
         if let raw = value(EditorSetupKey.runsOn) as? String, let c = EditorRunsOn(rawValue: raw) { return c }
         let found = EditorPrograms.shared

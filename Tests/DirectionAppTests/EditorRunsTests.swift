@@ -438,7 +438,7 @@ struct EditorJobTests {
         }
     }
 
-    /// With DIRECTION_LIVE_ACP=1: every ACP agent installed here answers the sign-in check (hello and a session, no
+    /// With DIRECTION_LIVE_ACP=1: Gemini CLI, when it is installed here, answers the sign-in check (hello and a session, no
     /// prompt, so nothing is spent).
     @Test(.enabled(if: ProcessInfo.processInfo.environment["DIRECTION_LIVE_ACP"] == "1"))
     func installedACPAgentsAnswerTheSignInCheck() {
@@ -488,12 +488,12 @@ struct EditorRunnerTests {
         if logged { _ = try store.logDailies(Dailies(scenes: [], takes: ["take-1": TakeInfo(assetID: "take-1")])) }
         try FileManager.default.createDirectory(at: dir.appendingPathComponent("Editor"), withIntermediateDirectories: true)
         let runner = EditorRunner.shared
-        runner.programOverride = [.claudeCode: Self.fake, .opencode: Self.fakeACP]; runner.helperOverride = "/usr/bin/true"
+        runner.programOverride = [.claudeCode: Self.fake, .gemini: Self.fakeACP]; runner.helperOverride = "/usr/bin/true"
         return (store, dir)
     }
     static let fakeACP = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("FakeEditor/fake-acp").path
     private func startACP(_ job: EditorJob, store: ProjectStore) throws -> EditorRun {
-        let run = EditorRun(job: job, program: "opencode", version: "")
+        let run = EditorRun(job: job, program: "gemini", version: "")
         try store.saveRun(run)
         EditorRunner.shared.launch(run, store: store)
         return run
@@ -509,18 +509,34 @@ struct EditorRunnerTests {
         let r = try await ended(store, run.id)
         #expect(r.state == .done)
         #expect(r.session == "fake-acp-session-1" && r.spend == 0.42 && r.summary == "Logged 1 take." && r.invocations == 1)
-        #expect(args(dir) == ["acp"])
+        #expect(args(dir) == ["--acp"])
         #expect(text(dir, ".fake-prompt").contains("\n\n---\n\n") && text(dir, ".fake-prompt").hasPrefix(String(EditorJobs.role.prefix(40))))
         let servers = try JSONDecoder().decode(JSONValue.self, from: Data(text(dir, ".fake-mcp.json").utf8))
         #expect(servers[0]["name"].string == "direction" && servers[0]["command"].string == "/usr/bin/true")
         #expect(servers[0]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
         #expect(servers[0]["env"] == .array([.object(["name": .string("DIRECTION_RUN_ID"), "value": .string(run.id)])]))
-        #expect(text(dir, ".fake-permissions").split(separator: "\n") == ["execute ffmpeg -version yes", "edit Edit /etc/hosts no", "edit Edit NOTES.md yes", "fetch Fetch example.com no", "other direction__direction_log_dailies yes"])
-        // OpenCode's asking mode is written for it, and the next start keeps Direction's own file.
-        #expect(EditorProgram.isOwnOpenCodeSettings((try? Data(contentsOf: dir.appendingPathComponent("Editor/opencode.json"))) ?? Data()))
-        _ = try EditorJobs.prepareFolder(film: dir, job: .logFootage)
-        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/opencode.json").path))
+        // Gemini CLI's commands are refused even with scripts on: Direction can't sandbox them.
+        #expect(text(dir, ".fake-permissions").split(separator: "\n") == ["execute ffmpeg -version no", "edit Edit /etc/hosts no", "edit Edit NOTES.md yes", "fetch Fetch example.com no", "other direction__direction_log_dailies yes"])
         #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "its notes" })
+    }
+
+    /// Gemini CLI reads the first .env from its folder up: Direction's own empty one ends the search in the job's folder,
+    /// stays from one run to the next, and the home folder's settings are passed on instead, under what's already set.
+    @Test func geminiReadsNoEnvFromTheFoldersAbove() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("gemini-env-\(UUID().uuidString).direction")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let folder = try EditorJobs.prepareFolder(film: dir, job: .logFootage)
+        #expect(try Data(contentsOf: folder.appendingPathComponent(".gemini/.env")) == EditorJobs.geminiStop)
+        _ = try EditorJobs.prepareFolder(film: dir, job: .logFootage)
+        #expect(EditorJobs.isGeminiStop(folder.appendingPathComponent(".gemini")))
+        let home = dir.appendingPathComponent("home")
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".gemini"), withIntermediateDirectories: true)
+        #expect(EditorDiscovery.geminiHomeEnvironment(home: home.path).isEmpty)
+        try "OTHER=x\n".write(to: home.appendingPathComponent(".env"), atomically: true, encoding: .utf8)
+        try "# mine\nexport GEMINI_API_KEY=\"abc 123\"\nGOOGLE_CLOUD_PROJECT=film # the project\nDEBUG=1\nnot a line\n".write(to: home.appendingPathComponent(".gemini/.env"), atomically: true, encoding: .utf8)
+        #expect(EditorDiscovery.geminiHomeEnvironment(home: home.path) == ["GEMINI_API_KEY": "abc 123", "GOOGLE_CLOUD_PROJECT": "film"])
+        let env = EditorDiscovery.environment(adding: "/usr/bin/true", extra: [:], fallback: ["PATH": "/nowhere", "DIRECTION_FALLBACK_ONLY": "yes"])
+        #expect(env["DIRECTION_FALLBACK_ONLY"] == "yes" && env["PATH"] != "/nowhere")
     }
 
     @Test func pausingAnACPAgentKeepsItsSessionAndResumeLoadsIt() async throws {
@@ -546,7 +562,7 @@ struct EditorRunnerTests {
         try scenario("auth", dir)
         let r = try await ended(store, try startACP(.logFootage, store: store).id)
         #expect(r.state == .failed && r.reason == .notSignedIn)
-        #expect(EditorSetup.signedIn(.opencode) == false)
+        #expect(EditorSetup.signedIn(.gemini) == false)
     }
     private func scenario(_ name: String, _ dir: URL) throws { try Data(name.utf8).write(to: dir.appendingPathComponent("Editor/.fake-scenario")) }
     private func args(_ dir: URL) -> [String] { ((try? String(contentsOf: dir.appendingPathComponent("Editor/.fake-args"), encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }

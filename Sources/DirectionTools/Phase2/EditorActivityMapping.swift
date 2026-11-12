@@ -76,6 +76,11 @@ public enum EditorActivityLog {
             return ActivityInput(verb: "Searching footage for", object: "\u{201C}\(q)\u{201D}", tool: name)
         case "direction_edit":
             return edit(name, a, c)
+        case "direction_run":
+            // The editor's own few words: "Evening out the narration".
+            let does = (a["does"].string ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            guard let space = does.firstIndex(of: " ") else { return ActivityInput(verb: does.isEmpty ? "Working through" : does, object: does.isEmpty ? "several steps at once" : "", tool: name) }
+            return ActivityInput(verb: String(does[..<space]), object: String(does[does.index(after: space)...]), tool: name)
         case "direction_make":
             if a["estimateOnly"].bool == true { return ActivityInput(verb: "Pricing", object: madeKind(a["kind"].string), tool: name) }
             let kind = madeKind(a["kind"].string ?? a["type"].string)

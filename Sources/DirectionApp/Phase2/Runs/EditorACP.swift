@@ -200,7 +200,7 @@ struct ACPConversation {
         case "read", "think": return true
         // A web search is a search too.
         case "search": return !Self.looksLikeWeb(call)
-        // Anything else is only Direction's own tools: not the director's other MCP servers, which these agents load
+        // Anything else is only Direction's own tools: not the director's other MCP servers, which Gemini CLI loads
         // (Claude Code runs with --strict-mcp-config and Codex with --ignore-user-config).
         default: return Self.isDirectionTool(call)
         }
@@ -219,7 +219,7 @@ struct ACPConversation {
     /// The files and folders agents read their settings from, where a hook or an MCP server's command would run as the
     /// director the next time one starts. Direction moves any it finds out of the film (EditorJobs.prepareFolder), and
     /// no agent may write one.
-    static let agentSettings: Set<String> = [".claude", ".codex", ".gemini", ".qwen", ".cursor", ".opencode", "opencode.json", "opencode.jsonc", ".goose", ".kilocode", "kilo.json", ".cline", ".clinerules", ".vscode", ".env", ".mcp.json", ".direction"]
+    static let agentSettings: Set<String> = [".claude", ".codex", ".gemini", ".env", ".mcp.json", ".direction"]
 
     /// The real path, symlinks resolved; a file that doesn't exist yet by its folder's real path.
     static func resolved(_ url: URL) -> String {

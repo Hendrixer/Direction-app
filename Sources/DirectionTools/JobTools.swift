@@ -8,7 +8,7 @@ extension ToolCatalog {
     public static let moreToolsName = "direction_more_tools"
 
     /// What every job reads and reports with.
-    static let everyJob: Set<String> = ["direction_brief", "direction_style", "direction_turnovers", "direction_questions", "direction_ask", "direction_editor_status", "direction_job", "direction_cancel_job"]
+    static let everyJob: Set<String> = ["direction_brief", "direction_style", "direction_turnovers", "direction_questions", "direction_ask", "direction_editor_status", "direction_job", "direction_cancel_job", "direction_run"]
     /// Reading the footage.
     static let looking: Set<String> = ["direction_dailies", "direction_index", "direction_shots", "direction_contact_sheet", "direction_frame", "direction_watch", "direction_screen_text", "direction_search_footage", "direction_transcript", "direction_inspect"]
     /// Changing the cut and hearing it.

@@ -6,53 +6,33 @@ import DirectionCore
 /// this file, and EditorProgramTests runs `--help` and fails when one disappears.
 ///
 /// Claude Code and Codex are run on their own command lines, which Direction relies on for strict MCP config,
-/// allowed tools, a sandbox and the result's shape. Every other agent is spoken to over the Agent Client
-/// Protocol (EditorACP.swift). Only the ones installed on this Mac are offered.
+/// allowed tools, a sandbox and the result's shape. Gemini CLI is spoken to over the Agent Client Protocol
+/// (EditorACP.swift). Only the ones installed on this Mac are offered.
 enum EditorProgram: String, CaseIterable, Codable, Sendable {
-    case claudeCode, codex, opencode, gemini, cursor, goose, qwen, copilot, cline, kilo
+    case claudeCode, codex, gemini
 
     var name: String {
-        switch self {
-        case .claudeCode: "Claude Code"; case .codex: "Codex"; case .opencode: "OpenCode"; case .gemini: "Gemini CLI"; case .cursor: "Cursor"
-        case .goose: "Goose"; case .qwen: "Qwen Code"; case .copilot: "GitHub Copilot"; case .cline: "Cline"; case .kilo: "Kilo Code"
-        }
+        switch self { case .claudeCode: "Claude Code"; case .codex: "Codex"; case .gemini: "Gemini CLI" }
     }
     /// Over the Agent Client Protocol, rather than a command line of its own.
-    var usesACP: Bool { self != .claudeCode && self != .codex }
-    /// The commands it's installed as, the usual one first (Cursor's agent was `cursor-agent` before `agent`).
-    var commands: [String] { self == .claudeCode ? ["claude"] : self == .cursor ? ["cursor-agent", "agent"] : [rawValue] }
+    var usesACP: Bool { self == .gemini }
+    /// The commands it's installed as.
+    var commands: [String] { self == .claudeCode ? ["claude"] : [rawValue] }
     var command: String { commands[0] }
     /// How it starts speaking ACP on stdin and stdout, newest first: the first its `--help` lists is used.
-    var acpForms: [[String]] {
-        switch self {
-        case .claudeCode, .codex: []
-        case .opencode, .cursor, .goose, .kilo: [["acp"]]
-        case .gemini, .qwen: [["--acp"], ["--experimental-acp"]]
-        case .copilot, .cline: [["--acp"]]
-        }
-    }
+    var acpForms: [[String]] { self == .gemini ? [["--acp"], ["--experimental-acp"]] : [] }
     var installCommand: String {
         switch self {
         case .claudeCode: "curl -fsSL https://claude.ai/install.sh | bash"
         case .codex: "npm install -g @openai/codex"
-        case .opencode: "curl -fsSL https://opencode.ai/install | bash"
         case .gemini: "npm install -g @google/gemini-cli"
-        case .cursor: "curl https://cursor.com/install -fsS | bash"
-        case .goose: "brew install block-goose-cli"
-        case .qwen: "npm install -g @qwen-code/qwen-code"
-        case .copilot: "npm install -g @github/copilot"
-        case .cline: "npm install -g cline"
-        case .kilo: "npm install -g @kilocode/cli"
         }
     }
-    /// Suggested when no agent is installed: the two Direction knows best, then the free and open ones.
-    static let suggested: [EditorProgram] = [.claudeCode, .codex, .opencode, .gemini]
+    /// Suggested when no agent is installed.
+    static let suggested: [EditorProgram] = allCases
     /// What to run in Terminal to sign in.
     var signInCommand: String {
-        switch self {
-        case .claudeCode: "claude"; case .codex: "codex login"; case .opencode: "opencode auth login"; case .gemini: "gemini"
-        case .cursor: "\(command) login"; case .goose: "goose configure"; case .qwen: "qwen"; case .copilot: "copilot"; case .cline: "cline auth"; case .kilo: "kilo auth"
-        }
+        switch self { case .claudeCode: "claude"; case .codex: "codex login"; case .gemini: "gemini" }
     }
     /// Brings the copy at `path` up to date: Claude Code updates itself; the rest the way they were installed, read from
     /// where the program really is (a Homebrew formula's Cellar folder, or npm's node_modules under any Node).
@@ -188,36 +168,21 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             ]
             if let s = i.session { return ["exec", "resume"] + shared + ["--config", "sandbox_mode=\(toml(sandbox))", s, i.job] }
             return ["exec"] + shared + ["--cd", i.folder.path, "--sandbox", sandbox, i.job]
-        default:
-            // Everything else goes over ACP on stdin (EditorACP.swift).
+        case .gemini:
+            // Over ACP on stdin (EditorACP.swift); Gemini CLI asks before edits and commands, and Direction answers.
             return acpForms.first ?? []
         }
     }
-
-    /// Agents that act without asking unless told to: OpenCode allows edits, commands and the web by default, so it
-    /// gets settings in the job's folder that make it ask for everything (Direction answers by its rules), in the
-    /// shape its version reads; Goose is started in its approve mode.
-    static func openCodeSettings(version: String?) -> Data {
-        let major = version.flatMap { Int($0.split(separator: ".").first ?? "") } ?? 1
-        let settings: JSONValue = major >= 2
-            ? .object(["permissions": .array([.object(["action": .string("*"), "resource": .string("*"), "effect": .string("ask")]),
-                                              .object(["action": .string("webfetch"), "resource": .string("*"), "effect": .string("deny")])])])
-            : .object(["permission": .object(["edit": .string("ask"), "bash": .string("ask"), "webfetch": .string("deny")])])
-        // Sorted, so the same settings are the same bytes from one launch to the next.
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-        return (try? encoder.encode(settings)) ?? Data()
-    }
-    static func isOwnOpenCodeSettings(_ data: Data) -> Bool { data == openCodeSettings(version: "1") || data == openCodeSettings(version: "2") }
-    /// What an agent needs in its environment to ask before it acts.
-    var askingEnvironment: [String: String] { self == .goose ? ["GOOSE_MODE": "approve"] : [:] }
 
     /// The conversation for one ACP invocation: the role leads the first message (ACP has no system prompt),
     /// and a saved session is loaded when the agent can, or the whole job is said again when it can't.
     func conversation(_ i: Invocation, wholeJob: String) -> ACPConversation {
         let server = ACPConversation.Server(command: i.helper, args: Self.serverArguments(film: i.film, job: i.kind), env: ["DIRECTION_RUN_ID": i.runID])
         let first = { (text: String) in i.role + "\n\n---\n\n" + text }
+        // Gemini CLI's commands run outside any sandbox Direction can set (Claude Code's and Codex's keep to the folder,
+        // with no network), so they're refused whatever Let the editor run scripts says; direction_run covers loops.
         return ACPConversation(cwd: i.folder, server: server, prompt: i.session == nil ? first(i.job) : i.job, wholeJob: first(wholeJob), resume: i.session,
-                               permissions: .init(folder: i.folder, scripts: i.scripts))
+                               permissions: .init(folder: i.folder, scripts: false))
     }
 
     /// The signed-in check: a job that only replies `ready`, with no tools.
@@ -232,7 +197,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             var args = ["exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only", "--ephemeral"]
             if !version.isEmpty { args += ["--model", version] }
             return args + [prompt]
-        default:
+        case .gemini:
             return acpForms.first ?? []
         }
     }
@@ -288,19 +253,14 @@ enum EditorDiscovery {
             guard let path = find(command: command) else { continue }
             let env = environment(adding: path)
             var install = EditorInstall(program: program, path: path, version: version(of: path, environment: env))
-            if program.usesACP {
-                // A generic name (Cursor's `agent`) has to be the program it's meant to be.
-                let help = run(path, ["--help"], environment: env, timeout: 15).map { $0.output + "\n" + $0.error } ?? ""
-                if command == "agent", !help.lowercased().contains("cursor") { continue }
-                install.acp = acpForm(program, help: help)
-            }
+            if program.usesACP { install.acp = acpForm(program, help: run(path, ["--help"], environment: env, timeout: 15).map { $0.output + "\n" + $0.error } ?? "") }
             return install
         }
         return nil
     }
 
-    /// The first of the program's ACP forms its help lists: a subcommand (`acp` at the start of a line's word list)
-    /// or a flag (`--acp`, `--experimental-acp`).
+    /// The first of the program's ACP forms its help lists: a flag (`--acp`, `--experimental-acp`), or a subcommand
+    /// leading a line's words.
     static func acpForm(_ program: EditorProgram, help: String) -> [String]? {
         program.acpForms.first { form in
             guard let word = form.first else { return false }
@@ -313,7 +273,7 @@ enum EditorDiscovery {
                 }
                 return false
             }
-            // "  acp   Start ACP" or "  opencode acp   Start ACP": the subcommand leads the line, or follows the program's name.
+            // "  acp   Start ACP" or "  gemini acp   Start ACP": the subcommand leads the line, or follows the program's name.
             return help.split(separator: "\n").contains { $0.split(separator: " ", omittingEmptySubsequences: true).prefix(2).contains { String($0) == word } }
         }
     }
@@ -412,9 +372,8 @@ enum EditorDiscovery {
     /// The shell's settings an editor reads to find its sign-in and the network: where its settings live,
     /// a Bedrock or Vertex setup, a proxy and its certificates.
     static func carried(_ key: String) -> Bool {
-        // The ACP agents' own too: Gemini's and Google's keys and project, GitHub's token for Copilot, Cursor's key,
-        // OpenRouter's, and where XDG-minded agents (OpenCode, Goose) keep their sign-in.
-        let prefixes = ["ANTHROPIC_", "CLAUDE_CODE_", "CODEX_", "OPENAI_", "AWS_", "VERTEX_", "GEMINI_", "GOOGLE_", "GH_", "GITHUB_", "COPILOT_", "CURSOR_", "OPENROUTER_", "GOOSE_", "OPENCODE_", "QWEN_", "DASHSCOPE_", "KILO", "CLINE_", "XDG_"]
+        // Gemini CLI's too: Gemini's and Google's keys, project and location.
+        let prefixes = ["ANTHROPIC_", "CLAUDE_CODE_", "CODEX_", "OPENAI_", "AWS_", "VERTEX_", "GEMINI_", "GOOGLE_"]
         let names = ["CLAUDE_CONFIG_DIR", "GOOGLE_APPLICATION_CREDENTIALS", "CLOUD_ML_REGION", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"]
         return (names.contains(key) || prefixes.contains { key.hasPrefix($0) }) && !nesting.contains(key)
     }
@@ -423,20 +382,49 @@ enum EditorDiscovery {
     /// Claude Code's own markers, so a Direction started from a Claude Code terminal doesn't nest.
     static let nesting = ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
     static func hasShellKey(_ p: EditorProgram) -> Bool {
-        let keys = p == .claudeCode ? ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] : p == .codex ? ["OPENAI_API_KEY", "CODEX_API_KEY"] : shellKeys
+        let keys = switch p { case .claudeCode: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"]; case .codex: ["OPENAI_API_KEY", "CODEX_API_KEY"]; case .gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] }
         return keys.contains { shellEnvironment[$0]?.isEmpty == false }
     }
 
     /// The environment a program runs with: the app's, the shell's settings for it, the login PATH and the
     /// program's own folder first. An API key goes only with `shellKey`, so work runs on the person's plan.
-    static func environment(adding program: String, extra: [String: String] = [:], shellKey: Bool = false) -> [String: String] {
+    static func environment(adding program: String, extra: [String: String] = [:], shellKey: Bool = false, fallback: [String: String] = [:]) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         for (k, v) in shellEnvironment where carried(k) && env[k] == nil { env[k] = v }
+        // Settings the program would read from a file itself, under the ones already set (as a .env loads).
+        for (k, v) in fallback where env[k] == nil { env[k] = v }
         if !shellKey { for key in shellKeys { env.removeValue(forKey: key) } }
         for key in nesting { env.removeValue(forKey: key) }
         env["PATH"] = ((program as NSString).deletingLastPathComponent) + ":" + loginPath
         for (k, v) in extra { env[k] = v }
         return env
+    }
+
+    /// The .env Gemini CLI reads from the home folder when no folder above its own has one (`~/.gemini/.env`, else
+    /// `~/.env`). Direction's empty one in the job's folder ends that search (EditorJobs.prepareFolder), so the home
+    /// folder's settings are passed on here, without the two Gemini CLI leaves out.
+    static func geminiHomeEnvironment(home: String = NSHomeDirectory()) -> [String: String] {
+        for path in ["\(home)/.gemini/.env", "\(home)/.env"] {
+            guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            return dotenv(text).filter { $0.key != "DEBUG" && $0.key != "DEBUG_MODE" }
+        }
+        return [:]
+    }
+    /// KEY=value lines, as dotenv reads them: `export` and comments allowed, quotes taken off.
+    static func dotenv(_ text: String) -> [String: String] {
+        var out: [String: String] = [:]
+        for raw in text.split(whereSeparator: \.isNewline) {
+            var line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("export ") { line = String(line.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
+            guard !line.hasPrefix("#"), let eq = line.firstIndex(of: "=") else { continue }
+            let key = line[..<eq].trimmingCharacters(in: .whitespaces)
+            var value = line[line.index(after: eq)...].trimmingCharacters(in: .whitespaces)
+            if value.count >= 2, let q = value.first, q == "\"" || q == "'", value.last == q { value = String(value.dropFirst().dropLast()) }
+            else if let hash = value.range(of: " #") { value = value[..<hash.lowerBound].trimmingCharacters(in: .whitespaces) }
+            guard !key.isEmpty, key.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) else { continue }
+            out[key] = value
+        }
+        return out
     }
 
     static func shell(_ command: String) -> String? {
@@ -550,7 +538,7 @@ enum EditorDiscovery {
                 if item?["type"] as? String == "agent_message", ((item?["text"] ?? item?["message"]) as? String)?.lowercased().contains("ready") == true { answered = true }
                 if o["type"] as? String == "error", let m = o["message"] as? String { said.append(m) }
                 if let m = (o["error"] as? [String: Any])?["message"] as? String { said.append(m) }
-            default:
+            case .gemini:
                 break
             }
         }

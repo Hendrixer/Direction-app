@@ -9,7 +9,7 @@ extension EditorProgram {
 }
 
 @MainActor private enum AgentIcons {
-    /// Only Claude Code's and Codex's are shipped; other agents show their name alone.
+    /// Only Claude Code's and Codex's are shipped; Gemini CLI shows its name alone.
     static let images: [EditorProgram: NSImage?] = Dictionary(uniqueKeysWithValues: [EditorProgram.claudeCode, .codex].map { p in
         let name = p == .claudeCode ? "AgentClaudeCode" : "AgentCodex"
         let url = Bundle.module.url(forResource: name, withExtension: "png") ?? Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Agents")

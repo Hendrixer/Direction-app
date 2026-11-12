@@ -16,15 +16,15 @@ enum RunsFixtures {
         ]
     }
 
-    /// Claude Code 2.4.1 found and signed in, Codex and OpenCode found too (only installed agents are offered);
+    /// Claude Code 2.4.1 found and signed in, Codex and Gemini CLI found too (only installed agents are offered);
     /// `found: false`, none at all.
     static func previewPrograms(chosen: Bool, signedIn: Bool = true, found: Bool = true) {
-        var values: [String: Any] = [EditorSetupKey.signedIn(.claudeCode): signedIn, EditorSetupKey.signedIn(.opencode): true]
+        var values: [String: Any] = [EditorSetupKey.signedIn(.claudeCode): signedIn, EditorSetupKey.signedIn(.gemini): true]
         if chosen { values[EditorSetupKey.runsOn] = EditorRunsOn.claudeCode.rawValue }
         let installs: [EditorProgram: EditorInstall] = found ? [
             .claudeCode: EditorInstall(program: .claudeCode, path: "/Users/you/.local/bin/claude", version: "2.4.1"),
             .codex: EditorInstall(program: .codex, path: "/opt/homebrew/bin/codex", version: "0.164.0"),
-            .opencode: EditorInstall(program: .opencode, path: "/Users/you/.opencode/bin/opencode", version: "2.2.7", acp: ["acp"]),
+            .gemini: EditorInstall(program: .gemini, path: "/opt/homebrew/bin/gemini", version: "1.2.0", acp: ["--acp"]),
         ] : [:]
         EditorPrograms.shared.setPreview(installs, values: values)
     }

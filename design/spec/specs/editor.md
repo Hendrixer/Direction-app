@@ -10,10 +10,10 @@ Direction starts the editor itself whenever there's work: footage to log, an ass
 
 | Connection | What happens | Control |
 |---|---|---|
-| **Direction starts it** (default) | Direction runs a coding agent on this Mac for each job (Claude Code, Codex, or any agent below over ACP), with Direction's tools connected and a job written for it. | Start, pause, resume, stop, retry. Activity, spend. |
+| **Direction starts it** (default) | Direction runs a coding agent on this Mac for each job (Claude Code, Codex or Gemini CLI), with Direction's tools connected and a job written for it. | Start, pause, resume, stop, retry. Activity, spend. |
 | **Your own session** | You run Claude Code or Codex yourself and connect it over MCP: the sheet gives `claude mcp add direction -- "<the app's Helpers/direction>" mcp` and the same for `codex`, or, in a copy built from source, `./scripts/install-local.sh`. Direction shows what it does from its tool calls. | Activity only. Direction can't start, pause or stop it; the pill's popover says "Your own session" and shows the request to copy, as today. |
 
-Settings › Engines › "Editor runs on" is a menu of the agents found on this Mac, then Your own session. Only installed agents are offered (2026-11-11); the one chosen stays listed if it's later removed, as "Not installed". A coding agent on the Mac is the one thing Direction requires: the editor is never a cloud agent.
+Settings › Engines › "Editor runs on" is a menu of the agents found on this Mac, then Your own session. Direction runs three: Claude Code, Codex and Gemini CLI (2026-11-11). Only the installed ones are offered; the one chosen stays listed if it's later removed, as "Not installed". A coding agent on the Mac is the one thing Direction requires: the editor is never a cloud agent.
 
 ## Programs
 
@@ -21,27 +21,26 @@ Settings › Engines › "Editor runs on" is a menu of the agents found on this 
 |---|---|---|---|
 | Claude Code (`claude`) | `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`, npm global bin, then `zsh -lc 'command -v claude'` | Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, Claude Haiku 5.5, Other… | Claude Opus 5.5 |
 | Codex (`codex`) | the same folders, then `zsh -lc 'command -v codex'` | The program's default, Other… (a text field) | The program's default |
-| OpenCode (`opencode acp`), Gemini CLI (`gemini --acp` or `--experimental-acp`), Cursor (`cursor-agent acp` or `agent acp`), Goose (`goose acp`), Qwen Code (`qwen --acp` or `--experimental-acp`), GitHub Copilot (`copilot --acp`), Cline (`cline --acp`), Kilo Code (`kilo acp`) | the same folders, plus nvm, Volta, Bun, asdf, mise and pnpm; the ACP form is the first one the copy's own `--help` lists, and a copy that lists none is "out of date" with its update command | The version set in the agent itself | The agent's own |
+| Gemini CLI (`gemini --acp` or `--experimental-acp`) | the same folders, plus nvm, Volta, Bun, asdf, mise and pnpm; the ACP form is the first one the copy's own `--help` lists, and a copy that lists neither is "out of date" with its update command | The version set in Gemini CLI | Gemini CLI's own |
 
-### Agents over ACP
+### Gemini CLI over ACP
 
-Every agent but Claude Code and Codex is spoken to over the [Agent Client Protocol](https://agentclientprotocol.com) (version 1), newline-delimited JSON-RPC on stdin and stdout (`EditorACP.swift`). Claude Code and Codex keep their own command lines, which Direction relies on for strict MCP config, allowed tools, a sandbox and the result's shape. One invocation is one conversation:
+Gemini CLI is spoken to over the [Agent Client Protocol](https://agentclientprotocol.com) (version 1), newline-delimited JSON-RPC on stdin and stdout (`EditorACP.swift`). Claude Code and Codex keep their own command lines, which Direction relies on for strict MCP config, allowed tools, a sandbox and the result's shape. One invocation is one conversation:
 
 - **Hello and a session.** `initialize` offers no files or terminal of Direction's own, then `session/new` with `cwd` the job's folder and Direction's MCP server (`direction mcp --project … --job …`, `DIRECTION_RUN_ID` in its env), or `session/load` on the saved session when the agent can load one. Its replay is ignored. One it can't load is a new session that hears the whole job and then the continuation.
 - **The prompt.** ACP has no system prompt, so the role leads the first message, then `---`, then the job. The role already asks for the result JSON at the end of every turn, and Direction reads it from the agent's message as it does Claude Code's.
 - **What Direction reads.** `tool_call` and `tool_call_update` become steps, named as Claude Code names them (`mcp__direction__direction_watch` whatever the agent calls it, `Read`, `Edit`, `Bash` for its own), started once their input is known. `usage_update`'s cost is the session's running total. The prompt's answer ends the invocation: the agent's stdin closes, and it is ended if it stays open.
 - **Permission.** `session/request_permission` is answered by the same rules as Claude Code's allowed tools, and what the step does decides first, so a command that mentions a Direction tool is still a command:
-  - commands (`execute`) only while Let the editor run scripts is on; never the web (`fetch`, a web `search`), and never a mode switch;
-  - changes (`edit`, `delete`, `move`) only when every path they name, a move's destination too, is inside the job's folder after `~` and symlinks are resolved, and isn't any agent's settings (`.claude`, `.codex`, `.gemini`, `.qwen`, `.cursor`, `.opencode`, `opencode.json`, `.goose`, `.kilocode`, `.cline`, `.vscode`, `.env`, `.mcp.json`, `.direction`); a change that names no path is refused;
-  - reading and thinking are allowed; anything else only when it's one of Direction's own tools by its exact name, so the director's other MCP servers, which these agents load (Claude Code runs with `--strict-mcp-config`, Codex with `--ignore-user-config`), are refused.
-- **Agents that don't ask.** OpenCode allows edits, commands and the web unless told otherwise, so Direction writes its asking mode into the job's folder (`opencode.json`: `permission` ask/deny for 1.x, `permissions` rules for 2.x); Goose starts with `GOOSE_MODE=approve`. Direction can't sandbox an agent, so one that still never asks runs as it's set up.
-- **Settings that came with a film.** Before every run, agents' settings files and folders in the job's folder go to the Trash (OpenCode's in the film's own folder too, since it reads them from every folder up), as Claude Code's and Codex's always have: a hook or an MCP server in one would run as the director.
+  - never commands (`execute`), even with Let the editor run scripts on: Gemini CLI's run outside any sandbox Direction can set, where Claude Code's and Codex's keep to the job's folder with no network (`direction_run` covers loops); never the web (`fetch`, a web `search`), and never a mode switch;
+  - changes (`edit`, `delete`, `move`) only when every path they name, a move's destination too, is inside the job's folder after `~` and symlinks are resolved, and isn't any agent's settings (`.claude`, `.codex`, `.gemini`, `.env`, `.mcp.json`, `.direction`); a change that names no path is refused;
+  - reading and thinking are allowed; anything else only when it's one of Direction's own tools by its exact name, so the director's other MCP servers, which Gemini CLI loads from its own settings (Claude Code runs with `--strict-mcp-config`, Codex with `--ignore-user-config`), are refused.
+- **Settings that came with a film.** Before every run, agents' settings and instructions in the job's folder go to the Trash (`.claude`'s settings, agents, commands and hooks, any skill that isn't Direction's, `.codex`, `.gemini`, `.env`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), and the instructions and `.env` in the film's own folder too, since Claude Code and Gemini CLI read those from every folder up: a hook or an MCP server in one would run as the director, and instructions would steer the editor. Gemini CLI loads the first `.env` it finds from its folder up, else the home folder's, and one setting `BASH_ENV` would run with every command, so Direction writes its own empty `Editor/.gemini/.env` to end the search there and passes the home folder's `.env` (`~/.gemini/.env`, else `~/.env`) to Gemini CLI as settings instead.
 - **Pause, Stop, Quit** send `session/cancel`, give the agent 1.5 s to save, then the usual signals. An agent that stays open after its answer, or opens no session within 2 minutes, is ended with everything it started.
-- **Its shell settings** are carried as Claude Code's are, its own included: Gemini's and Google's keys and project, GitHub's token, Cursor's and OpenRouter's keys, and `XDG_*` (where OpenCode and Goose keep their sign-in).
-- **An older protocol** (a copy from before ACP's version 1, or one that doesn't know `session/new`) is "out of date" with the agent's update command, read from where the program really is (a Homebrew formula's Cellar, or npm).
-- **Signed in** is a hello and a session with no tools and no prompt, so the check spends nothing: a session means signed in, ACP's `auth_required` means not. Each agent's sign-in step names its own command (`opencode auth login`, `gemini`, `goose configure`, and so on).
-- **Versions and effort** are the agent's own; the speed and quality slider still sets made media for the film.
-- **Icons:** only Claude Code's and Codex's ship; other agents show their name alone.
+- **Its shell settings** are carried as Claude Code's are: Gemini's and Google's keys, project and location.
+- **An older protocol** (a copy from before ACP's version 1, or one that doesn't know `session/new`) is "out of date" with its update command, read from where the program really is (a Homebrew formula's Cellar, or npm).
+- **Signed in** is a hello and a session with no tools and no prompt, so the check spends nothing: a session means signed in, ACP's `auth_required` means not. The sign-in step is "run `gemini`".
+- **Versions and effort** are Gemini CLI's own; the speed and quality slider still sets made media for the film.
+- **Icons:** only Claude Code's and Codex's ship; Gemini CLI shows its name alone.
 
 - The version list ships with the app and is updated with it. "Other…" accepts any version string the program accepts.
 - **Signed in** is checked at setup, at every launch while the answer was no, after a sign-in failure, and on **Check again**. Direction runs the program with a job that only replies `ready` (no tools) and reads its answer (Claude Code's result JSON, Codex's events), never searching the reply for error words. It answers "ready": signed in. It says it isn't signed in (an invalid key, "run /login", a 401 status): "Not signed in" with the sign-in step; that answer is remembered. Anything else (no reply within 45 s, another error): "Couldn't check sign-in" with why and **Check again**, remembered as nothing, and the work can start anyway. A run that finishes means signed in. Each answer goes to Direction's log with its reason.
@@ -77,6 +76,15 @@ Each job is given the tools it uses, so the program has them all from the start 
 
 `direction_more_tools` is always there too: with nothing, it lists the rest a line each; with a name, one tool's description and arguments; with a name and arguments, it runs it, checked exactly like a direct call. Each use is logged, so a job that keeps reaching for a tool gets it on its list. Your own session (`direction mcp` with no `--job`) has every tool.
 
+### Scripts (`direction_run`)
+
+Every job has `direction_run` (2026-11-11): the editor writes a short JavaScript whose functions are Direction's tools (`direction.measure_audio({…})`, `direction.edit({…})`), and only what it returns comes back, so a loop of measure → decide → change is one step instead of dozens. Every step resends everything said so far, so on an API key this is most of what a long run costs.
+
+- **Where it runs.** In `direction script`, a helper Direction starts for each script, which closes itself off with macOS's own sandbox (the pure-computation profile: no files, no network, no other programs) before any of the script runs, and runs it in JavaScriptCore, the engine Safari uses. It reaches Direction only by asking, on its stdout, for a tool call; each is checked and run exactly as a direct call is, so a script can do nothing the editor couldn't do one call at a time. It runs with Let the editor run scripts off, too: it starts no programs. Apple's Linux containers from WWDC 2026 (Container machines) don't fit: they need an image to download, can't use the Mac's video frameworks, and are far more than a few lines that call Direction need.
+- **What a script has.** `direction.<tool>(args)` without `direction_`, returning the tool's answer (images as `imagePaths`) or throwing an Error with its `code`; `print(…)`; `show(path)` for up to 8 images a tool rendered in this script; `return` for the answer. Calls are synchronous; `await` works too.
+- **Limits.** 4 minutes (under the 5 after which a tool call is reported stuck), 2 GB of memory and 300 calls; a script can't run another. Stopping it stops the call in flight too, and it ends itself if Direction goes away. A failure says its line, and changes made before it stay ("2 calls had run; changes they made stay").
+- **Activity.** One row in the editor's words (`does`: "Evening out the narration"); of the script's own calls, only its changes show.
+
 ### Tool call → Activity
 
 | Call | Verb | Object | Time (editor's playhead) |
@@ -94,6 +102,7 @@ Each job is given the tools it uses, so the program has them all from the start 
 | `direction_ask` | Asking you | "about line 12" | — |
 | `direction_turnover_complete` | Delivering | `Cut 4` | — |
 | `direction_check` | Checking | the cut as it delivers | — |
+| `direction_run` | Its `does`, first word as the verb: Evening | "out the narration" | — |
 | Anything else (reading the brief, notes, files) | Reading | "the notes" / "the brief" | — |
 
 Consecutive calls with the same verb and object merge into one row with the latest time.
@@ -156,7 +165,7 @@ Frame: `screens/43-settings-editor.html` drew it as the Editor tab's first group
 
 | Group | Setting | Control | Default | What it changes |
 |---|---|---|---|---|
-| Who edits | Editor runs on | Select: the agents found on this Mac, then Your own session | The first agent found, in this order: Claude Code, Codex, OpenCode, Gemini CLI, Cursor, Goose, Qwen Code, GitHub Copilot, Cline, Kilo Code; else Your own session | Which program Direction starts. Sub-label shows what was found: "Claude Code 2.4.1 · signed in", "Not installed. Install it, then come back." with **Copy install command**, or for Your own session "Run Claude Code or Codex yourself. Direction shows what it does but can't start or pause it. How to connect". |
+| Who edits | Editor runs on | Select: the agents found on this Mac, then Your own session | The first agent found, in this order: Claude Code, Codex, Gemini CLI; else Your own session | Which program Direction starts. Sub-label shows what was found: "Claude Code 2.4.1 · signed in", "Not installed. Install it, then come back." with **Copy install command**, or for Your own session "Run Claude Code or Codex yourself. Direction shows what it does but can't start or pause it. How to connect". |
 | Who edits | Start work | Select: Right away / Ask me first | Right away | Sub-label: "When notes are turned over or footage arrives." |
 | Who edits | Let the editor run scripts | Switch | On | Sub-label: "Only inside its own folder in the film, with no internet. Some graphics and looks need it." |
 | Freedom | unchanged | | | |
@@ -209,14 +218,14 @@ Opens on every new film (New Film…, from a script or a story, a dropped folder
 - A card for each agent found on this Mac, two across (`--raised`, radius 10, padding 14, the same selection ring as the Freedom cards). Frame 56 has three:
   - **Claude Code**: "Found · 2.4.1 · signed in" with a green dot (`--approve`). Selected.
   - **Codex**: "Found · 0.164.0".
-  - **OpenCode**: "Found · 2.2.7 · signed in", with no icon (only Claude Code's and Codex's ship).
+  - **Gemini CLI**: "Found · 1.2.0 · signed in", with no icon (only Claude Code's and Codex's ship).
 - Start work row: seg "Right away / Ask me first".
 - Speed and quality row: the slider (200 wide), its line as the row's detail (Speed and quality, above). Starts on the last one chosen.
 - Under the card, a note (11.5 text-3): "Change the speed and quality anytime the editor isn't working, from the editor button at the top of the window."
 - A text link (text-2, 12): "I'll run my own session instead". It turns the sheet into the MCP instructions (the install script and the "Copy request for your editor" text), with **Done**.
 - Buttons: Cancel (plain) · **Use Claude Code** (steel). The steel label follows the selected card.
 
-States: no agent found (`56-editor-none-found`) changes the body to "The editor is a coding agent on this Mac, and Direction found none. Install one of these, sign in, then check again." and shows Claude Code, Codex, OpenCode and Gemini CLI as "Not installed" with their install commands; the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Check again** and **Open Terminal**. A check that couldn't tell shows "Found · couldn't check sign-in" and "Direction couldn't check the sign-in: <why>. You can start anyway." with **Check again**.
+States: no agent found (`56-editor-none-found`) changes the body to "The editor is a coding agent on this Mac, and Direction found none. Install one of these, sign in, then check again." and shows Claude Code, Codex and Gemini CLI as "Not installed" with their install commands; the primary becomes "Check again". Found but not signed in shows "Found · not signed in" and the step "Open Terminal, run `claude`, and sign in." with **Check again** and **Open Terminal**. A check that couldn't tell shows "Found · couldn't check sign-in" and "Direction couldn't check the sign-in: <why>. You can start anyway." with **Check again**.
 
 **Acceptance:**
 - [ ] Cancel leaves the film on the Footage step: on the editor in Settings, or with the pill "Editor not set up" when none was ever chosen. Nothing is lost; footage stays.

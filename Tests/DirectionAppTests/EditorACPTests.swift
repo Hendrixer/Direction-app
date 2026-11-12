@@ -105,15 +105,10 @@ struct EditorACPTests {
         #expect(EditorFailure.reason(missing) == .outOfDate)
     }
 
-    /// OpenCode allows everything unless told, and Goose doesn't ask in its default mode: both start asking.
-    @Test func agentsThatDontAskAreToldTo() throws {
-        let v1 = try JSONDecoder().decode(JSONValue.self, from: EditorProgram.openCodeSettings(version: "1.0.119"))
-        #expect(v1["permission"]["bash"].string == "ask" && v1["permission"]["edit"].string == "ask" && v1["permission"]["webfetch"].string == "deny")
-        let v2 = try JSONDecoder().decode(JSONValue.self, from: EditorProgram.openCodeSettings(version: "2.2.7"))
-        #expect(v2["permissions"][0]["effect"].string == "ask" && v2["permissions"][0]["action"].string == "*")
-        #expect(EditorProgram.isOwnOpenCodeSettings(EditorProgram.openCodeSettings(version: "1.0.119")) && !EditorProgram.isOwnOpenCodeSettings(Data(#"{"mcp":{}}"#.utf8)))
-        #expect(EditorProgram.goose.askingEnvironment == ["GOOSE_MODE": "approve"] && EditorProgram.cursor.askingEnvironment.isEmpty)
-        #expect(EditorDiscovery.carried("GEMINI_API_KEY") && EditorDiscovery.carried("XDG_CONFIG_HOME") && EditorDiscovery.carried("GH_TOKEN"))
+    /// Gemini CLI's sign-in settings come from the shell; nothing for agents Direction doesn't run.
+    @Test func geminisSettingsAreCarried() {
+        #expect(EditorDiscovery.carried("GEMINI_API_KEY") && EditorDiscovery.carried("GOOGLE_CLOUD_PROJECT") && EditorDiscovery.carried("GOOGLE_APPLICATION_CREDENTIALS"))
+        #expect(!EditorDiscovery.carried("XDG_CONFIG_HOME") && !EditorDiscovery.carried("GH_TOKEN"))
     }
 
     @Test func notSignedInEndsTheInvocation() {
@@ -150,7 +145,7 @@ struct EditorACPTests {
         // An edit that names no path, or an agent's own settings, or a path by ~, is refused.
         #expect(answer("edit", "Edit something") == "no")
         #expect(answer("edit", "Edit settings", paths: ["\(folder.path)/.gemini/settings.json"]) == "no")
-        #expect(answer("edit", "Edit config", paths: ["opencode.json"]) == "no")
+        #expect(answer("edit", "Edit keys", paths: [".env"]) == "no")
         #expect(answer("edit", "Edit home", paths: ["~/notes.md"]) == "no")
         // A web search is the web; a search of the folder isn't.
         #expect(answer("search", "Web search: grain looks") == "no")
@@ -178,24 +173,23 @@ struct EditorACPTests {
         #expect(ACPConversation.input(json(#"{"kind":"read","locations":[{"path":"/f/NOTES.md"}]}"#))["path"].string == "/f/NOTES.md")
     }
 
-    /// Each agent's own `--help` says how it speaks ACP; one that lists none is too old for Direction.
+    /// Gemini CLI's own `--help` says how it speaks ACP; a copy that lists neither flag is too old for Direction.
     @Test func theACPFormComesFromTheProgramsHelp() {
-        #expect(EditorDiscovery.acpForm(.opencode, help: "Commands:\n  opencode run [message..]\n  opencode serve    Start a headless server\n") == nil)
-        #expect(EditorDiscovery.acpForm(.opencode, help: "Commands:\n  opencode acp                 Start ACP (Agent Client Protocol) server\n") == ["acp"])
-        #expect(EditorDiscovery.acpForm(.goose, help: "Commands:\n  acp  Start ACP server\n  run  Run goose") == ["acp"])
         #expect(EditorDiscovery.acpForm(.gemini, help: "Options:\n  --experimental-acp  Starts the agent in ACP mode") == ["--experimental-acp"])
         #expect(EditorDiscovery.acpForm(.gemini, help: "Options:\n  --acp  Starts in ACP mode\n  --experimental-acp  Deprecated") == ["--acp"])
-        #expect(EditorDiscovery.acpForm(.cline, help: "  --acp-port <n>") == nil)
-        #expect(EditorDiscovery.acpForm(.cline, help: "  --acp, -a  Run as an ACP agent") == ["--acp"])
+        #expect(EditorDiscovery.acpForm(.gemini, help: "Options:\n  --acp-port <n>  A port") == nil)
+        #expect(EditorDiscovery.acpForm(.gemini, help: "Options:\n  --prompt  Run once") == nil)
     }
 
     /// Only agents found on this Mac are offered, with the one chosen kept even when it's gone, and your own session.
     @Test func onlyInstalledAgentsAreOffered() {
-        #expect(EditorWhoEditsGroup.choices(.claudeCode, installed: [.claudeCode, .opencode]) == [.claudeCode, .opencode, .yourOwn])
+        #expect(EditorWhoEditsGroup.choices(.claudeCode, installed: [.claudeCode, .gemini]) == [.claudeCode, .gemini, .yourOwn])
         #expect(EditorWhoEditsGroup.choices(.gemini, installed: [.codex]) == [.codex, .gemini, .yourOwn])
         #expect(EditorWhoEditsGroup.choices(.yourOwn, installed: []) == [.yourOwn])
-        #expect(EditorPicks.pick(.opencode, .assemble, .best) == .init(version: "", effort: ""))
-        #expect(EditorProgram.opencode.efforts("").map(\.id) == [""])
-        #expect(EditorRunsOn(.goose) == .goose && EditorProgram.cursor.commands == ["cursor-agent", "agent"])
+        #expect(EditorPicks.pick(.gemini, .assemble, .best) == .init(version: "", effort: ""))
+        #expect(EditorProgram.gemini.efforts("").map(\.id) == [""])
+        #expect(EditorRunsOn(.gemini) == .gemini && EditorProgram.allCases == [.claudeCode, .codex, .gemini])
+        // A film saved with an agent Direction no longer runs falls back to the setting.
+        #expect(EditorRunsOn(rawValue: "opencode") == nil)
     }
 }

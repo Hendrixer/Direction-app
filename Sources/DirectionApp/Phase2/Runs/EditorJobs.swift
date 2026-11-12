@@ -261,30 +261,51 @@ enum EditorJobs {
     static func prepareFolder(film: URL, job: EditorJob) throws -> URL {
         let fm = FileManager.default, folder = film.appendingPathComponent("Editor")
         for sub in ["Graphics", "Looks", "Effects", "Transitions", "Techniques", ".direction"] { try fm.createDirectory(at: folder.appendingPathComponent(sub), withIntermediateDirectories: true) }
-        // Direction writes no settings here but OpenCode's asking mode (EditorProgram.openCodeSettings). Any others it
-        // finds came with a film someone shared, or from an editor, and a hook or an MCP server's command in one would
-        // run as you when the editor starts, so they go to the Trash first. OpenCode reads its settings from every
-        // folder up from where it starts, so the film's own folder is cleared of those too.
-        let planted = [".claude/settings.json", ".claude/settings.local.json", ".codex", ".gemini", ".qwen", ".cursor", ".opencode", "opencode.json", "opencode.jsonc", ".goose", ".kilocode", "kilo.json", ".cline", ".clinerules", ".vscode", ".env"]
-        for (base, name) in planted.map({ (folder, $0) }) + [".opencode", "opencode.json", "opencode.jsonc", "kilo.json", ".kilocode"].map({ (film, $0) }) {
+        // Direction writes no settings or instructions here but its skills and Gemini CLI's stop below. Any others it
+        // finds came with a film someone shared, or from an editor: a hook or an MCP server's command in one would run
+        // as you when the editor starts, and instructions would steer it, so they go to the Trash first. Claude Code and
+        // Gemini CLI read their instructions from every folder up too, so the film's own folder is cleared of those.
+        let planted = [".claude/settings.json", ".claude/settings.local.json", ".claude/agents", ".claude/commands", ".claude/hooks", ".claude/output-styles",
+                       ".codex", ".gemini", ".env", "CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", "AGENTS.override.md", "GEMINI.md"]
+        for (base, name) in planted.map({ (folder, $0) }) + [".gemini", ".env", "CLAUDE.md", "CLAUDE.local.md", "GEMINI.md"].map({ (film, $0) }) {
             let url = base.appendingPathComponent(name)
             guard fm.fileExists(atPath: url.path) else { continue }
-            if base == folder, name == "opencode.json", let data = try? Data(contentsOf: url), EditorProgram.isOwnOpenCodeSettings(data) { continue }
+            if base == folder, name == ".gemini", isGeminiStop(url) { continue }
             DirectionLog.warning("Moved \(name) out of the film\(base == folder ? "\u{2019}s editor folder" : "") before starting the editor", "editor")
             if (try? fm.trashItem(at: url, resultingItemURL: nil)) == nil { try fm.removeItem(at: url) }
         }
+        // Gemini CLI loads the first .env it finds from here up, else the home folder's, and one setting BASH_ENV would
+        // run with every command: Direction's own empty one stops it reading one from a folder the film sits in, and
+        // the home folder's settings are passed to it instead (EditorDiscovery.geminiHomeEnvironment).
+        try fm.createDirectory(at: folder.appendingPathComponent(".gemini"), withIntermediateDirectories: true)
+        try geminiStop.write(to: folder.appendingPathComponent(".gemini/.env"), options: .atomic)
         let notes = folder.appendingPathComponent("NOTES.md")
         if !fm.fileExists(atPath: notes.path) { try Data("# Notes between runs\n\nWhat I\u{2019}d want to know next time I pick up this film.\n".utf8).write(to: notes) }
         // The job names its own skill; the others (make-shot, make-graphic, propose-look…) are there for it to follow too.
+        var ours: Set<String> = []
         if let skills = skillsFolder(), let names = try? fm.contentsOfDirectory(atPath: skills.path) {
             for name in names {
                 guard let text = try? Data(contentsOf: skills.appendingPathComponent(name).appendingPathComponent("SKILL.md")) else { continue }
                 let target = folder.appendingPathComponent(".claude/skills/\(name)/SKILL.md")
                 try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try text.write(to: target, options: .atomic)
+                ours.insert(name)
             }
         }
+        // A skill that isn't Direction's came with the film (a skill can carry hooks of its own).
+        let installed = folder.appendingPathComponent(".claude/skills")
+        for name in (try? fm.contentsOfDirectory(atPath: installed.path)) ?? [] where !ours.contains(name) {
+            DirectionLog.warning("Moved the skill \(name) out of the film\u{2019}s editor folder before starting the editor", "editor")
+            let url = installed.appendingPathComponent(name)
+            if (try? fm.trashItem(at: url, resultingItemURL: nil)) == nil { try fm.removeItem(at: url) }
+        }
         return folder
+    }
+
+    static let geminiStop = Data("# Direction's: Gemini CLI reads no .env from the folders above this one.\n".utf8)
+    /// The job folder's .gemini holding nothing but Direction's own stop.
+    static func isGeminiStop(_ url: URL) -> Bool {
+        (try? FileManager.default.contentsOfDirectory(atPath: url.path)) == [".env"] && (try? Data(contentsOf: url.appendingPathComponent(".env"))) == geminiStop
     }
 
     /// The skills that ship with Direction: in the app bundle, or the checkout this build came from.

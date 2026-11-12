@@ -99,7 +99,13 @@ import DirectionTools
                 run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = pick.version; $0.effort = pick.effort }) ?? run
             }
         }
-        guard live[run.id] == nil, preparing[run.id] == nil, let program = EditorProgram(rawValue: run.program) else { return }
+        // A run left by an agent Direction no longer runs starts over with the film's editor: its session was that agent's.
+        if EditorProgram(rawValue: run.program) == nil, let p = EditorSetup.runsOn(film: state?.editor).program {
+            let pick = EditorPicks.pick(p, run.job, state?.speedAndQuality ?? .balanced)
+            run = (try? store.updateRun(run.id) { $0.program = p.rawValue; $0.version = pick.version; $0.effort = pick.effort; $0.session = nil }) ?? run
+        }
+        guard live[run.id] == nil, preparing[run.id] == nil else { return }
+        guard let program = EditorProgram(rawValue: run.program) else { end(run.id, store: store, outcome: .init(state: .failed, reason: .notInstalled)); return }
         offlineRetries[run.id]?.cancel(); offlineRetries[run.id] = nil
         // Try again, Resume or back online: a fresh start, with its one restart to come.
         if !restartingStuck { restarted.remove(run.id) }
@@ -149,8 +155,8 @@ import DirectionTools
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = programOverride[program] == nil ? (install?.arguments(invocation) ?? program.arguments(invocation)) : program.arguments(invocation)
             p.currentDirectoryURL = folder
-            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id].merging(program.askingEnvironment) { a, _ in a }, shellKey: EditorSetup.usesShellKey(program))
-            if program == .opencode { try EditorProgram.openCodeSettings(version: install?.version).write(to: folder.appendingPathComponent("opencode.json"), options: .atomic) }
+            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id], shellKey: EditorSetup.usesShellKey(program),
+                                                        fallback: program == .gemini ? EditorDiscovery.geminiHomeEnvironment() : [:])
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
             let l = LiveRun(runID: run.id, store: store, program: program, process: p)
@@ -473,7 +479,7 @@ import DirectionTools
             l.intent = .quit
             _ = try? l.store.updateRun(l.runID) { $0.state = .paused; $0.reason = .pausedByQuit; $0.pausedByQuit = true }
         }
-        // ACP agents hear the turn is cancelled, and have a moment to save, before the signals.
+        // Gemini CLI hears the turn is cancelled, and have a moment to save, before the signals.
         var cancelled = false
         for l in working { if let cancel = l.acp?.cancel() { send(l, [cancel]); cancelled = true } }
         let groups = working.map(\.process.processIdentifier), steps = stopSteps
