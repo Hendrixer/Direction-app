@@ -113,6 +113,15 @@ swift build           # or open Package.swift in Xcode
 - Screening links aren't available yet. To share a cut, export a screening copy with File › Share Cut….
 - Open-source parts are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-## License
+## License and paying for Direction
 
-Direction is fair source under the [Functional Source License, Version 1.1, MIT Future License](LICENSE.md) (FSL-1.1-MIT). You can read, build, change and use it for anything except a competing product, and each version becomes MIT two years after it's released. The Direction name and icon aren't covered by the license.
+Direction is **fair source**: the code is public under the [Functional Source License, Version 1.1, MIT Future License](LICENSE.md) (FSL-1.1-MIT).
+
+- **Build it yourself, free.** You can read, build, change and use Direction for your own films, your work and your clients, at no cost and with no license key.
+- **No competing copies.** You can't use the code to offer a product or service that competes with Direction, such as selling your own build of it.
+- **MIT after two years.** Each version becomes MIT-licensed two years after it's released, with none of these limits.
+- **The name and icon** aren't covered by the license.
+
+The download is the signed, notarized app that keeps itself up to date. It will become a paid plan: **$99 a year**, with support, or **$199 once** as a launch offer, with a 14-day trial. Until then it's free. Either way, the editor runs on your own Claude, ChatGPT or Gemini plan; Direction never charges for it.
+
+Outside pull requests can't be accepted yet: see [CONTRIBUTING.md](CONTRIBUTING.md).
