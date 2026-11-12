@@ -65,6 +65,9 @@ import DirectionTools
     /// Finishing runs while Direction does its own steps first (FinishingPass), before the program starts: the
     /// pass, so Stop and Quit reach it.
     private var preparing: [String: Task<Void, Never>] = [:]
+    /// Which of those are reading what the editor reads first (EditorOpening), by the read's own mark: Pause ends
+    /// one at once, since nothing has started.
+    private var reading: [String: UUID] = [:]
     func isLive(_ runID: String) -> Bool { live[runID] != nil || preparing[runID] != nil }
     /// Tests hold it weakly to see it let go once the run is over.
     func liveRun(_ runID: String) -> LiveRun? { live[runID] }
@@ -90,7 +93,7 @@ import DirectionTools
     // MARK: Launch
 
     /// Starts the program for a run: its first job text, or `continuation` on the saved session.
-    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false, prepared: Bool = false) {
+    func launch(_ run: EditorRun, store: ProjectStore, continuation: String? = nil, restartingStuck: Bool = false, prepared: Bool = false, opening: String? = nil) {
         register(store)
         // The store's copy: the session or state may have moved since the caller read it.
         var run = (try? store.run(run.id)) ?? run
@@ -139,6 +142,27 @@ import DirectionTools
             }
             return
         }
+        // What the editor would read first, read for it (EditorOpening): then this starts again with it in hand.
+        if opening == nil {
+            guard let folder = try? EditorJobs.prepareFolder(film: store.url, job: run.job) else {
+                end(run.id, store: store, outcome: .init(state: .failed, reason: .programQuit, detail: "Direction couldn\u{2019}t make the editor\u{2019}s folder in the film.")); return
+            }
+            if run.state != .starting { _ = try? store.updateRun(run.id) { $0.state = .starting }; onChange?(store.url) }
+            let runID = run.id, continuing = continuation != nil && run.session != nil
+            let mine = UUID()
+            reading[runID] = mine
+            preparing[runID] = Task { @MainActor in
+                let text = await EditorOpening.text(for: run, store: store, folder: folder, continuing: continuing)
+                // Paused meanwhile, and perhaps resumed: the entry is gone or another's, and this one ends here.
+                guard self.reading[runID] == mine else { return }
+                self.reading[runID] = nil
+                self.preparing[runID] = nil
+                // Stopped or paused meanwhile: it stays that way.
+                guard !Task.isCancelled, let again = try? store.run(runID), again.state == .starting || again.state == .queued else { self.onChange?(store.url); self.pump(); return }
+                self.launch(again, store: store, continuation: continuation, restartingStuck: restartingStuck, prepared: true, opening: text)
+            }
+            return
+        }
         do {
             let folder = try EditorJobs.prepareFolder(film: store.url, job: run.job)
             let mcp = folder.appendingPathComponent(".mcp.json"), schema = folder.appendingPathComponent(".direction/result.schema.json")
@@ -152,6 +176,7 @@ import DirectionTools
             else if session != nil, run.sessionSpend == nil, let spent = run.spend { run = (try? store.updateRun(run.id) { $0.sessionSpend = spent }) ?? run }
             var job = try (session == nil ? EditorJobs.text(for: run, store: store) : continuation!)
             if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
+            if let opening, !opening.isEmpty { job += "\n" + opening }
             // The run's own, once it has started; an older run without one reads its job's.
             let effort = run.effort ?? EditorPicks.pick(program, run.job, state?.speedAndQuality ?? .balanced).effort
             let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role(for: run.job, program: program), version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, kind: run.job)
@@ -453,6 +478,8 @@ import DirectionTools
     /// Interrupts after the current tool call (SIGINT; the program saves its session). Edits made stay.
     func pause(_ runID: String, store: ProjectStore) {
         _ = try? store.updateRun(runID) { if $0.state.isOpen { $0.state = .paused } }
+        // Still reading what the editor reads first: nothing has started, and Resume starts it again.
+        if reading[runID] != nil, let task = preparing[runID] { task.cancel(); preparing[runID] = nil; reading[runID] = nil }
         guard let l = live[runID] else { onChange?(store.url); return }
         l.intent = .pause
         if l.pending.isEmpty { interrupt(l) }

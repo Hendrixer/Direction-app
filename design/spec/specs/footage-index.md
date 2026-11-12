@@ -85,6 +85,14 @@ Measured on the director's 3:12 talking-head take on an M4 Max, against Whisper 
 
 Most of Apple's difference is verbatim speech Whisper tidies away: false starts and a repeated phrase ("it transitioned that large. I think", "I think we should"), which an editor wants for finding retakes, plus "7" for "seven". Turbo's one real slip: "in finite time" as "by nighttime". Settings › Footage says this in each choice's line.
 
+### Word times held to the sound
+
+Both engines put the silence before a phrase inside that phrase's first word. On the director's 2:24 narration with 48 pauses (2026-11-12), 27 of Apple's 247 word starts and 36 of Whisper's 244 sat in silence, up to 2 s early; the ends were right. The editor found cuts "inside a word" that were in silence, half the real pause time was missing from the pauses it's offered, and it measured the sound itself to time its cuts.
+
+So when a transcript is made or imported, Direction holds each word to the take's own sound (`WordEdges`): the level every 10 ms, speech being what's well over the take's quietest fifth of a second and within 30 dB of its speech. A word's end comes back to where its sound stops (plus 60 ms), and its start goes forward to where that sound began after the pause before it (less 30 ms). Edges only move inward, a word keeps at least 80 ms, and a word with no sound found, or a take where speech can't be told from the room (music throughout), stays as the engine gave it. After, 1 start of 247 sits in silence (by 0.24 s), and the gaps between words cover 67 of the 71 seconds of real pauses, where they covered 29.
+
+Transcripts from before are checked once, the first time the film is opened or a tool reads its words (ids, text and the chosen track unchanged; about a second for an hour of sound). Whisper no longer has the better times, only sometimes the better words.
+
 ### Logging in batches
 
 The editor logs footage in runs of up to 20 takes, each a fresh session, so no run grows past what one session can hold, and the director can circle while the rest is still being looked at.

@@ -180,6 +180,8 @@ final class FilmModel {
         let store = try ProjectStore(url: url)
         try ProjectLibrary().register(store)
         runtime = try ToolRuntime(store: store)
+        // Transcripts from before word times were held to the sound, once, off the main thread.
+        if !isPreview { let runtime = runtime; Task.detached(priority: .utility) { await runtime?.checkWordEdges() } }
         refresh(force: true)
         knownDelivered = Set(turnovers.filter { $0.state == .delivered }.map(\.id))
         knownQuestions = Set(questions.map(\.id))

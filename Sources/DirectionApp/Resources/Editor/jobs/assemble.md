@@ -1,7 +1,7 @@
-<!-- direction-job assemble v6 -->
+<!-- direction-job assemble v7 -->
 # Build the assembly for "{{film}}"
 
-Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
+Follow the `{{skill}}` skill. Its playbook is at the end of this message, under Read for you, with what you’d read first; if it isn’t there, read `{{skillPath}}` in this folder.
 
 The director asked for the assembly: turnover {{turnoverNumber}} (id `{{turnoverID}}`, kind assembly). {{circles}}
 

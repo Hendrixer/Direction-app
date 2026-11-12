@@ -83,8 +83,12 @@ public enum TutorialStudy {
     /// A video's words with their times: Whisper when it's installed, else the Mac's own recognizer; none when both fail.
     public static func listen(_ asset: MediaAsset, cacheDirectory: URL) async -> [TranscriptWord] {
         guard let track = asset.audio.first?.id else { return [] }
-        if WhisperTranscriber.executable() != nil, let t = try? await WhisperTranscriber.transcribe(asset: asset, trackID: track, language: "en", model: SharedSettings.whisperModel, directory: cacheDirectory) { return t.words }
-        return (try? await LocalTranscriber.transcribe(asset: asset, trackID: track, language: "en-US", directory: cacheDirectory))?.words ?? []
+        var heard: SourceTranscript?
+        if WhisperTranscriber.executable() != nil { heard = try? await WhisperTranscriber.transcribe(asset: asset, trackID: track, language: "en", model: SharedSettings.whisperModel, directory: cacheDirectory) }
+        if heard == nil { heard = try? await LocalTranscriber.transcribe(asset: asset, trackID: track, language: "en-US", directory: cacheDirectory) }
+        guard let heard else { return [] }
+        // Each word where its sound is (WordEdges): the pace and the pauses are measured from these.
+        return ((try? await WordEdges.tighten(heard, asset: asset, directory: cacheDirectory)) ?? heard).words
     }
 
     /// Full frames of the video at given times, as JPEGs in `folder`.

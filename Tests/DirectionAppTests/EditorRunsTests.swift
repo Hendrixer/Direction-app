@@ -1024,8 +1024,39 @@ struct EditorRunnerTests {
         m.refresh(force: true)
         _ = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
         #expect(jobText(dir).hasPrefix("I approved your read-back. Cut it."), "\(jobText(dir))")
+        // The continuation carries what it would read again.
+        #expect(jobText(dir).contains("## Read for you") && jobText(dir).contains("`direction.turnovers({})` answered") && jobText(dir).contains("`direction.questions({})` answered") && !jobText(dir).contains("playbook (`"))
         EditorRunner.shared.stop(run.id, store: store)
         _ = try await ended(store, run.id)
+    }
+
+    /// A job starts with what its editor would read first: the playbook without its front matter, its notes, the
+    /// turnover and the cut, each as the script call it answers. Only tools that change nothing are read.
+    @Test func aJobStartsWithWhatItsEditorWouldReadFirst() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let (m, t, _) = try readBackFilm(store); defer { m.close() }
+        let folder = try EditorJobs.prepareFolder(film: store.url, job: .turnover)
+        try "# Notes between runs\n\nThe narration is the story; cut on its pauses.\n".write(to: folder.appendingPathComponent("NOTES.md"), atomically: true, encoding: .utf8)
+        let run = EditorRun(job: .turnover, program: "claudeCode", version: "claude-opus-5-5", turnoverID: t.id)
+        let text = await EditorOpening.text(for: run, store: store, folder: folder, continuing: false)
+        #expect(text.hasPrefix("## Read for you") && text.contains("### The `take-turnover` playbook") && !text.contains("\nname: take-turnover"))
+        #expect(text.contains("cut on its pauses") && text.contains("### `direction.turnovers({})` answered") && text.contains(t.id) && text.contains("### `direction.timeline({})` answered"))
+        // As a script calls them, never as tools of their own.
+        #expect(!text.contains("direction_turnovers") && !text.contains("direction_timeline"))
+        for job in EditorJob.allCases {
+            for read in EditorOpening.reads(job, hasScript: true, hasStyle: true) + EditorOpening.readsAgain(job) {
+                #expect(ToolCatalog.definitions.first { $0.name == read.name }?.readOnly == true && ToolCatalog.names(for: job).contains(read.name), "\(job): \(read.name)")
+            }
+        }
+        // The film is as it was.
+        #expect(try store.turnover(t.id).state == t.state && store.revision() == 1)
+        // And the run's first message has it.
+        try scenario("slow", dir)
+        let started = try start(.turnover, store: store, turnoverID: t.id)
+        _ = try await wait(store, started.id) { $0.state == .working }
+        #expect(jobText(dir).contains("## Read for you") && jobText(dir).contains("### The `take-turnover` playbook"))
+        EditorRunner.shared.stop(started.id, store: store)
+        _ = try await ended(store, started.id)
     }
 
     private func pid(_ dir: URL, _ name: String) async throws -> pid_t {
@@ -1048,8 +1079,14 @@ struct EditorRunnerTests {
         let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
         try scenario("straggler", dir)
         let run = try start(.logFootage, store: store)
-        weak var live = EditorRunner.shared.liveRun(run.id)
-        #expect(live != nil)
+        // The program starts once Direction has read what the editor would read first.
+        // It's over in a few milliseconds, so look often; the mark it leaves shows it was there.
+        weak var live: EditorRunner.LiveRun?
+        var seen = false
+        for _ in 0..<3_000 where !seen {
+            if let l = EditorRunner.shared.liveRun(run.id) { live = l; seen = true } else { await Task.yield(); try await Task.sleep(for: .milliseconds(1)) }
+        }
+        #expect(seen)
         let straggler = try await pid(dir, ".fake-straggler")
         #expect(try await ended(store, run.id).state == .done)
         #expect(try await gone(straggler))

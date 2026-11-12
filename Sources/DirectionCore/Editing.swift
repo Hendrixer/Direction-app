@@ -2014,11 +2014,15 @@ public enum TranscriptEditing {
 
     public static func deletionRanges(wordIDs: Set<String>, words: [TimelineWord]) throws -> [MediaRange] {
         guard !wordIDs.isEmpty, wordIDs.isSubset(of: Set(words.map(\.id))) else { throw DirectionError("stale_transcript", "Selected words no longer match this edit. Refresh the transcript.") }
-        let ranges = words.filter { wordIDs.contains($0.id) }.map(\.range).sorted { $0.start < $1.start }
-        var merged: [MediaRange] = []
-        for r in ranges {
-            if let last = merged.last, r.start <= last.end { merged[merged.count - 1].duration = max(last.end, r.end) - last.start }
+        // Words are held to their sound, so there's a pause between two of them: when both go and they're one after
+        // the other in the same clip, the pause between goes too, not left as a few frames of room.
+        let ordered = words.sorted { $0.range.start < $1.range.start }
+        var merged: [MediaRange] = [], lastIndex: Int?, lastClip: String?
+        for (i, w) in ordered.enumerated() where wordIDs.contains(w.id) {
+            let r = w.range
+            if let last = merged.last, r.start <= last.end || (lastIndex == i - 1 && lastClip == w.clipID) { merged[merged.count - 1].duration = max(last.end, r.end) - last.start }
             else { merged.append(r) }
+            lastIndex = i; lastClip = w.clipID
         }
         return merged.reversed()
     }

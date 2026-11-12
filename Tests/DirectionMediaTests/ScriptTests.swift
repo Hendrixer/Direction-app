@@ -217,5 +217,41 @@ struct Scripts {
             }
             #expect(many.imagePaths.count == ScriptRunner.maxShown && many.audioPaths == [wav.path])
         }
+
+        /// What one script keeps, the next one has: ids and planned operations are written once. It's there after a
+        /// failure, in a new tool server for the same run (its file), and never past its size.
+        @Test func whatAScriptKeepsTheNextOneHas() async throws {
+            ScriptRunner.helper = ScriptTests.helper
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("keep-\(UUID().uuidString).json"); defer { try? FileManager.default.removeItem(at: file) }
+            let kept = KeptValues(file: file)
+            let none: @Sendable (String, JSONValue) async throws -> ToolResponse = { _, _ in ToolResponse(.object([:])) }
+            let first = try await ScriptRunner.run(code: #"keep.ops = [{op: "trim", frames: 3}]; keep.clip = "clip-1"; return Object.keys(keep).length"#, kept: kept, invoke: none)
+            #expect(first.value["result"] == .number(2) && first.value["keep"] == .string("clip, ops"))
+            let second = try await ScriptRunner.run(code: #"return keep.ops[0].frames + (keep.clip === "clip-1" ? 10 : 0)"#, kept: kept, invoke: none)
+            #expect(second.value["result"] == .number(13))
+            // A failure keeps what it found first.
+            do { _ = try await ScriptRunner.run(code: #"keep.found = 7; throw new Error("no")"#, kept: kept, invoke: none); Issue.record("should fail") } catch let e as DirectionError { #expect(e.code == "script_failed") }
+            // The run's file: a continued session's new tool server reads it.
+            let later = try await ScriptRunner.run(code: "return [keep.found, keep.clip]", kept: KeptValues(file: file), invoke: none)
+            #expect(later.value["result"] == .array([.number(7), .string("clip-1")]))
+            // Too big isn't kept, and says so; what was there stays. Something that isn't an object isn't kept either.
+            let big = try await ScriptRunner.run(code: #"keep.big = "x".repeat(300000); return 1"#, kept: kept, invoke: none)
+            #expect(big.value["keep"].string?.contains("wasn\u{2019}t kept") == true)
+            _ = try await ScriptRunner.run(code: "keep = 5; return 1", kept: kept, invoke: none)
+            #expect(kept.read()["found"] == .number(7) && kept.read()["big"] == .null)
+            // Something that can't be written down (a cycle) says so, in the answer or the failure, and what was kept stays.
+            let cycle = try await ScriptRunner.run(code: "keep.self = keep; return 1", kept: kept, invoke: none)
+            #expect(cycle.value["keep"].string?.contains("plain values") == true && kept.read()["found"] == .number(7))
+            do { _ = try await ScriptRunner.run(code: #"keep.self = keep; throw new Error("no")"#, kept: kept, invoke: none); Issue.record("should fail") } catch let e as DirectionError { #expect(e.message.contains("plain values")) }
+            // Two scripts at once: each one's changes go over what's there, neither loses the other's.
+            let base = kept.read()
+            var one = base, two = base
+            if case .object(var o) = one { o["one"] = .number(1); one = .object(o) }
+            if case .object(var o) = two { o["two"] = .number(2); o["found"] = nil; two = .object(o) }
+            #expect(kept.write(one, since: base) && kept.write(two, since: base))
+            #expect(kept.read()["one"] == .number(1) && kept.read()["two"] == .number(2) && kept.read()["found"] == .null && kept.read()["clip"] == .string("clip-1"))
+            // Without anywhere to keep, a script still has an empty keep.
+            #expect(try await ScriptRunner.run(code: "keep.a = 1; return keep.a", invoke: none).value["result"] == .number(1))
+        }
     }
 }

@@ -1,7 +1,7 @@
-<!-- direction-job script v4 -->
+<!-- direction-job script v5 -->
 # Write the picture for "{{film}}"
 
-Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
+Follow the `{{skill}}` skill. Its playbook is at the end of this message, under Read for you, with what you’d read first; if it isn’t there, read `{{skillPath}}` in this folder.
 
 {{task}}
 

@@ -1,7 +1,7 @@
-<!-- direction-job finish v6 -->
+<!-- direction-job finish v7 -->
 # Finish "{{film}}"
 
-Follow the `{{skill}}` skill. Its playbook is in `{{skillPath}}` in this folder; read it first.
+Follow the `{{skill}}` skill. Its playbook is at the end of this message, under Read for you, with what you’d read first; if it isn’t there, read `{{skillPath}}` in this folder.
 
 The director locked picture on {{lockedCut}}. The cut is final: every shot, cutaway and their timing stay exactly as they are, and anything that would change them fails with `picture_locked`. Color and sound are open to you, and so are the graphics over the picture (captions, titles, lower thirds, credits) placed with `placeGraphic` on V2 and up, moved or removed. Locked scenes are the same.
 

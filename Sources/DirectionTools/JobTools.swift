@@ -44,8 +44,30 @@ extension ToolCatalog {
     /// tool's description short (Claude Code keeps 2,048 characters); instructions are kept whole.
     public static func reference(for job: EditorJob) -> String {
         let own = names(for: job)
-        return definitions.filter { own.contains($0.name) }.map { scriptNames("### " + call($0, film: true) + "\n" + $0.description) }.joined(separator: "\n\n")
+        return definitions.filter { own.contains($0.name) }.map { scriptNames("### " + call($0, film: true) + "\n" + $0.description + (returns[$0.name].map { "\nReturns " + $0 } ?? "")) }.joined(separator: "\n\n")
     }
+
+    /// What the most used tools answer with, so a script reads a field the first time instead of returning the
+    /// answer's keys to find it (the runs of 11 Nov 2026 spent two to four steps each doing that). Written from
+    /// real answers; `returnsAreWhatTheToolsAnswer` holds each to its tool.
+    static let returns: [String: String] = [
+        "direction_timeline": "{cut, editRevision, sequenceID, outline, locks: {pictureLocked, scenes: []}, effects?: {clipID, effectID, name}[], otio?}. outline is text: a first line for the cut, then a row per clip: `V2  00:04:03\u{2013}00:06:21  clip-\u{2026}  1B 1B-1  src 00:02:00\u{2013}00:04:18  filter.soften(0.7)` (track, cut timecodes as minutes:seconds:frames, clip id, take, source times, effects). effects has every effect\u{2019}s id, for setEffect and removeEffect.",
+        "direction_transcript": "{editRevision, words: {id, text, start, end}[], total, nextOffset} with start and end in cut seconds; nextOffset is null on the last page. With assetID: {assetID, audioTrackID, provider, words: {id, text, start, end}[] (source seconds), text, total, nextOffset}.",
+        "direction_turnovers": "{brief, preferences, locks, turnovers: {turnover: {id, number, kind, state, latitude, noteIDs, baseCutID, baseRevision, readBack: [], readBackApproved, waitForOK, adjustments: {[noteID]: string}, progress: {[noteID]: string}}, notes: {id, number, kind, text, time?, range?, status, answers: [], replies: [], transcriptContext: {excerpt, wordCount}}[], questions: [], mayStartCutting, latitudeMeaning}[]}. A note\u{2019}s time and range are {value, timescale}: seconds are value / timescale.",
+        "direction_edit": "{committed, editRevision, baseEditRevision, oldLength, newLength, delta (seconds), operations: {index, op, summary, delta, deltaText, changes: []}[], warnings: string[], summary, mix? (with measure: true)}. With validateOnly: true nothing changes and committed is false: the same answer, to check a batch first. A batch that fails throws, with the failing operation\u{2019}s index, and changes nothing.",
+        "direction_watch": "{range, start, end, revision, watched, words (what\u{2019}s said), cells: {cell, time, timecode, afterCut}[], cuts: {time, timecode}[], sounds: {kind, start, end}[], imagePaths: [the filmstrip]}. With changed: true: {passages: [each of those, without imagePaths], more?, imagePaths: [every passage\u{2019}s filmstrip, in order]}. `show` the imagePaths to look at them.",
+        "direction_check": "{editRevision, ready, cuts?: {at, kind, clipIDs, says, fix}[], cutsCompared?, framing?: [], loudness?: {integratedLUFS, truePeakDBTP, target, ceiling, ready, says, fix}}, each part only for the checks asked.",
+        "direction_cut_points": "{points: {t (cut seconds, or source seconds with assetID), kind, strength, from, to, clipID? (when more than one clip was asked)}[], says, clipID? and take? (when one clip was asked), more?}.",
+        "direction_measure_audio": "The cut: {editRevision, integratedLUFS, samplePeakDBFS, truePeakDBTP, target: {lufs, ready, says, mixGainDB, next}, profile: {every, shortTermLUFS: number[], loudest: {start, end, shortTermLUFS}[], peaks: {start, end, truePeakDBTP}[], overCeiling: []}}. With ranges: {editRevision, ranges: {start, end, integratedLUFS, samplePeakDBFS, truePeakDBTP, loudest}[]}. With levels: {start, every, count, peakDBFS: number[], rmsDBFS: number[]}. With assetID: {assetID, audioTrackID, samplePeakDBFS, rmsDBFS, waveformPeaks}.",
+        "direction_frame": "With times: {editRevision, frames: {path, width, height, requestedTime, actualTime}[], imagePaths: string[]}. With time: {path, width, height, editRevision, requestedTime, actualTime, imagePaths: [path]}. requestedTime and actualTime are {value, timescale}: seconds are value / timescale. `show` an imagePath to look at it.",
+        "direction_brief": "{brief: {logline, feeling, audience, lengthMin, lengthMax, shape, style, mustKeep: [], references: []}, latitude, preferences, pictureLocked, lockedScenes: [], style}.",
+        "direction_dailies": "{assets: {id, name, durationSeconds, hasAudio, index}[], dailies: {scenes: {id, number, title, locked, setups: []}[], takes: {[assetID]: {assetID, sceneID, setupCode, code, circled, caption, suggestion?, flags: [], unusable}}, syncGroups: {id, soundAssetID, takes: []}[]}}.",
+        "direction_questions": "{questions: {id, text, choices: [], answer?, turnoverID?}[]}.",
+        "direction_cuts": "{id, name, editRevision, sequenceID, createdAt}[], newest first.",
+        "direction_shots": "{shots: {id, assetID, number, start, end (source seconds), size, movement, description, people: [], setting, flags: [], keyframes: []}[], takes: {assetID, take, index}[], total, nextOffset}.",
+        "direction_edit_catalog": "{operations: {op, group, does, arguments: []}[], effects: [], transitions: [], customEffects: [], customTransitions: [], conventions: {editPoint, keys, notes, times, tracks}, errors: {code, when}[], latitude, pictureLocked}.",
+        "direction_job": "{id, kind, status (running, completed, failed, cancelled or interrupted), phase, progress, result?, error?}.",
+    ]
 
     /// One tool as a script calls it, every argument typed. film: the server was started for a film (a job's always
     /// is), so projectPath, on every tool, is left out.
@@ -109,7 +131,9 @@ extension ToolCatalog {
             guard full != runName, let d = definitions.first(where: { $0.name == full }) else {
                 throw DirectionError("unknown_tool", "Direction has no tool \(name). direction.help() lists them.")
             }
-            return .object(["call": .string(job == nil ? call(d) : scriptNames(call(d, film: true))), "description": .string(job == nil ? d.description : scriptNames(d.description))])
+            var fields: [String: JSONValue] = ["call": .string(job == nil ? call(d) : scriptNames(call(d, film: true))), "description": .string(job == nil ? d.description : scriptNames(d.description))]
+            if let r = returns[d.name] { fields["returns"] = .string(job == nil ? r : scriptNames(r)) }
+            return .object(fields)
         })
     }
 

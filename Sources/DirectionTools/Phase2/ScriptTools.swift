@@ -16,7 +16,7 @@ import DirectionCore
 extension ToolCatalog {
     public static let runName = "direction_run"
     static var scriptDefinitions: [ToolDefinition] { [
-        definition(runName, "Direction\u{2019}s tools as functions in a short JavaScript: one step instead of many, and only what the script returns comes back. Each tool is a function on `direction`, named without direction_ and taking that tool\u{2019}s own arguments: `const m = direction.measure_audio({ranges: [{start: 0, end: 8}]})` returns the tool\u{2019}s answer as an object (a tool that draws images or makes a sound adds imagePaths or audioPaths). Calls are synchronous; a tool that fails throws an Error with code and message, which the script can catch. `return x` answers with x; `print(...)` adds a line to the answer; `show(path)` puts an image (up to 8) or a sound a tool made in this script into the answer, to look at or listen to. Gather changes and make them in one direction.edit call. `direction.help()` lists Direction\u{2019}s other tools, and `direction.help(\"name\")` gives one in full. The script reaches nothing but Direction\u{2019}s tools (no files, network or programs). It stops after 4 minutes of its own work (the tools\u{2019} time doesn\u{2019}t count) or 300 calls; changes made before a failure stay.",
+        definition(runName, "Direction\u{2019}s tools as functions in a short JavaScript: one step instead of many, and only what the script returns comes back. Each tool is a function on `direction`, named without direction_ and taking that tool\u{2019}s own arguments: `const m = direction.measure_audio({ranges: [{start: 0, end: 8}]})` returns the tool\u{2019}s answer as an object (a tool that draws images or makes a sound adds imagePaths or audioPaths). Calls are synchronous; a tool that fails throws an Error with code and message, which the script can catch. `return x` answers with x; `print(...)` adds a line to the answer; `show(path)` puts an image (up to 8) or a sound a tool made in this script into the answer, to look at or listen to. `keep` is an object that stays between your scripts in this job: put ids, measurements and the operations you plan in it (`keep.ops = [...]`) and use them in a later script, so you never write them out twice (a trial edit, then the same `keep.ops` committed). Gather changes and make them in one direction.edit call. `direction.help()` lists Direction\u{2019}s other tools, and `direction.help(\"name\")` gives one in full. The script reaches nothing but Direction\u{2019}s tools (no files, network or programs). It stops after 4 minutes of its own work (the tools\u{2019} time doesn\u{2019}t count) or 300 calls; changes made before a failure stay.",
                    ["code": noted(string, "The script\u{2019}s body: a function body, so end with return."),
                     "does": noted(string, "What it does in a few plain words, as the director reads it: \u{201C}Evening out the narration\u{201D}.")],
                    required: ["code", "does"], readOnly: false),
@@ -27,7 +27,7 @@ extension ToolRuntime {
     func invokeScript(_ name: String, _ a: JSONValue) async throws -> ToolResponse? {
         guard name == ToolCatalog.runName else { return nil }
         // The script's calls come back here, checked and run as direct calls are.
-        return try await ScriptRunner.run(code: a.requiredString("code")) { [self] name, arguments in try await invoke(name, arguments: arguments) }
+        return try await ScriptRunner.run(code: a.requiredString("code"), kept: KeptValues.forThisProcess(cache: cacheDirectory)) { [self] name, arguments in try await invoke(name, arguments: arguments) }
     }
 }
 
@@ -62,7 +62,10 @@ public enum ScriptRunner {
     /// Why the helper was stopped before it finished.
     enum Stop: Sendable { case time, memory, longLine }
 
-    public static func run(code: String, invoke: @escaping @Sendable (String, JSONValue) async throws -> ToolResponse) async throws -> ToolResponse {
+    static let keepTooBig = "keep is over \(KeptValues.most / 1_000) KB and wasn\u{2019}t kept: what was kept before this script is still there. Keep less."
+    static let keepUnreadable = "keep wasn\u{2019}t kept: it has to be an object of plain values (no functions, cycles or BigInt). What was kept before this script is still there."
+
+    public static func run(code: String, kept: KeptValues? = nil, invoke: @escaping @Sendable (String, JSONValue) async throws -> ToolResponse) async throws -> ToolResponse {
         let started = SuspendingClock.now, limit = seconds, memory = maxMemory, job = Self.job
         // Time inside tool calls, and when the call in flight began: the rest is the script's own.
         let waited = Box<(total: Duration, since: SuspendingClock.Instant?)>((.zero, nil))
@@ -105,7 +108,8 @@ public enum ScriptRunner {
             let data = (try? v.data()) ?? (try? JSONValue.object(["error": .object(["code": .string("unreadable_answer"), "message": .string("The tool\u{2019}s answer couldn\u{2019}t be passed to the script.")])]).data()) ?? Data("{}".utf8)
             try? writer.write(contentsOf: data + Data("\n".utf8))
         }
-        send(.object(["code": .string(code), "seconds": .number(limit)]))
+        let keptBefore = kept?.read() ?? .object([:])
+        send(.object(["code": .string(code), "seconds": .number(limit), "keep": keptBefore]))
 
         let got = Collected()
         let work = Task {
@@ -142,8 +146,9 @@ public enum ScriptRunner {
                         got.printed.append(kept.count < text.count ? kept + "\u{2026}" : kept)
                     } else if message.has("done") {
                         got.done = message["done"]; got.cutFrom = message["cutFrom"].int; got.shown = message["shown"].array?.compactMap(\.string) ?? []
+                        got.keep = message["keep"]
                     } else if let text = message["failed"].string {
-                        got.failure = (text, message["line"].int ?? 0)
+                        got.failure = (text, message["line"].int ?? 0); got.keep = message["keep"]
                     }
                 }
             }
@@ -167,6 +172,17 @@ public enum ScriptRunner {
         for await _ in ended { break }
 
         let calls = got.calls, printed = got.printed
+        // What the script kept, for the next one: also when it failed, since what it found before failing is still true.
+        var keptNote: String?
+        var keptProblem = ""
+        if let kept, let keep = got.keep {
+            if case .object = keep {
+                if kept.write(keep, since: keptBefore) { let names = kept.names; keptNote = names.isEmpty ? nil : names.joined(separator: ", ") } else { keptNote = keepTooBig; keptProblem = " " + keepTooBig }
+            } else if let why = keep.string {
+                let note = why == "big" ? keepTooBig : keepUnreadable
+                keptNote = note; keptProblem = " " + note
+            }
+        }
         let tail = printed.isEmpty ? "" : " It printed: " + String(printed.joined(separator: " | ").suffix(1_000))
         let madeCalls = calls == 0 ? "" : " \(calls) call\(calls == 1 ? "" : "s") had run; changes they made stay."
         switch stop.value {
@@ -175,7 +191,7 @@ public enum ScriptRunner {
         case .longLine: throw DirectionError("script_too_big", "The script sent more than \(maxLine >> 20) MB at once and was stopped.\(madeCalls) Send and return less.\(tail)")
         case nil: break
         }
-        if let failure = got.failure { throw DirectionError("script_failed", (failure.line > 0 ? "Line \(failure.line): " : "") + sentence(failure.message) + madeCalls + tail) }
+        if let failure = got.failure { throw DirectionError("script_failed", (failure.line > 0 ? "Line \(failure.line): " : "") + sentence(failure.message) + madeCalls + keptProblem + tail) }
         guard let done = got.done else {
             let why = stderrTail.text.split(separator: "\n").suffix(3).joined(separator: " ")
             throw DirectionError("script_failed", "The script stopped without an answer\(why.isEmpty ? "" : " (\(why))").\(madeCalls)\(tail)")
@@ -183,6 +199,7 @@ public enum ScriptRunner {
         var answer: [String: JSONValue] = ["result": done, "calls": .number(Double(calls)), "seconds": .number(((SuspendingClock.now - started) / .milliseconds(100)).rounded() / 10)]
         if let cutFrom = got.cutFrom { answer["cut"] = .string("The answer was \(cutFrom) characters and is cut at \(maxAnswer): return less.") }
         if !printed.isEmpty { answer["printed"] = .array(printed.map(JSONValue.string)) }
+        if let keptNote { answer["keep"] = .string(keptNote) }
         // Only images and sounds a tool made for this script, never another file, and only those still there.
         let kept = { (made: [String], most: Int) in Array(got.shown.filter { made.contains($0) && FileManager.default.fileExists(atPath: $0) }.prefix(most)) }
         let images = kept(got.rendered, maxShown), sounds = kept(got.sounds, maxSounds)
@@ -207,7 +224,53 @@ public enum ScriptRunner {
 /// What one script's calls and lines gave, written by the task that answers them and read once it's over.
 final class Collected: @unchecked Sendable {
     var calls = 0, printed: [String] = [], printedSize = 0, rendered: [String] = [], sounds: [String] = []
-    var done: JSONValue?, cutFrom: Int?, shown: [String] = [], failure: (message: String, line: Int)?
+    var done: JSONValue?, cutFrom: Int?, shown: [String] = [], failure: (message: String, line: Int)?, keep: JSONValue?
+}
+
+/// What an editor's scripts keep between them (`keep`): the run's, in a file in the film's cache, so it's there
+/// after the director answers and the session continues; a session of your own keeps it while its tool server runs.
+public final class KeptValues: @unchecked Sendable {
+    public static let most = 256_000
+    private let lock = NSLock()
+    private let file: URL?
+    private var value: JSONValue = .object([:])
+    public init(file: URL?) {
+        self.file = file
+        if let file, let data = try? Data(contentsOf: file), let v = try? JSONDecoder().decode(JSONValue.self, from: data), case .object = v { value = v }
+    }
+    nonisolated(unsafe) private static var shared: [String: KeptValues] = [:]
+    private static let sharedLock = NSLock()
+    /// One per film in this process: the run's file when Direction started the editor (DIRECTION_RUN_ID).
+    public static func forThisProcess(cache: URL) -> KeptValues {
+        sharedLock.lock(); defer { sharedLock.unlock() }
+        if let k = shared[cache.path] { return k }
+        let run = ProcessInfo.processInfo.environment["DIRECTION_RUN_ID"].flatMap { $0.isEmpty ? nil : $0 }
+        let k = KeptValues(file: run.map { cache.appendingPathComponent("Scripts/keep-\($0.filter { $0.isLetter || $0.isNumber || $0 == "-" }).json") })
+        shared[cache.path] = k
+        return k
+    }
+    public func read() -> JSONValue { lock.lock(); defer { lock.unlock() }; return value }
+    public var names: [String] { if case .object(let o) = read() { return o.keys.sorted() }; return [] }
+    /// What a script changed since it read `before` goes over what's kept now, so two scripts at once don't lose
+    /// each other's. False when the result is too big to keep; what was kept before stays.
+    public func write(_ new: JSONValue, since before: JSONValue = .object([:])) -> Bool {
+        guard case .object(let fields) = new else { return false }
+        lock.lock(); defer { lock.unlock() }
+        var merged: [String: JSONValue] = [:]
+        if case .object(let now) = value { merged = now }
+        var old: [String: JSONValue] = [:]
+        if case .object(let o) = before { old = o }
+        for (k, v) in fields where old[k] != v { merged[k] = v }
+        for k in old.keys where fields[k] == nil { merged[k] = nil }
+        let result = JSONValue.object(merged)
+        guard let data = try? result.data(), data.count <= Self.most else { return false }
+        value = result
+        if let file {
+            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: file, options: .atomic)
+        }
+        return true
+    }
 }
 
 /// A value shared with a pipe's handler.
@@ -260,7 +323,8 @@ public enum ScriptHost {
     (function () {
       "use strict";
       const call = __call, say = __print, done = __done, fail = __fail;
-      for (const name of ["__call", "__print", "__done", "__fail"]) delete globalThis[name];
+      const __keep = globalThis.__kept;
+      for (const name of ["__call", "__print", "__done", "__fail", "__kept"]) delete globalThis[name];
       const stringify = JSON.stringify, parse = JSON.parse, wellFormed = String.prototype.toWellFormed;
       const json = function (x) { return stringify(x, function (k, v) { return typeof v === "string" ? wellFormed.call(v) : v; }); };
       const shown = [];
@@ -278,16 +342,17 @@ public enum ScriptHost {
         say(parts.join(" "));
       };
       const show = function (path) { if (typeof path !== "string") throw new Error("show takes a path from a tool's imagePaths or audioPaths"); if (shown.length < 64) shown.push(path); };
-      const report = function (e) { fail(e && e.message !== undefined ? (e.code ? e.code + ": " : "") + String(e.message) : String(e), e && e.stack ? String(e.stack) : ""); };
+      const kept = function () { try { const k = json(globalThis.keep); return typeof k === "string" ? k : "!"; } catch (x) { return "!"; } };
+      const report = function (e) { fail(e && e.message !== undefined ? (e.code ? e.code + ": " : "") + String(e.message) : String(e), e && e.stack ? String(e.stack) : "", kept()); };
       Object.defineProperties(globalThis, {
-        direction: { value: direction }, print: { value: print }, show: { value: show },
+        direction: { value: direction }, print: { value: print }, show: { value: show }, keep: { value: parse(__keep), writable: true },
         console: { value: Object.freeze({ log: print, info: print, warn: print, error: print }) },
         __start: { value: function (body) {
           let running;
           try { running = body(); } catch (e) { report(e); return; }
           Promise.resolve(running).then(function (v) {
             let s; try { s = json(v === undefined ? null : v); } catch (x) { s = json(String(v)); }
-            done(s === undefined ? "null" : s, stringify(shown));
+            done(s === undefined ? "null" : s, stringify(shown), kept());
           }, report);
         } },
       });
@@ -336,26 +401,34 @@ public enum ScriptHost {
             printedLines += 1; printedSize += max(1, text.count)
             write(.object(["print": .string(String(text.prefix(ScriptRunner.maxPrinted)))]))
         }
-        let done: @convention(block) (String, String) -> Void = { value, shown in
+        // What the script kept, as an object, or nothing when it isn't one.
+        let keeping: (String) -> JSONValue = { text in
+            guard text.utf8.count <= KeptValues.most else { return .string("big") }
+            guard let v = try? JSONDecoder().decode(JSONValue.self, from: Data(text.utf8)), case .object = v else { return .string("unreadable") }
+            return v
+        }
+        let done: @convention(block) (String, String, String) -> Void = { value, shown, keep in
             finished = true
             // All of them (the script keeps 64): Direction sorts images from sounds and keeps what it may.
             let paths = (try? JSONDecoder().decode([String].self, from: Data(shown.utf8))) ?? []
             if value.count > ScriptRunner.maxAnswer {
-                write(.object(["done": .string(String(value.prefix(ScriptRunner.maxAnswer))), "cutFrom": .number(Double(value.count)), "shown": .array(paths.map(JSONValue.string))]))
+                write(.object(["done": .string(String(value.prefix(ScriptRunner.maxAnswer))), "cutFrom": .number(Double(value.count)), "shown": .array(paths.map(JSONValue.string)), "keep": keeping(keep)]))
             } else if let answer = try? JSONDecoder().decode(JSONValue.self, from: Data(value.utf8)) {
-                write(.object(["done": answer, "shown": .array(paths.map(JSONValue.string))]))
+                write(.object(["done": answer, "shown": .array(paths.map(JSONValue.string)), "keep": keeping(keep)]))
             } else {
                 write(.object(["failed": .string("The script\u{2019}s answer isn\u{2019}t JSON Direction can read")]))
             }
         }
-        let fail: @convention(block) (String, String) -> Void = { message, stack in
+        let fail: @convention(block) (String, String, String) -> Void = { message, stack, keep in
             finished = true
-            write(.object(["failed": .string(message), "line": .number(Double(line(fromStack: stack, lines: lines)))]))
+            write(.object(["failed": .string(message), "line": .number(Double(line(fromStack: stack, lines: lines))), "keep": keeping(keep)]))
         }
         context.setObject(call, forKeyedSubscript: "__call" as NSString)
         context.setObject(say, forKeyedSubscript: "__print" as NSString)
         context.setObject(done, forKeyedSubscript: "__done" as NSString)
         context.setObject(fail, forKeyedSubscript: "__fail" as NSString)
+        let keptBefore: JSONValue = { if case .object = request["keep"] { return request["keep"] }; return .object([:]) }()
+        context.setObject((try? keptBefore.data()).map { String(decoding: $0, as: UTF8.self) } ?? "{}", forKeyedSubscript: "__kept" as NSString)
         nonisolated(unsafe) var syntax: (String, Int)?
         context.exceptionHandler = { _, exception in
             syntax = (exception?.toString() ?? "an error", line(Int(exception?.objectForKeyedSubscript("line")?.toInt32() ?? 0), lines: lines))

@@ -182,6 +182,23 @@ public final class ProjectStore: Sendable {
         }
     }
 
+    /// The same transcript with its words' times moved (WordEdges) and nothing else: the same choice of track, and
+    /// only if its words are still the ones that were read. False when it changed meanwhile.
+    @discardableResult public func retime(_ transcript: SourceTranscript, from old: [TranscriptWord]) throws -> Bool {
+        let id = transcript.assetID + ":" + String(transcript.audioTrackID)
+        // Still words in order that don't overlap, as saveTranscript asks.
+        let sorted = transcript.words.sorted { $0.range.start < $1.range.start }
+        guard transcript.words.map(\.id) == old.map(\.id), transcript.words.allSatisfy({ $0.range.isValid }), !sorted.indices.dropFirst().contains(where: { sorted[$0].range.start < sorted[$0 - 1].range.end }) else { return false }
+        return try database.write { db in
+            guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM transcripts WHERE id = ?", arguments: [id]),
+                  let now = try? JSONDecoder().decode(SourceTranscript.self, from: data), now.words == old else { return false }
+            var kept = transcript; kept.selectedAt = now.selectedAt
+            try db.execute(sql: "INSERT OR REPLACE INTO transcripts (id, payload) VALUES (?, ?)", arguments: [id, try JSONEncoder.direction.encode(kept)])
+            try Self.event(db, kind: "transcript.updated", revision: try Int.fetchOne(db, sql: "SELECT revision FROM state WHERE id = 1") ?? 0, summary: "Word times checked against the sound")
+            return true
+        }
+    }
+
     /// What a note on `range` or at `time` rests on in the footage, and the words under it (3 s either side of a
     /// moment): made with the note, and again when its stretch moves (editNote).
     func restsOn(_ p: Project, _ s: Sequence, range: MediaRange?, time: MediaTime?) throws -> (anchors: [SourceAnchor], words: [TimelineWord]) {
