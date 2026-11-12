@@ -100,7 +100,7 @@ public enum ToolCatalog {
         "options": list(record(["label": strings(["A", "B"]), "summary": string, "revision": integer, "cutID": string, "delta": string], required: ["label", "summary"])),
         "rule": record(["text": string, "area": strings(StyleRule.areas.map(\.id)), "scope": strings(["style", "house"]), "replaces": list(string)], required: ["text"]),
     ], required: ["summary"])
-    private static let readBackLine = record(["noteID": string, "plan": string, "delta": string, "twoWays": bool, "conflictWithNoteID": string, "following": string,
+    private static let readBackLine = record(["noteID": string, "plan": string, "delta": noted(string, "The change in a few characters, shown beside the plan: \u{2212}4.2 s, 1.6\u{00D7}, \u{2212}3 dB, crop. Words about it go in plan or detail."), "twoWays": bool, "conflictWithNoteID": string, "following": string,
                                               "range": noted(record(["start": number, "end": number], required: ["start", "end"]), "Where the two notes overlap, {start, end} in the cut's seconds."), "detail": string, "cantYet": string], required: ["noteID", "plan"])
     private static let finishingItem = record(["id": string, "title": string, "detail": string, "state": strings(["todo", "working", "done", "needsYou", "blocked"]),
                                                "by": list(strings(["editor", "you"])), "progress": fraction], required: ["id"])

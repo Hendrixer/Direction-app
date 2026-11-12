@@ -77,6 +77,13 @@ struct CutRoomTests {
 
     /// The Cut tab counts what's waiting on you: the editor's answers and questions first, in its color, then
     /// marks to write up and outside notes, in yours.
+    /// A read-back's change sits beside its plan when it's a measure; a longer one goes under the plan, so the plan
+    /// keeps the row's width (an editor once wrote "+0 s (graphic on V2 over the opening)" there).
+    @Test func aLongChangeGoesUnderThePlan() {
+        for short in ["\u{2212}4.2 s", "1.6\u{00D7}", "crop", "\u{2212}6 dB", "+12.4 s"] { #expect(ReadBackLineView.besidePlan(short), "\(short)") }
+        #expect(!ReadBackLineView.besidePlan("+0 s (graphic on V2 over the opening)"))
+    }
+
     @Test func theCutTabCountsTheEditorsWorkFirst() {
         let m = ChangesFixtures.question()
         #expect(m.badge(for: .cut)?.0 == "8" && m.badge(for: .cut)?.1 == false)

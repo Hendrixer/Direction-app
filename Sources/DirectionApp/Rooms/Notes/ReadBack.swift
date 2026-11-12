@@ -84,6 +84,10 @@ struct ReadBackLineView: View {
                     Text(line.plan).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Gate.Text.primary)
                         .lineHeight(12.5, 1.45).fixedSize(horizontal: false, vertical: true)
                         .opacity(pending == nil ? 1 : 0.5)
+                    // A change longer than a measure reads under the plan, wrapping, instead of squeezing it.
+                    if !line.twoWays, let delta = line.delta, !Self.besidePlan(delta) {
+                        deltaText(delta).fixedSize(horizontal: false, vertical: true).padding(.top, 2)
+                    }
                 } else {
                     RoundedRectangle(cornerRadius: 3).fill(Gate.Surface.hover).frame(height: 10).padding(.vertical, 4).frame(maxWidth: 200)
                 }
@@ -128,8 +132,15 @@ struct ReadBackLineView: View {
     @ViewBuilder private var trailing: some View {
         if let line {
             if line.twoWays { Chip("2 ways", style: .agent) }
-            else if let delta = line.delta { Text(delta).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.tertiary).lineHeight(11, 1.6, mono: true).fixedSize() }
+            else if let delta = line.delta, Self.besidePlan(delta) { deltaText(delta).fixedSize() }
         }
+    }
+
+    /// The change beside the plan when it's a measure ("−4.2 s", "1.6×", "crop"); under it when it's longer.
+    static func besidePlan(_ delta: String) -> Bool { delta.count <= 14 }
+
+    private func deltaText(_ delta: String) -> some View {
+        Text(delta).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(Gate.Text.tertiary).lineHeight(11, 1.6, mono: true)
     }
 
     @ViewBuilder private var correction: some View {
