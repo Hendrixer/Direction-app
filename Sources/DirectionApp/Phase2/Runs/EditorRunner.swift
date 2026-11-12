@@ -149,7 +149,8 @@ import DirectionTools
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = programOverride[program] == nil ? (install?.arguments(invocation) ?? program.arguments(invocation)) : program.arguments(invocation)
             p.currentDirectoryURL = folder
-            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id], shellKey: EditorSetup.usesShellKey(program))
+            p.environment = EditorDiscovery.environment(adding: path, extra: ["DIRECTION_RUN_ID": run.id].merging(program.askingEnvironment) { a, _ in a }, shellKey: EditorSetup.usesShellKey(program))
+            if program == .opencode { try EditorProgram.openCodeSettings(version: install?.version).write(to: folder.appendingPathComponent("opencode.json"), options: .atomic) }
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
             let l = LiveRun(runID: run.id, store: store, program: program, process: p)
@@ -184,7 +185,15 @@ import DirectionTools
             }
             try p.run()
             ChildProcesses.started(p)
-            if var conversation = l.acp { let hello = conversation.start(); l.acp = conversation; send(l, hello) }
+            if var conversation = l.acp {
+                let hello = conversation.start(); l.acp = conversation; send(l, hello)
+                // An agent that never opens a session would otherwise wait for the silence watch.
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.sessionWithin) { MainActor.assumeIsolated {
+                    guard l.exited == nil, l.process.isRunning, l.acp?.sessionID == nil, l.intent == .none else { return }
+                    l.failures.append("\(l.program.name) didn\u{2019}t open a session within \(Int(Self.sessionWithin)) seconds.")
+                    self.stopFirmly(l)
+                } }
+            }
             DirectionLog.info("Started \(program.name) for \(run.job.rawValue) (run \(run.id), \(run.version.isEmpty ? "default version" : run.version), \(effort.isEmpty ? "default effort" : effort + " effort"), session \(session ?? "new"), pid \(p.processIdentifier)) in \(store.url.lastPathComponent)", "editor")
             live[run.id] = l
             watchForSilence()
@@ -232,15 +241,27 @@ import DirectionTools
         for m in messages { try? input.write(contentsOf: ACPConversation.line(m)) }
     }
 
-    /// The prompt is answered: the agent's stdin closes, and an agent that stays open after that is ended.
+    /// The prompt is answered: the agent's stdin closes, and an agent that stays open after that is ended, with
+    /// everything it started.
     private func endConversation(_ l: LiveRun) {
         try? l.input?.close(); l.input = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { MainActor.assumeIsolated { if l.exited == nil { l.process.terminate() } } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { MainActor.assumeIsolated { if l.process.isRunning { self.stopFirmly(l) } } }
     }
+
+    /// SIGTERM to the program's whole group, then SIGKILL. Off the main thread.
+    private func stopFirmly(_ l: LiveRun) {
+        let group = l.process.processIdentifier
+        DispatchQueue.global(qos: .userInitiated).async { ChildProcesses.stop(group: group, ChildProcesses.firmly) }
+    }
+
+    /// How long an ACP agent has to open its session, and to hear a cancelled turn before the signal.
+    static var sessionWithin: Double = 120
+    static var cancelGrace: Double = 1.5
 
     func handle(_ l: LiveRun, _ e: StreamEvent) {
         switch e {
-        case .session(let s): _ = try? l.store.updateRun(l.runID) { if $0.session != s { $0.session = s } }
+        // A new session counts its spend from nothing (an ACP agent that couldn't load the saved one).
+        case .session(let s): _ = try? l.store.updateRun(l.runID) { if $0.session != s { if $0.session != nil { $0.sessionSpend = nil }; $0.session = s } }
         case .toolStarted(let id, let name, let input):
             l.pending[id] = name
             if let r = try? l.store.run(l.runID), r.state == .starting { _ = try? l.store.updateRun(l.runID) { $0.state = .working } }
@@ -428,10 +449,11 @@ import DirectionTools
     /// SIGINT to the program's whole group (it saves its session and stops), SIGTERM if anything is
     /// still there after a few seconds, then SIGKILL. Off the main thread.
     private func interrupt(_ l: LiveRun) {
-        // An ACP agent hears the turn is cancelled first, so it saves the session before the signal.
-        if let cancel = l.acp?.cancel() { send(l, [cancel]) }
-        let group = l.process.processIdentifier, steps = stopSteps
-        DispatchQueue.global(qos: .userInitiated).async { ChildProcesses.stop(group: group, steps) }
+        // An ACP agent hears the turn is cancelled first, and has a moment to save the session before the signal.
+        let cancel = l.acp?.cancel()
+        if let cancel { send(l, [cancel]) }
+        let group = l.process.processIdentifier, steps = stopSteps, grace = cancel == nil ? 0 : Self.cancelGrace
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + grace) { ChildProcesses.stop(group: group, steps) }
     }
 
     /// Quitting: pause every working run and keep its session; the next launch offers Resume.
@@ -451,8 +473,11 @@ import DirectionTools
             l.intent = .quit
             _ = try? l.store.updateRun(l.runID) { $0.state = .paused; $0.reason = .pausedByQuit; $0.pausedByQuit = true }
         }
+        // ACP agents hear the turn is cancelled, and have a moment to save, before the signals.
+        var cancelled = false
+        for l in working { if let cancel = l.acp?.cancel() { send(l, [cancel]); cancelled = true } }
         let groups = working.map(\.process.processIdentifier), steps = stopSteps
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + (cancelled ? Self.cancelGrace : 0)) {
             DispatchQueue.concurrentPerform(iterations: groups.count) { ChildProcesses.stop(group: groups[$0], steps) }
             DispatchQueue.main.async { MainActor.assumeIsolated { done() } }
         }

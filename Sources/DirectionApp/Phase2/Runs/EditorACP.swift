@@ -1,5 +1,6 @@
 import Foundation
 import DirectionCore
+import DirectionTools
 
 /// One invocation of an agent over the Agent Client Protocol (agentclientprotocol.com, version 1): newline-delimited
 /// JSON-RPC 2.0 over stdin and stdout. Direction starts the agent, says hello, opens a session with Direction's
@@ -41,6 +42,7 @@ struct ACPConversation {
     private var message = ""
     private var calls: [String: JSONValue] = [:]
     private var started: Set<String> = []
+    private var informed: Set<String> = []
     private var ended: Set<String> = []
 
     init(cwd: URL, server: Server, prompt: String, wholeJob: String? = nil, resume: String? = nil, permissions: Permissions) {
@@ -95,6 +97,11 @@ struct ACPConversation {
         var step = Step()
         switch method {
         case "initialize":
+            // Builds from before ACP's version 1 (mid-2025) have no sessions as Direction knows them.
+            if let v = result["protocolVersion"].int, v != 1 {
+                done = true
+                return Step(events: [.failure(Self.oldProtocol + " (version \(v))")], done: true)
+            }
             if let resume, result["agentCapabilities"]["loadSession"].bool == true {
                 loading = true
                 step.send = [request("session/load", ["sessionId": .string(resume), "cwd": .string(cwd.path), "mcpServers": mcpServers])]
@@ -154,10 +161,15 @@ struct ACPConversation {
         done = true
         var text = error["message"].string ?? "The agent reported an error."
         if let data = error["data"]["message"].string ?? error["data"].string { text += " " + data }
-        // ACP's "auth_required" (-32000): the agent isn't signed in.
-        if error["code"].int == -32000 || text.lowercased().contains("auth") { text = "Not signed in: " + text }
+        // A copy that doesn't know sessions speaks an older protocol; ACP's "auth_required" (-32000), or the agent's own
+        // words for it, means it isn't signed in.
+        if method == "session/new", error["code"].int == -32601 { text = Self.oldProtocol }
+        else if error["code"].int == -32000 || EditorFailure.reason(text) == .notSignedIn || text.lowercased().contains("authentication required") { text = "Not signed in: " + text }
         return Step(events: [.failure(text)], done: true)
     }
+
+    /// Read by EditorFailure as out of date, so the stop shows the agent's update command.
+    static let oldProtocol = "This copy speaks an older agent client protocol than Direction does"
 
     /// The agent's own requests. Only permission is answered; Direction offers no files or terminal.
     private mutating func answer(_ method: String, id: JSONValue, params: JSONValue) -> JSONValue {
@@ -176,20 +188,57 @@ struct ACPConversation {
         return .object(["jsonrpc": .string("2.0"), "id": id, "result": .object(["outcome": outcome])])
     }
 
+    /// What the step does decides first, so a command or a fetch that mentions a Direction tool is still a command.
     func allows(_ call: JSONValue) -> Bool {
-        if Self.name(call).hasPrefix("mcp__direction__") { return true }
         switch call["kind"].string ?? "other" {
         case "execute": return permissions.scripts
-        case "fetch": return false
+        case "fetch", "switch_mode": return false
         case "edit", "delete", "move":
-            let root = permissions.folder.standardizedFileURL.path
-            return Self.paths(call).allSatisfy { p in
-                let full = (p.hasPrefix("/") ? URL(fileURLWithPath: p) : permissions.folder.appendingPathComponent(p)).standardizedFileURL.path
-                return full == root || full.hasPrefix(root + "/")
-            }
-        default: return true
+            // Every path it names, a move's destination too; none named, no telling where it writes.
+            let paths = Self.paths(call)
+            return !paths.isEmpty && paths.allSatisfy(writable)
+        case "read", "think": return true
+        // A web search is a search too.
+        case "search": return !Self.looksLikeWeb(call)
+        // Anything else is only Direction's own tools: not the director's other MCP servers, which these agents load
+        // (Claude Code runs with --strict-mcp-config and Codex with --ignore-user-config).
+        default: return Self.isDirectionTool(call)
         }
     }
+
+    /// Inside the job's folder, symlinks and `~` resolved, and not any agent's own settings.
+    func writable(_ path: String) -> Bool {
+        let root = Self.resolved(permissions.folder)
+        let expanded = (path as NSString).expandingTildeInPath
+        let full = Self.resolved(expanded.hasPrefix("/") ? URL(fileURLWithPath: expanded) : permissions.folder.appendingPathComponent(expanded))
+        guard full == root || full.hasPrefix(root + "/") else { return false }
+        let first = full == root ? "" : String(full.dropFirst(root.count + 1).split(separator: "/").first ?? "")
+        return !Self.agentSettings.contains(first)
+    }
+
+    /// The files and folders agents read their settings from, where a hook or an MCP server's command would run as the
+    /// director the next time one starts. Direction moves any it finds out of the film (EditorJobs.prepareFolder), and
+    /// no agent may write one.
+    static let agentSettings: Set<String> = [".claude", ".codex", ".gemini", ".qwen", ".cursor", ".opencode", "opencode.json", "opencode.jsonc", ".goose", ".kilocode", "kilo.json", ".cline", ".clinerules", ".vscode", ".env", ".mcp.json", ".direction"]
+
+    /// The real path, symlinks resolved; a file that doesn't exist yet by its folder's real path.
+    static func resolved(_ url: URL) -> String {
+        let u = url.standardizedFileURL
+        if FileManager.default.fileExists(atPath: u.path) { return u.resolvingSymlinksInPath().path }
+        return u.deletingLastPathComponent().resolvingSymlinksInPath().appendingPathComponent(u.lastPathComponent).path
+    }
+
+    static func looksLikeWeb(_ call: JSONValue) -> Bool {
+        let said = ([call["title"].string, call["name"].string].compactMap { $0 } + [(try? JSONEncoder().encode(call["rawInput"])).map { String(decoding: $0, as: UTF8.self) } ?? ""]).joined(separator: " ").lowercased()
+        return ["web", "http", "url", "google", "internet", "online", "browse"].contains(where: said.contains)
+    }
+
+    /// One of Direction's tools by its exact name, however the agent prefixes it.
+    static func isDirectionTool(_ call: JSONValue) -> Bool {
+        let n = name(call)
+        return n.hasPrefix("mcp__direction__") && directionTools.contains(String(n.dropFirst("mcp__direction__".count)))
+    }
+    static let directionTools: Set<String> = Set(ToolCatalog.definitions.map(\.name))
 
     // MARK: Updates
 
@@ -204,9 +253,17 @@ struct ACPConversation {
             calls[id] = call
             var out: [StreamEvent] = []
             let status = call["status"].string ?? "pending"
-            // Started once the agent says what it's doing: an input, or work under way.
-            if !started.contains(id), call["rawInput"] != .null || status != "pending" {
+            // Started once the agent says what it's doing: an input that says something, or work under way. Agents
+            // announce a call with an empty input and fill it in later.
+            let hasInput = Self.says(call["rawInput"])
+            if !started.contains(id), hasInput || status != "pending" {
                 started.insert(id)
+                if hasInput { informed.insert(id) }
+                out.append(.toolStarted(id: id, name: Self.name(call), input: Self.input(call)))
+            } else if started.contains(id), hasInput, !informed.contains(id), Self.isDirectionTool(call) {
+                // Its input came after it started: Direction's own tools again, so a read-back or a question posted
+                // this way is still seen (handling a Direction tool's start twice changes nothing else).
+                informed.insert(id)
                 out.append(.toolStarted(id: id, name: Self.name(call), input: Self.input(call)))
             }
             if status == "completed" || status == "failed", !ended.contains(id) {
@@ -251,6 +308,17 @@ struct ACPConversation {
         }
     }
 
+    /// An input with something in it: not null, `{}` or `[]`.
+    static func says(_ v: JSONValue) -> Bool {
+        switch v {
+        case .null: false
+        case .object(let o): !o.isEmpty
+        case .array(let a): !a.isEmpty
+        case .string(let s): !s.isEmpty
+        default: true
+        }
+    }
+
     /// The tool's input, with the file it touches as `path` when only its locations say.
     static func input(_ call: JSONValue) -> JSONValue {
         var input = call["rawInput"]
@@ -260,11 +328,12 @@ struct ACPConversation {
         return .object(o)
     }
 
+    /// Every path the step names: its locations and its input's, a move's source and destination included.
     static func paths(_ call: JSONValue) -> [String] {
         let located = (call["locations"].array ?? []).compactMap { $0["path"].string }
-        if !located.isEmpty { return located }
         let raw = call["rawInput"]
-        return [raw["path"].string, raw["file_path"].string, raw["filePath"].string].compactMap { $0 }
+        let named = ["path", "file_path", "filePath", "destination", "dest", "newPath", "new_path", "target", "to", "source", "from", "oldPath", "old_path"].compactMap { raw[$0].string }
+        return Array(Set(located + named)).sorted()
     }
 
     /// What the tool returned, as text: its content blocks, or its raw output.

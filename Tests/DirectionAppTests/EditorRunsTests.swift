@@ -69,8 +69,23 @@ struct EditorStreamTests {
         #expect(RunStateMachine.outcome(RunStateMachine.Exit(status: 1, failures: ["error: unknown option '--no-session-persistence'"])).reason == .outOfDate)
         #expect(EditorFailure.reason("ffmpeg: unknown encoder 'libx265'") == nil)
         #expect(EditorDiscovery.readyAnswer(.claudeCode, output: "", error: "error: unknown option '--tools'", status: 1) == .couldNotCheck("Claude Code is out of date for Direction. In Terminal, run claude update"))
-        #expect(EditorProgram.codex.updateCommand(path: "/opt/homebrew/bin/codex") == "brew upgrade codex")
+        // Where the program really is says how it was installed: a Homebrew formula's Cellar, or npm under any Node
+        // (Homebrew's own included), never the folder its link sits in.
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("direction-brew-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fm = FileManager.default
+        try? fm.createDirectory(at: root.appendingPathComponent("Cellar/codex/0.164.0/bin"), withIntermediateDirectories: true)
+        try? fm.createDirectory(at: root.appendingPathComponent("lib/node_modules/@google/gemini-cli/dist"), withIntermediateDirectories: true)
+        try? fm.createDirectory(at: root.appendingPathComponent("bin"), withIntermediateDirectories: true)
+        fm.createFile(atPath: root.appendingPathComponent("Cellar/codex/0.164.0/bin/codex").path, contents: Data())
+        fm.createFile(atPath: root.appendingPathComponent("lib/node_modules/@google/gemini-cli/dist/index.js").path, contents: Data())
+        try? fm.createSymbolicLink(atPath: root.appendingPathComponent("bin/codex").path, withDestinationPath: "../Cellar/codex/0.164.0/bin/codex")
+        try? fm.createSymbolicLink(atPath: root.appendingPathComponent("bin/gemini").path, withDestinationPath: "../lib/node_modules/@google/gemini-cli/dist/index.js")
+        #expect(EditorProgram.codex.updateCommand(path: root.appendingPathComponent("bin/codex").path) == "brew upgrade codex")
+        #expect(EditorProgram.gemini.updateCommand(path: root.appendingPathComponent("bin/gemini").path) == "npm install -g @google/gemini-cli@latest")
         #expect(EditorProgram.codex.updateCommand(path: "/Users/you/.npm-global/bin/codex") == "npm install -g @openai/codex@latest")
+        // An ACP agent on the older protocol is out of date too.
+        #expect(EditorFailure.reason(ACPConversation.oldProtocol + " (version 0)") == .outOfDate)
         #expect(EditorStopCopy.title(.outOfDate, run: nil) == "The editor needs updating.")
     }
 
@@ -501,6 +516,10 @@ struct EditorRunnerTests {
         #expect(servers[0]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
         #expect(servers[0]["env"] == .array([.object(["name": .string("DIRECTION_RUN_ID"), "value": .string(run.id)])]))
         #expect(text(dir, ".fake-permissions").split(separator: "\n") == ["execute ffmpeg -version yes", "edit Edit /etc/hosts no", "edit Edit NOTES.md yes", "fetch Fetch example.com no", "other direction__direction_log_dailies yes"])
+        // OpenCode's asking mode is written for it, and the next start keeps Direction's own file.
+        #expect(EditorProgram.isOwnOpenCodeSettings((try? Data(contentsOf: dir.appendingPathComponent("Editor/opencode.json"))) ?? Data()))
+        _ = try EditorJobs.prepareFolder(film: dir, job: .logFootage)
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/opencode.json").path))
         #expect(try store.activity(runID: run.id).contains { $0.verb == "Reading" && $0.object == "its notes" })
     }
 

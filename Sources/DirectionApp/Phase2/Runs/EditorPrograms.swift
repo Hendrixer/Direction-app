@@ -54,12 +54,13 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
         case .cursor: "\(command) login"; case .goose: "goose configure"; case .qwen: "qwen"; case .copilot: "copilot"; case .cline: "cline auth"; case .kilo: "kilo auth"
         }
     }
-    /// Brings the copy at `path` up to date: Claude Code updates itself; the rest the way they were installed.
+    /// Brings the copy at `path` up to date: Claude Code updates itself; the rest the way they were installed, read from
+    /// where the program really is (a Homebrew formula's Cellar folder, or npm's node_modules under any Node).
     func updateCommand(path: String?) -> String {
         if self == .claudeCode { return "claude update" }
-        let brew = path.map { $0.hasPrefix("/opt/homebrew/") || $0.hasPrefix("/usr/local/Cellar/") } == true
-        if self == .codex { return brew ? "brew upgrade codex" : "npm install -g @openai/codex@latest" }
-        if brew { return "brew upgrade \(command)" }
+        let real = path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } ?? ""
+        if let r = real.range(of: "/Cellar/"), let formula = real[r.upperBound...].split(separator: "/").first { return "brew upgrade \(formula)" }
+        if self == .codex { return "npm install -g @openai/codex@latest" }
         return installCommand.hasPrefix("npm install -g ") ? installCommand + "@latest" : installCommand
     }
 
@@ -193,6 +194,23 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
         }
     }
 
+    /// Agents that act without asking unless told to: OpenCode allows edits, commands and the web by default, so it
+    /// gets settings in the job's folder that make it ask for everything (Direction answers by its rules), in the
+    /// shape its version reads; Goose is started in its approve mode.
+    static func openCodeSettings(version: String?) -> Data {
+        let major = version.flatMap { Int($0.split(separator: ".").first ?? "") } ?? 1
+        let settings: JSONValue = major >= 2
+            ? .object(["permissions": .array([.object(["action": .string("*"), "resource": .string("*"), "effect": .string("ask")]),
+                                              .object(["action": .string("webfetch"), "resource": .string("*"), "effect": .string("deny")])])])
+            : .object(["permission": .object(["edit": .string("ask"), "bash": .string("ask"), "webfetch": .string("deny")])])
+        // Sorted, so the same settings are the same bytes from one launch to the next.
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return (try? encoder.encode(settings)) ?? Data()
+    }
+    static func isOwnOpenCodeSettings(_ data: Data) -> Bool { data == openCodeSettings(version: "1") || data == openCodeSettings(version: "2") }
+    /// What an agent needs in its environment to ask before it acts.
+    var askingEnvironment: [String: String] { self == .goose ? ["GOOSE_MODE": "approve"] : [:] }
+
     /// The conversation for one ACP invocation: the role leads the first message (ACP has no system prompt),
     /// and a saved session is loaded when the agent can, or the whole job is said again when it can't.
     func conversation(_ i: Invocation, wholeJob: String) -> ACPConversation {
@@ -307,9 +325,19 @@ enum EditorDiscovery {
         let pathFolders = loginPath.split(separator: ":").map(String.init)
         var path = firstExecutable(command, in: EditorProgram.searchFolders + pathFolders)
         if path == nil { path = firstExecutable(command, in: versionManagerFolders()) }
-        if path == nil, let prefix = shell("npm prefix -g")?.trimmingCharacters(in: .whitespacesAndNewlines), !prefix.isEmpty, fm.isExecutableFile(atPath: "\(prefix)/bin/\(command)") { path = "\(prefix)/bin/\(command)" }
-        if path == nil, let found = shell("command -v \(command)")?.split(separator: "\n").last.map(String.init), found.hasPrefix("/"), fm.isExecutableFile(atPath: found) { path = found }
+        if path == nil, let prefix = npmPrefix, fm.isExecutableFile(atPath: "\(prefix)/bin/\(command)") { path = "\(prefix)/bin/\(command)" }
+        // The shell's own answer, only when its PATH couldn't be read: otherwise its folders were searched above.
+        if path == nil, shellEnvironment["PATH"]?.isEmpty != false, let found = shell("command -v \(command)")?.split(separator: "\n").last.map(String.init), found.hasPrefix("/"), fm.isExecutableFile(atPath: found) { path = found }
         return path
+    }
+
+    /// npm's global folder, asked once for every program looked for.
+    nonisolated(unsafe) private static var cachedNPM: String??
+    static var npmPrefix: String? {
+        if let cachedNPM { return cachedNPM }
+        let t = shell("npm prefix -g")?.trimmingCharacters(in: .whitespacesAndNewlines), p = t?.isEmpty == false ? t : nil
+        cachedNPM = .some(p)
+        return p
     }
 
     /// The first folder holding `command` as a program, in order.
@@ -384,7 +412,9 @@ enum EditorDiscovery {
     /// The shell's settings an editor reads to find its sign-in and the network: where its settings live,
     /// a Bedrock or Vertex setup, a proxy and its certificates.
     static func carried(_ key: String) -> Bool {
-        let prefixes = ["ANTHROPIC_", "CLAUDE_CODE_", "CODEX_", "OPENAI_", "AWS_", "VERTEX_"]
+        // The ACP agents' own too: Gemini's and Google's keys and project, GitHub's token for Copilot, Cursor's key,
+        // OpenRouter's, and where XDG-minded agents (OpenCode, Goose) keep their sign-in.
+        let prefixes = ["ANTHROPIC_", "CLAUDE_CODE_", "CODEX_", "OPENAI_", "AWS_", "VERTEX_", "GEMINI_", "GOOGLE_", "GH_", "GITHUB_", "COPILOT_", "CURSOR_", "OPENROUTER_", "GOOSE_", "OPENCODE_", "QWEN_", "DASHSCOPE_", "KILO", "CLINE_", "XDG_"]
         let names = ["CLAUDE_CONFIG_DIR", "GOOGLE_APPLICATION_CREDENTIALS", "CLOUD_ML_REGION", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"]
         return (names.contains(key) || prefixes.contains { key.hasPrefix($0) }) && !nesting.contains(key)
     }
@@ -393,7 +423,7 @@ enum EditorDiscovery {
     /// Claude Code's own markers, so a Direction started from a Claude Code terminal doesn't nest.
     static let nesting = ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
     static func hasShellKey(_ p: EditorProgram) -> Bool {
-        let keys = p == .claudeCode ? ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] : ["OPENAI_API_KEY", "CODEX_API_KEY"]
+        let keys = p == .claudeCode ? ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] : p == .codex ? ["OPENAI_API_KEY", "CODEX_API_KEY"] : shellKeys
         return keys.contains { shellEnvironment[$0]?.isEmpty == false }
     }
 
@@ -453,7 +483,7 @@ enum EditorDiscovery {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: install.path); p.arguments = form; p.currentDirectoryURL = folder
         p.environment = environment(adding: install.path, shellKey: shellKey)
-        let input = Pipe(), output = Pipe(), errors = Pipe()
+        let input = Pipe(), output = Pipe(), errors = Pipe(), lock = NSLock()
         _ = fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
         p.standardInput = input; p.standardOutput = output; p.standardError = errors
         let done = DispatchSemaphore(value: 0)
@@ -461,13 +491,19 @@ enum EditorDiscovery {
         do { try p.run() } catch { return .couldNotCheck(error.localizedDescription) }
         ChildProcesses.started(p)
         nonisolated(unsafe) var conversation = ACPConversation(cwd: folder, server: .init(command: "", args: [], env: [:]), prompt: "", permissions: .init(folder: folder, scripts: false))
+        let hello = conversation.start()
         let answer = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var verdict: SignInCheck?
-        nonisolated(unsafe) var buffer = Data()
+        nonisolated(unsafe) var buffer = Data(), stderrText = ""
+        // Read as it comes, so an agent that says a lot there doesn't stall on a full pipe.
+        errors.fileHandleForReading.readabilityHandler = { h in
+            let d = h.availableData
+            if d.isEmpty { h.readabilityHandler = nil; return }
+            lock.lock(); stderrText = String((stderrText + String(decoding: d, as: UTF8.self)).suffix(4_000)); lock.unlock()
+        }
         let writer = input.fileHandleForWriting
         let send: @Sendable (JSONValue) -> Void = { v in try? writer.write(contentsOf: ACPConversation.line(v)) }
         // Hello and a session; the session's answer is the verdict. Errors become "not signed in" when they say so.
-        let lock = NSLock()
         output.fileHandleForReading.readabilityHandler = { h in
             let d = h.availableData
             if d.isEmpty { h.readabilityHandler = nil; answer.signal(); return }
@@ -481,16 +517,17 @@ enum EditorDiscovery {
                 if let v = step.verdict { verdict = v; answer.signal() }
             }
         }
-        for v in conversation.start() { send(v) }
+        for v in hello { send(v) }
         let timedOut = answer.wait(timeout: .now() + seconds) == .timedOut
         output.fileHandleForReading.readabilityHandler = nil
-        try? input.fileHandleForWriting.close()
+        lock.lock(); try? writer.close(); lock.unlock()
         if p.isRunning { p.terminate() }
         _ = done.wait(timeout: .now() + 3)
         if p.isRunning { kill(p.processIdentifier, SIGKILL) }
+        errors.fileHandleForReading.readabilityHandler = nil
         lock.lock(); defer { lock.unlock() }
         if let verdict { return verdict }
-        let stderr = String(decoding: errors.fileHandleForReading.availableData, as: UTF8.self)
+        let stderr = stderrText
         if EditorFailure.reason(stderr) == .notSignedIn { return .notSignedIn(String(stderr.suffix(200))) }
         return .couldNotCheck(timedOut ? "\(install.program.name) didn\u{2019}t answer within \(Int(seconds)) seconds" : "\(install.program.name) stopped without answering")
     }

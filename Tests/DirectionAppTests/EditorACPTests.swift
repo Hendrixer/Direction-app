@@ -76,6 +76,46 @@ struct EditorACPTests {
         #expect(cannot.receive(#"{"jsonrpc":"2.0","id":1,"result":{"agentCapabilities":{}}}"#).send.first?["method"].string == "session/new")
     }
 
+    /// Agents announce a call with an empty input and fill it in later: a read-back posted that way is still seen.
+    @Test func aReadBackWhoseInputComesLaterIsStillSeen() {
+        var c = conversation()
+        _ = c.start()
+        _ = c.receive(#"{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}"#)
+        _ = c.receive(#"{"jsonrpc":"2.0","id":2,"result":{"sessionId":"s"}}"#)
+        #expect(c.receive(#"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"rb","title":"direction_direction_turnover_update","kind":"other","status":"pending","rawInput":{}}}}"#).events.isEmpty)
+        let started = c.receive(#"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"rb","status":"in_progress"}}}"#).events
+        #expect(started == [.toolStarted(id: "rb", name: "mcp__direction__direction_turnover_update", input: .object([:]))])
+        let informed = c.receive(#"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"rb","rawInput":{"turnoverID":"t","readBack":[{"noteID":"n"}]}}}}"#).events
+        guard case .toolStarted(_, let name, let input) = informed.first else { Issue.record("Not seen again: \(informed)"); return }
+        #expect(name == "mcp__direction__direction_turnover_update" && input["readBack"] != .null)
+    }
+
+    /// A copy from before ACP's version 1 is out of date, not a mystery.
+    @Test func anOlderProtocolIsOutOfDate() {
+        var c = conversation()
+        _ = c.start()
+        let step = c.receive(#"{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":0}}"#)
+        #expect(step.done)
+        guard case .failure(let text) = step.events.first else { Issue.record("No failure"); return }
+        #expect(EditorFailure.reason(text) == .outOfDate)
+        var noSessions = conversation()
+        _ = noSessions.start()
+        _ = noSessions.receive(#"{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}"#)
+        guard case .failure(let missing) = noSessions.receive(#"{"jsonrpc":"2.0","id":2,"error":{"code":-32601,"message":"Method not found"}}"#).events.first else { Issue.record("No failure"); return }
+        #expect(EditorFailure.reason(missing) == .outOfDate)
+    }
+
+    /// OpenCode allows everything unless told, and Goose doesn't ask in its default mode: both start asking.
+    @Test func agentsThatDontAskAreToldTo() throws {
+        let v1 = try JSONDecoder().decode(JSONValue.self, from: EditorProgram.openCodeSettings(version: "1.0.119"))
+        #expect(v1["permission"]["bash"].string == "ask" && v1["permission"]["edit"].string == "ask" && v1["permission"]["webfetch"].string == "deny")
+        let v2 = try JSONDecoder().decode(JSONValue.self, from: EditorProgram.openCodeSettings(version: "2.2.7"))
+        #expect(v2["permissions"][0]["effect"].string == "ask" && v2["permissions"][0]["action"].string == "*")
+        #expect(EditorProgram.isOwnOpenCodeSettings(EditorProgram.openCodeSettings(version: "1.0.119")) && !EditorProgram.isOwnOpenCodeSettings(Data(#"{"mcp":{}}"#.utf8)))
+        #expect(EditorProgram.goose.askingEnvironment == ["GOOSE_MODE": "approve"] && EditorProgram.cursor.askingEnvironment.isEmpty)
+        #expect(EditorDiscovery.carried("GEMINI_API_KEY") && EditorDiscovery.carried("XDG_CONFIG_HOME") && EditorDiscovery.carried("GH_TOKEN"))
+    }
+
     @Test func notSignedInEndsTheInvocation() {
         var c = conversation()
         _ = c.start()
@@ -105,6 +145,22 @@ struct EditorACPTests {
         #expect(answer("edit", "Sneaky", paths: ["\(folder.path)/../project.sqlite"]) == "no")
         #expect(answer("execute", "ffmpeg -version") == "no")
         #expect(answer("fetch", "Fetch a page") == "no")
+        // What the step does decides first: a command that mentions a Direction tool is still a command.
+        #expect(answer("execute", "direction_cut --all") == "no")
+        // An edit that names no path, or an agent's own settings, or a path by ~, is refused.
+        #expect(answer("edit", "Edit something") == "no")
+        #expect(answer("edit", "Edit settings", paths: ["\(folder.path)/.gemini/settings.json"]) == "no")
+        #expect(answer("edit", "Edit config", paths: ["opencode.json"]) == "no")
+        #expect(answer("edit", "Edit home", paths: ["~/notes.md"]) == "no")
+        // A web search is the web; a search of the folder isn't.
+        #expect(answer("search", "Web search: grain looks") == "no")
+        #expect(answer("search", "Grep scene 4") == "ok")
+        // Other MCP servers the agent loads on its own are refused, and so is switching its mode.
+        #expect(answer("other", "linear_create_issue") == "no")
+        #expect(answer("switch_mode", "Switch to yolo") == "no")
+        // A move is checked at both ends.
+        let move = #"{"jsonrpc":"2.0","id":"m1","method":"session/request_permission","params":{"sessionId":"s","toolCall":{"toolCallId":"mv","title":"Move","kind":"move","locations":[{"path":"\#(folder.path)/a.js"}],"rawInput":{"source":"\#(folder.path)/a.js","destination":"/tmp/a.js"}},"options":[{"optionId":"ok","name":"Allow","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}"#
+        #expect(c.receive(move).send.first?["result"]["outcome"]["optionId"].string == "no")
         var scripted = conversation(scripts: true)
         let run = scripted.receive(#"{"jsonrpc":"2.0","id":7,"method":"session/request_permission","params":{"sessionId":"s","toolCall":{"toolCallId":"y","title":"node draw.js","kind":"execute"},"options":[{"optionId":"always","name":"Always","kind":"allow_always"}]}}"#).send.first
         #expect(run?["result"]["outcome"]["optionId"].string == "always")

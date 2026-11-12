@@ -144,7 +144,7 @@ enum EditorFailure {
     /// '--effort'", Codex "error: unexpected argument '--ephemeral' found".
     static func isOutOfDate(_ text: String) -> Bool {
         let t = text.lowercased()
-        return ["unknown option '--", "unexpected argument '--", "unrecognized option '--", "unknown option \"--"].contains(where: t.contains)
+        return ["unknown option '--", "unexpected argument '--", "unrecognized option '--", "unknown option \"--", "older agent client protocol"].contains(where: t.contains)
     }
     /// A service refused because this month's limit is reached (made-media.md › Spending).
     static func isSpendCap(_ text: String) -> Bool {

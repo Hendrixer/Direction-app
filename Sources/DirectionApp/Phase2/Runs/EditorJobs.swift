@@ -261,12 +261,16 @@ enum EditorJobs {
     static func prepareFolder(film: URL, job: EditorJob) throws -> URL {
         let fm = FileManager.default, folder = film.appendingPathComponent("Editor")
         for sub in ["Graphics", "Looks", "Effects", "Transitions", "Techniques", ".direction"] { try fm.createDirectory(at: folder.appendingPathComponent(sub), withIntermediateDirectories: true) }
-        // Direction writes no settings here. Any it finds came with a film someone shared, or from an editor,
-        // and a hook in one would run as you when the editor starts, so they go to the Trash first.
-        for planted in [".claude/settings.json", ".claude/settings.local.json", ".codex"] {
-            let url = folder.appendingPathComponent(planted)
+        // Direction writes no settings here but OpenCode's asking mode (EditorProgram.openCodeSettings). Any others it
+        // finds came with a film someone shared, or from an editor, and a hook or an MCP server's command in one would
+        // run as you when the editor starts, so they go to the Trash first. OpenCode reads its settings from every
+        // folder up from where it starts, so the film's own folder is cleared of those too.
+        let planted = [".claude/settings.json", ".claude/settings.local.json", ".codex", ".gemini", ".qwen", ".cursor", ".opencode", "opencode.json", "opencode.jsonc", ".goose", ".kilocode", "kilo.json", ".cline", ".clinerules", ".vscode", ".env"]
+        for (base, name) in planted.map({ (folder, $0) }) + [".opencode", "opencode.json", "opencode.jsonc", "kilo.json", ".kilocode"].map({ (film, $0) }) {
+            let url = base.appendingPathComponent(name)
             guard fm.fileExists(atPath: url.path) else { continue }
-            DirectionLog.warning("Moved \(planted) out of the film\u{2019}s editor folder before starting the editor", "editor")
+            if base == folder, name == "opencode.json", let data = try? Data(contentsOf: url), EditorProgram.isOwnOpenCodeSettings(data) { continue }
+            DirectionLog.warning("Moved \(name) out of the film\(base == folder ? "\u{2019}s editor folder" : "") before starting the editor", "editor")
             if (try? fm.trashItem(at: url, resultingItemURL: nil)) == nil { try fm.removeItem(at: url) }
         }
         let notes = folder.appendingPathComponent("NOTES.md")
