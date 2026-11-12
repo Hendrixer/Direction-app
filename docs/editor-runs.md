@@ -65,6 +65,19 @@ Templates are versioned files (`<!-- direction-job <name> vN -->` on the first l
 
 `Tests/DirectionAppTests/EditorRunsTests.swift`: Claude and Codex streams from canned samples, the activity table, the state machine, templates, command lines, and the runner end to end against `Tests/FakeEditor/fake-claude` (scenarios `done`, `unfinished`, `auth`, `slow`, `crash`, chosen by `Editor/.fake-scenario`) and `Tests/FakeEditor/fake-acp`, a stand-in ACP agent (`done`, `unfinished`, `auth`, `slow`, `refusal`) that records the prompt, the MCP servers and every permission answer. `EditorACPTests.swift` plays conversations line by line. With `DIRECTION_LIVE_ACP=1`, every ACP agent installed on this Mac answers the sign-in check (free: no prompt). Tests use `EditorPrograms.shared.setPreview` so nothing touches the defaults, and `EditorRunner.shared.programOverride` / `helperOverride` so no real program runs.
 
+## Measuring a run
+
+`LiveEditorRunTests` (off unless `DIRECTION_LIVE_EDITOR_FILM` is set) runs a real turnover on a scratch copy of a film: it puts the copy back to a named cut, writes the numbered notes again, turns them over without waiting for an OK, and runs Claude Code on them at a speed and quality, with `DIRECTION_LIVE_EDITOR_HELPER` as the `direction` it talks to. It spends the signed-in plan. Copy the film folder without `project.sqlite*` and take the database with `sqlite3 -readonly … ".backup …"`; set the scratch `DIRECTION_*` paths as `scripts/test.sh` does. It refuses a film under `~/Movies`. The run's steps, with each one's time and tokens, are in the agent's own session file (`~/.claude/projects/<the Editor folder's path>/<session>.jsonl`), which is where the numbers under Fewer steps came from.
+
+Measured on 12 Nov 2026, the same three notes (two narration joins and a VCR look) on copies of "Coded Love v2", against the runs of 11 Nov:
+
+| | 11 Nov | 12 Nov |
+|---|---|---|
+| Fastest (Sonnet 5.5, medium), from Cut 4 | 35 steps, 229 s of the editor's time, $0.71 | 10 steps, 80 s, $0.46 |
+| Best (Opus 5.5, highest effort), from Cut 5 | 30 steps, 1,126 s, $2.96 | 28 steps, 538 s, $2.68 |
+
+Neither rerun was refused at delivery or returned an answer's keys. The copies weren't quite the first runs' films: the VCR effect's file was already in the Editor folder (about 10 of the first Fastest run's steps wrote it), and the notes' earlier answers were in the film for the editor to read. The Best run did more with its time than the first one (it found a tick where the music's ducking restarted, and made a second version of the look), so its step count says less than its 6.5 minutes of measuring that are gone.
+
 ## Fewer steps
 
 Every step an agent takes resends everything said so far, so on an API key a run's cost follows its number of steps more than anything else ("Coded love", 1 Nov 2026: five runs on Opus 5.5, $71 at API prices, $47 of it one round of notes with about 130 steps). The tools answer in fewer, fuller calls:
@@ -79,4 +92,5 @@ Every step an agent takes resends everything said so far, so on an API key a run
   - `ToolCatalog.returns` says what the most used tools answer with; the reference and `direction.help("name")` carry it. `JobToolsTests.returnsAreWhatTheToolsAnswer` holds the fields to real answers.
   - `direction_timeline` answers with `effects` (clip, effect id, name); `direction_job` takes `wait`.
   - Word times are held to the sound (`WordEdges`, footage-index.md), so the editor cuts on words instead of measuring levels.
+  - Watching is looking: every filmstrip `direction_watch` draws in a script comes back with the script's answer, shown or not (`ScriptRunner.maxWatched`, 12 a script; a watch that wouldn't fit is refused before it counts). Before, a script could mark a passage watched for delivery without the editor ever seeing it.
 - The role, the skills (edit-video, finish) and the finish job say so, and that sound edits answer with the mix.

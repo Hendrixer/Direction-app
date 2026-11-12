@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import os
 import DirectionCore
 import DirectionTools
 
@@ -216,6 +217,29 @@ struct Scripts {
                 ToolResponse(.object([:]), imagePaths: pngs.map(\.path), audioPaths: [wav.path])
             }
             #expect(many.imagePaths.count == ScriptRunner.maxShown && many.audioPaths == [wav.path])
+        }
+
+        /// Watching is looking: a filmstrip a script watched comes back whether it shows it or not, and past what one
+        /// answer can carry, a watch is refused before it counts.
+        @Test func whatAScriptWatchesComesBack() async throws {
+            ScriptRunner.helper = ScriptTests.helper
+            let pngs = (0..<14).map { FileManager.default.temporaryDirectory.appendingPathComponent("watch-\($0)-\(UUID().uuidString).png") }
+            for p in pngs { try Data("png".utf8).write(to: p) }; defer { for p in pngs { try? FileManager.default.removeItem(at: p) } }
+            let asked = OSAllocatedUnfairLock(initialState: 0)
+            let watch: @Sendable (String, JSONValue) async throws -> ToolResponse = { name, _ in
+                guard name == "direction_watch" else { return ToolResponse(.object([:]), imagePaths: [pngs[13].path]) }
+                let n = asked.withLock { n in defer { n += 1 }; return n }
+                return ToolResponse(.object(["watched": .bool(true)]), imagePaths: [pngs[n].path])
+            }
+            let one = try await ScriptRunner.run(code: "const w = direction.watch({start: 0, end: 2}); const f = direction.frame({}); show(f.imagePaths[0]); return w.watched", invoke: watch)
+            #expect(one.value["result"] == .bool(true) && one.imagePaths == [pngs[0].path, pngs[13].path] && one.value["notShown"] == .null)
+            asked.withLock { $0 = 0 }
+            let many = try await ScriptRunner.run(code: "let refused = null; for (let i = 0; i < 13; i++) { try { direction.watch({start: i, end: i + 1}) } catch (e) { refused = e.code } } return refused", invoke: watch)
+            #expect(many.value["result"] == .string("too_much_to_watch") && many.imagePaths == pngs.prefix(ScriptRunner.maxWatched).map(\.path) && asked.withLock({ $0 }) == ScriptRunner.maxWatched)
+            // Every changed passage at once may be eight: refused when they wouldn't all fit.
+            asked.withLock { $0 = 0 }
+            let changed = try await ScriptRunner.run(code: "for (let i = 0; i < 5; i++) direction.watch({start: i, end: i + 1}); try { direction.watch({changed: true}) } catch (e) { return e.code }", invoke: watch)
+            #expect(changed.value["result"] == .string("too_much_to_watch") && asked.withLock({ $0 }) == 5)
         }
 
         /// What one script keeps, the next one has: ids and planned operations are written once. It's there after a

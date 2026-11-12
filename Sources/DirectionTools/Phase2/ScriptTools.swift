@@ -16,7 +16,7 @@ import DirectionCore
 extension ToolCatalog {
     public static let runName = "direction_run"
     static var scriptDefinitions: [ToolDefinition] { [
-        definition(runName, "Direction\u{2019}s tools as functions in a short JavaScript: one step instead of many, and only what the script returns comes back. Each tool is a function on `direction`, named without direction_ and taking that tool\u{2019}s own arguments: `const m = direction.measure_audio({ranges: [{start: 0, end: 8}]})` returns the tool\u{2019}s answer as an object (a tool that draws images or makes a sound adds imagePaths or audioPaths). Calls are synchronous; a tool that fails throws an Error with code and message, which the script can catch. `return x` answers with x; `print(...)` adds a line to the answer; `show(path)` puts an image (up to 8) or a sound a tool made in this script into the answer, to look at or listen to. `keep` is an object that stays between your scripts in this job: put ids, measurements and the operations you plan in it (`keep.ops = [...]`) and use them in a later script, so you never write them out twice (a trial edit, then the same `keep.ops` committed). Gather changes and make them in one direction.edit call. `direction.help()` lists Direction\u{2019}s other tools, and `direction.help(\"name\")` gives one in full. The script reaches nothing but Direction\u{2019}s tools (no files, network or programs). It stops after 4 minutes of its own work (the tools\u{2019} time doesn\u{2019}t count) or 300 calls; changes made before a failure stay.",
+        definition(runName, "Direction\u{2019}s tools as functions in a short JavaScript: one step instead of many, and only what the script returns comes back. Each tool is a function on `direction`, named without direction_ and taking that tool\u{2019}s own arguments: `const m = direction.measure_audio({ranges: [{start: 0, end: 8}]})` returns the tool\u{2019}s answer as an object (a tool that draws images or makes a sound adds imagePaths or audioPaths). Calls are synchronous; a tool that fails throws an Error with code and message, which the script can catch. `return x` answers with x; `print(...)` adds a line to the answer; `show(path)` puts an image (up to 8) or a sound a tool made in this script into the answer, to look at or listen to; what direction.watch draws always comes back, shown or not (up to 12 filmstrips a script). `keep` is an object that stays between your scripts in this job: put ids, measurements and the operations you plan in it (`keep.ops = [...]`) and use them in a later script, so you never write them out twice (a trial edit, then the same `keep.ops` committed). Gather changes and make them in one direction.edit call. `direction.help()` lists Direction\u{2019}s other tools, and `direction.help(\"name\")` gives one in full. The script reaches nothing but Direction\u{2019}s tools (no files, network or programs). It stops after 4 minutes of its own work (the tools\u{2019} time doesn\u{2019}t count) or 300 calls; changes made before a failure stay.",
                    ["code": noted(string, "The script\u{2019}s body: a function body, so end with return."),
                     "does": noted(string, "What it does in a few plain words, as the director reads it: \u{201C}Evening out the narration\u{201D}.")],
                    required: ["code", "does"], readOnly: false),
@@ -44,6 +44,9 @@ public enum ScriptRunner {
     nonisolated(unsafe) public static var seconds: Double = 240
     nonisolated(unsafe) public static var maxMemory: UInt64 = 2 << 30
     public static let maxCalls = 300
+    /// Filmstrips a script's watching may bring back, beside what it shows: watching is looking, so each one comes
+    /// back whether or not the script shows it, and past these a watch is refused rather than counted unseen.
+    public static let maxWatched = 12
     public static let maxShown = 8, maxSounds = 2, maxAnswer = 40_000, maxPrinted = 8_000, maxPrintedLines = 200
     /// A line from the helper longer than this stops it: the most an edit batch or an answer needs, many times over.
     static let maxLine = 8 << 20
@@ -123,11 +126,18 @@ public enum ScriptRunner {
                         do {
                             if name == "direction_help" { send(.object(["value": try ToolCatalog.help(message["arguments"], job: job)])); continue }
                             let arguments = message["arguments"]
+                            // Watching is looking: every filmstrip comes back with the answer. One that couldn't
+                            // isn't watched at all, so delivery never passes on a passage no one saw.
+                            let strips = name == "direction_watch" ? (arguments["changed"].bool == true ? 8 : 1) : 0
+                            if strips > 0, got.watched.count + strips > maxWatched {
+                                send(.object(["error": .object(["code": .string("too_much_to_watch"), "message": .string("A script brings back up to \(maxWatched) filmstrips, and this one has \(got.watched.count). Nothing more was watched: return, look at these, and watch the rest in your next script.")])])); continue
+                            }
                             waited.value.since = .now
                             defer { if let since = waited.value.since { waited.value = (waited.value.total + (.now - since), nil) } }
                             let r = try await DirectionMCPServer.limited(name) { try await invoke(name, arguments) }
                             var value = r.value
                             got.rendered += r.imagePaths; got.sounds += r.audioPaths
+                            if strips > 0 { got.watched += r.imagePaths }
                             for (key, paths) in [("imagePaths", r.imagePaths), ("audioPaths", r.audioPaths)] where !paths.isEmpty {
                                 if case .object(var o) = value { o[key] = .array(paths.map(JSONValue.string)); value = .object(o) }
                                 else { value = .object(["answer": value, key: .array(paths.map(JSONValue.string))]) }
@@ -202,8 +212,11 @@ public enum ScriptRunner {
         if let keptNote { answer["keep"] = .string(keptNote) }
         // Only images and sounds a tool made for this script, never another file, and only those still there.
         let kept = { (made: [String], most: Int) in Array(got.shown.filter { made.contains($0) && FileManager.default.fileExists(atPath: $0) }.prefix(most)) }
-        let images = kept(got.rendered, maxShown), sounds = kept(got.sounds, maxSounds)
-        if got.shown.count > images.count + sounds.count { answer["notShown"] = .string("show takes the imagePaths or audioPaths a tool returned in this script, up to \(maxShown) images and \(maxSounds) sounds.") }
+        // What it watched comes back whether it showed it or not, first; then what it chose to show.
+        let seen = got.watched.filter { FileManager.default.fileExists(atPath: $0) }
+        let chosen = kept(got.rendered.filter { !seen.contains($0) }, maxShown), sounds = kept(got.sounds, maxSounds)
+        let images = seen + chosen
+        if got.shown.filter({ !seen.contains($0) }).count > chosen.count + sounds.count { answer["notShown"] = .string("show takes the imagePaths or audioPaths a tool returned in this script, up to \(maxShown) images and \(maxSounds) sounds.") }
         return ToolResponse(.object(answer), imagePaths: images, audioPaths: sounds)
     }
 
@@ -223,7 +236,7 @@ public enum ScriptRunner {
 
 /// What one script's calls and lines gave, written by the task that answers them and read once it's over.
 final class Collected: @unchecked Sendable {
-    var calls = 0, printed: [String] = [], printedSize = 0, rendered: [String] = [], sounds: [String] = []
+    var calls = 0, printed: [String] = [], printedSize = 0, rendered: [String] = [], sounds: [String] = [], watched: [String] = []
     var done: JSONValue?, cutFrom: Int?, shown: [String] = [], failure: (message: String, line: Int)?, keep: JSONValue?
 }
 

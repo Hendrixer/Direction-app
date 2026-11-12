@@ -76,7 +76,7 @@ struct JobToolsTests {
         let all = Set(ToolCatalog.definitions.map(\.name))
         #expect(Set(ToolCatalog.returns.keys).isSubset(of: all))
         let reference = ToolCatalog.reference(for: .turnover)
-        #expect(reference.contains("Returns {cut, editRevision, sequenceID, outline") && reference.contains("for setEffect and removeEffect") && reference.contains("`show` the imagePaths"))
+        #expect(reference.contains("Returns {cut, editRevision, sequenceID, outline") && reference.contains("for setEffect and removeEffect") && reference.contains("every filmstrip comes back"))
         #expect(try ToolCatalog.help(.string("watch"), job: .turnover).array?.first?["returns"].string?.contains("imagePaths") == true)
         let f = try await MediaFixture.make(); defer { f.cleanup() }
         func answer(_ name: String, _ arguments: [String: JSONValue] = [:]) async throws -> JSONValue { try await f.runtime.invoke(name, arguments: .object(arguments)).value }
