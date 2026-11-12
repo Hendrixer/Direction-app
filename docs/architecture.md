@@ -81,7 +81,7 @@ Feedback is fetched on the agent's next request. Agents may reply and mark a not
 
 Transcription, preview, and export return durable job IDs. Their work belongs to the initiating process. CLI commands wait; persistent API/MCP clients poll. Cancellation reaches the owner task and the native exporter/analyzer where supported. A dead owner's jobs become interrupted when read. There is no background daemon or automatic job restart. Status currently describes phases and completion; export has no fine-grained percentage callback.
 
-## Open source
+## Open-source parts
 
 GRDB provides mature SQLite transaction handling; the official MCP Swift SDK supplies transport and protocol support; Swift Argument Parser provides CLI parsing/help. Native Apple media frameworks handle the platform-specific media pipeline. Package.resolved pins versions and the app includes upstream notices. See `../THIRD_PARTY_NOTICES.md`.
 
