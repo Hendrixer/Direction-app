@@ -48,6 +48,10 @@ import DirectionTools
         let began = Date().timeIntervalSince1970
         var askedAt: Double?
         var waitsForOK = false
+        /// Its turnover's read-back when it began, so one posted from inside a script can be told apart.
+        var readBackAtStart: [ReadBackLine] = []
+        /// Scripts in flight that import, whose long work happens inside a call.
+        var importing: Set<String> = []
         /// The last time the program said anything, in awake time (a Mac asleep isn't a program saying nothing),
         /// and whether this silence was logged yet.
         var lastHeard = ProcessInfo.processInfo.systemUptime { didSet { quietLogged = false } }
@@ -150,7 +154,7 @@ import DirectionTools
             if session == nil, let c = continuation, run.invocations > 0 { job += "\n" + c }
             // The run's own, once it has started; an older run without one reads its job's.
             let effort = run.effort ?? EditorPicks.pick(program, run.job, state?.speedAndQuality ?? .balanced).effort
-            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role, version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, scripts: EditorSetup.runsScripts, kind: run.job)
+            let invocation = EditorProgram.Invocation(job: job, role: EditorJobs.role(for: run.job, program: program), version: run.version, effort: effort, session: session, folder: folder, mcpConfig: mcp, schema: schema, helper: helper, film: store.url, runID: run.id, kind: run.job)
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = programOverride[program] == nil ? (install?.arguments(invocation) ?? program.arguments(invocation)) : program.arguments(invocation)
@@ -160,6 +164,7 @@ import DirectionTools
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err; p.standardInput = FileHandle.nullDevice
             let l = LiveRun(runID: run.id, store: store, program: program, process: p)
+            l.readBackAtStart = run.turnoverID.flatMap { try? store.turnover($0) }?.readBack ?? []
             if program.usesACP {
                 // The whole job, for a saved session the agent can't load.
                 let whole = session == nil ? job : ((try? EditorJobs.text(for: run, store: store)).map { $0 + "\n" + job } ?? job)
@@ -270,6 +275,7 @@ import DirectionTools
         case .session(let s): _ = try? l.store.updateRun(l.runID) { if $0.session != s { if $0.session != nil { $0.sessionSpend = nil }; $0.session = s } }
         case .toolStarted(let id, let name, let input):
             l.pending[id] = name
+            if name.hasSuffix(ToolCatalog.runName), let code = input["code"].string, code.contains("import(") || code.contains("direction_import") { l.importing.insert(id) }
             if let r = try? l.store.run(l.runID), r.state == .starting { _ = try? l.store.updateRun(l.runID) { $0.state = .working } }
             // Asking: anything the director does from here on answers it, even before the program exits.
             let tool = name.hasPrefix("mcp__direction__") ? String(name.dropFirst("mcp__direction__".count)) : name
@@ -282,7 +288,8 @@ import DirectionTools
                 _ = try? l.store.recordActivity(a, runID: l.runID)
             }
         case .toolFinished(let id, let isError, let text):
-            l.pending[id] = nil
+            if l.pending[id]?.hasSuffix(ToolCatalog.runName) == true { noteAsked(l) }
+            l.pending[id] = nil; l.importing.remove(id)
             if isError { DirectionLog.warning("A tool call in run \(l.runID) failed: \(text.prefix(600))", "editor") }
             if isError, EditorFailure.isSpendCap(text) { l.spendCap = EditorFailure.amount(text).map { "\($0) spent on services this month." } ?? "This month\u{2019}s limit for services is reached." }
             if l.pauseWhenIdle, l.pending.isEmpty { l.pauseWhenIdle = false; interrupt(l) }
@@ -290,6 +297,20 @@ import DirectionTools
         case .tokens(let t): l.tokens = (l.tokens ?? 0) + t
         case .result(let text, let isError): l.result = text; if isError { l.failures.append(text) }
         case .failure(let m): l.failures.append(m)
+        }
+    }
+
+    /// A script's calls aren't in the program's stream, so what it asked is read from the film: a question for this
+    /// run's turnover since the invocation began, or a read-back posted since then on a turnover that waits for the
+    /// OK (the director may already have given it).
+    private func noteAsked(_ l: LiveRun) {
+        guard let run = try? l.store.run(l.runID) else { return }
+        if let at = ((try? l.store.questions()) ?? []).filter({ $0.turnoverID == run.turnoverID && $0.createdAt >= l.began }).map(\.createdAt).min() {
+            l.askedAt = min(l.askedAt ?? at, at)
+        }
+        if let id = run.turnoverID, let t = try? l.store.turnover(id), t.waitForOK, !t.readBack.isEmpty, t.readBack != l.readBackAtStart {
+            l.askedAt = l.askedAt ?? Date().timeIntervalSince1970
+            l.waitsForOK = true
         }
     }
 
@@ -367,9 +388,11 @@ import DirectionTools
     /// Quiet this long, it's stuck: Direction stops it and starts it again on its session, once a run, telling it
     /// which step it was on. Stuck again, the run stops and says so (hang recovery).
     nonisolated(unsafe) static var restartAfter: Double = 15 * 60
-    /// While it waits on a call that does its long work inside the call (an import copying a whole file), the
-    /// program is quiet because the call is, so it has this long instead.
+    /// While it waits on a call that does its long work inside the call (an import copying a whole file, or a script
+    /// that imports), the program is quiet because the call is, so it has this long instead.
     nonisolated(unsafe) static var restartAfterLongCall: Double = 2 * 60 * 60
+    /// While it waits on a script: each of its calls may take up to 10 minutes (DirectionMCPServer.limited).
+    nonisolated(unsafe) static var restartAfterScript: Double = 30 * 60
     private var restarted: Set<String> = []
     private var silenceTimer: Timer?
     private func watchForSilence() {
@@ -381,8 +404,9 @@ import DirectionTools
         if live.isEmpty { silenceTimer?.invalidate(); silenceTimer = nil; return }
         for l in live.values where l.intent == .none && !l.finished && !waitsForReadBackOK(l) {
             let quiet = now - l.lastHeard, minutes = Int(quiet / 60)
-            let longCall = l.pending.values.contains { name in DirectionMCPServer.unlimited.contains { name.hasSuffix($0) } }
-            if quiet >= (longCall ? Self.restartAfterLongCall : Self.restartAfter) {
+            let longCall = !l.importing.isEmpty || l.pending.values.contains { name in DirectionMCPServer.unlimited.contains { name.hasSuffix($0) } }
+            let script = l.pending.values.contains { $0.hasSuffix(ToolCatalog.runName) }
+            if quiet >= (longCall ? Self.restartAfterLongCall : script ? Self.restartAfterScript : Self.restartAfter) {
                 recover(l, step: lastStep(l), minutes: minutes)
                 continue
             }
@@ -421,7 +445,7 @@ import DirectionTools
     /// What the program hears when it's started again after getting stuck.
     static func restartNote(_ step: String, minutes: Int) -> String {
         let m = max(minutes, 1)
-        return "Direction stopped you and started you again: you\u{2019}d said nothing for \(m == 1 ? "a minute" : "\(m) minutes"), and your last step was \u{201C}\(step)\u{201D}. Don\u{2019}t do it the same way again. If it was one of Direction\u{2019}s tools, it may get stuck on the same thing: try a shorter passage or fewer frames, or look at what you added there last (an effect or a graphic that never finishes). If it was a command you ran, give it a time limit. Then carry on where you were."
+        return "Direction stopped you and started you again: you\u{2019}d said nothing for \(m == 1 ? "a minute" : "\(m) minutes"), and your last step was \u{201C}\(step)\u{201D}. Don\u{2019}t do it the same way again. If it was one of Direction\u{2019}s tools, it may get stuck on the same thing: try a shorter passage or fewer frames, or look at what you added there last (an effect or a graphic that never finishes). If it was a script, make it do less at once. Then carry on where you were."
     }
 
     // MARK: Control

@@ -14,10 +14,10 @@ extension JSONValue {
 struct EditorACPTests {
     private let folder = URL(fileURLWithPath: "/films/One.direction/Editor")
 
-    private func conversation(resume: String? = nil, scripts: Bool = true) -> ACPConversation {
+    private func conversation(resume: String? = nil) -> ACPConversation {
         ACPConversation(cwd: folder, server: .init(command: "/A/direction", args: ["mcp", "--project", "/films/One.direction"], env: ["DIRECTION_RUN_ID": "run-1"]),
                         prompt: resume == nil ? "Role\n\n---\n\nLog the takes." : "Continue where you stopped.", wholeJob: "Role\n\n---\n\nLog the takes.\nContinue where you stopped.",
-                        resume: resume, permissions: .init(folder: folder, scripts: scripts))
+                        resume: resume, permissions: .init(folder: folder))
     }
     private func line(_ v: JSONValue) -> String { String(decoding: ACPConversation.line(v).dropLast(), as: UTF8.self) }
     private func json(_ s: String) -> JSONValue { (try? JSONDecoder().decode(JSONValue.self, from: Data(s.utf8))) ?? .null }
@@ -122,9 +122,9 @@ struct EditorACPTests {
     }
 
     /// The same rules as Claude Code's allowed tools: Direction's tools, reading, changes inside its folder;
-    /// commands only with scripts on; never the web. Anything else Direction doesn't offer is refused.
+    /// never commands (its scripts are direction_run's) or the web. Anything else Direction doesn't offer is refused.
     @Test func permissionFollowsClaudeCodesRules() {
-        var c = conversation(scripts: false)
+        var c = conversation()
         func answer(_ kind: String, _ title: String, paths: [String] = []) -> String? {
             let locations = paths.map { #"{"path":"\#($0)"}"# }.joined(separator: ",")
             let req = #"{"jsonrpc":"2.0","id":"r1","method":"session/request_permission","params":{"sessionId":"s","toolCall":{"toolCallId":"x\#(kind)\#(title.count)","title":"\#(title)","kind":"\#(kind)","locations":[\#(locations)]},"options":[{"optionId":"ok","name":"Allow","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}"#
@@ -156,10 +156,9 @@ struct EditorACPTests {
         // A move is checked at both ends.
         let move = #"{"jsonrpc":"2.0","id":"m1","method":"session/request_permission","params":{"sessionId":"s","toolCall":{"toolCallId":"mv","title":"Move","kind":"move","locations":[{"path":"\#(folder.path)/a.js"}],"rawInput":{"source":"\#(folder.path)/a.js","destination":"/tmp/a.js"}},"options":[{"optionId":"ok","name":"Allow","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}"#
         #expect(c.receive(move).send.first?["result"]["outcome"]["optionId"].string == "no")
-        var scripted = conversation(scripts: true)
-        let run = scripted.receive(#"{"jsonrpc":"2.0","id":7,"method":"session/request_permission","params":{"sessionId":"s","toolCall":{"toolCallId":"y","title":"node draw.js","kind":"execute"},"options":[{"optionId":"always","name":"Always","kind":"allow_always"}]}}"#).send.first
-        #expect(run?["result"]["outcome"]["optionId"].string == "always")
-        let terminal = scripted.receive(#"{"jsonrpc":"2.0","id":8,"method":"terminal/create","params":{}}"#).send.first
+        let run = c.receive(#"{"jsonrpc":"2.0","id":7,"method":"session/request_permission","params":{"sessionId":"s","toolCall":{"toolCallId":"y","title":"node draw.js","kind":"execute"},"options":[{"optionId":"always","name":"Always","kind":"allow_always"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}"#).send.first
+        #expect(run?["result"]["outcome"]["optionId"].string == "no")
+        let terminal = c.receive(#"{"jsonrpc":"2.0","id":8,"method":"terminal/create","params":{}}"#).send.first
         #expect(terminal?["error"]["code"].int == -32601)
     }
 

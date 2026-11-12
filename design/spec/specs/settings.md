@@ -204,7 +204,7 @@ What it recommends (`EngineAdvice`):
 - **Editor:** the chosen program while it's installed, else whichever is (Claude Code first). Your own session is left alone.
 - Use Recommended sets those three and nothing else. Defaults already follow it: a Mac with 32 GB or more starts on Best.
 
-**Who edits**: as specified in `editor.md › 43` (Editor runs on, Version, Effort, Start work, Let the editor run scripts).
+**Who edits**: as specified in `editor.md › 43` (Editor runs on, Version, Effort, Start work).
 
 **Transcription** and **Looking at footage**
 

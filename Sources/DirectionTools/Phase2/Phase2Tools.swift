@@ -4,7 +4,7 @@ import DirectionCore
 // Phase 2 tools. Each area registers its definitions and handles its calls in its own file.
 extension ToolCatalog {
     static var phase2Definitions: [ToolDefinition] {
-        runsDefinitions + indexDefinitions + syncDefinitions + timelineDefinitions + looksDefinitions + graphicsDefinitions + madeDefinitions + styleDefinitions + techniqueDefinitions + libraryDefinitions + prepDefinitions + checkDefinitions + cutPointDefinitions + scriptDefinitions
+        runsDefinitions + indexDefinitions + syncDefinitions + timelineDefinitions + looksDefinitions + graphicsDefinitions + madeDefinitions + styleDefinitions + techniqueDefinitions + libraryDefinitions + prepDefinitions + checkDefinitions + cutPointDefinitions + copyDefinitions + scriptDefinitions
     }
 }
 
@@ -23,6 +23,7 @@ extension ToolRuntime {
         if let r = try await invokePrep(name, a) { return r }
         if let r = try await invokeCheck(name, a) { return r }
         if let r = try await invokeCutPoints(name, a) { return r }
+        if let r = try await invokeCopy(name, a) { return r }
         if let r = try await invokeScript(name, a) { return r }
         return nil
     }

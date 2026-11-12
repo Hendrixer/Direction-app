@@ -124,8 +124,7 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
         var helper: String
         var film: URL
         var runID: String
-        var scripts: Bool
-        /// The job's tools only, with direction_more_tools for the rest.
+        /// The job: its tools are in the role, and the server lists direction_run alone.
         var kind: EditorJob? = nil
     }
 
@@ -138,20 +137,20 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
             if !i.version.isEmpty { args += ["--model", i.version] }
             if !i.effort.isEmpty { args += ["--effort", i.effort] }
             args += ["--mcp-config", i.mcpConfig.path, "--strict-mcp-config"]
-            // Every Direction tool, file read and write inside the working folder, and scripts when allowed.
-            var allowed = ["mcp__direction", "Read", "Glob", "Grep", "Edit(./**)", "Write(./**)"]
-            if i.scripts { allowed.append("Bash") }
-            args += ["--allowedTools", allowed.joined(separator: ","), "--append-system-prompt", i.role, "--permission-mode", "dontAsk"]
+            // Direction's tool (direction_run, for every step) and file read and write inside the working folder. No
+            // shell: a script does the loops and the sums, and direction_copy brings files in. Only these are offered,
+            // so the editor doesn't spend steps on ones it would be refused.
+            args += ["--tools", "Read,Glob,Grep,Edit,Write"]
+            args += ["--allowedTools", "mcp__direction,Read,Glob,Grep,Edit(./**),Write(./**)", "--append-system-prompt", i.role, "--permission-mode", "dontAsk"]
             // Its own settings stay Direction's: a hook written there would run outside the sandbox next time.
             args += ["--disallowedTools", "Edit(./.claude/**),Write(./.claude/**),Edit(./.codex/**),Write(./.codex/**)"]
-            // Scripts run in Claude Code's sandbox: this folder only, no network.
-            if i.scripts { args += ["--settings", #"{"sandbox":{"enabled":true,"autoAllowBashIfSandboxed":true,"allowUnsandboxedCommands":false}}"#] }
             if let s = i.session { args += ["--resume", s] }
             return args
         case .codex:
             let toml = { (s: String) in "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\"" }
-            // Scripts off: read-only is Codex's only way to keep commands from running.
-            let sandbox = i.scripts ? "workspace-write" : "read-only"
+            // Codex reads and writes files with its own commands, so it keeps them: in its sandbox, writing only in this
+            // folder, with no network.
+            let sandbox = "workspace-write"
             // --ignore-user-config: only Direction's tools, not the director's other MCP servers (auth still works).
             var shared = ["--json", "--skip-git-repo-check", "--ignore-user-config"]
             if !i.version.isEmpty { shared += ["--model", i.version] }
@@ -162,12 +161,15 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
                 "--config", "mcp_servers.direction.env.DIRECTION_RUN_ID=\(toml(i.runID))",
                 // Codex strips a tool's field descriptions, then its nested shapes, past 5,000 bytes of schema; direction_edit's is bigger.
                 "--config", "mcp_servers.direction.tool_input_schema_max_bytes=32768",
+                // A script waits on Direction's tools as long as they take (each has its own limit, DirectionMCPServer.limited).
+                "--config", "mcp_servers.direction.tool_timeout_sec=3600",
                 "--config", "sandbox_workspace_write.network_access=false",
                 "--config", "approval_policy=\"never\"",
                 "--output-schema", i.schema.path,
             ]
             if let s = i.session { return ["exec", "resume"] + shared + ["--config", "sandbox_mode=\(toml(sandbox))", s, i.job] }
-            return ["exec"] + shared + ["--cd", i.folder.path, "--sandbox", sandbox, i.job]
+            // Codex has no system prompt to add to: the role leads the first message, as over ACP.
+            return ["exec"] + shared + ["--cd", i.folder.path, "--sandbox", sandbox, i.role + "\n\n---\n\n" + i.job]
         case .gemini:
             // Over ACP on stdin (EditorACP.swift); Gemini CLI asks before edits and commands, and Direction answers.
             return acpForms.first ?? []
@@ -179,10 +181,9 @@ enum EditorProgram: String, CaseIterable, Codable, Sendable {
     func conversation(_ i: Invocation, wholeJob: String) -> ACPConversation {
         let server = ACPConversation.Server(command: i.helper, args: Self.serverArguments(film: i.film, job: i.kind), env: ["DIRECTION_RUN_ID": i.runID])
         let first = { (text: String) in i.role + "\n\n---\n\n" + text }
-        // Gemini CLI's commands run outside any sandbox Direction can set (Claude Code's and Codex's keep to the folder,
-        // with no network), so they're refused whatever Let the editor run scripts says; direction_run covers loops.
+        // Gemini CLI's commands run outside any sandbox Direction can set, so they're always refused; scripts do the loops.
         return ACPConversation(cwd: i.folder, server: server, prompt: i.session == nil ? first(i.job) : i.job, wholeJob: first(wholeJob), resume: i.session,
-                               permissions: .init(folder: i.folder, scripts: false))
+                               permissions: .init(folder: i.folder))
     }
 
     /// The signed-in check: a job that only replies `ready`, with no tools.
@@ -478,7 +479,7 @@ enum EditorDiscovery {
         p.terminationHandler = { p in ChildProcesses.ended(p); done.signal() }
         do { try p.run() } catch { return .couldNotCheck(error.localizedDescription) }
         ChildProcesses.started(p)
-        nonisolated(unsafe) var conversation = ACPConversation(cwd: folder, server: .init(command: "", args: [], env: [:]), prompt: "", permissions: .init(folder: folder, scripts: false))
+        nonisolated(unsafe) var conversation = ACPConversation(cwd: folder, server: .init(command: "", args: [], env: [:]), prompt: "", permissions: .init(folder: folder))
         let hello = conversation.start()
         let answer = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var verdict: SignInCheck?

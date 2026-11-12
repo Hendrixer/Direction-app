@@ -7,14 +7,16 @@ import DirectionCore
 // script returns comes back (specs/editor.md › Scripts). A loop of measure → decide → change is one step instead of
 // dozens, and every step the editor saves is everything said so far it doesn't send again.
 //
+// An editor Direction starts has only this tool (JobTools.swift): every step is a script, even a single call.
+//
 // The script runs in a helper process (`direction script`) that macOS's own sandbox closes off before any of it
 // runs: the pure-computation profile, so no files, no network, no programs. All it can do is ask Direction, over
 // its stdin and stdout, to run a tool, and each ask is checked exactly like a direct call. A script can do nothing
 // the editor couldn't do one call at a time.
 extension ToolCatalog {
-    static let runName = "direction_run"
+    public static let runName = "direction_run"
     static var scriptDefinitions: [ToolDefinition] { [
-        definition(runName, "Run a short JavaScript that calls Direction\u{2019}s tools, and get back only what it returns: one step instead of many. Use it whenever you\u{2019}d make several calls in a row, such as measuring every clip, looking at each graphic or finding words across takes, then making every change in one edit. Each tool is a function on `direction`, named without direction_ and taking that tool\u{2019}s own arguments: `const m = direction.measure_audio({ranges: [{start: 0, end: 8}]})` returns the tool\u{2019}s answer as an object (a tool that renders images adds imagePaths). Calls are synchronous; a tool that fails throws an Error with code and message, which the script can catch. `return x` answers with x; `print(...)` adds a line to the answer; `show(path)` puts one of the images a tool rendered in this script into the answer (up to 8). Gather changes and make them in one direction.edit call. The script reaches nothing but Direction\u{2019}s tools (no files, network or programs) and stops after 4 minutes or 300 calls; changes made before a failure stay.",
+        definition(runName, "Direction\u{2019}s tools as functions in a short JavaScript: one step instead of many, and only what the script returns comes back. Each tool is a function on `direction`, named without direction_ and taking that tool\u{2019}s own arguments: `const m = direction.measure_audio({ranges: [{start: 0, end: 8}]})` returns the tool\u{2019}s answer as an object (a tool that draws images or makes a sound adds imagePaths or audioPaths). Calls are synchronous; a tool that fails throws an Error with code and message, which the script can catch. `return x` answers with x; `print(...)` adds a line to the answer; `show(path)` puts an image (up to 8) or a sound a tool made in this script into the answer, to look at or listen to. Gather changes and make them in one direction.edit call. `direction.help()` lists Direction\u{2019}s other tools, and `direction.help(\"name\")` gives one in full. The script reaches nothing but Direction\u{2019}s tools (no files, network or programs). It stops after 4 minutes of its own work (the tools\u{2019} time doesn\u{2019}t count) or 300 calls; changes made before a failure stay.",
                    ["code": noted(string, "The script\u{2019}s body: a function body, so end with return."),
                     "does": noted(string, "What it does in a few plain words, as the director reads it: \u{201C}Evening out the narration\u{201D}.")],
                    required: ["code", "does"], readOnly: false),
@@ -33,13 +35,16 @@ extension ToolRuntime {
 public enum ScriptRunner {
     /// Set while a script's own calls run, so only its changes show in the editor's activity (the run itself is one row).
     @TaskLocal public static var running = false
+    /// The job the tool server was started for, so direction.help knows which tools it was given.
+    @TaskLocal public static var job: EditorJob?
     /// The `direction` program to start; nil finds it (this process when it is `direction`, else beside the app).
     nonisolated(unsafe) public static var helper: String?
-    /// Under the tool server's 5 minutes, after which a call is reported as stuck.
+    /// The script's own work: time spent waiting on a tool doesn't count, since each call has the limits a direct
+    /// one has (DirectionMCPServer.limited).
     nonisolated(unsafe) public static var seconds: Double = 240
     nonisolated(unsafe) public static var maxMemory: UInt64 = 2 << 30
     public static let maxCalls = 300
-    public static let maxShown = 8, maxAnswer = 40_000, maxPrinted = 8_000, maxPrintedLines = 200
+    public static let maxShown = 8, maxSounds = 2, maxAnswer = 40_000, maxPrinted = 8_000, maxPrintedLines = 200
     /// A line from the helper longer than this stops it: the most an edit batch or an answer needs, many times over.
     static let maxLine = 8 << 20
 
@@ -58,7 +63,9 @@ public enum ScriptRunner {
     enum Stop: Sendable { case time, memory, longLine }
 
     public static func run(code: String, invoke: @escaping @Sendable (String, JSONValue) async throws -> ToolResponse) async throws -> ToolResponse {
-        let started = SuspendingClock.now, limit = seconds, memory = maxMemory
+        let started = SuspendingClock.now, limit = seconds, memory = maxMemory, job = Self.job
+        // Time inside tool calls, and when the call in flight began: the rest is the script's own.
+        let waited = Box<(total: Duration, since: SuspendingClock.Instant?)>((.zero, nil))
         let p = Process()
         p.executableURL = URL(fileURLWithPath: try helperPath())
         p.arguments = ["script"]
@@ -110,12 +117,16 @@ public enum ScriptRunner {
                         if name == ToolCatalog.runName { send(.object(["error": .object(["code": .string("not_in_a_script"), "message": .string("A script can\u{2019}t run another script.")])])); continue }
                         got.calls += 1
                         do {
-                            let r = try await invoke(name, message["arguments"])
+                            if name == "direction_help" { send(.object(["value": try ToolCatalog.help(message["arguments"], job: job)])); continue }
+                            let arguments = message["arguments"]
+                            waited.value.since = .now
+                            defer { if let since = waited.value.since { waited.value = (waited.value.total + (.now - since), nil) } }
+                            let r = try await DirectionMCPServer.limited(name) { try await invoke(name, arguments) }
                             var value = r.value
-                            if !r.imagePaths.isEmpty {
-                                got.rendered += r.imagePaths
-                                if case .object(var o) = value { o["imagePaths"] = .array(r.imagePaths.map(JSONValue.string)); value = .object(o) }
-                                else { value = .object(["answer": value, "imagePaths": .array(r.imagePaths.map(JSONValue.string))]) }
+                            got.rendered += r.imagePaths; got.sounds += r.audioPaths
+                            for (key, paths) in [("imagePaths", r.imagePaths), ("audioPaths", r.audioPaths)] where !paths.isEmpty {
+                                if case .object(var o) = value { o[key] = .array(paths.map(JSONValue.string)); value = .object(o) }
+                                else { value = .object(["answer": value, key: .array(paths.map(JSONValue.string))]) }
                             }
                             send(.object(["value": value]))
                         } catch is CancellationError { throw CancellationError() }
@@ -137,11 +148,13 @@ public enum ScriptRunner {
                 }
             }
         }
-        // The limits: awake time (as the tool limit counts it) and memory. Either stops the helper and the call in flight.
+        // The limits: the script's own awake time (as the tool limit counts it) and memory. Either stops the helper and
+        // the call in flight.
         let watch = Task {
             while !Task.isCancelled {
                 try await Task.sleep(for: .milliseconds(250), clock: .suspending)
-                if SuspendingClock.now - started > .seconds(limit) { stop.value = .time }
+                let now = SuspendingClock.now, w = waited.value
+                if now - started - w.total - (w.since.map { now - $0 } ?? .zero) > .seconds(limit) { stop.value = .time }
                 else if footprint(pid) > memory { stop.value = .memory }
                 else { continue }
                 kill(pid, SIGKILL); work.cancel(); return
@@ -157,7 +170,7 @@ public enum ScriptRunner {
         let tail = printed.isEmpty ? "" : " It printed: " + String(printed.joined(separator: " | ").suffix(1_000))
         let madeCalls = calls == 0 ? "" : " \(calls) call\(calls == 1 ? "" : "s") had run; changes they made stay."
         switch stop.value {
-        case .time: throw DirectionError("script_too_long", "The script ran past \(Int(limit / 60)) minutes and was stopped.\(madeCalls) Do less in one script, or check what it waits on.\(tail)")
+        case .time: throw DirectionError("script_too_long", "The script worked past \(Int(limit / 60)) minutes on its own (the tools\u{2019} time doesn\u{2019}t count) and was stopped.\(madeCalls) Do less in one script, or look for a loop that never ends.\(tail)")
         case .memory: throw DirectionError("script_too_big", "The script used more than \(memory >> 30) GB of memory and was stopped.\(madeCalls) Keep less at once.\(tail)")
         case .longLine: throw DirectionError("script_too_big", "The script sent more than \(maxLine >> 20) MB at once and was stopped.\(madeCalls) Send and return less.\(tail)")
         case nil: break
@@ -170,10 +183,11 @@ public enum ScriptRunner {
         var answer: [String: JSONValue] = ["result": done, "calls": .number(Double(calls)), "seconds": .number(((SuspendingClock.now - started) / .milliseconds(100)).rounded() / 10)]
         if let cutFrom = got.cutFrom { answer["cut"] = .string("The answer was \(cutFrom) characters and is cut at \(maxAnswer): return less.") }
         if !printed.isEmpty { answer["printed"] = .array(printed.map(JSONValue.string)) }
-        // Only images a tool rendered for this script, never another file, and only those still there.
-        let images = Array(got.shown.filter { got.rendered.contains($0) && FileManager.default.fileExists(atPath: $0) }.prefix(maxShown))
-        if got.shown.count > images.count { answer["notShown"] = .string("show takes the imagePaths a tool returned in this script, up to \(maxShown).") }
-        return ToolResponse(.object(answer), imagePaths: images)
+        // Only images and sounds a tool made for this script, never another file, and only those still there.
+        let kept = { (made: [String], most: Int) in Array(got.shown.filter { made.contains($0) && FileManager.default.fileExists(atPath: $0) }.prefix(most)) }
+        let images = kept(got.rendered, maxShown), sounds = kept(got.sounds, maxSounds)
+        if got.shown.count > images.count + sounds.count { answer["notShown"] = .string("show takes the imagePaths or audioPaths a tool returned in this script, up to \(maxShown) images and \(maxSounds) sounds.") }
+        return ToolResponse(.object(answer), imagePaths: images, audioPaths: sounds)
     }
 
     /// A message as a sentence: one full stop, not two.
@@ -192,7 +206,7 @@ public enum ScriptRunner {
 
 /// What one script's calls and lines gave, written by the task that answers them and read once it's over.
 final class Collected: @unchecked Sendable {
-    var calls = 0, printed: [String] = [], printedSize = 0, rendered: [String] = []
+    var calls = 0, printed: [String] = [], printedSize = 0, rendered: [String] = [], sounds: [String] = []
     var done: JSONValue?, cutFrom: Int?, shown: [String] = [], failure: (message: String, line: Int)?
 }
 
@@ -263,7 +277,7 @@ public enum ScriptHost {
         for (let i = 0; i < arguments.length; i++) { const x = arguments[i]; parts.push(typeof x === "string" ? wellFormed.call(x) : json(x)); }
         say(parts.join(" "));
       };
-      const show = function (path) { if (typeof path !== "string") throw new Error("show takes a path from a tool's imagePaths"); if (shown.length < 64) shown.push(path); };
+      const show = function (path) { if (typeof path !== "string") throw new Error("show takes a path from a tool's imagePaths or audioPaths"); if (shown.length < 64) shown.push(path); };
       const report = function (e) { fail(e && e.message !== undefined ? (e.code ? e.code + ": " : "") + String(e.message) : String(e), e && e.stack ? String(e.stack) : ""); };
       Object.defineProperties(globalThis, {
         direction: { value: direction }, print: { value: print }, show: { value: show },
@@ -297,12 +311,13 @@ public enum ScriptHost {
             write(.object(["failed": .string("No script came")])); _exit(1)
         }
         let lines = code.split(separator: "\n", omittingEmptySubsequences: false).count
-        // Limits that hold even if Direction goes away without stopping it: CPU time, wall time and the parent itself
-        // (an orphan is handed to launchd, pid 1).
-        let limit = max(1, request["seconds"].double ?? ScriptRunner.seconds), started = Date()
+        // Limits that hold even if Direction goes away without stopping it: CPU time (the script's own work; waiting on
+        // a tool takes none) and the parent itself (an orphan is handed to launchd, pid 1). Not wall time: one tool
+        // call can take minutes.
+        let limit = max(1, request["seconds"].double ?? ScriptRunner.seconds)
         var cpu = rlimit(rlim_cur: rlim_t(limit + 15), rlim_max: rlim_t(limit + 30)); setrlimit(RLIMIT_CPU, &cpu)
         Thread.detachNewThread {
-            while true { if getppid() == 1 || getppid() != parent || Date().timeIntervalSince(started) > limit + 15 { _exit(3) }; sleep(1) }
+            while true { if getppid() == 1 || getppid() != parent { _exit(3) }; sleep(1) }
         }
 
         let context = JSContext()!
@@ -323,7 +338,8 @@ public enum ScriptHost {
         }
         let done: @convention(block) (String, String) -> Void = { value, shown in
             finished = true
-            let paths = ((try? JSONDecoder().decode([String].self, from: Data(shown.utf8))) ?? []).prefix(ScriptRunner.maxShown)
+            // All of them (the script keeps 64): Direction sorts images from sounds and keeps what it may.
+            let paths = (try? JSONDecoder().decode([String].self, from: Data(shown.utf8))) ?? []
             if value.count > ScriptRunner.maxAnswer {
                 write(.object(["done": .string(String(value.prefix(ScriptRunner.maxAnswer))), "cutFrom": .number(Double(value.count)), "shown": .array(paths.map(JSONValue.string))]))
             } else if let answer = try? JSONDecoder().decode(JSONValue.self, from: Data(value.utf8)) {

@@ -95,7 +95,9 @@ struct EditorStreamTests {
         #expect(DeveloperTools.isPlaceholder("/usr/bin/python3") == !DeveloperTools.installed)
         #expect(!DeveloperTools.isPlaceholder("/opt/homebrew/bin/python3") && !DeveloperTools.isPlaceholder("/usr/bin/sips"))
         #expect(EditorJobs.noDeveloperTools.contains("`python3`") && EditorJobs.noDeveloperTools.contains("`git`"))
-        #expect(EditorJobs.role.contains("developer tools") == !DeveloperTools.installed)
+        #expect(EditorJobs.role(for: .finish, program: .codex).contains("developer tools") == !DeveloperTools.installed)
+        // Only Codex runs commands.
+        #expect(!EditorJobs.role(for: .finish, program: .claudeCode).contains("developer tools") && !EditorJobs.role(for: .finish, program: .gemini).contains("developer tools"))
     }
 
     /// A downloaded copy opened from its disk image offers to move to Applications; one in place doesn't.
@@ -371,7 +373,13 @@ struct EditorJobTests {
         #expect(EditorRunner.finished(style, store: store))
         let more = EditorJobs.continuation("I approved your read-back. Cut it.", job: .turnover)
         #expect(more.hasPrefix("I approved your read-back.") && !more.contains("{{"))
-        #expect(!EditorJobs.role.contains("{{") && EditorJobs.role.contains("\"finished\""))
+        for job in EditorJob.allCases {
+            let role = EditorJobs.role(for: job)
+            #expect(!role.contains("{{") && role.contains("\"finished\"") && role.contains("direction_run") && !role.contains("direction_more_tools"), "\(job)")
+            // The job's tools, in full, as a script calls them.
+            #expect(role.contains("## Direction\u{2019}s tools for this job") && role.contains("### direction.brief("), "\(job)")
+        }
+        #expect(EditorJobs.role(for: .finish).contains("### direction.edit(") && !EditorJobs.role(for: .script).contains("### direction.edit("))
     }
 
     @Test func theFinishJobCarriesTheDirectorsCreditsAndLicenses() throws {
@@ -390,16 +398,20 @@ struct EditorJobTests {
     }
 
     @Test func commandLinesUseOnlyTheCheckedFlags() {
-        let i = EditorProgram.Invocation(job: "Do the job.", role: "Be the editor.", version: "claude-opus-5-5", session: nil, folder: URL(fileURLWithPath: "/f/Editor"), mcpConfig: URL(fileURLWithPath: "/f/Editor/.mcp.json"), schema: URL(fileURLWithPath: "/f/Editor/.direction/result.schema.json"), helper: "/A/direction", film: URL(fileURLWithPath: "/f"), runID: "run-1", scripts: true)
+        let i = EditorProgram.Invocation(job: "Do the job.", role: "Be the editor.", version: "claude-opus-5-5", session: nil, folder: URL(fileURLWithPath: "/f/Editor"), mcpConfig: URL(fileURLWithPath: "/f/Editor/.mcp.json"), schema: URL(fileURLWithPath: "/f/Editor/.direction/result.schema.json"), helper: "/A/direction", film: URL(fileURLWithPath: "/f"), runID: "run-1")
         let claude = EditorProgram.claudeCode.arguments(i)
         #expect(Array(claude.prefix(2)) == ["--print", "Do the job."])
         for flag in claude where flag.hasPrefix("--") { #expect(EditorProgram.claudeFlags.contains(flag), "\(flag) isn't in claudeFlags") }
-        #expect(claude.contains("--strict-mcp-config") && claude.contains("mcp__direction,Read,Glob,Grep,Edit(./**),Write(./**),Bash"))
-        var resumed = i; resumed.session = "s-1"; resumed.scripts = false
+        // No shell: Direction's tool and the files in its folder, and only those offered.
+        #expect(claude.contains("--strict-mcp-config") && claude.contains("mcp__direction,Read,Glob,Grep,Edit(./**),Write(./**)"))
+        #expect(claude.firstIndex(of: "--tools").map { claude[$0 + 1] } == "Read,Glob,Grep,Edit,Write" && !claude.joined().contains("Bash") && !claude.contains("--settings"))
+        var resumed = i; resumed.session = "s-1"
         let again = EditorProgram.claudeCode.arguments(resumed)
         #expect(again.suffix(2) == ["--resume", "s-1"] && !again.joined().contains("Bash"))
+        // Codex has no system prompt to add to: the role leads its first message. Its commands keep to its sandbox.
         let codex = EditorProgram.codex.arguments(i)
-        #expect(codex.first == "exec" && codex.last == "Do the job.")
+        #expect(codex.first == "exec" && codex.last == "Be the editor.\n\n---\n\nDo the job.")
+        #expect(codex.firstIndex(of: "--sandbox").map { codex[$0 + 1] } == "workspace-write" && codex.contains("mcp_servers.direction.tool_timeout_sec=3600"))
         for flag in codex where flag.hasPrefix("--") { #expect(EditorProgram.codexExecFlags.contains(flag), "\(flag) isn't in codexExecFlags") }
         #expect(codex.contains("mcp_servers.direction.args=[\"mcp\",\"--project\",\"/f\"]"))
         var finishing = i; finishing.kind = .finish
@@ -408,7 +420,7 @@ struct EditorJobTests {
         let codexAgain = EditorProgram.codex.arguments(resumed)
         #expect(Array(codexAgain.prefix(2)) == ["exec", "resume"] && codexAgain.suffix(2) == ["s-1", "Do the job."])
         for flag in codexAgain where flag.hasPrefix("--") { #expect(EditorProgram.codexResumeFlags.contains(flag), "\(flag) isn't in codexResumeFlags") }
-        #expect(codexAgain.contains("sandbox_mode=\"read-only\""))
+        #expect(codexAgain.contains("sandbox_mode=\"workspace-write\""))
         // No effort chosen: the program decides. Chosen: Claude Code's flag, Codex's config key, on resume too.
         #expect(!claude.contains("--effort") && !codex.joined().contains("model_reasoning_effort"))
         var harder = i; harder.effort = "high"
@@ -510,7 +522,7 @@ struct EditorRunnerTests {
         #expect(r.state == .done)
         #expect(r.session == "fake-acp-session-1" && r.spend == 0.42 && r.summary == "Logged 1 take." && r.invocations == 1)
         #expect(args(dir) == ["--acp"])
-        #expect(text(dir, ".fake-prompt").contains("\n\n---\n\n") && text(dir, ".fake-prompt").hasPrefix(String(EditorJobs.role.prefix(40))))
+        #expect(text(dir, ".fake-prompt").contains("\n\n---\n\n") && text(dir, ".fake-prompt").hasPrefix(String(EditorJobs.role(for: .logFootage).prefix(40))))
         let servers = try JSONDecoder().decode(JSONValue.self, from: Data(text(dir, ".fake-mcp.json").utf8))
         #expect(servers[0]["name"].string == "direction" && servers[0]["command"].string == "/usr/bin/true")
         #expect(servers[0]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
@@ -595,7 +607,7 @@ struct EditorRunnerTests {
         #expect(a.first == "--print" && a.contains("stream-json") && a.contains("--strict-mcp-config") && a.contains("claude-opus-5-5"))
         #expect((try? String(contentsOf: dir.appendingPathComponent("Editor/.fake-run-id"), encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) == run.id)
         let mcp = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: dir.appendingPathComponent("Editor/.mcp.json")))
-        // Started for this job: its own tools, with direction_more_tools for the rest.
+        // Started for this job: direction_run alone, the job's tools in its role.
         #expect(mcp["mcpServers"]["direction"]["args"] == .array([.string("mcp"), .string("--project"), .string(store.url.path), .string("--job"), .string("logFootage")]))
         #expect(mcp["mcpServers"]["direction"]["env"]["DIRECTION_RUN_ID"].string == run.id)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Editor/.claude/skills/start-project/SKILL.md").path))
@@ -701,6 +713,29 @@ struct EditorRunnerTests {
     /// An import copies a whole file inside its call, so an editor waiting on one is quiet because the call is: it
     /// isn't stuck until a much longer time. The director's own Stop is what they asked for, so it isn't logged as
     /// an error (nor reported).
+    /// A script is one call to the program, so it has longer than a single call (each of its calls may take 10
+    /// minutes), and a script that imports has an import's time.
+    @Test func aScriptInFlightHasLongerAndOneThatImportsHasAnImportsTime() async throws {
+        let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
+        try scenario("slow", dir)
+        let run = try start(.logFootage, store: store)
+        _ = try await wait(store, run.id) { $0.state == .working && $0.session != nil }
+        let live = try #require(EditorRunner.shared.liveRun(run.id))
+        let script = { (code: String) in JSONValue.object(["does": .string("Bringing in the takes"), "code": .string(code)]) }
+        EditorRunner.shared.handle(live, .toolStarted(id: "s-1", name: "mcp__direction__direction_run", input: script("return direction.timeline({})")))
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + EditorRunner.restartAfter + 60)
+        #expect(live.intent == .none, "past a call's 15 minutes, a script isn't stuck yet")
+        EditorRunner.shared.handle(live, .toolFinished(id: "s-1", isError: false, text: "{}"))
+        EditorRunner.shared.handle(live, .toolStarted(id: "s-2", name: "mcp__direction__direction_run", input: script("return direction.import({path: \"/tmp/take.mov\"})")))
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + EditorRunner.restartAfterScript + 60)
+        #expect(live.intent == .none, "a script that imports has an import's time")
+        EditorRunner.shared.checkSilence(now: ProcessInfo.processInfo.systemUptime + EditorRunner.restartAfterLongCall + 1)
+        #expect(live.intent == .restart)
+        _ = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        EditorRunner.shared.stop(run.id, store: store)
+        _ = try await ended(store, run.id)
+    }
+
     @Test func anImportInFlightIsntSilenceAndAStopIsntAnError() async throws {
         let (store, dir) = try film(logged: false); defer { try? FileManager.default.removeItem(at: dir) }
         let before = EditorRunner.restartAfter
@@ -965,6 +1000,27 @@ struct EditorRunnerTests {
         let told = jobText(dir)
         #expect(told.hasPrefix("I approved your read-back. Cut it.") && told.contains("I chose \u{201C}Hold on her\u{201D}."), "\(told)")
         #expect(args(dir).suffix(2) == ["--resume", "fake-session-1"])
+        EditorRunner.shared.stop(run.id, store: store)
+        _ = try await ended(store, run.id)
+    }
+
+    /// The same when the read-back was made inside a script: the program's stream shows only direction_run, so
+    /// Direction reads from the film that it waits for the OK.
+    @Test func aReadBackMadeInAScriptStillWaitsForTheOK() async throws {
+        let (store, dir) = try film(logged: true); defer { try? FileManager.default.removeItem(at: dir) }
+        let (m, t, note) = try readBackFilm(store); defer { m.close() }
+        try scenario("readback-script", dir)
+        let run = try start(.turnover, store: store, turnoverID: t.id)
+        try await asked(dir, store, run.id)
+        try readBack(store, t, note, "Reframe to about 1.6\u{00D7}; sky down to a third.")
+        _ = try store.approveReadBack(turnoverID: t.id)
+        try scenario("slow", dir)
+        try go(dir)
+        let waited = try await wait(store, run.id) { !$0.state.isActive && !EditorRunner.shared.isLive(run.id) && $0.endedAt != nil }
+        #expect(try waited.state == .waitingForYou && waited.askedForOK == true && store.turnover(t.id).state == .cutting)
+        m.refresh(force: true)
+        _ = try await wait(store, run.id) { $0.invocations == 2 && $0.state == .working }
+        #expect(jobText(dir).hasPrefix("I approved your read-back. Cut it."), "\(jobText(dir))")
         EditorRunner.shared.stop(run.id, store: store)
         _ = try await ended(store, run.id)
     }

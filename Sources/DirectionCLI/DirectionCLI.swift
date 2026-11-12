@@ -236,7 +236,7 @@ struct API: AsyncParsableCommand {
 struct MCP: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "mcp", abstract: "Serve the official MCP stdio transport for an external agent.")
     @OptionGroup var options: OptionalProjectOptions
-    @Option(help: "The job Direction started the editor for (assemble, turnover, finish…): only its tools are listed, with direction_more_tools for the rest.") var job: String?
+    @Option(help: "The job Direction started the editor for (assemble, turnover, finish…): only direction_run is listed, and its scripts call the job's tools and the rest.") var job: String?
     func run() async throws {
         let job = try job.map { name in
             guard let job = EditorJob(rawValue: name) else { throw ValidationError("Unknown job \(name): use one of \(EditorJob.allCases.map(\.rawValue).joined(separator: ", ")).") }

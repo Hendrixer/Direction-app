@@ -11,11 +11,10 @@ struct ACPConversation {
     struct Server { var command: String; var args: [String]; var env: [String: String] }
 
     /// What the agent may do without asking the director (the same as Claude Code's allowed tools): Direction's
-    /// tools, reading and searching, and changes inside its own folder. Commands only while scripts are on;
-    /// never the web.
+    /// tools, reading and searching, and changes inside its own folder. Never commands (its scripts are Direction's,
+    /// in direction_run), never the web.
     struct Permissions {
         var folder: URL
-        var scripts: Bool
     }
 
     struct Step: Equatable {
@@ -191,8 +190,7 @@ struct ACPConversation {
     /// What the step does decides first, so a command or a fetch that mentions a Direction tool is still a command.
     func allows(_ call: JSONValue) -> Bool {
         switch call["kind"].string ?? "other" {
-        case "execute": return permissions.scripts
-        case "fetch", "switch_mode": return false
+        case "execute", "fetch", "switch_mode": return false
         case "edit", "delete", "move":
             // Every path it names, a move's destination too; none named, no telling where it writes.
             let paths = Self.paths(call)

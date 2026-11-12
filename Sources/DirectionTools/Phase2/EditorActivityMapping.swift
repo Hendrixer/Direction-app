@@ -93,6 +93,9 @@ public enum EditorActivityLog {
             let what = a["name"].string ?? a["title"].string ?? "a graphic"
             let note = noteLabel(a, c)
             return ActivityInput(verb: "Drawing", object: note.map { "\(what) for \($0)" } ?? what, time: seconds(a["at"]) ?? seconds(a["start"]), tool: name)
+        case "direction_copy":
+            let to = a["to"].string.map { ($0 as NSString).lastPathComponent } ?? "a file"
+            return ActivityInput(verb: "Bringing in", object: a["font"].string.map { "the font \($0)" } ?? to, tool: name)
         case "direction_make_look":
             return ActivityInput(verb: "Making a look", object: noteLabel(a, c).map { "for \($0)" } ?? (a["name"].string ?? "for the film"), tool: name)
         case "direction_turnover_update":

@@ -24,7 +24,12 @@ enum EditorJobs {
         return out.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
     }
 
-    static var role: String { fill(template("editor-role") ?? "", [:]) + (DeveloperTools.installed ? "" : "\n" + noDeveloperTools) }
+    /// The role, then the job's tools in full as the functions a script calls (its only tool is direction_run). Only
+    /// Codex runs commands, so only Codex hears which aren't real on this Mac.
+    static func role(for job: EditorJob, program: EditorProgram = .claudeCode) -> String {
+        fill(template("editor-role") ?? "", [:]) + (DeveloperTools.installed || program != .codex ? "" : "\n" + noDeveloperTools)
+            + "\n\n## Direction\u{2019}s tools for this job\n\nEach is a function in a `direction_run` script.\n\n" + ToolCatalog.reference(for: job)
+    }
     /// Without Apple's developer tools, python3, git and friends are placeholders that open an installer on the
     /// director's screen.
     static let noDeveloperTools = "- This Mac doesn\u{2019}t have Apple\u{2019}s developer tools, so `python3`, `pip3`, `git`, `make`, `clang` and `swift` aren\u{2019}t real commands here: running one opens an installer on the director\u{2019}s screen and does nothing. Don\u{2019}t run them. Use Direction\u{2019}s tools, and the commands macOS has (`sips`, `afinfo`, `mdls`, `plutil`, the shell\u{2019}s own)."

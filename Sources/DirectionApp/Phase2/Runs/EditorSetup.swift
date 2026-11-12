@@ -9,7 +9,6 @@ enum EditorSetupKey {
     static let quality = "filmQuality"
     /// "rightAway" | "askFirst"
     static let startWork = "editorStartWork"
-    static let scripts = "editorRunsScripts"
     /// true once the ready job answered; false after a sign-in failure; absent until checked.
     static func signedIn(_ p: EditorProgram) -> String { "editorSignedIn." + p.rawValue }
     /// true when the program has no sign-in of its own and works with the API key the shell sets.
@@ -100,8 +99,6 @@ enum EditorSetup {
     static func setDefaultQuality(_ q: FilmQuality) { put(EditorSetupKey.quality, q.rawValue) }
     static var asksFirst: Bool { value(EditorSetupKey.startWork) as? String == "askFirst" }
     static func setAsksFirst(_ on: Bool) { put(EditorSetupKey.startWork, on ? "askFirst" : "rightAway") }
-    static var runsScripts: Bool { value(EditorSetupKey.scripts) as? Bool ?? true }
-    static func setRunsScripts(_ on: Bool) { put(EditorSetupKey.scripts, on) }
     static func signedIn(_ p: EditorProgram) -> Bool? { value(EditorSetupKey.signedIn(p)) as? Bool }
     static func setSignedIn(_ p: EditorProgram, _ on: Bool?) { put(EditorSetupKey.signedIn(p), on) }
     static func usesShellKey(_ p: EditorProgram) -> Bool { value(EditorSetupKey.shellKey(p)) as? Bool ?? false }

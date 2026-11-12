@@ -3,47 +3,73 @@ import Foundation
 import DirectionCore
 @testable import DirectionTools
 
-/// Each job lists the tools it uses; direction_more_tools has the rest, so no job is short of one.
+/// An editor Direction starts has one tool, direction_run; its instructions carry the job's tools in full, and
+/// direction.help() in a script has the rest, so no job is short of one.
 struct JobToolsTests {
-    @Test func everyJobsToolsExistAndTheRestAreOneCallAway() throws {
+    @Test func aJobListsOnlyTheScriptToolAndItsInstructionsCarryTheRest() throws {
         let all = Set(ToolCatalog.definitions.map(\.name))
-        #expect(ToolCatalog.listed(for: nil).count == all.count && !ToolCatalog.listed(for: nil).contains { $0.name == ToolCatalog.moreToolsName })
+        #expect(ToolCatalog.listed(for: nil).count == all.count)
         for job in EditorJob.allCases {
             let own = ToolCatalog.names(for: job)
-            #expect(own.isSubset(of: all), "\(job): \(own.subtracting(all).sorted())")
-            let listed = ToolCatalog.listed(for: job).map(\.name)
-            #expect(listed.last == ToolCatalog.moreToolsName && Set(listed.dropLast()) == own && listed.count < all.count, "\(job)")
-            guard case .answer(let rest) = try ToolCatalog.moreTools(.object([:]), job: job) else { Issue.record("\(job): the list should answer at once"); continue }
-            let names = Set(rest["tools"].array?.compactMap { $0["name"].string } ?? [])
-            #expect(names.union(own) == all && names.isDisjoint(with: own), "\(job)")
+            #expect(own.isSubset(of: all) && !own.contains(ToolCatalog.runName), "\(job): \(own.subtracting(all).sorted())")
+            #expect(ToolCatalog.listed(for: job).map(\.name) == [ToolCatalog.runName], "\(job)")
+            // Every tool of the job, in full, as a script calls it.
+            let reference = ToolCatalog.reference(for: job)
+            for name in own {
+                let d = try #require(ToolCatalog.definitions.first { $0.name == name })
+                #expect(reference.contains("### direction.\(ToolCatalog.scriptName(name))(") && reference.contains(d.description), "\(job): \(name)")
+            }
+            // help() lists the rest, a line each.
+            let rest = try ToolCatalog.help(.object([:]), job: job)
+            let names = Set(rest["tools"].array?.compactMap { $0["name"].string }.map { "direction_" + $0 } ?? [])
+            #expect(names.union(own).union([ToolCatalog.runName]) == all && names.isDisjoint(with: own), "\(job)")
             #expect(rest["tools"].array?.allSatisfy { ($0["does"].string ?? "").count <= 200 } == true)
         }
-        // What the editors used in the runs so far is on their lists.
+        // What the editors used in the runs so far is theirs.
         #expect(ToolCatalog.names(for: .script).isSuperset(of: ["direction_script", "direction_script_update", "direction_turnovers", "direction_questions", "direction_style", "direction_brief"]))
-        #expect(ToolCatalog.names(for: .finish).isSuperset(of: ["direction_measure_audio", "direction_frame", "direction_edit", "direction_finishing", "direction_graphic", "direction_watch", "direction_looks", "direction_library"]))
+        #expect(ToolCatalog.names(for: .finish).isSuperset(of: ["direction_measure_audio", "direction_frame", "direction_edit", "direction_finishing", "direction_graphic", "direction_watch", "direction_looks", "direction_library", "direction_copy"]))
         #expect(ToolCatalog.names(for: .turnover).isSuperset(of: ["direction_import", "direction_cancel_job", "direction_feedback_reply", "direction_cuts", "direction_restore", "direction_preview"]))
-        // Cutting jobs choose cut points and check their cuts.
         for job in [EditorJob.assemble, .turnover] { #expect(ToolCatalog.names(for: job).isSuperset(of: ["direction_cut_points", "direction_check"]), "\(job)") }
     }
 
-    @Test func moreToolsDescribesAndRunsOneThisJobWasntGiven() throws {
-        guard case .answer(let looks) = try ToolCatalog.moreTools(.object(["name": .string("direction_looks")]), job: .script) else { Issue.record("expected the description"); return }
-        #expect(looks["description"].string?.hasPrefix("Read the looks.") == true && looks["arguments"]["type"].string == "object" && looks["note"] == .null)
-        guard case .answer(let own) = try ToolCatalog.moreTools(.object(["name": .string("direction_script")]), job: .script) else { Issue.record("expected the description"); return }
-        #expect(own["note"].string == "You already have direction_script: call it directly.")
-        guard case .run(let name, let arguments) = try ToolCatalog.moreTools(.object(["name": .string("direction_looks"), "arguments": .object([:])]), job: .script) else { Issue.record("expected a run"); return }
-        #expect(name == "direction_looks" && arguments == .object([:]))
-        do { _ = try ToolCatalog.moreTools(.object(["name": .string("direction_nope")]), job: .script); Issue.record("an unknown tool should be refused") }
-        catch let e as DirectionError { #expect(e.code == "unknown_tool") }
-        do { _ = try ToolCatalog.moreTools(.object(["tool": .string("direction_looks")]), job: .script); Issue.record("a wrong field should be refused") }
-        catch let e as DirectionError { #expect(e.code == "invalid_arguments" && e.message.contains("unknown field tool")) }
+    @Test func helpGivesAnyToolInFull() throws {
+        let looks = try ToolCatalog.help(.string("looks"), job: .script)
+        #expect(looks.array?.first?["call"].string?.hasPrefix("direction.looks(") == true && looks.array?.first?["description"].string?.hasPrefix("Read the looks.") == true)
+        #expect(try ToolCatalog.help(.array([.string("direction_edit"), .string("frame")]), job: nil).array?.count == 2)
+        for bad in ["nope", "run"] {
+            do { _ = try ToolCatalog.help(.string(bad), job: .script); Issue.record("\(bad) should be refused") }
+            catch let e as DirectionError { #expect(e.code == "unknown_tool") }
+        }
+        // In your own session every tool is listed directly; help lists them all.
+        #expect(try ToolCatalog.help(.object([:]), job: nil)["tools"].array?.count == ToolCatalog.definitions.count - 1)
     }
 
-    /// A job's list is a fraction of every tool's words, so the program loads them up front instead of searching.
-    @Test func aJobsListIsMuchSmallerThanEveryTool() throws {
-        func size(_ d: [ToolDefinition]) throws -> Int { try d.reduce(0) { try $0 + $1.description.count + JSONEncoder().encode($1.inputSchema).count } }
-        let all = try size(ToolCatalog.definitions)
-        for job in EditorJob.allCases where job != .turnover { #expect(try size(ToolCatalog.listed(for: job)) * 10 < all * 7, "\(job)") }
-        #expect(try size(ToolCatalog.listed(for: .script)) * 5 < all)
+    /// Arguments read as TypeScript: shorter than JSON Schema, with a field's words beside it.
+    @Test func argumentsReadAsTypes() throws {
+        let measure = try #require(ToolCatalog.definitions.first { $0.name == "direction_measure_audio" })
+        let call = ToolCatalog.call(measure)
+        #expect(call.hasPrefix("direction.measure_audio({") && call.contains("ranges?: {end?: number, start?: number}[]") && call.contains("assetID?: string"))
+        let s = JSONValue.object(["type": .string("object"), "required": .array([.string("to")]), "properties": .object([
+            "to": .object(["type": .string("string"), "description": .string("Where it goes.")]),
+            "kind": .object(["type": .string("string"), "enum": .array([.string("a"), .string("b")])]),
+            "at": .object(["anyOf": .array([.object(["type": .string("number")]), .object(["type": .string("string")])])]),
+            "ids": .object(["type": .string("array"), "items": .object(["anyOf": .array([.object(["type": .string("integer")]), .object(["type": .string("boolean")])])])]),
+            "by": .object(["type": .string("object"), "additionalProperties": .object(["type": .string("number")])]),
+        ])])
+        #expect(ToolCatalog.typeScript(.object(["type": .array([.string("string"), .string("integer")])]), depth: 0) == "string | integer")
+        #expect(ToolCatalog.typeScript(.object(["enum": .array([.number(1), .number(2.5)])]), depth: 0) == "1 | 2.5")
+        let brief = try #require(ToolCatalog.definitions.first { $0.name == "direction_brief" })
+        #expect(ToolCatalog.call(brief, film: true) == "direction.brief({})")
+        #expect(ToolCatalog.typeScript(s, depth: 0) == "{\n  to: string,  // Where it goes.\n  at?: number | string,\n  by?: {[key: string]: number},\n  ids?: (integer | boolean)[],\n  kind?: \"a\" | \"b\",\n}")
+    }
+
+    /// The instructions carry each job's tools in full: bigger than a list of names, but read once and kept (a
+    /// host caches them), where the tools as a list would have been searched for and cut short.
+    @Test func eachJobsReferenceIsAReasonableSize() throws {
+        for job in EditorJob.allCases {
+            let size = ToolCatalog.reference(for: job).count
+            #expect(size < 70_000, "\(job): \(size)")
+        }
+        #expect(ToolCatalog.reference(for: .script).count < 15_000)
     }
 }

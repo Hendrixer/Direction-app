@@ -18,10 +18,6 @@ struct EditorWhoEditsGroup: View {
                 GateSelect(options: [(false, "Right away"), (true, "Ask me first")], selection: Binding(get: { EditorSetup.asksFirst }, set: { EditorSetup.setAsksFirst($0) }))
             }
             .disabled(own)
-            SettingsRow(label: "Let the editor run scripts", detail: "Only inside its own folder in the film, with no internet. Some graphics and looks need it.") {
-                GateSwitch(isOn: Binding(get: { EditorSetup.runsScripts }, set: { EditorSetup.setRunsScripts($0) }))
-            }
-            .disabled(own)
         }
         .task { if !preview { programs.refreshIfNeeded() } }
     }
