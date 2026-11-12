@@ -83,6 +83,60 @@
 @keyframes n3 { 0% { color: var(--text-3); font-weight: 400; } 34% { color: var(--text-1); font-weight: 500; } 67% { color: var(--text-3); font-weight: 400; } }
 .pop-note { font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
 
+/* 0.3.6: the editor's script, a line at a time, and what comes back */
+.h-script { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 232px; gap: 18px; padding: 30px 30px; align-items: center; background: radial-gradient(70% 90% at 28% 36%, oklch(0.25 0.03 268 / .55), transparent 72%); --loop: 12s; }
+.sc-win { border-radius: 12px; background: var(--panel); box-shadow: 0 0 0 1px oklch(1 0 0 / .12), 0 30px 70px -20px #000; overflow: hidden; }
+.sc-bar { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border-bottom: 1px solid var(--line); background: var(--raised); }
+.sc-bar b { font-size: 12.5px; font-weight: 600; }
+.sc-bar span { margin-left: auto; font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
+.sc-code { counter-reset: ln; padding: 14px 0 16px; display: grid; gap: 2px; }
+.sc-code li { counter-increment: ln; display: grid; grid-template-columns: 30px minmax(0, 1fr) 22px; align-items: center; height: 36px; padding: 0 12px 0 0; }
+.sc-code li::before { content: counter(ln); font: 500 10.5px/1 var(--f-tc); color: var(--text-4); text-align: right; padding-right: 12px; }
+.sc-code code { font: 500 11.5px/1 var(--f-tc); color: var(--text-2); white-space: nowrap; animation: var(--loop) steps(60, end) infinite; }
+.sc-code em { font-style: normal; color: var(--text-4); }
+.sc-code u { text-decoration: none; color: var(--ion); }
+.sc-code s { text-decoration: none; color: var(--amber); }
+.sc-code b { font-weight: 500; color: var(--prism-1); }
+.sc-code li > i { width: 14px; height: 14px; border-radius: 50%; justify-self: end; background: var(--ion-wash); position: relative; animation: var(--loop) linear infinite; }
+.sc-code li > i::after { content: ""; position: absolute; left: 4.5px; top: 2.5px; width: 3.5px; height: 6.5px; border-right: 1.5px solid var(--ion); border-bottom: 1.5px solid var(--ion); transform: rotate(40deg); }
+.sc-code li:nth-child(1) code { animation-name: sc-type0; } .sc-code li:nth-child(1) > i { animation-name: sc-tick0; }
+.sc-code li:nth-child(2) code { animation-name: sc-type1; } .sc-code li:nth-child(2) > i { animation-name: sc-tick1; }
+.sc-code li:nth-child(3) code { animation-name: sc-type2; } .sc-code li:nth-child(3) > i { animation-name: sc-tick2; }
+.sc-code li:nth-child(4) code { animation-name: sc-type3; } .sc-code li:nth-child(4) > i { animation-name: sc-tick3; }
+.sc-code li:nth-child(5) code { animation-name: sc-type4; } .sc-code li:nth-child(5) > i { animation-name: sc-tick4; }
+.sc-code li:nth-child(6) code { animation-name: sc-type5; } .sc-code li:nth-child(6) > i { animation-name: sc-tick5; }
+.sc-side { display: grid; gap: 12px; }
+.sc-card { display: grid; gap: 10px; padding: 12px 12px 12px; border-radius: 12px; background: var(--panel); box-shadow: 0 0 0 1px oklch(1 0 0 / .1), 0 20px 50px -24px #000; }
+.sc-wave { position: relative; height: 54px; display: grid; grid-template-columns: repeat(18, 1fr); gap: 3px; align-items: center; }
+.sc-wave i { height: var(--h); min-height: 2px; border-radius: 2px; background: var(--steel-6); }
+.sc-wave .cut { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--amber); box-shadow: 0 0 10px oklch(0.82 0.13 72 / .6); left: 49%; animation: sc-cut var(--loop) var(--e-inout) infinite; }
+.sc-words { display: grid; grid-template-columns: 6fr 5fr 7fr; font: 500 10px/1 var(--f-tc); color: var(--text-3); }
+.sc-words span { padding-top: 6px; border-top: 1px solid var(--line-2); white-space: nowrap; }
+.sc-words .gap { color: var(--text-4); text-align: center; border-top-style: dashed; }
+.sc-words span:last-child { text-align: right; }
+.sc-frames { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; border-radius: 6px; overflow: hidden; }
+.sc-frames img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; animation: sc-frame var(--loop) steps(1) infinite; }
+.sc-frames img:nth-child(2) { animation-delay: .12s; } .sc-frames img:nth-child(3) { animation-delay: .24s; } .sc-frames img:nth-child(4) { animation-delay: .36s; }
+.sc-done { display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 10px; background: var(--ion-wash); box-shadow: inset 0 0 0 1px oklch(0.78 0.11 250 / .3); animation: sc-done var(--loop) var(--e-out) infinite; }
+.sc-done b { font-size: 13.5px; font-weight: 600; color: var(--ion); }
+.sc-done span { margin-left: auto; font: 500 10.5px/1 var(--f-tc); color: var(--text-2); }
+/* Each line types in at its own moment and they all clear together before the loop turns. */
+@keyframes sc-type0 { 0%, 2% { clip-path: inset(0 100% 0 0); opacity: 1; } 8.5%, 92% { clip-path: inset(0 0 0 0); opacity: 1; } 95%, 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@keyframes sc-tick0 { 0%, 9.5% { opacity: 0; } 9.51%, 92% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@keyframes sc-type1 { 0%, 10% { clip-path: inset(0 100% 0 0); opacity: 1; } 16.5%, 92% { clip-path: inset(0 0 0 0); opacity: 1; } 95%, 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@keyframes sc-tick1 { 0%, 17.5% { opacity: 0; } 17.51%, 92% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@keyframes sc-type2 { 0%, 18% { clip-path: inset(0 100% 0 0); opacity: 1; } 24.5%, 92% { clip-path: inset(0 0 0 0); opacity: 1; } 95%, 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@keyframes sc-tick2 { 0%, 25.5% { opacity: 0; } 25.51%, 92% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@keyframes sc-type3 { 0%, 26% { clip-path: inset(0 100% 0 0); opacity: 1; } 32.5%, 92% { clip-path: inset(0 0 0 0); opacity: 1; } 95%, 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@keyframes sc-tick3 { 0%, 33.5% { opacity: 0; } 33.51%, 92% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@keyframes sc-type4 { 0%, 34% { clip-path: inset(0 100% 0 0); opacity: 1; } 40.5%, 92% { clip-path: inset(0 0 0 0); opacity: 1; } 95%, 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@keyframes sc-tick4 { 0%, 41.5% { opacity: 0; } 41.51%, 92% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@keyframes sc-type5 { 0%, 42% { clip-path: inset(0 100% 0 0); opacity: 1; } 48.5%, 92% { clip-path: inset(0 0 0 0); opacity: 1; } 95%, 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@keyframes sc-tick5 { 0%, 49.5% { opacity: 0; } 49.51%, 92% { opacity: 1; } 95%, 100% { opacity: 0; } }
+@keyframes sc-cut { 0%, 33% { left: 31%; } 38%, 92% { left: 49%; } 97%, 100% { left: 31%; } }
+@keyframes sc-frame { 0% { opacity: .12; } 41% { opacity: 1; } 94%, 100% { opacity: .12; } }
+@keyframes sc-done { 0%, 50% { opacity: 0; transform: translateY(6px); } 54%, 92% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; transform: translateY(6px); } }
+
 /* 0.3.4: the folder an editing app opens */
 .h-export { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 28px; padding: 0 44px; background: radial-gradient(80% 90% at 30% 40%, oklch(0.24 0.02 265 / .6), transparent 70%); }
 .finder { border-radius: 12px; background: var(--panel); box-shadow: 0 0 0 1px oklch(1 0 0 / .12), 0 30px 70px -20px #000; overflow: hidden; }
@@ -157,4 +211,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .stops .fill, .stops .knob, .stops .names span, .stops .d3 { animation: none !important; }
+  .sc-code code, .sc-code li > i, .sc-wave .cut, .sc-frames img, .sc-done { animation: none !important; }
 }
