@@ -141,8 +141,10 @@ struct CommandCatalog {
         add("export", "square.and.arrow.up.on.square", "Export\u{2026}", caps(.export), synonyms: ["deliver", "render"], disabled: m.isPictureLocked ? nil : m.cuts.isEmpty ? "No cut yet" : nil) { if m.isPictureLocked { m.sheet = .deliver } else { m.sheet = .share } }
         add("exportTimeline", "film.stack", "Export for an Editing App\u{2026}", synonyms: ["final cut", "resolve", "premiere", "fcpxml", "xml", "timeline", "colorist", "hand off"], disabled: m.cuts.isEmpty ? "No cut yet" : m.runtime == nil ? "This film isn\u{2019}t open from disk" : nil) { FilmActions(m).exportTimeline() }
         add("footage", "square.and.arrow.down", "Bring footage\u{2026}", caps(.bringFootage), synonyms: ["import", "media"]) { m.chooseFootage() }
-        add("bringScript", "doc.text", m.script == nil ? "Bring in a script\u{2026}" : "Bring in a new draft\u{2026}", synonyms: ["script", "screenplay", "fountain", "draft"]) { m.chooseScript() }
-        if m.script == nil { add("bringStory", "text.book.closed", "Bring in a story\u{2026}", synonyms: ["story", "treatment", "outline", "beats"]) { m.chooseScript(.story) } }
+        add("bringScript", "doc.text", m.script == nil || m.script?.isVoiceOver == true ? "Bring in a script\u{2026}" : "Bring in a new draft\u{2026}", synonyms: ["script", "screenplay", "fountain", "draft"]) { m.chooseScript() }
+        if m.canWriteVoiceOver { add("voiceOver", "mic", "Write a voice-over\u{2026}", synonyms: ["voice", "voiceover", "narration", "narrate", "record", "words"]) { m.sheet = .voiceOver } }
+        if m.script?.isVoiceOver == true { add("copyVoiceOver", "doc.on.doc", "Copy voice-over for recording", synonyms: ["voice", "narration", "record", "read"]) { m.copyVoiceOverForRecording() } }
+        if m.script == nil || m.script?.isVoiceOver == true { add("bringStory", "text.book.closed", "Bring in a story\u{2026}", synonyms: ["story", "treatment", "outline", "beats"]) { m.chooseScript(.story) } }
         else { add("readAgain", m.scriptKind == .story ? "doc.text" : "text.book.closed", m.scriptKind == .story ? "Read as a script\u{2026}" : "Read as a story\u{2026}", synonyms: ["story", "script", "treatment", "wrong", "kind"]) { m.readAgain(as: m.scriptKind == .story ? .script : .story) } }
         if m.breakdown?.isOK == true { add("printShootList", "printer", "Print shoot list\u{2026}", synonyms: ["shot list", "call sheet", "setups"]) { m.printShootList() } }
         let missing = m.isPreview ? MissingFootage.previewAssets(m).count : MenuState.shared.missingCount

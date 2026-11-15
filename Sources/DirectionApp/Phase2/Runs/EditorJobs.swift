@@ -5,10 +5,10 @@ import DirectionTools
 /// The job text Direction writes for each run, from the versioned templates in
 /// Resources/Editor/jobs (specs/editor.md › The job text), and the working folder it runs in.
 enum EditorJobs {
-    static let templateNames = ["log-footage", "assemble", "turnover", "continue", "finish", "style", "technique", "script", "breakdown", "editor-role"]
+    static let templateNames = ["log-footage", "assemble", "turnover", "continue", "finish", "style", "technique", "script", "breakdown", "voice-over", "editor-role"]
 
     static func templateName(_ job: EditorJob) -> String {
-        switch job { case .logFootage: "log-footage"; case .assemble: "assemble"; case .turnover: "turnover"; case .finish: "finish"; case .style: "style"; case .technique: "technique"; case .script: "script"; case .breakdown: "breakdown" }
+        switch job { case .logFootage: "log-footage"; case .assemble: "assemble"; case .turnover: "turnover"; case .finish: "finish"; case .style: "style"; case .technique: "technique"; case .script: "script"; case .breakdown: "breakdown"; case .voiceOver: "voice-over" }
     }
 
     /// A template's text. SwiftPM flattens processed resources, so look both ways.
@@ -122,7 +122,7 @@ enum EditorJobs {
             let info = VideoInfo.read(in: folder)
             v["videoSource"] = info.map { i in "It\u{2019}s \u{201C}\(i.title ?? "untitled")\u{201D} by \(i.channel ?? i.uploader ?? "someone"), \(i.webpage_url ?? ""). Its description is in `video.info.json`." } ?? "The director gave you the file."
             v["techniquesFolder"] = SharedSettings.techniquesFolder.path
-        case .script, .breakdown:
+        case .script, .breakdown, .voiceOver:
             v.merge(try prepValues(run.job, store: store)) { _, new in new }
         }
         return fill(template(templateName(run.job)) ?? "", v)
@@ -199,7 +199,7 @@ enum EditorJobs {
 
     /// A continuation of the same session: an answer, an approval, Resume or Try again.
     static func continuation(_ answer: String, job: EditorJob) -> String {
-        let what: String = switch job { case .logFootage: "logging the footage"; case .assemble: "the assembly"; case .turnover: "the turnover"; case .finish: "finishing"; case .style: "the style"; case .technique: "the technique"; case .script: "the A/V script"; case .breakdown: "the breakdown" }
+        let what: String = switch job { case .logFootage: "logging the footage"; case .assemble: "the assembly"; case .turnover: "the turnover"; case .finish: "finishing"; case .style: "the style"; case .technique: "the technique"; case .script: "the A/V script"; case .breakdown: "the breakdown"; case .voiceOver: "the voice-over" }
         return fill(template("continue") ?? "{{answer}}", ["answer": answer, "skill": job.skill, "skillPath": skillPath(job), "job": what])
     }
 

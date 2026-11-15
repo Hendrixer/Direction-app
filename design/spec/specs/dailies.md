@@ -102,7 +102,7 @@ Frame: `screens/09-dailies-unsorted.html` · Render: `renders/09-dailies-unsorte
 - [ ] "Accept N guesses" counts only cards with a guess.
 - [ ] Unsorted takes never appear in a cut.
 - [ ] With nothing circled, Assemble builds the first cut from the editor's picks once logging is done.
-- [ ] A film started from its footage shows no Script or Breakdown in the room bar until a script is brought in.
+- [ ] A film started from its footage shows Script in the room bar, and Breakdown once a script or a story is brought in.
 
 ## From your folders
 

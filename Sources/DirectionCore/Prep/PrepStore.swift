@@ -13,6 +13,17 @@ public struct PictureInput: Codable, Sendable {
 }
 
 /// Words the editor changes for a row, only where a note on it asks.
+/// A line of a voice-over, as the editor writes it: where it starts in the cut, what's on screen there, the words.
+public struct VoiceLineInput: Codable, Sendable {
+    /// To change a line already written; without it the line is new.
+    public var rowID: String?
+    public var at: Double
+    public var picture: String
+    public var text: String
+    public var seconds: Double?
+    public init(rowID: String? = nil, at: Double, picture: String, text: String, seconds: Double? = nil) { self.rowID = rowID; self.at = at; self.picture = picture; self.text = text; self.seconds = seconds }
+}
+
 public struct SoundInput: Codable, Sendable {
     public var rowID: String
     public var kind: HeardKind?
@@ -98,6 +109,7 @@ extension ProjectStore {
             var unused = Dictionary(grouping: old.filter { !key($0).isEmpty }, by: key)
             s.sections = read.sections
             s.kind = kind == .story ? .story : nil
+            s.voiceOver = nil
             s.storyNotes = read.notes
             s.rows = read.rows.map { new in
                 guard var kept = unused[key(new)]?.first else { return new }
@@ -114,6 +126,26 @@ extension ProjectStore {
                 if let rows = s.notes[i].rowIDs, !rows.contains(where: ids.contains) { s.notes[i].state = .dropped }
             }
             s.source = ScriptSource(fileName: fileName, path: path, words: read.words, importedAt: Date().timeIntervalSince1970)
+        }
+    }
+
+    /// A voice-over written to a cut: the director's ask, and an empty script the editor fills with lines. It takes
+    /// the place of the film's script; a film that has a breakdown keeps it only when `replace` is false (refused).
+    @discardableResult
+    public func startVoiceOver(_ ask: VoiceOverAsk, replace: Bool = false) throws -> AVScript {
+        let words = ask.ask.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard VoiceOverAsk.validAsk(words) else { throw DirectionError("invalid_voice_over", "Say what the voice-over should say, in up to 4,000 characters.") }
+        var asked = ask; asked.ask = words
+        // The script and its breakdown go together, in one write.
+        return try database.write { db in
+            let old = try Self.value(db, PrepKey.script, as: AVScript.self)
+            if let old, !old.rows.isEmpty, !replace { throw DirectionError("script_exists", "This film has a script already. Write the voice-over in its place?") }
+            var s = AVScript(); s.revision = (old?.revision ?? 0) + 1; s.updatedAt = Date().timeIntervalSince1970
+            s.kind = .voiceOver; s.voiceOver = asked
+            if replace { try db.execute(sql: "DELETE FROM directing WHERE key = ?", arguments: [PrepKey.breakdown]) }
+            try Self.setValue(db, PrepKey.script, s)
+            try Self.event(db, kind: "script.updated", revision: try Int.fetchOne(db, sql: "SELECT revision FROM state WHERE id = 1") ?? 0, summary: "Asked for a voice-over")
+            return s
         }
     }
 
@@ -150,6 +182,8 @@ extension ProjectStore {
             var r = row
             let at = id.flatMap { id in s.rows.firstIndex { $0.id == id } }
             r.section = at.map { s.rows[$0].section } ?? s.rows.first?.section
+            // A voice-over line starts where the one before it ends.
+            if s.isVoiceOver { r.at = at.map { i in s.rows[i].at.map { $0 + s.rows[i].seconds } ?? 0 } ?? 0 }
             s.rows.insert(r, at: at.map { $0 + 1 } ?? 0)
         }
         return (s, row.id)
@@ -171,6 +205,7 @@ extension ProjectStore {
     @discardableResult
     public func moveRow(_ id: String, before other: String?) throws -> AVScript {
         try changeScript("Moved a row") { s in
+            guard !s.isVoiceOver else { throw DirectionError("voice_over_order", "A voice-over plays in the order of the cut. To move a line, leave a note on it.") }
             guard let from = s.rows.firstIndex(where: { $0.id == id }) else { throw DirectionError("row_not_found", "There\u{2019}s no row \(id).") }
             var row = s.rows.remove(at: from)
             let to = other.flatMap { o in s.rows.firstIndex { $0.id == o } } ?? s.rows.count
@@ -237,11 +272,37 @@ extension ProjectStore {
 
     /// The editor writes pictures, answers notes and asks about rows. A row the director typed in, or words
     /// from the script, change only where a turned-over note on that row asks. Returns what it refused.
-    public func updateScript(pictures: [PictureInput] = [], sounds: [SoundInput] = [], replies: [String: String] = [:], questions: [String: PrepQuestion] = [:]) throws -> (AVScript, refused: [String]) {
+    public func updateScript(pictures: [PictureInput] = [], sounds: [SoundInput] = [], lines: [VoiceLineInput] = [], removeLines: [String] = [], replies: [String: String] = [:], questions: [String: PrepQuestion] = [:]) throws -> (AVScript, refused: [String]) {
         var refused: [String] = []
-        let s = try changeScript("The editor wrote the script\u{2019}s picture") { s in
+        let s = try changeScript(lines.isEmpty ? "The editor wrote the script\u{2019}s picture" : "The editor wrote the voice-over") { s in
             let noted = Set(s.notes.filter { $0.state == .turnedOver }.flatMap { $0.rowIDs ?? [] })
             if s.pass == 0 { s.pass = 1 }
+            if !(lines.isEmpty && removeLines.isEmpty) && !s.isVoiceOver { refused.append("lines are for a voice-over; this film's script isn\u{2019}t one") }
+            for id in removeLines where s.isVoiceOver {
+                guard let i = s.rows.firstIndex(where: { $0.id == id }) else { refused.append("\(id): no such row"); continue }
+                if (s.rows[i].sound.yours == true || s.rows[i].picture.yours == true), !noted.contains(id) { refused.append("Row \(i + 1): the director changed this line; take it out only when a note on the row asks"); continue }
+                s.rows.remove(at: i)
+            }
+            for l in lines where s.isVoiceOver {
+                let words = l.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !words.isEmpty, l.at >= 0 else { refused.append("A line needs words and a start at or after 0"); continue }
+                if let id = l.rowID {
+                    guard let i = s.rows.firstIndex(where: { $0.id == id }) else { refused.append("\(id): no such row"); continue }
+                    if (s.rows[i].sound.yours == true || s.rows[i].picture.yours == true), !noted.contains(id) { refused.append("Row \(i + 1): the director changed this line; change it only when a note on the row asks"); continue }
+                    s.rows[i].at = l.at
+                    s.rows[i].sound.text = words
+                    s.rows[i].picture.text = l.picture; s.rows[i].picture.pass = s.pass
+                    Self.retime(&s.rows[i])
+                    if let given = l.seconds { s.rows[i].seconds = min(600, max(0.5, given)) }
+                } else {
+                    var row = AVRow(picture: AVPicture(text: l.picture, board: .action), sound: AVSound(kind: .voice, speaker: "Narrator", text: words))
+                    row.at = l.at; row.picture.pass = s.pass
+                    if let given = l.seconds { row.seconds = min(600, max(0.5, given)) }
+                    s.rows.append(row)
+                }
+            }
+            // A voice-over reads in the order it plays.
+            if s.isVoiceOver && !lines.isEmpty { s.rows.sort { ($0.at ?? .infinity) < ($1.at ?? .infinity) } }
             for p in pictures {
                 guard let i = s.rows.firstIndex(where: { $0.id == p.rowID }) else { refused.append("\(p.rowID): no such row"); continue }
                 if s.rows[i].picture.yours == true, !noted.contains(p.rowID) { refused.append("Row \(i + 1): the director wrote this picture; change it only when a note on the row asks"); continue }
@@ -253,7 +314,8 @@ extension ProjectStore {
                 guard let i = s.rows.firstIndex(where: { $0.id == w.rowID }) else { refused.append("\(w.rowID): no such row"); continue }
                 // A script's words are its own. A story has none: what we hear is the editor's to write,
                 // unless the director wrote it.
-                let fromStory = s.rows[i].story != nil, asked = noted.contains(w.rowID)
+                // A voice-over's words are the editor's too, until the director changes them.
+                let fromStory = s.rows[i].story != nil || s.isVoiceOver, asked = noted.contains(w.rowID)
                 if !fromStory, w.text != nil || w.ownWords != nil, !asked { refused.append("Row \(i + 1): the words are the script\u{2019}s; change them only when a note on the row asks"); continue }
                 if fromStory, s.rows[i].sound.yours == true, !asked { refused.append("Row \(i + 1): the director wrote what we hear; change it only when a note on the row asks"); continue }
                 if let k = w.kind { s.rows[i].sound.kind = k }
@@ -293,6 +355,7 @@ extension ProjectStore {
     /// numbers in the words that name no shot now, for the editor to put right.
     public func updateBreakdown(setups: [SetupInput] = [], shots: [ShotInput] = [], remove: [String] = [], replies: [String: String] = [:], questions: [String: PrepQuestion] = [:]) throws -> (Breakdown, refused: [String], toFix: [String]) {
         let script = try self.script() ?? AVScript()
+        guard !script.isVoiceOver else { throw DirectionError("voice_over", "This film\u{2019}s script is a voice-over, written to the cut: there\u{2019}s nothing in it to break down.") }
         var refused: [String] = [], toFix: [String] = []
         let b = try changeBreakdown("The editor broke down the script") { b in
             let numbered = Dictionary(b.shots.map { ($0.id, $0.code) }, uniquingKeysWith: { a, _ in a })

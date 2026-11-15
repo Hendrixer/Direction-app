@@ -38,9 +38,17 @@ struct ScriptRoom: View {
 private struct ScriptEmpty: View {
     @Bindable var model: FilmModel
     var body: some View {
-        EmptyStateView(art: nil, title: "Start from a script or a story", message: "The editor lays out what we see and hear, beat by beat, in the film\u{2019}s style. You edit it or leave notes, then OK it for the breakdown. Markdown, plain text, Fountain, Final Draft or PDF.") {
+        // A film started from its footage brings its script in after: the pictures come from the takes first.
+        let footage = model.hasFootage
+        EmptyStateView(art: nil, title: footage ? "A script, a story or a voice-over" : "Start from a script or a story",
+                       message: footage
+                        ? "Bring in a script or a story, and the editor lays out what we see and hear from the footage you have. Or have it watch your cut and write a voice-over for you to record. You edit it or leave notes either way."
+                        : "The editor lays out what we see and hear, beat by beat, in the film\u{2019}s style. You edit it or leave notes, then OK it for the breakdown. Markdown, plain text, Fountain, Final Draft or PDF.") {
             Button("Choose a script\u{2026}") { model.chooseScript(.script) }.buttonStyle(.gate(.normal, .large))
             Button("Choose a story\u{2026}") { model.chooseScript(.story) }.buttonStyle(.gate(.normal, .large))
+            if model.canWriteVoiceOver {
+                Button("Write a voice-over\u{2026}") { model.sheet = .voiceOver }.buttonStyle(.gate(.normal, .large))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Gate.Surface.ground)
@@ -215,7 +223,7 @@ private struct ScriptPage: View {
             .font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary).lineLimit(1)
             Spacer()
             HStack(spacing: 0) {
-                Text("\(script.rows.count) rows ").foregroundStyle(Gate.Text.secondary)
+                Text("\(script.rows.count) \(script.isVoiceOver ? "lines" : "rows") ").foregroundStyle(Gate.Text.secondary)
                 Text("\u{00B7} \(script.isStory ? "runs" : "reads in") about \(Timecode.duration(script.seconds))").foregroundStyle(Gate.Text.disabled)
             }.font(Gate.Font.timecodeSmall).fixedSize()
         }
@@ -228,8 +236,10 @@ private struct ScriptPage: View {
 
     private var page: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
-            if let source = script.source { sourceLine(source) }
-            if model.writingPicture, script.rows.contains(where: { $0.picture.isEmpty }) { drafting.padding(.leading, 46).padding(.bottom, 14) }
+            if let v = script.voiceOver, script.isVoiceOver { askLine(v) }
+            else if let source = script.source { sourceLine(source) }
+            if model.writingPicture, script.isVoiceOver { writingVoiceOver.padding(.leading, 46).padding(.bottom, 14) }
+            else if model.writingPicture, script.rows.contains(where: { $0.picture.isEmpty }) { drafting.padding(.leading, 46).padding(.bottom, 14) }
             header
             let found = Set(hits), now = current
             ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
@@ -274,6 +284,37 @@ private struct ScriptPage: View {
         .padding(.leading, 46).padding(.bottom, 12)
     }
 
+    /// A voice-over: what the director asked for, on one line, and the cut it's written to.
+    private func askLine(_ v: VoiceOverAsk) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "mic").font(.system(size: 11)).foregroundStyle(Gate.Text.tertiary)
+            Text("Voice-over\(v.cutName.map { " for \($0)" } ?? "")").foregroundStyle(Gate.Text.tertiary).fixedSize()
+            Text("\u{00B7}").foregroundStyle(Gate.Text.disabled)
+            Text("\u{201C}\(v.ask)\u{201D}").foregroundStyle(Gate.Text.secondary).lineLimit(1).truncationMode(.tail).help(v.ask)
+            Spacer()
+            Menu {
+                Button("Write It Again\u{2026}") { model.sheet = .voiceOver }
+                Button("Copy for Recording") { model.copyVoiceOverForRecording() }.disabled(script.rows.isEmpty)
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(Gate.Text.secondary).frame(width: 22, height: 22).contentShape(Rectangle())
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().help("More")
+        }
+        .font(Gate.Font.small)
+        .padding(.leading, 46).padding(.bottom, 12)
+    }
+
+    private var writingVoiceOver: some View {
+        HStack(spacing: 10) {
+            GemMark()
+            Text(script.rows.isEmpty
+                 ? "Watching \(script.voiceOver?.cutName ?? "the footage") before writing."
+                 : "Writing the voice-over to the picture. \(script.rows.count == 1 ? "1 line" : "\(script.rows.count) lines"), \(script.words) words so far.")
+                .font(.system(size: 12.5)).foregroundStyle(Gate.Text.primary)
+            GateSpinner()
+        }
+    }
+
     private var drafting: some View {
         let done = script.rows.filter { !$0.picture.isEmpty }.count
         return HStack(spacing: 10) {
@@ -297,10 +338,10 @@ private struct ScriptPage: View {
         HStack(alignment: .bottom, spacing: 16) {
             Color.clear.frame(width: 30, height: 1)
             HStack(spacing: 28) {
-                SectionLabel("Picture").frame(maxWidth: .infinity, alignment: .leading)
-                SectionLabel("Sound").frame(maxWidth: .infinity, alignment: .leading)
+                SectionLabel(script.isVoiceOver ? "On screen" : "Picture").frame(maxWidth: .infinity, alignment: .leading)
+                SectionLabel(script.isVoiceOver ? "Voice-over" : "Sound").frame(maxWidth: .infinity, alignment: .leading)
             }
-            SectionLabel("Time").frame(width: 40, alignment: .trailing)
+            SectionLabel(script.isVoiceOver ? "At" : "Time").frame(width: 40, alignment: .trailing)
         }
         .padding(.bottom, 8)
         .overlay(alignment: .bottom) { Rectangle().fill(Gate.Line.strong).frame(height: 1) }
@@ -339,7 +380,9 @@ private struct ScriptPage: View {
                         sound(r, found: found && matches(r.sound.text)).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                Text(Timecode.duration(r.seconds)).font(Gate.Font.timecodeSmall).foregroundStyle(Gate.Text.disabled).frame(width: 40, height: 18, alignment: .trailing)
+                // A voice-over line says where it starts in the cut; its length is in its words.
+                Text(script.isVoiceOver ? r.at.map { Timecode.duration($0) } ?? "\u{2013}" : Timecode.duration(r.seconds)).font(Gate.Font.timecodeSmall).foregroundStyle(Gate.Text.disabled).frame(width: 40, height: 18, alignment: .trailing)
+                    .help(script.isVoiceOver ? "Starts at \(r.at.map { Timecode.duration($0) } ?? "no time yet"), about \(Timecode.duration(r.seconds)) read aloud" : "")
             }
             .padding(.vertical, measure.rowPadding)
             if let q = r.question, q.isOpen { questionLine(r, q).padding(.leading, 46).padding(.trailing, 56).padding(.bottom, 10) }
@@ -399,14 +442,17 @@ private struct ScriptPage: View {
 
     @ViewBuilder private func picture(_ r: AVRow, notes: [PrepNote], found: Bool) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            if r.picture.isEmpty {
+            // A voice-over's picture is the cut's already: nothing to draw a board for.
+            if script.isVoiceOver {
+                EmptyView()
+            } else if r.picture.isEmpty {
                 if r.question != nil { BoardView(kind: .empty).frame(width: measure.board) }
                 else { RoundedRectangle(cornerRadius: 4).fill(Gate.Surface.sunken).overlay(Hatching().clipShape(RoundedRectangle(cornerRadius: 4))).overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Gate.Line.subtle)).frame(width: measure.board, height: measure.board * 9 / 16) }
             } else {
                 BoardView(kind: r.picture.board ?? .medium, move: r.picture.move).frame(width: measure.board)
             }
             VStack(alignment: .leading, spacing: 4) {
-                let writing = model.writingPicture && firstEmpty == r.id
+                let writing = model.writingPicture && firstEmpty == r.id && !script.isVoiceOver
                 if writing { HStack(spacing: 8) { GateSpinner(); Text("Writing\u{2026}").foregroundStyle(Gate.Voice.agent) }.font(.system(size: measure.text(13))) }
                 else {
                     ScriptCellText(text: r.picture.text, placeholder: r.question != nil ? "Nothing yet." : (r.hint.map { "Writer\u{2019}s idea: \($0)" } ?? "What do we see?"),

@@ -29,8 +29,11 @@ extension ToolCatalog {
                                                     "direction_frame", "direction_watch", "direction_contact_sheet", "direction_inspect"])
         case .technique: everyJob.union(cutting).union(["direction_save_technique", "direction_study_frames", "direction_frame", "direction_watch", "direction_contact_sheet", "direction_shots",
                                                         "direction_search_footage", "direction_transcript", "direction_inspect"])
-        case .script: everyJob.union(["direction_script", "direction_script_update", "direction_library"])
-        case .breakdown: everyJob.union(["direction_breakdown", "direction_breakdown_update", "direction_script", "direction_estimate", "direction_services", "direction_library"])
+        // A film started from its footage writes its pictures from the takes it has.
+        case .script: everyJob.union(["direction_script", "direction_script_update", "direction_library", "direction_dailies", "direction_search_footage", "direction_contact_sheet"])
+        // Watching the cut it's written to, and hearing who already talks in it.
+        case .voiceOver: everyJob.union(["direction_script", "direction_script_update", "direction_timeline", "direction_watch", "direction_frame", "direction_transcript", "direction_dailies", "direction_search_footage"])
+        case .breakdown: everyJob.union(["direction_breakdown", "direction_breakdown_update", "direction_script", "direction_estimate", "direction_services", "direction_library", "direction_dailies"])
         }
     }
 

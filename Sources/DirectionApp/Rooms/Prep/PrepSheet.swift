@@ -74,7 +74,7 @@ struct ScriptSheet: View {
             if model.writingPicture {
                 HStack(alignment: .top, spacing: 9) {
                     GemMark().padding(.top, 5)
-                    Text("I\u{2019}m writing what we see under each line, from \(model.styleName.map { "the \($0) style" } ?? "the brief").").font(.system(size: 13)).foregroundStyle(Gate.Text.primary)
+                    Text(script.isVoiceOver ? "I\u{2019}m watching \(script.voiceOver?.cutName ?? "the footage") and writing the voice-over to it, line by line." : "I\u{2019}m writing what we see under each line, from \(model.styleName.map { "the \($0) style" } ?? "the brief").").font(.system(size: 13)).foregroundStyle(Gate.Text.primary)
                 }
                 if !rules.isEmpty {
                     SectionLabel("From the style").padding(.top, 4)
@@ -100,7 +100,7 @@ struct ScriptSheet: View {
                 if rows.isEmpty { Text("Select rows to leave a note").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary) }
                 else { Text("Note \(script.nextNoteNumber) on").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary); Chip(rows.count == 1 ? "Row \(rows[0])" : "Rows \(EditorJobs.rowList(rows))", style: .director) }
             }
-            GateTextArea(text: $noteText, placeholder: "What should we see?", minHeight: 52, onSubmit: { if ready { add() } })
+            GateTextArea(text: $noteText, placeholder: script.isVoiceOver ? "What should it say?" : "What should we see?", minHeight: 52, onSubmit: { if ready { add() } })
             HStack {
                 KindPicker(kind: $noteKind)
                 Spacer()

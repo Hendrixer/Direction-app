@@ -20,6 +20,8 @@ enum ActiveSheet: String, Identifiable { case turnover, lockPicture, deliver, sh
     case editorSetup
     /// Learn a technique from a video (techniques.md).
     case learnTechnique
+    /// Write a voice-over to the cut (specs/script.md › A voice-over).
+    case voiceOver
     /// Make a style from a video (styles.md › From a video).
     case styleFromVideo
     var id: String { rawValue }
@@ -550,10 +552,13 @@ final class FilmModel {
         default: return nil
         }
     }
-    /// The rooms this film uses. One started from its footage, with no script, has no prep: Script and
-    /// Breakdown come back the moment a script or a story is brought in (File › Bring In a Script…).
+    /// The rooms this film uses. Script is always there, so a film started from its footage can still bring in a
+    /// script or a story and have the editor lay out what we see and hear (2026-11-14). Breakdown breaks a script
+    /// down: a film started from its footage has none until a script or a story is brought in.
     func isShown(_ room: Room) -> Bool {
-        guard room == .script || room == .breakdown else { return true }
+        guard room == .breakdown else { return true }
+        // A voice-over is written to the cut: there's nothing in it to shoot.
+        if script?.isVoiceOver == true { return breakdown != nil }
         return script != nil || breakdown != nil || (!hasFootage && cuts.isEmpty)
     }
     func isEnabled(_ room: Room) -> Bool {

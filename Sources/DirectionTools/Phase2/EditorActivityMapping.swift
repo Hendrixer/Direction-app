@@ -184,7 +184,7 @@ public enum EditorActivityLog {
         let known = ["assemble": "assemble a cut", "break-down": "break down the script", "edit-video": "edit", "finish": "finish the film",
                      "learn-technique": "learn a technique", "make-graphic": "make a graphic", "make-shot": "make a shot", "make-style": "make a style",
                      "propose-look": "propose a look", "reframe": "reframe for the shape", "review-feedback": "read your notes", "start-project": "start a film",
-                     "take-turnover": "take your notes", "transitions": "use transitions", "write-av-script": "write the script"]
+                     "take-turnover": "take your notes", "transitions": "use transitions", "write-av-script": "write the script", "write-voice-over": "write the voice-over"]
         return known[name] ?? name.replacingOccurrences(of: "-", with: " ")
     }
 

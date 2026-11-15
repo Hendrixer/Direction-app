@@ -116,3 +116,62 @@ import DirectionCore
     let second = try await runtime.invoke("direction_script", arguments: .object(["from": .number(2)]))
     #expect(second.value["storyNotes"] == .null)
 }
+
+/// A voice-over written to a cut (specs/script.md › A voice-over): the director asks, the editor writes lines timed to
+/// the cut, a line the director changed stays theirs, overlaps are said, and a script brought in after puts it away.
+@Test func theEditorWritesAVoiceOverToTheCut() async throws {
+    let path = FileManager.default.temporaryDirectory.appendingPathComponent("direction-voiceover-" + UUID().uuidString + ".direction")
+    defer { try? FileManager.default.removeItem(at: path) }
+    let store = try ProjectStore.create(at: path, name: "Bodies")
+    let runtime = try ToolRuntime(store: store)
+    refuses("invalid_voice_over") { _ = try store.startVoiceOver(VoiceOverAsk(ask: "  ")) }
+    _ = try store.startVoiceOver(VoiceOverAsk(ask: "Why the bodies look this way. Curious, a little funny.", cutID: "cut-10", cutName: "Cut 10", cutSeconds: 40))
+    let read = try await runtime.invoke("direction_script")
+    #expect(read.value["kind"].string == "voiceOver" && read.value["voiceOver"]["cutName"].string == "Cut 10" && read.value["voiceOver"]["wordsThatFit"].double == 80)
+
+    // Written out of order, they read in the order they play; a line that runs into the next is said.
+    let wrote = try await runtime.invoke("direction_script_update", arguments: .object(["lines": .array([
+        .object(["at": .number(12), "picture": .string("The nervous system, lit up."), "text": .string("Every nerve you have, laid out like a map.")]),
+        .object(["at": .number(0), "picture": .string("FOR SCIENCE over the full body."), "text": .string("This was a person once, and they said yes to this so you could see inside yourself without a scalpel.")]),
+    ])]))
+    #expect(wrote.value["lines"].double == 2 && wrote.value["overlaps"].array?.count == 0)
+    var s = try #require(try store.script())
+    #expect(s.rows.map(\.at) == [0, 12] && s.rows.allSatisfy { $0.sound.kind == .voice && $0.sound.ownWords == nil })
+    let crowded = try await runtime.invoke("direction_script_update", arguments: .object(["lines": .array([
+        .object(["at": .number(5), "picture": .string("Hands."), "text": .string("Look at the hands, every tendon still there, every one of them doing its job.")]),
+    ])]))
+    #expect(crowded.value["overlaps"].array?.isEmpty == false)
+
+    // The director's words stay theirs until a note asks.
+    let first = s.rows[0].id
+    _ = try store.editRow(first, sound: "This was a person once.")
+    let refused = try await runtime.invoke("direction_script_update", arguments: .object(["lines": .array([.object(["rowID": .string(first), "at": .number(0), "picture": .string("x"), "text": .string("Something else.")])])]))
+    #expect(refused.value["refused"].array?.count == 1)
+    s = try #require(try store.script())
+    #expect(s.rows[0].sound.text == "This was a person once." && s.forRecording.contains("0:00  This was a person once."))
+
+    // The editor takes out a line it wrote; the director's order is the cut's; there's nothing to break down; a line the
+    // director adds starts where the one before it ends.
+    let fiveSeconds = try #require(try store.script()?.rows.first { $0.at == 5 })
+    let removed = try await runtime.invoke("direction_script_update", arguments: .object(["removeLines": .array([.string(fiveSeconds.id)])]))
+    #expect(removed.value["lines"].double == 2)
+    refuses("voice_over_order") { _ = try store.moveRow(first, before: nil) }
+    refuses("voice_over") { _ = try store.updateBreakdown(setups: [try JSONDecoder().decode(SetupInput.self, from: Data(#"{"name":"Desk"}"#.utf8))]) }
+    let (added, newID) = try store.addRow(after: first)
+    #expect(added.row(newID)?.at == added.rows[0].seconds)
+    let marked = try await runtime.invoke("direction_script")
+    #expect(marked.value["rows"].array?.first?["yours"].bool == true)
+
+    // Asking again replaces it only when told to; a script brought in after is a script, not a voice-over.
+    refuses("script_exists") { _ = try store.startVoiceOver(VoiceOverAsk(ask: "Again.")) }
+    _ = try store.startVoiceOver(VoiceOverAsk(ask: "Again."), replace: true)
+    let again = try store.script()
+    #expect(again?.rows.isEmpty == true && again?.voiceOver?.ask == "Again.")
+    _ = try store.importScript("A line to say.", fileName: "script.md")
+    let script = try store.script()
+    #expect(script?.isVoiceOver == false && script?.voiceOver == nil)
+}
+
+private func refuses(_ code: String, _ body: () throws -> Void) {
+    do { try body(); Issue.record("Expected \(code)") } catch let e as DirectionError { #expect(e.code == code, "\(e.code): \(e.message)") } catch { Issue.record("Unexpected \(error)") }
+}

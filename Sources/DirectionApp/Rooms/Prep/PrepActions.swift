@@ -13,7 +13,7 @@ extension FilmModel {
 
     /// Choose a script or a story; with one already in, a new draft of it (nil: the same kind as the film's).
     func chooseScript(_ kind: ScriptKind? = nil) {
-        let kind = kind ?? scriptKind
+        let kind = (kind ?? scriptKind) == .voiceOver ? .script : kind ?? scriptKind
         let panel = NSOpenPanel(); panel.title = script == nil ? (kind == .story ? "Bring in a story" : "Bring in a script") : "Bring in a new draft"; panel.allowedContentTypes = Self.scriptTypes; panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         bringScript(url, as: kind)
@@ -22,9 +22,12 @@ extension FilmModel {
     /// A script or a story: the first one starts the A/V script, a later one of the same kind is a new draft of it.
     func bringScript(_ url: URL, as kind: ScriptKind? = nil) {
         guard let store else { return }
-        let kind = kind ?? scriptKind, draft = script != nil && kind == scriptKind
+        let kind = (kind ?? scriptKind) == .voiceOver ? .script : kind ?? scriptKind, draft = script != nil && kind == scriptKind
+        // A script brought in over a voice-over puts it away, and the pass writing it stops.
+        let overVoiceOver = script?.isVoiceOver == true
         do { _ = try store.importScript(try ScriptFile.text(url), fileName: url.lastPathComponent, path: url.path, as: kind) }
         catch { self.error = error.localizedDescription; return }
+        if overVoiceOver { runs.stopPrep(.voiceOver, film: self) }
         // The room first: the start screen goes once the script is read, and the titlebar has to find Script
         // already chosen, or its room bar stays on the one before. Forced: a film started from its footage
         // shows no Script room until this refresh reads the script.
@@ -95,15 +98,17 @@ extension FilmModel {
     var styleName: String? { brief.style.flatMap { id in StyleNames.name(id) } }
 
     /// The editor is writing the picture now.
-    var writingPicture: Bool { runs.active?.job == .script }
+    var writingPicture: Bool { runs.active?.job == .script || runs.active?.job == .voiceOver }
     /// A picture pass is waiting for the director's Start (Start work: Ask me first).
-    var pictureHeld: Bool { runs.held?.job == .script }
+    var pictureHeld: Bool { runs.held?.job == .script || runs.held?.job == .voiceOver }
     var breakingDown: Bool { runs.active?.job == .breakdown }
 
     var scriptPrimary: PrimaryAction? {
         guard let s = script else { return PrimaryAction(title: "Bring in a script\u{2026}", icon: "doc.text", help: "Choose the script to start from (\u{2318}\u{21A9})") { self.chooseScript() } }
         let written = s.openNotes.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.count
         if written > 0 { return PrimaryAction(title: "Turn over", icon: "arrow.right", count: "\(written)", help: "Send your notes on the script to the editor (\u{2318}\u{21A9})") { self.turnOverScriptNotes() } }
+        // A voice-over goes to the microphone, not a breakdown.
+        if s.isVoiceOver { return PrimaryAction(title: "Copy for Recording", icon: "doc.on.doc", enabled: !s.rows.isEmpty && !writingPicture, help: s.rows.isEmpty ? "The editor is writing it" : "The lines, with where each starts, to read from (\u{2318}\u{21A9})") { self.copyVoiceOverForRecording() } }
         if s.isOK { return PrimaryAction(title: "Open Breakdown", icon: "list.bullet.rectangle", help: "The breakdown of the script you OK\u{2019}d (\u{2318}\u{21A9})") { self.go(.breakdown) } }
         let empty = s.rows.filter { $0.picture.isEmpty }.count
         return PrimaryAction(title: "OK script", icon: "checkmark", enabled: empty == 0 && s.openQuestions.isEmpty && !writingPicture && !pictureHeld,

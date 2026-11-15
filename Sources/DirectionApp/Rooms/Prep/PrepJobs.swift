@@ -6,6 +6,9 @@ import DirectionCore
 extension EditorJobs {
     static func prepValues(_ job: EditorJob, store: ProjectStore) throws -> [String: String] {
         let script = try store.script() ?? AVScript()
+        // A film started from its footage brings its script in after: the pictures come from what's there first.
+        // Only before a breakdown is OK'd: footage shot from an OK'd breakdown is that plan's, not a starting point.
+        let takes = try store.breakdown()?.isOK == true ? 0 : try store.read().footage(film: store.url).count
         switch job {
         case .script:
             let story = script.isStory
@@ -22,6 +25,11 @@ extension EditorJobs {
             if !script.turnedOver.isEmpty { task.append("The director turned over \(count(script.turnedOver.count, "note")) on the script. Answer each one: change the rows it names, then reply.") }
             var v = ["task": task.isEmpty ? (story ? "Read the A/V script and check every beat has a picture and a sound that fit the story and the style." : "Read the script and check every row has a picture that fits its words and the style.") : task.joined(separator: " "),
                      "notes": notes(script.turnedOver) { n in (n.rowIDs ?? []).compactMap { script.number(of: $0) }.isEmpty ? "" : "Rows \(rowList((n.rowIDs ?? []).compactMap { script.number(of: $0) }))" }]
+            v["footage"] = takes == 0 ? "" : """
+            The film already has its footage: \(count(takes, "take")), logged in Dailies. Before you write, read what's there with `direction_dailies` (and `direction_search_footage` for a moment you need). Where a row's picture can be a moment of a take, write it from that take, naming it ("Take 3: her hands stop on the keys"); write a new picture only where nothing there fits. The breakdown marks the ones you named as footage the director has.
+
+
+            """
             if story {
                 v["columns"] = "This film starts from a story, not a script: nobody\u{2019}s words are written. Direction laid the story out as beats, a row each, with the part of the story it came from (`story`). Both columns are yours to write: the picture, what the viewer sees, never how to shoot it; and the sound, what we hear. Later the breakdown turns them into shots, so write what someone could film, record on a screen, or make."
                 v["write"] = "pictures and sounds"; v["whole"] = "story"; v["done"] = "a picture and a sound"
@@ -48,6 +56,24 @@ extension EditorJobs {
                 v["story"] = ""
             }
             return v
+        case .voiceOver:
+            let ask = script.voiceOver ?? VoiceOverAsk(ask: "")
+            var task: [String] = []
+            if script.rows.isEmpty { task.append("The director asked for a voice-over\(ask.cutName.map { " for \($0)" } ?? ""): words they\u{2019}ll record later and lay over \(ask.cutName == nil ? "the film" : "the cut"). Watch it, then write it, line by line, timed to the picture.") }
+            if !script.turnedOver.isEmpty { task.append("The director turned over \(count(script.turnedOver.count, "note")) on the voice-over. Answer each one: change the lines it names, then reply.") }
+            let words = ask.ask.trimmingCharacters(in: .whitespacesAndNewlines)
+            let quoted = words.isEmpty ? "" : words.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n")
+            let watch: String
+            if let name = ask.cutName, let seconds = ask.cutSeconds {
+                let at = ask.cutRevision.map { "`revision: \($0)`" } ?? "its revision"
+                watch = "It\u{2019}s written to \(name), \(Timecode.duration(seconds)) long. Read that cut, not the edit as it is now: pass \(at) to `direction_timeline`, `direction_frame`, `direction_watch` and `direction_transcript`. Watch it before you write: its outline, then the picture (`direction_frame` with `times` across it, `direction_watch` where a moment matters), and `direction_transcript` for anyone already talking."
+            } else {
+                watch = "There\u{2019}s no cut to write to yet: write it from the footage (`direction_dailies`, `direction_search_footage`), each line\u{2019}s `at` counted from the start as the footage would play."
+            }
+            return ["task": task.isEmpty ? "Read the voice-over against the cut and check every line fits its picture and its time." : task.joined(separator: " "),
+                    "ask": quoted.isEmpty ? "> (Nothing more than a voice-over for the film.)" : quoted, "watch": watch,
+                    "budget": ask.wordsThatFit.map { "That\u{2019}s about \($0) words for the whole cut, with room for the picture to breathe." } ?? "",
+                    "notes": notes(script.turnedOver) { n in (n.rowIDs ?? []).compactMap { script.number(of: $0) }.isEmpty ? "" : "Lines \(rowList((n.rowIDs ?? []).compactMap { script.number(of: $0) }))" }]
         case .breakdown:
             let b = try store.breakdown()
             var task: [String] = []
@@ -58,6 +84,7 @@ extension EditorJobs {
             }
             if let b, !b.turnedOver.isEmpty { task.append("The director turned over \(count(b.turnedOver.count, "note")) on the breakdown. Answer each one: change the shots it names, then reply.") }
             return ["task": task.isEmpty ? "Read the breakdown and check every row has a shot." : task.joined(separator: " "),
+                    "footage": takes == 0 ? "" : "The film already has its footage (\(count(takes, "take")) in Dailies). A picture the script wrote from a take (\u{201C}Take 3: …\u{201D}) is a shot with source `have`, in a setup with `noCamera`; check it against `direction_dailies`. Only what the footage doesn\u{2019}t cover needs shooting or making.\n\n",
                     "notes": notes(b?.turnedOver ?? []) { n in (n.shotIDs ?? []).compactMap { b?.shot($0)?.code }.joined(separator: ", ") }]
         default:
             return [:]
@@ -93,8 +120,8 @@ extension EditorJobs {
             return "\u{201C}\(q.text)\u{201D} " + [choice.map { "I chose \u{201C}\($0)\u{201D}." }, q.answerText.map { "I said: \u{201C}\($0)\u{201D}" }].compactMap { $0 }.joined(separator: " ")
         }
         switch job {
-        case .script:
-            return (script?.rows ?? []).enumerated().compactMap { i, r in r.question.flatMap { q in (q.answeredAt ?? 0) > since ? "You asked about row \(i + 1): " + said(q) : nil } }
+        case .script, .voiceOver:
+            return (script?.rows ?? []).enumerated().compactMap { i, r in r.question.flatMap { q in (q.answeredAt ?? 0) > since ? "You asked about \(job == .voiceOver ? "line" : "row") \(i + 1): " + said(q) : nil } }
         case .breakdown:
             return (breakdown?.shots ?? []).compactMap { s in s.question.flatMap { q in (q.answeredAt ?? 0) > since ? "You asked about \(s.code): " + said(q) : nil } }
         default: return []
