@@ -14,8 +14,13 @@ struct LockCheck: Identifiable {
 }
 
 extension FilmModel {
-    /// Notes the editor has seen that aren't accepted or dropped yet.
-    var openNotes: [ReviewComment] { notes.filter { $0.visibleToEditor && ![.accepted, .dropped].contains($0.lifecycle) && !$0.inInbox } }
+    /// Notes the editor has seen that aren't accepted or dropped yet. An unasked change counts only while it waits
+    /// in the cut on screen: once a newer cut is made on top of it, it's part of the edit, the sheet no longer shows
+    /// it, and nothing could accept it, so it must not hold the lock (a tester was stuck on a greyed Lock picture).
+    var openNotes: [ReviewComment] {
+        let waiting = Set(toReview.map(\.id))
+        return notes.filter { $0.visibleToEditor && ![.accepted, .dropped].contains($0.lifecycle) && !$0.inInbox && (!$0.isUnasked || waiting.contains($0.id)) }
+    }
 
     /// Every blocker and warning before picture lock, in the sheet's order.
     var lockChecks: [LockCheck] {
@@ -33,7 +38,7 @@ extension FilmModel {
         } else {
             let unreviewed = toReview.count
             out.append(.init(id: "notes", status: .fail, title: open.count == 1 ? "1 note still open" : "\(open.count) notes still open",
-                             detail: "Notes \(open.compactMap(\.number).sorted().map(String.init).joined(separator: ", "))",
+                             detail: openNotesDetail(open),
                              fix: unreviewed > 0 ? ("Review \(unreviewed) answer\(unreviewed == 1 ? "" : "s")", { self.sheet = nil; self.watch(self.latestCut); self.go(.cut); self.notesTab = .sheet }) : ("Open the Cut", { self.sheet = nil; self.go(.cut); self.notesTab = .sheet })))
         }
         let questions = openQuestions.count
@@ -67,6 +72,17 @@ extension FilmModel {
             out.append(.init(id: "scenes", status: .info, icon: "lock.fill", title: openScenes.count == 1 ? "1 scene still open" : "\(openScenes.count) scenes still open", detail: "\(list) will lock with the picture"))
         }
         return out
+    }
+
+    /// "Notes 3, 7 and an unasked change": the open notes by number, and the editor's unasked changes by name.
+    func openNotesDetail(_ open: [ReviewComment]) -> String {
+        var parts: [String] = []
+        let numbers = open.compactMap(\.number).sorted().map(String.init)
+        if !numbers.isEmpty { parts.append("\(numbers.count == 1 ? "Note" : "Notes") \(numbers.joined(separator: ", "))") }
+        let unasked = open.filter(\.isUnasked).count
+        if unasked > 0 { parts.append(unasked == 1 ? "an unasked change" : "\(unasked) unasked changes") }
+        let line = parts.joined(separator: " and ")
+        return line.prefix(1).uppercased() + line.dropFirst()
     }
 
     /// Locks the picture, and every scene with it, and opens Finish.

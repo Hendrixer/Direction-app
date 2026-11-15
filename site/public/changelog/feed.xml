@@ -5,8 +5,30 @@
   <id>https://givedirection.ai/changelog/</id>
   <link href="https://givedirection.ai/changelog/"/>
   <link rel="self" href="https://givedirection.ai/changelog/feed.xml"/>
-  <updated>2026-11-12T12:00:00Z</updated>
+  <updated>2026-11-14T12:00:00Z</updated>
   <author><name>Direction</name></author>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.8</id>
+    <title>0.3.8: Lock picture always opens</title>
+    <link href="https://givedirection.ai/changelog/#0.3.8"/>
+    <updated>2026-11-14T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;Some films got stuck in the Cut room with every note accepted: &lt;strong&gt;Lock picture…&lt;/strong&gt; was greyed out with no reason, and Finish stayed closed. The cause was an unasked change, something the editor did on its own in an earlier cut, that was never accepted before the next turnover. Once a newer cut came, the sheet stopped showing that change, but it still counted as an open note, so nothing could unlock the button.&lt;/p&gt;
+&lt;p&gt;Now a change the editor made on its own counts only while it waits in the cut you're looking at. Once a newer cut is made from it, it's part of the edit. If you're stuck on an older version, update and &lt;strong&gt;Lock picture…&lt;/strong&gt; works on the cut you have.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Lock picture…&lt;/strong&gt; also never sits greyed out anymore. It always opens its sheet, and the sheet lists anything still in the way, each with the button that fixes it.&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <id>https://givedirection.ai/changelog/#0.3.7</id>
+    <title>0.3.7: Clearer when the picture is locked</title>
+    <link href="https://givedirection.ai/changelog/#0.3.7"/>
+    <updated>2026-11-14T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;Once you lock picture, the edit is final. The Cut room now says so: the top of the notes reads &lt;strong&gt;Picture is locked&lt;/strong&gt;, explains that color, sound, captions and delivery happen in Finish, and offers &lt;strong&gt;Unlock Picture…&lt;/strong&gt; if you want a change to the edit. The steel button takes you to Finish.&lt;/p&gt;
+&lt;p&gt;Before, you could keep writing notes on a locked cut, and they went nowhere. Now the tools for making a note step aside while picture is locked, and pressing N tells you why instead of making a note that can't be sent. The cut still plays, so you can watch it through once more before you deliver.&lt;/p&gt;
+&lt;h3&gt;Make a style from a video in Settings&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Settings › Styles › New Style&lt;/strong&gt; now starts with &lt;strong&gt;From a video&lt;/strong&gt;. Paste a YouTube link (or choose a file), say what you like about it, and press Make Style. &lt;strong&gt;Write it yourself&lt;/strong&gt; is one click away.&lt;/p&gt;
+&lt;p&gt;While the style is being made, it's the first row in Your styles, saying what's happening: downloading the video, studying it, or the editor writing it. If something goes wrong, the row says what, with &lt;strong&gt;Try Again&lt;/strong&gt;.&lt;/p&gt;
+&lt;h3&gt;Fixes&lt;/h3&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Locking scenes after an assembly&lt;/strong&gt; no longer stops with "Scene not found". Shots from takes that aren't in a scene lock with the picture, and a cut with no scenes offers just Lock picture.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Styles from YouTube videos&lt;/strong&gt; open on every Mac. Direction now asks for a version of the video that macOS always plays, where some downloads used to fail with "Cannot Open".&lt;/li&gt;&lt;li&gt;&lt;strong&gt;No more pause after a video downloads.&lt;/strong&gt; Direction used to stop for a few seconds while it read what the video page said about it.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;A crash when a popover changed size&lt;/strong&gt; while it was open is fixed.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Looking at footage on this Mac&lt;/strong&gt; says when mlx-vlm needs an update, with the command to copy, instead of failing on every take.&lt;/li&gt;&lt;/ul&gt;</content>
+  </entry>
   <entry>
     <id>https://givedirection.ai/changelog/#0.3.6</id>
     <title>0.3.6: A faster editor</title>

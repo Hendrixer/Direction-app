@@ -51,6 +51,29 @@ struct TesterReportTests {
         #expect(!m.refusesNotesWhileLocked() && m.toast == nil)
     }
 
+    /// An unasked change the editor made in an earlier cut, never accepted before the next turnover, is part of the
+    /// edit now: the sheet doesn't show it, so it can't hold Lock picture. One waiting in the cut on screen still does.
+    @Test func anOldUnaskedChangeDoesntHoldTheLock() {
+        let m = ChangesFixtures.cut4()
+        for n in 1...7 { ChangesFixtures.accept(m, n) }
+        func unasked(_ cut: String) -> ReviewComment {
+            var c = SampleFilm.note(nil, "Trimmed the pause before the title.", state: .answered, cut: cut)
+            c.authorRole = "editor"
+            var a = NoteAnswer(cutID: cut, revision: 12, summary: c.text, delta: nil, range: nil, options: nil, preferred: nil, createdAt: 0)
+            a.state = "unreviewed"
+            c.answers = [a]
+            return c
+        }
+        m.notes.append(unasked("cut-3"))
+        #expect(m.sheetRows.allSatisfy { !$0.isUnasked })
+        #expect(m.picturelockBlockers.isEmpty && m.openNotes.isEmpty)
+        #expect(m.cutPrimary?.title == "Lock picture\u{2026}" && m.cutPrimary?.enabled == true)
+        // In the cut on screen it waits for an Accept, and the lock sheet names it.
+        m.notes.append(unasked("cut-4"))
+        #expect(m.cutPrimary?.title == "Accept")
+        #expect(m.picturelockBlockers == ["1 note still open"] && m.openNotesDetail(m.openNotes) == "An unasked change")
+    }
+
     /// Settings › Styles follows a style from the video to the editor saving it, and says why when it stops.
     @Test func aStyleOnItsWayShowsHowItsGoing() {
         let m = ChangesFixtures.cut4()

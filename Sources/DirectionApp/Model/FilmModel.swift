@@ -881,8 +881,8 @@ final class FilmModel {
     func unlockPicture() { perform { try $0.lockPicture(cutID: nil, locked: false) } }
     var picturelockBlockers: [String] {
         var out: [String] = []
-        let open = notes.filter { $0.visibleToEditor && ![.accepted, .dropped].contains($0.lifecycle) && !$0.inInbox }
-        if !open.isEmpty { out.append("\(open.count) notes still open") }
+        let open = openNotes.count
+        if open > 0 { out.append(open == 1 ? "1 note still open" : "\(open) notes still open") }
         if !openQuestions.isEmpty { out.append("\(openQuestions.count) questions waiting") }
         if !inbox.isEmpty { out.append("\(inbox.count) outside notes waiting") }
         return out

@@ -355,7 +355,8 @@ extension FilmModel {
             return PrimaryAction(title: "Accept", icon: "checkmark", count: String(acceptable), help: "Accept every answer still to look at (\u{2318}\u{21A9})") { self.changes.confirmAcceptAll = true }
         }
         if canLockScenes {
-            return PrimaryAction(title: "Lock picture\u{2026}", icon: "lock.fill", enabled: picturelockBlockers.isEmpty) { self.sheet = .lockPicture }
+            // Never a grey button with no reason: the sheet lists what's in the way, each with its fix.
+            return PrimaryAction(title: "Lock picture\u{2026}", icon: "lock.fill", help: picturelockBlockers.isEmpty ? "Lock picture" : picturelockBlockers.joined(separator: ", ")) { self.sheet = .lockPicture }
         }
         return PrimaryAction(title: "Turn over", icon: "arrow.right", enabled: false, help: "Write a note first") {}
     }

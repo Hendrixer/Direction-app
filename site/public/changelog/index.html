@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Changelog — Direction</title>
-<meta name="description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.6, a faster editor.">
+<meta name="description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.8, lock picture always opens.">
 <link rel="canonical" href="https://givedirection.ai/changelog/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#000000">
@@ -18,13 +18,13 @@
 <meta property="og:site_name" content="Direction">
 <meta property="og:url" content="https://givedirection.ai/changelog/">
 <meta property="og:title" content="Changelog — Direction">
-<meta property="og:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.6, a faster editor.">
+<meta property="og:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.8, lock picture always opens.">
 <meta property="og:image" content="https://givedirection.ai/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Changelog — Direction">
-<meta name="twitter:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.6, a faster editor.">
+<meta name="twitter:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.8, lock picture always opens.">
 <meta name="twitter:image" content="https://givedirection.ai/og.jpg">
 <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/css/site.css">
@@ -52,7 +52,7 @@
     <h1 class="display">What's new in Direction.</h1>
     <p class="lede">Direction checks for a new version once a day and updates itself. Here's what each one brought.</p>
     <div class="cl-links">
-      <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg">Download 0.3.6</a>
+      <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg">Download 0.3.8</a>
       <a class="btn ghost sm" href="/changelog/feed.xml"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="12.5" r="1.6" fill="currentColor"/><path d="M2 7a7 7 0 0 1 7 7M2 2.5A11.5 11.5 0 0 1 13.5 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Follow</a>
       <a class="btn ghost sm" href="https://github.com/Hendrixer/Direction-app/releases">Releases on GitHub ↗</a>
     </div>
@@ -60,9 +60,98 @@
 
   <ol class="cl-list">
 
-    <li class="cl-entry latest" id="0.3.6">
+    <li class="cl-entry latest" id="0.3.8">
       <div class="cl-when">
         <i class="gem"></i>
+        <a class="cl-ver" href="#0.3.8">0.3.8</a>
+        <time datetime="2026-11-14">November 14, 2026</time>
+      </div>
+      <article class="cl-body">
+        <h2 class="display">Lock picture always opens</h2>
+        <figure class="cl-hero rv" aria-hidden="true"><div class="cl-stage"><div class="h-lc">
+  <div class="lk-bar">
+    <b>Launch film</b><span class="sl">/</span><span class="cut">Cut 10</span>
+    <span class="lc-chip"><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.4" fill="currentColor"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Picture locked</span>
+    <span class="lc-btn"><span class="a"><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.4" fill="currentColor"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Lock picture…</span><span class="b"><svg viewBox="0 0 16 16"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Go to Finish</span></span>
+  </div>
+  <div class="lc-body">
+    <div class="lc-pic"><img src="/img/ridge.svg" alt="" loading="lazy"></div>
+    <div class="lk-sheet grain">
+      <div class="lk-h">Notes on Cut 10</div>
+      <div class="lc-row"><i class="gem"></i><b>Answered in Cut 10</b><span>all 16</span></div>
+    </div>
+    <i class="lc-dim"></i>
+  </div>
+  <div class="lc-dlg">
+    <div class="lc-t">Lock picture on Cut 10?</div>
+    <ul>
+      <li><i class="ok"></i><b>16 of 16 notes accepted</b></li>
+      <li><i class="ok"></i><b>No open questions</b></li>
+      <li><i class="ok"></i><b>No outside notes waiting</b></li>
+      <li><i class="lk"><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.4" fill="currentColor"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></i><b>2 scenes still open</b><span>They lock with the picture</span></li>
+    </ul>
+    <div class="lc-foot"><span class="cancel">Cancel</span><span class="go">Lock picture</span></div>
+  </div>
+</div></div></figure>
+        <div class="cl-prose"><p>Some films got stuck in the Cut room with every note accepted: <strong>Lock picture…</strong> was greyed out with no reason, and Finish stayed closed. The cause was an unasked change, something the editor did on its own in an earlier cut, that was never accepted before the next turnover. Once a newer cut came, the sheet stopped showing that change, but it still counted as an open note, so nothing could unlock the button.</p>
+<p>Now a change the editor made on its own counts only while it waits in the cut you're looking at. Once a newer cut is made from it, it's part of the edit. If you're stuck on an older version, update and <strong>Lock picture…</strong> works on the cut you have.</p>
+<p><strong>Lock picture…</strong> also never sits greyed out anymore. It always opens its sheet, and the sheet lists anything still in the way, each with the button that fixes it.</p></div>
+        
+        <a class="cl-gh" href="https://github.com/Hendrixer/Direction-app/releases/tag/v0.3.8">Direction 0.3.8 on GitHub <span aria-hidden="true">↗</span></a>
+      </article>
+    </li>
+
+    <li class="cl-entry" id="0.3.7">
+      <div class="cl-when">
+        <i class="gem grey"></i>
+        <a class="cl-ver" href="#0.3.7">0.3.7</a>
+        <time datetime="2026-11-14">November 14, 2026</time>
+      </div>
+      <article class="cl-body">
+        <h2 class="display">Clearer when the picture is locked</h2>
+        <figure class="cl-hero rv" aria-hidden="true"><div class="cl-stage"><div class="h-lock">
+  <div class="lk-bar">
+    <b>Launch film</b><span class="sl">/</span><span class="cut">Cut 4</span>
+    <span class="lk-chip"><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.4" fill="currentColor"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Picture locked</span>
+    <span class="lk-btn"><span class="a"><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.4" fill="currentColor"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Lock picture…</span><span class="b"><svg viewBox="0 0 16 16"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Go to Finish</span></span>
+  </div>
+  <div class="lk-body">
+    <div class="lk-left">
+      <div class="lk-pic"><img src="/img/ridge.svg" alt="" loading="lazy"></div>
+      <div class="lk-transport">
+        <i class="play"></i>
+        <div class="lk-strip"><span>1 Open</span><span>2 Maya</span><span>3 Ridge</span><span>4 Launch</span></div>
+        <div class="lk-tools">
+          <svg viewBox="0 0 16 16"><path d="M8 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="5" r="2.4" fill="currentColor"/></svg>
+          <svg viewBox="0 0 16 16"><path d="M2 8h12M2 4v8M14 4v8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="lk-sheet grain">
+      <div class="lk-h">Notes on Cut 4</div>
+      <div class="lk-note">
+        <b><svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.4" fill="currentColor"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Picture is locked</b>
+        <p>The edit is final. Color, sound, captions and delivery are in Finish.</p>
+        <span class="lk-unlock">Unlock Picture…</span>
+      </div>
+      <div class="lk-row"><i class="gem"></i><b>Answered in Cut 4</b><span>all 7</span></div>
+    </div>
+  </div>
+</div></div></figure>
+        <div class="cl-prose"><p>Once you lock picture, the edit is final. The Cut room now says so: the top of the notes reads <strong>Picture is locked</strong>, explains that color, sound, captions and delivery happen in Finish, and offers <strong>Unlock Picture…</strong> if you want a change to the edit. The steel button takes you to Finish.</p>
+<p>Before, you could keep writing notes on a locked cut, and they went nowhere. Now the tools for making a note step aside while picture is locked, and pressing N tells you why instead of making a note that can't be sent. The cut still plays, so you can watch it through once more before you deliver.</p>
+<h3>Make a style from a video in Settings</h3>
+<p><strong>Settings › Styles › New Style</strong> now starts with <strong>From a video</strong>. Paste a YouTube link (or choose a file), say what you like about it, and press Make Style. <strong>Write it yourself</strong> is one click away.</p>
+<p>While the style is being made, it's the first row in Your styles, saying what's happening: downloading the video, studying it, or the editor writing it. If something goes wrong, the row says what, with <strong>Try Again</strong>.</p></div>
+        <div class="cl-mores"><details class="cl-more"><summary><span>Fixes</span><span class="n">5</span></summary><div class="cl-more-body"><ul><li><strong>Locking scenes after an assembly</strong> no longer stops with "Scene not found". Shots from takes that aren't in a scene lock with the picture, and a cut with no scenes offers just Lock picture.</li><li><strong>Styles from YouTube videos</strong> open on every Mac. Direction now asks for a version of the video that macOS always plays, where some downloads used to fail with "Cannot Open".</li><li><strong>No more pause after a video downloads.</strong> Direction used to stop for a few seconds while it read what the video page said about it.</li><li><strong>A crash when a popover changed size</strong> while it was open is fixed.</li><li><strong>Looking at footage on this Mac</strong> says when mlx-vlm needs an update, with the command to copy, instead of failing on every take.</li></ul></div></details></div>
+        <a class="cl-gh" href="https://github.com/Hendrixer/Direction-app/releases/tag/v0.3.7">Direction 0.3.7 on GitHub <span aria-hidden="true">↗</span></a>
+      </article>
+    </li>
+
+    <li class="cl-entry" id="0.3.6">
+      <div class="cl-when">
+        <i class="gem grey"></i>
         <a class="cl-ver" href="#0.3.6">0.3.6</a>
         <time datetime="2026-11-12">November 12, 2026</time>
       </div>
