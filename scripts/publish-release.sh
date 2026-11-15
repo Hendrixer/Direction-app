@@ -1,7 +1,8 @@
 #!/bin/bash
 # Publishes a release that scripts/release.sh made (docs/releasing.md) to the direction-releases bucket, served at
 # updates.givedirection.ai: the DMG, the same DMG as Direction.dmg (the website's download link), then the feed.
-# Uploading the feed is what offers the update to every signed copy, so it goes last.
+# Uploading the feed is what offers the update to every signed copy, so it goes last. Then the debug symbols go to
+# Sentry (scripts/upload-symbols.sh).
 #
 #   scripts/publish-release.sh 0.3.0
 set -euo pipefail
@@ -39,6 +40,10 @@ fetch() { curl -fsS --doh-url https://cloudflare-dns.com/dns-query "$@"; }
 fetch -o /dev/null "$host/Direction-$version.dmg" || fail "$host/Direction-$version.dmg doesn't download yet."
 fetch "$host/appcast.xml" | grep -q "Direction-$version.dmg" || fail "$host/appcast.xml doesn't offer $version yet (the cache may still hold the old feed)."
 printf '\nPublished Direction %s:\n  %s/Direction.dmg\n  %s/appcast.xml\n' "$version" "$host" "$host"
+
+# The debug symbols, so Sentry can read this release's crashes. A missing token doesn't hold the release back.
+"$direction_root/scripts/upload-symbols.sh" "$version" \
+  || printf 'The update is out, but Sentry has no symbols for it yet. Once that is fixed, run: scripts/upload-symbols.sh %s\n' "$version" >&2
 
 # MARK: GitHub and the changelog, from site/changelog/<version>.md
 

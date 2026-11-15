@@ -34,6 +34,11 @@ The files are in the R2 bucket `direction-releases`, on the Cloudflare account t
 
 4. **Cloudflare.** Sign in with `cf auth login` (the account that has `givedirection.ai`).
 
+5. **Sentry, for readable crash reports.** Make an organization token at [personal-projects-rn.sentry.io › Settings › Auth Tokens](https://personal-projects-rn.sentry.io/settings/auth-tokens/), then save it in your login keychain. The command asks for the token, so it doesn't land in your shell history:
+   ```sh
+   security add-generic-password -U -s direction-sentry -a sentry -w
+   ```
+
 ## Each release
 
 ```sh
@@ -50,6 +55,7 @@ scripts/publish-release.sh 0.3.6  # upload the DMG, then the feed; tag v0.3.6, m
 
 - **Versions.** The version you give is what people see. The build number is the number of commits on `HEAD`, so it goes up with every release. Sparkle compares build numbers, so release from the same branch each time.
 - **`build/releases`** keeps every DMG and `appcast.xml`, and `generate_appcast` rebuilds the feed from what's there. If the folder is lost, the next feed lists only the new release. Sparkle only needs the newest, so this is fine.
+- **Debug symbols.** `release.sh` keeps each release's `.dSYM` files in `build/symbols/<version>`, checked against the binaries it signs. `publish-release.sh` sends them to Sentry with `scripts/upload-symbols.sh`, so a crash or freeze names the function and line it happened in. Without the token the update still goes out; save the token, then run `scripts/upload-symbols.sh <version>`. Keep `build/symbols`: a release's symbols can't be made again later, because a new build gets new IDs.
 - **Dry run.** `DIRECTION_SIGNING_IDENTITY=- scripts/release.sh 0.3.0` signs ad hoc and stops before notarizing. It checks the packaging without a certificate.
 - **When Apple says no**, the notary log is in `build/dist/notary-log-*.json`. It names each file and what's wrong with it.
 
