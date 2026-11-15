@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Changelog — Direction</title>
-<meta name="description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.8, lock picture always opens.">
+<meta name="description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.9, exports finish, and picture locks.">
 <link rel="canonical" href="https://givedirection.ai/changelog/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#000000">
@@ -18,13 +18,13 @@
 <meta property="og:site_name" content="Direction">
 <meta property="og:url" content="https://givedirection.ai/changelog/">
 <meta property="og:title" content="Changelog — Direction">
-<meta property="og:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.8, lock picture always opens.">
+<meta property="og:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.9, exports finish, and picture locks.">
 <meta property="og:image" content="https://givedirection.ai/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Changelog — Direction">
-<meta name="twitter:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.8, lock picture always opens.">
+<meta name="twitter:description" content="What's new in Direction, the Mac app for directing films. Latest: 0.3.9, exports finish, and picture locks.">
 <meta name="twitter:image" content="https://givedirection.ai/og.jpg">
 <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/css/site.css">
@@ -52,7 +52,7 @@
     <h1 class="display">What's new in Direction.</h1>
     <p class="lede">Direction checks for a new version once a day and updates itself. Here's what each one brought.</p>
     <div class="cl-links">
-      <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg">Download 0.3.8</a>
+      <a class="btn steel sm" href="https://updates.givedirection.ai/Direction.dmg">Download 0.3.9</a>
       <a class="btn ghost sm" href="/changelog/feed.xml"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="12.5" r="1.6" fill="currentColor"/><path d="M2 7a7 7 0 0 1 7 7M2 2.5A11.5 11.5 0 0 1 13.5 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Follow</a>
       <a class="btn ghost sm" href="https://github.com/Hendrixer/Direction-app/releases">Releases on GitHub ↗</a>
     </div>
@@ -60,9 +60,38 @@
 
   <ol class="cl-list">
 
-    <li class="cl-entry latest" id="0.3.8">
+    <li class="cl-entry latest" id="0.3.9">
       <div class="cl-when">
         <i class="gem"></i>
+        <a class="cl-ver" href="#0.3.9">0.3.9</a>
+        <time datetime="2026-11-14">November 14, 2026</time>
+      </div>
+      <article class="cl-body">
+        <h2 class="display">Exports finish, and picture locks</h2>
+        <figure class="cl-hero rv" aria-hidden="true"><div class="cl-stage"><div class="h-xg">
+  <div class="xg-card">
+    <div class="xg-top"><b>Exporting Cut 10</b><span class="xg-pct"><span class="a">Saving…</span><span class="b"><i></i>Saved Cut 10.mp4</span></span></div>
+    <div class="xg-strip">
+      <span style="--x:0%"></span><span style="--x:14%"></span><span style="--x:28%"></span>
+      <span class="gap" style="--x:28%"><em>no frame</em></span>
+      <span style="--x:57%"></span><span style="--x:71%"></span><span style="--x:85%"></span>
+      <i class="xg-head"></i>
+    </div>
+    <div class="xg-bar"><i></i></div>
+    <p class="xg-note">Where a shot has no frame for a moment, it holds the one before, and the export finishes.</p>
+  </div>
+</div></div></figure>
+        <div class="cl-prose"><p><strong>Exporting a cut</strong> no longer fails with "A source frame is unavailable for this edit." Sometimes a shot has no frame for a moment, like a sliver at a cut after a speed change. The whole export used to stop there. Now the shot holds the frame before it for that moment, the way it plays in the Cut room, and the export finishes.</p>
+<p><strong>Lock picture</strong> works when the editor made a change on its own in an earlier cut that you never accepted. 0.3.8 opened the sheet, but locking still said "Accept or drop every open note." Locking and the sheet now check notes the same way.</p>
+<p>Locking picture is going away next. You'll be able to go to Finish and deliver from any cut, and come back later to make new ones.</p></div>
+        
+        <a class="cl-gh" href="https://github.com/Hendrixer/Direction-app/releases/tag/v0.3.9">Direction 0.3.9 on GitHub <span aria-hidden="true">↗</span></a>
+      </article>
+    </li>
+
+    <li class="cl-entry" id="0.3.8">
+      <div class="cl-when">
+        <i class="gem grey"></i>
         <a class="cl-ver" href="#0.3.8">0.3.8</a>
         <time datetime="2026-11-14">November 14, 2026</time>
       </div>

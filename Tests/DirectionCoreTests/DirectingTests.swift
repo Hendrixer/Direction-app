@@ -87,6 +87,28 @@ private func directedStore() throws -> (ProjectStore, Project, ReviewCut) {
     #expect(try store.directingState().finishing?.count == FinishingItem.defaults.count)
 }
 
+/// The store's lock asks the same as the Cut room: an unasked change from an earlier cut, never accepted before the
+/// next turnover, is part of the edit and doesn't refuse the lock; one in the latest cut still does (DIRECTION-C).
+@Test func anUnaskedChangeFromAnEarlierCutDoesntRefuseTheLock() throws {
+    let (store, p, cut) = try directedStore()
+    let first = try store.addComment(text: "Tighter on her.", sequenceID: nil, revision: p.editRevision, cutID: cut.id, time: .init(seconds: 1), extra: NoteFields(kind: .picture))
+    let t1 = try store.turnOver(noteIDs: [first.id], latitude: .faithful, waitForOK: false, cutID: cut.id, sequenceID: nil)
+    let (_, cut2) = try store.completeTurnover(id: t1.id, revision: nil, sequenceID: nil, answers: [
+        AnswerInput(noteID: first.id, summary: "Reframed."), AnswerInput(summary: "Trimmed the pause before the title.", unasked: true)])
+    try store.acceptAnswer(noteID: first.id)
+    // The next turnover goes out with the unasked change still unaccepted.
+    let second = try store.addComment(text: "Hold the last shot.", sequenceID: nil, revision: p.editRevision, cutID: cut2.id, time: .init(seconds: 2), extra: NoteFields(kind: .pace))
+    let t2 = try store.turnOver(noteIDs: [second.id], latitude: .faithful, waitForOK: false, cutID: cut2.id, sequenceID: nil)
+    _ = try store.completeTurnover(id: t2.id, revision: nil, sequenceID: nil, answers: [AnswerInput(noteID: second.id, summary: "Held it."), AnswerInput(summary: "Evened the music.", unasked: true)])
+    try store.acceptAnswer(noteID: second.id)
+    // The unasked change in the latest cut still waits for an Accept.
+    expectError("notes_open") { try store.lockPicture(cutID: nil, locked: true) }
+    let latest = try store.notes().first { $0.isUnasked && $0.text == "Evened the music." }!
+    try store.acceptAnswer(noteID: latest.id)
+    try store.lockPicture(cutID: nil, locked: true)
+    #expect(try store.directingState().pictureLocked)
+}
+
 /// Locking picture locks every scene with it; unlocking picture opens those again, so going back to the edit
 /// never leaves the editor asking to unlock scenes the director never locked. A scene locked on its own stays.
 @Test func scenesThatLockedWithThePictureOpenWithIt() throws {

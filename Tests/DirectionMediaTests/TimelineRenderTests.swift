@@ -306,6 +306,25 @@ struct TimelineRenderTests {
     #expect(color.0 > 120 && color.2 < 90)
 }
 
+/// A moment where a shot has no source frame (a sub-frame gap at a cut) holds the shot's last frame, and the export
+/// finishes, where it used to fail whole with "A source frame is unavailable for this edit" (DIRECTION-B).
+@Test func aMomentWithNoSourceFrameHoldsTheLastOne() async throws {
+    let f = try await MediaFixture.make(); defer { f.cleanup() }
+    let compiled = try await f.compile()
+    // The first video track is the clock; the picture is the next. Empty a fifth of a second of it.
+    let picture = try #require(compiled.composition.tracks(withMediaType: .video).sorted { $0.trackID < $1.trackID }.dropFirst().first)
+    let gap = CMTimeRange(start: CMTime(seconds: 1.0, preferredTimescale: 600), duration: CMTime(seconds: 0.2, preferredTimescale: 600))
+    picture.removeTimeRange(gap); picture.insertEmptyTimeRange(gap)
+    let path = f.directory.appendingPathComponent("gap.mp4")
+    _ = try await SequenceRenderer.export(compiled, to: path)
+    let generator = AVAssetImageGenerator(asset: AVURLAsset(url: path)); generator.requestedTimeToleranceBefore = .zero; generator.requestedTimeToleranceAfter = .zero
+    let still = f.directory.appendingPathComponent("gap.png")
+    try MediaInspector.writePNG(try await generator.image(at: CMTime(seconds: 1.1, preferredTimescale: 600)).image, to: still)
+    let color = try meanColor(still)
+    // The fixture is red until 1.5 s: the held frame, not black.
+    #expect(color.0 > 120 && color.2 < 90)
+}
+
 /// The editor reads the timeline; it changes the cut only through edit functions.
 @Test func noToolTakesATimelineDocument() async throws {
     for d in ToolCatalog.definitions where !d.readOnly {

@@ -449,6 +449,13 @@ extension ReviewComment {
     /// Notes the editor is allowed to see.
     public var visibleToEditor: Bool { noteState != .draft && noteState != .dropped && !(isOutside && outsideState != "accepted") }
     public var latestAnswer: NoteAnswer? { answers?.last }
+    /// A note to accept or drop before picture locks. An unasked change holds the lock only while its answer is
+    /// in the latest cut: once a newer cut is made on top of it, it's part of the edit and nothing shows it to accept
+    /// (2026-11-14, a tester stuck with every note accepted). The store's lock and the Cut room both ask this.
+    public func holdsPictureLock(latestCutID: String?) -> Bool {
+        guard visibleToEditor, ![.accepted, .dropped].contains(lifecycle), !inInbox else { return false }
+        return !isUnasked || latestAnswer?.cutID == latestCutID
+    }
     /// The words said where the note is, as plain text: about `limit` of them around its moment, or from
     /// the start of its range or of the cut, with "…" where words are left out.
     public func transcriptExcerpt(limit: Int = 40) -> String {

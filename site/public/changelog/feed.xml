@@ -8,6 +8,15 @@
   <updated>2026-11-14T12:00:00Z</updated>
   <author><name>Direction</name></author>
   <entry>
+    <id>https://givedirection.ai/changelog/#0.3.9</id>
+    <title>0.3.9: Exports finish, and picture locks</title>
+    <link href="https://givedirection.ai/changelog/#0.3.9"/>
+    <updated>2026-11-14T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;&lt;strong&gt;Exporting a cut&lt;/strong&gt; no longer fails with "A source frame is unavailable for this edit." Sometimes a shot has no frame for a moment, like a sliver at a cut after a speed change. The whole export used to stop there. Now the shot holds the frame before it for that moment, the way it plays in the Cut room, and the export finishes.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Lock picture&lt;/strong&gt; works when the editor made a change on its own in an earlier cut that you never accepted. 0.3.8 opened the sheet, but locking still said "Accept or drop every open note." Locking and the sheet now check notes the same way.&lt;/p&gt;
+&lt;p&gt;Locking picture is going away next. You'll be able to go to Finish and deliver from any cut, and come back later to make new ones.&lt;/p&gt;</content>
+  </entry>
+  <entry>
     <id>https://givedirection.ai/changelog/#0.3.8</id>
     <title>0.3.8: Lock picture always opens</title>
     <link href="https://givedirection.ai/changelog/#0.3.8"/>
