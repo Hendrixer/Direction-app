@@ -27,7 +27,7 @@ Frame: `screens/34-lock-scenes.html` · Render: `renders/34-lock-scenes@2x.png`
 - Primary (steel): "Lock picture…" with a lock glyph.
 
 **States and variants:**
-- Lock picture is disabled while any note is open, questioned, or an outside note waits. Its tooltip names the blocker: "2 answers still to review".
+- The titlebar's Lock picture… always opens its sheet. While any note is open, a question waits or an outside note waits, the sheet's Lock picture is disabled and its checks name each blocker with its fix; the titlebar button's tooltip names them too. An unasked change counts as open only while it waits in the cut on screen: once a newer cut is made from it, it is part of the edit (2026-11-14, a tester stuck on a greyed button).
 - Hovering a locked tile shows "Unlock" (default button). Unlocking asks: "Unlock 1 Cold open? The editor can change it again in the next cut."
 - The same lock and unlock actions exist in the scene strip context menu (`⌘L` on the current scene) in every room.
 
