@@ -31,6 +31,21 @@ A story is what happens, told in prose, with nobody's words written: a treatment
 - The editor writes both columns: the picture, and what we hear: someone on camera or a voice recorded on its own, a sound, music, silence. It never writes words for anyone to say. Where someone talks, the cell says who and what about ("Calling her dad: the hello") and the row is in their **own words**: the speaker finds them on the day. Words the story quotes are the writer's and are said as written.
 - A new draft of a story matches beats by their part of the story: a beat whose story didn't change keeps its picture, its sound and its notes. A script brought in over a story (or a story over a script) starts the rows again.
 
+## After the footage
+
+A film started from its footage has the Script room too (2026-11-14), so a script or a story can come in after the shoot. Its empty room reads "Bring in a script or a story" (frame 70b). Breakdown appears once one is in. When the film has footage, the script job is told how many takes are in Dailies and reads them (`direction_dailies`, `direction_search_footage`, `direction_contact_sheet`): where a row's picture can be a moment of a take, it's written from that take and names it ("Take 3: her hands stop on the keys"); a new picture is written only where nothing fits. The breakdown makes those shots source `have`, so only what the footage doesn't cover is left to shoot or make.
+
+## A voice-over
+
+The editor can write a voice-over to the cut (2026-11-14): the words the director records later and lays over it. It's the one place Direction writes words for someone to say, and only when asked.
+
+- **Asking.** Write a voice-over… (the Script room's empty state, the Film menu, the command menu), once the film has a cut or footage. The sheet asks **What should it say?** in the director's words, and **Watch Cut N first** (on; the cut on screen, else the latest), with how long it runs and about how many words fit (2.5 a second, four-fifths of the cut). Without the cut, the editor writes from the footage. A film with a script asks first: the film has one script at a time, and the breakdown goes with the script it broke down.
+- **The job** is `voiceOver` (Resources/Editor/jobs/voice-over.md), the skill `write-voice-over`, on the quicker version (Sonnet at medium, Opus only at Best; Terra, then Sol for Codex). It reads the ask, then the cut it's written to at that cut's revision (`cutRevision`, passed as `revision` to the timeline, frames, watch and transcript; the opening read is that cut's outline), never writes over someone already talking, and writes lines a minute of the cut at a time: `direction_script_update` `lines: [{rowID?, at, picture, text}]` (no `rowID` is a new line) and `removeLines`. `direction_script` gives `kind: voiceOver` with the ask, the cut and `wordsThatFit`; each row has `at`, and `yours` when the director changed its words or what's on screen. The update says the words written, how long they read, and any line that runs into the next. It's finished when lines are written, every note has a reply and no question is open.
+- **The room.** The A/V script with its columns as **On screen** and **Voice-over**, and **At** (where a line starts) for the time; no boards, since the picture is the cut's. The source line is the ask ("Voice-over for Cut 10 · …") with Write It Again… and Copy for Recording in its menu. A line the director changes is theirs; notes and Turn over work as for a script. There's no Breakdown and no OK: the steel button is **Copy for Recording**, the lines with their times to read from (frames 80, 80b).
+- Lines play in the cut's order: a line the director adds starts where the one before ends, and moving a line is a note, not a drag. A breakdown is refused for a voice-over.
+- Asking again stops the pass on the old ask (even one still watching, with no lines yet), and replacing a script stops its picture and breakdown passes; the new ask and the breakdown's removal are one write. A script or a story brought in after puts the voice-over away and stops its pass.
+- A script pass in a film with footage writes from the takes only until a breakdown is OK'd: footage shot from that breakdown is the plan's, not a starting point.
+
 ## Layout (frames 70–73, 78)
 
 Three columns under the titlebar, like the other rooms.

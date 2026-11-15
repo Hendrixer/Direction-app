@@ -11,7 +11,8 @@ enum EditorOpening {
     static let most = 32_000, budget = 80_000
 
     /// The tools read for a job as it starts, in order, most needed first. Only tools that change nothing.
-    static func reads(_ job: EditorJob, hasScript: Bool, hasStyle: Bool) -> [(name: String, arguments: JSONValue)] {
+    /// `voiceOverCut`: the revision of the cut a voice-over is written to, so its outline is that cut's.
+    static func reads(_ job: EditorJob, hasScript: Bool, hasStyle: Bool, voiceOverCut: Int? = nil) -> [(name: String, arguments: JSONValue)] {
         let style: [(String, JSONValue)] = hasStyle ? [("direction_style", .object([:]))] : []
         switch job {
         case .turnover: return [("direction_turnovers", .object([:])), ("direction_timeline", .object([:]))] + style
@@ -22,6 +23,8 @@ enum EditorOpening {
         case .finish: return [("direction_timeline", .object([:]))]
         case .script: return style + [("direction_script", .object([:]))]
         case .breakdown: return style + [("direction_breakdown", .object(["includeScript": .bool(true)]))]
+        // The ask and the lines so far, then the cut's outline to write to.
+        case .voiceOver: return style + [("direction_script", .object([:])), ("direction_timeline", voiceOverCut.map { .object(["revision": .number(Double($0))]) } ?? .object([:]))]
         case .logFootage, .style, .technique: return []
         }
     }
@@ -59,7 +62,7 @@ enum EditorOpening {
         }
         let reads: [(name: String, arguments: JSONValue)]
         if continuing { reads = readsAgain(run.job) }
-        else { reads = self.reads(run.job, hasScript: ((try? store.script())?.rows.isEmpty == false), hasStyle: (try? store.appliedStyle().style) != nil) }
+        else { reads = self.reads(run.job, hasScript: ((try? store.script())?.rows.isEmpty == false), hasStyle: (try? store.appliedStyle().style) != nil, voiceOverCut: (try? store.script())??.voiceOver?.cutRevision) }
         if !reads.isEmpty, let runtime = try? ToolRuntime(store: store) {
             for read in reads {
                 guard !Task.isCancelled else { return "" }

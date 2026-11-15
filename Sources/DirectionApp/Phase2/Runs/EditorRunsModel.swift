@@ -152,7 +152,11 @@ import DirectionTools
         }
         // Prep (specs/script.md, specs/breakdown.md): the picture column when a script comes in, the breakdown
         // once it's OK'd, and a pass whenever the director turns over notes on either.
-        if let script = film.script {
+        if let script = film.script, script.isVoiceOver {
+            // A voice-over asked for since the last pass began, or notes turned over on it.
+            let asked = script.rows.isEmpty && latest(.voiceOver).map { (script.voiceOver?.askedAt ?? 0) > $0.createdAt } ?? true
+            if (asked || !script.turnedOver.isEmpty), latest(.voiceOver)?.state.isOpen != true { startPrep(.voiceOver, film: film, program: program, store: store) }
+        } else if let script = film.script {
             // The first script, or a new draft, since the last pass began.
             let fresh = script.rows.contains { $0.picture.isEmpty } && latest(.script).map { (script.source?.importedAt ?? 0) > $0.createdAt } ?? true
             if (fresh || !script.turnedOver.isEmpty), latest(.script)?.state.isOpen != true { startPrep(.script, film: film, program: program, store: store) }
@@ -236,7 +240,7 @@ import DirectionTools
 
     /// A prep pass: what it changes is marked as this pass's.
     private func startPrep(_ job: EditorJob, film: FilmModel, program: EditorProgram, store: ProjectStore) {
-        if job == .script { _ = try? store.beginScriptPass() } else { _ = try? store.beginBreakdownPass() }
+        if job == .script || job == .voiceOver { _ = try? store.beginScriptPass() } else { _ = try? store.beginBreakdownPass() }
         create(job, program: program, store: store)
     }
 
@@ -386,6 +390,7 @@ import DirectionTools
         case .technique: "The technique isn\u{2019}t saved. Your film is as it was, and you can ask again."
         case .script: "The picture column isn\u{2019}t finished. What\u{2019}s written stays, and you can start again."
         case .breakdown: "The breakdown isn\u{2019}t finished. What\u{2019}s there stays, and you can start again."
+        case .voiceOver: "The voice-over isn\u{2019}t finished. The lines written stay, and you can start again."
         }
     }
 

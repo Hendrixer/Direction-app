@@ -22,6 +22,8 @@ enum EditorPicks {
     private static let claude: [EditorJob: [Pick]] = [
         .script: [p(sonnet, "medium"), p(sonnet, "medium"), p(opus, "medium"), p(opus, "high")],
         .breakdown: [p(haiku, "medium"), p(haiku, "medium"), p(sonnet, "medium"), p(opus, "medium")],
+        // Words to a cut it watches: the quicker version is plenty until Best.
+        .voiceOver: [p(sonnet, "medium"), p(sonnet, "medium"), p(sonnet, "medium"), p(opus, "medium")],
         .logFootage: [p(sonnet, "medium"), p(sonnet, "medium"), p(sonnet, "medium"), p(opus, "high")],
         .assemble: [p(sonnet, "medium"), p(opus, "medium"), p(opus, "high"), p(opus, "xhigh")],
         .turnover: [p(sonnet, "medium"), p(opus, "medium"), p(opus, "high"), p(opus, "xhigh")],
@@ -32,6 +34,7 @@ enum EditorPicks {
     private static let codex: [EditorJob: [Pick]] = [
         .script: [p(terra, "medium"), p(terra, "medium"), p(sol, "medium"), p(sol, "high")],
         .breakdown: [p(terra, "low"), p(terra, "low"), p(terra, "medium"), p(sol, "medium")],
+        .voiceOver: [p(terra, "medium"), p(terra, "medium"), p(terra, "medium"), p(sol, "medium")],
         .logFootage: [p(terra, "medium"), p(terra, "medium"), p(terra, "medium"), p(sol, "high")],
         .assemble: [p(sol, "medium"), p(sol, "medium"), p(sol, "high"), p(astra, "high")],
         .turnover: [p(sol, "medium"), p(sol, "medium"), p(sol, "high"), p(astra, "high")],

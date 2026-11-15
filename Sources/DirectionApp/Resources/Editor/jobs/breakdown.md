@@ -1,4 +1,4 @@
-<!-- direction-job breakdown v7 -->
+<!-- direction-job breakdown v8 -->
 # Break down "{{film}}"
 
 Follow the `{{skill}}` skill. Its playbook is at the end of this message, under Read for you, with what you’d read first; if it isn’t there, read `{{skillPath}}` in this folder.
@@ -7,7 +7,7 @@ Follow the `{{skill}}` skill. Its playbook is at the end of this message, under 
 
 The breakdown is the director's plan for the shoot: every picture in the A/V script as a shot, grouped by setup (a place and its light, set up once), each with where its picture comes from. The shot numbers Direction gives become the slates the director says on camera, and Dailies files takes by them.
 
-1. Read the film's style with `direction_style`; the brief is below. The director watches the breakdown fill in, so build it as you read: `direction_breakdown` with `includeScript: true` gives the breakdown and a page of 40 rows (`from`, then its `next`). Add that page's shots with one `direction_breakdown_update`, then read the next page. Start within your first minute; never plan the whole script before the first page is in.
+{{footage}}1. Read the film's style with `direction_style`; the brief is below. The director watches the breakdown fill in, so build it as you read: `direction_breakdown` with `includeScript: true` gives the breakdown and a page of 40 rows (`from`, then its `next`). Add that page's shots with one `direction_breakdown_update`, then read the next page. Start within your first minute; never plan the whole script before the first page is in.
 2. Group by setup: one setup per place and light ("Desk at night", "On camera, day"), with what it needs (time of day, light, props, what's on the screen). Narration recorded on its own is a setup of its own, source sound. Screen recordings, shots to make and footage the director said they have go in setups with `noCamera`.
 3. A shot for every row's picture: the rows it plays under, what we see, how to get it on the day, what it's for (when what we see doesn't say), size, move, seconds (the rows' seconds, unless the picture should run longer), and its source. A picture that runs across several rows is one shot; a row that cuts between two pictures has two. Titles, graphics and anything that can be made in Direction's graphics are source make with no estimate (they're free); a made shot needs a `makePlan` and an `estimate` from `direction_estimate`. Don't make anything now.
 4. Write for a director who's never been on a set, as the skill shows: plain words, no crew shorthand (locked off, plate, cover, matte, layer, roll), every recording its own shot (never Take A and Take B), the script's moments by what happens in them rather than row numbers, and other shots by the numbers Direction last gave them. Fix whatever `toFix` lists.

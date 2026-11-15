@@ -72,13 +72,14 @@ private struct FileMenuItems: View {
         }
         Divider()
         Button("Bring Footage\u{2026}") { film?.chooseFootage() }.shortcut(.bringFootage).disabled(film == nil)
-        if film?.script == nil {
+        if film?.script == nil || film?.script?.isVoiceOver == true {
             Button("Bring In a Script\u{2026}") { film?.chooseScript(.script) }.disabled(film == nil)
             Button("Bring In a Story\u{2026}") { film?.chooseScript(.story) }.disabled(film == nil)
         } else {
             Button("Bring In a New Draft\u{2026}") { film?.chooseScript() }
             Button(film?.script?.isStory == true ? "Read as a Script\u{2026}" : "Read as a Story\u{2026}") { if let f = film { f.readAgain(as: f.scriptKind == .story ? .script : .story) } }
         }
+        Button("Write a Voice-Over\u{2026}") { film?.sheet = .voiceOver }.disabled(film?.canWriteVoiceOver != true)
         Button("Print Shoot List\u{2026}") { film?.printShootList() }.disabled(film?.breakdown?.isOK != true)
         Button("Find Missing Footage\u{2026}") { film?.sheet = .relink }.disabled(film == nil || MenuState.shared.missingCount == 0)
         Divider()

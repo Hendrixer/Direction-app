@@ -35,6 +35,7 @@ struct EditorActivityPopover: View {
         case .technique: "Learning a technique"
         case .script: "Writing the picture"
         case .breakdown: "Breaking down the script"
+        case .voiceOver: "Writing the voice-over"
         }
     }
 

@@ -23,11 +23,11 @@ extension EditorProgram {
 /// The jobs, as the editor's picks list them.
 extension EditorJob {
     /// In the order a film is made, then styles and techniques.
-    static let byFilm: [EditorJob] = [.script, .breakdown, .logFootage, .assemble, .turnover, .finish, .style, .technique]
+    static let byFilm: [EditorJob] = [.script, .breakdown, .logFootage, .assemble, .turnover, .voiceOver, .finish, .style, .technique]
     var workName: String {
         switch self {
         case .script: "A/V script"; case .breakdown: "Breakdown"; case .logFootage: "Logging takes"; case .assemble: "Assembly"
-        case .turnover: "Notes"; case .finish: "Finishing"; case .style: "Styles"; case .technique: "Techniques"
+        case .turnover: "Notes"; case .finish: "Finishing"; case .style: "Styles"; case .technique: "Techniques"; case .voiceOver: "Voice-over"
         }
     }
 }

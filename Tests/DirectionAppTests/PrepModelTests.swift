@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import DirectionCore
+import DirectionTools
 @testable import DirectionApp
 
 /// The prep rooms' one button, their place in the room order, and the editor's job text for them
@@ -134,16 +135,65 @@ struct PrepModelTests {
         #expect(LockBar.lockable(strip, scenes: m.sceneIDs).scenes.allSatisfy { !$0.passage })
     }
 
-    /// A film started from its footage has no prep rooms; a script brought in brings them back.
+    /// A film started from its footage keeps Script, to bring in a script or a story; Breakdown comes with one.
     @Test func roomsFollowTheFilm() {
         let m = FilmModel(preview: true)
         #expect(m.isShown(.script) && m.isShown(.breakdown))
         var p = Project(name: "Short"); p.assets = [MediaAsset(name: "Take 1.mov", path: "/tmp/direction-short/Take 1.mov", duration: MediaTime(seconds: 30))]
         m.project = p; m.displayed = p
-        #expect(!m.isShown(.script) && !m.isShown(.breakdown) && !m.isEnabled(.script))
+        #expect(m.isShown(.script) && m.isEnabled(.script) && !m.isShown(.breakdown))
         #expect(m.isShown(.dailies) && m.isShown(.cut) && m.isShown(.finish))
         m.script = PrepFixtures.script()
         #expect(m.isShown(.script) && m.isEnabled(.script) && m.isShown(.breakdown))
+    }
+
+    /// A film started from its footage that brings in a story: the script job writes pictures from the takes it has,
+    /// and the breakdown marks those as footage the director has. A film with no footage hears nothing of it.
+    @Test func aScriptAfterFootageWritesFromTheTakes() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("footage-first-\(UUID().uuidString).direction")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = try ProjectStore.create(at: dir, name: "Bodies")
+        _ = try store.importScript("Why we look inside.\n\nThe heart, up close.", fileName: "story.md", as: .story)
+        let before = try EditorJobs.text(for: EditorRun(job: .script, program: "claudeCode", version: "", turnoverID: nil), store: store)
+        #expect(!before.contains("already has its footage") && !before.contains("{{"))
+        let take = MediaAsset(name: "Take 3.mov", path: "/tmp/direction-footage-first/Take 3.mov", duration: MediaTime(seconds: 12))
+        _ = try store.addAsset(take, append: false, expectedRevision: store.read().editRevision)
+        let script = try EditorJobs.text(for: EditorRun(job: .script, program: "claudeCode", version: "", turnoverID: nil), store: store)
+        #expect(script.contains("The film already has its footage: 1 take") && script.contains("direction.dailies") && !script.contains("{{"))
+        let breakdown = try EditorJobs.text(for: EditorRun(job: .breakdown, program: "claudeCode", version: "", turnoverID: nil), store: store)
+        #expect(breakdown.contains("source `have`") && !breakdown.contains("{{"))
+        #expect(ToolCatalog.names(for: .script).isSuperset(of: ["direction_dailies", "direction_search_footage"]))
+        // Footage shot from an OK'd breakdown is that plan's: a later script pass isn't told to start from it.
+        let row = try #require(try store.script()?.rows.first?.id)
+        _ = try store.updateBreakdown(setups: [try JSONDecoder().decode(SetupInput.self, from: Data(#"{"name":"Desk"}"#.utf8))],
+                                      shots: [try JSONDecoder().decode(ShotInput.self, from: Data(#"{"setup":"Desk","rowIDs":["\#(row)"],"what":"The heart.","source":"shoot"}"#.utf8))])
+        _ = try store.okBreakdown()
+        let later = try EditorJobs.text(for: EditorRun(job: .script, program: "claudeCode", version: "", turnoverID: nil), store: store)
+        #expect(!later.contains("already has its footage") && !later.contains("{{"))
+    }
+
+    /// A voice-over: its job carries the ask, the cut and the word budget on the quicker version; it's finished once
+    /// lines are written; the Script room copies it for recording, and there's no Breakdown for it.
+    @Test func aVoiceOverIsWrittenToTheCut() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("voice-over-\(UUID().uuidString).direction")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = try ProjectStore.create(at: dir, name: "Bodies")
+        _ = try store.startVoiceOver(VoiceOverAsk(ask: "Why the bodies look this way.\nCurious, a little funny.", cutID: "cut-10", cutName: "Cut 10", cutRevision: 47, cutSeconds: 40))
+        let run = EditorRun(job: .voiceOver, program: "claudeCode", version: "", turnoverID: nil)
+        let text = try EditorJobs.text(for: run, store: store)
+        #expect(text.contains("> Why the bodies look this way.\n> Curious, a little funny.") && text.contains("written to Cut 10, 0:40 long") && text.contains("`revision: 47`") && text.contains("about 80 words") && !text.contains("{{"))
+        // Its first read is that cut's outline, not the edit as it is now.
+        #expect(EditorOpening.reads(.voiceOver, hasScript: true, hasStyle: false, voiceOverCut: 47).contains { $0.name == "direction_timeline" && $0.arguments["revision"].int == 47 })
+        #expect(text.contains("`write-voice-over`"))
+        #expect(!EditorRunner.finished(run, store: store))
+        _ = try store.updateScript(lines: [VoiceLineInput(at: 0, picture: "The full body.", text: "This was a person once.")])
+        #expect(EditorRunner.finished(run, store: store))
+        #expect(EditorPicks.listed(.claudeCode, .voiceOver, .balanced).version == "claude-sonnet-5-5" && EditorPicks.listed(.claudeCode, .voiceOver, .best).version == "claude-opus-5-5")
+        #expect(ToolCatalog.names(for: .voiceOver).isSuperset(of: ["direction_timeline", "direction_frame", "direction_watch", "direction_transcript", "direction_script_update"]))
+
+        let m = PrepFixtures.film(room: .script, script: try store.script())
+        #expect(!m.isShown(.breakdown) && m.scriptPrimary?.title == "Copy for Recording" && m.scriptPrimary?.enabled == true)
+        #expect(m.script?.forRecording == "Voice-over for Cut 10\n\n0:00  This was a person once.")
     }
 
     /// Every answer the director gave on the script or the breakdown goes to every job after as settled.

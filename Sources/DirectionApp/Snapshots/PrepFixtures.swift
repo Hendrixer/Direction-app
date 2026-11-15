@@ -7,6 +7,19 @@ enum PrepFixtures {
     static var frames: [String: () -> SnapshotScene] {
         [
             "70-script-empty": { let m = film(room: .script, script: nil); m.onboardingDismissed = true; return .film(m) },
+            // A film started from its footage: Script is there to bring a script or a story in.
+            "70b-script-empty-footage": {
+                let m = film(room: .script, script: nil); m.onboardingDismissed = true
+                var p = m.project!; p.assets = [MediaAsset(name: "Take 1.mov", path: "/tmp/direction-chatbox/Take 1.mov", duration: MediaTime(seconds: 30))]
+                m.project = p; m.displayed = p
+                return .film(m)
+            },
+            "70c-voice-over-ask": {
+                let m = ChangesFixtures.cut4(room: .script); m.onboardingDismissed = true
+                return SnapshotScene(ZStack { FilmWindow(app: nil, model: m); Color.black.opacity(0.45); VoiceOverSheet(model: m, ask: "Why every app has a chat box now, for someone who\u{2019}s never built one. Wry, a little tired of it, never smug.").fixedSize() })
+            },
+            "80-voice-over": { .film(film(room: .script, script: voiceOver())) },
+            "80b-voice-over-writing": { let m = film(room: .script, script: voiceOver(upTo: 2)); working(m, .voiceOver); return .film(m) },
             "71-script-drafting": { drafting() },
             "72-script-notes": { notes() },
             "73-script-pass": { pass() },
@@ -101,6 +114,30 @@ enum PrepFixtures {
         var r = EditorRun(id: "run-prep", job: job, state: .working, program: "claudeCode", version: "", createdAt: SampleFilm.date(11, 2, 9, 42))
         r.startedAt = r.createdAt
         m.runs.runs = [r]
+    }
+
+    // MARK: A voice-over
+
+    /// A voice-over written to the cut, as the editor lays its lines out.
+    static func voiceOver(upTo: Int? = nil) -> AVScript {
+        var s = AVScript()
+        s.kind = .voiceOver
+        s.voiceOver = VoiceOverAsk(ask: "Why every app has a chat box now, for someone who\u{2019}s never built one. Wry, a little tired of it, never smug.", cutID: "cut-4", cutName: "Cut 4", cutSeconds: 252)
+        let lines: [(Double, String, String)] = [
+            (0, "Black. The chat box types on, cursor blinking.", "Open any app you used five years ago."),
+            (4.5, "A banking app, then a fitness app, each with a chat bubble.", "It has a chat box now. Your bank has one. Your running app has one."),
+            (12, "Me at the desk, from behind, the screen glowing.", "I build these for a living, so I\u{2019}ve had a front-row seat."),
+            (19, "Close on the keyboard: a prompt typed and deleted.", "And here\u{2019}s the thing nobody says out loud."),
+            (24, "A product roadmap on a whiteboard, a sticky note reading \u{201C}AI?\u{201D}", "Most of them weren\u{2019}t asked for. They were the easiest thing to ship."),
+            (33, "The chat box again, empty.", "So let\u{2019}s talk about what it\u{2019}s actually for."),
+        ]
+        for (i, l) in lines.prefix(upTo ?? lines.count).enumerated() {
+            var r = AVRow(id: "vo-\(i + 1)", picture: AVPicture(text: l.1, board: i == 0 ? .title : i == 2 ? .wide : .action), sound: AVSound(kind: .voice, speaker: "Narrator", text: l.2))
+            r.at = l.0; r.picture.pass = 1
+            s.rows.append(r)
+        }
+        s.pass = 1
+        return s
     }
 
     // MARK: Script

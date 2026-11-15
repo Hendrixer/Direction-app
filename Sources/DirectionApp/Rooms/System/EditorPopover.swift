@@ -110,6 +110,7 @@ struct EditorPopover: View {
         case .technique: "You gave it a video to learn from"
         case .script: "Your script is in"
         case .breakdown: "You OK\u{2019}d the script"
+        case .voiceOver: "You asked for a voice-over"
         }
     }
 

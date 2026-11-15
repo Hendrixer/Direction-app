@@ -98,6 +98,8 @@ public struct AVRow: Codable, Hashable, Sendable, Identifiable {
     public var hint: String?
     /// A film from a story: the part of the story this beat came from.
     public var story: String?
+    /// A voice-over written to a cut: where the line starts, in the cut's seconds.
+    public var at: Double?
     public var question: PrepQuestion?
     public init(id: String = newID("row"), section: String? = nil, picture: AVPicture = .init(), sound: AVSound, seconds: Double? = nil, hint: String? = nil, story: String? = nil) {
         self.id = id; self.section = section; self.picture = picture; self.sound = sound; self.hint = hint; self.story = story
@@ -112,9 +114,32 @@ public struct AVRow: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// What a film's A/V script was laid out from: a script, whose words are said as written, or a story, where
-/// the editor writes what we hear as well as what we see and nobody's words are written for them.
+/// the editor writes what we hear as well as what we see and nobody's words are written for them. A voice-over is
+/// written to a cut the film already has: the editor watches it and writes the words to record over it.
 public enum ScriptKind: String, Codable, Sendable {
-    case script, story
+    case script, story, voiceOver
+}
+
+/// What the director asked a voice-over to say, and the cut it's written to (specs/script.md › A voice-over).
+public struct VoiceOverAsk: Codable, Hashable, Sendable {
+    /// The director's words: what it should say, who it's for, how it should sound.
+    public var ask: String
+    /// The cut the editor watches; nil writes from the footage alone.
+    public var cutID: String?
+    public var cutName: String?
+    /// The edit revision that cut plays: the editor reads the timeline, frames and words at it, not the edit as it is now.
+    public var cutRevision: Int?
+    /// How long that cut runs, so the words fit it.
+    public var cutSeconds: Double?
+    public var askedAt: Double
+    public init(ask: String, cutID: String? = nil, cutName: String? = nil, cutRevision: Int? = nil, cutSeconds: Double? = nil, askedAt: Double = Date().timeIntervalSince1970) {
+        self.ask = ask; self.cutID = cutID; self.cutName = cutName; self.cutRevision = cutRevision; self.cutSeconds = cutSeconds; self.askedAt = askedAt
+    }
+    /// The longest ask the editor is given.
+    public static let longest = 4_000
+    public static func validAsk(_ text: String) -> Bool { let t = text.trimmingCharacters(in: .whitespacesAndNewlines); return !t.isEmpty && t.count <= longest }
+    /// About how many words fit, at 2.5 a second with room left for the picture to breathe.
+    public var wordsThatFit: Int? { cutSeconds.map { Int(($0 * 2.5 * 0.8 / 10).rounded()) * 10 } }
 }
 
 public struct AVSection: Codable, Hashable, Sendable, Identifiable {
@@ -161,6 +186,8 @@ public struct AVScript: Codable, Hashable, Sendable {
     /// What a story says around the beats the writer numbered (the idea, its rules, questions for the
     /// director), as written: the editor reads it with the beats, and it never becomes rows.
     public var storyNotes: String?
+    /// A voice-over: what the director asked for and the cut it's written to.
+    public var voiceOver: VoiceOverAsk?
     /// Every change counts up, so the breakdown knows when the script moved on after it.
     public var revision = 0
     /// Editor passes so far: 1 is the first picture column.
@@ -172,6 +199,19 @@ public struct AVScript: Codable, Hashable, Sendable {
 
     public var isOK: Bool { okAt != nil }
     public var isStory: Bool { kind == .story }
+    public var isVoiceOver: Bool { kind == .voiceOver }
+    /// A voice-over as it's read aloud: each line with where it starts in the cut, for recording.
+    public var forRecording: String {
+        var out: [String] = []
+        if let v = voiceOver { out.append("Voice-over\(v.cutName.map { " for \($0)" } ?? "")"); out.append("") }
+        for r in rows where !r.sound.text.isEmpty {
+            // A line the director added has no time until the editor gives it one.
+            guard let at = r.at else { out.append("      " + r.sound.text); continue }
+            let t = Int(at.rounded(.down))
+            out.append(String(format: "%d:%02d  ", t / 60, t % 60) + r.sound.text)
+        }
+        return out.joined(separator: "\n")
+    }
     /// Changed since the director OK'd it.
     public var changedSinceOK: Bool { okRevision.map { revision > $0 } ?? false }
     public var openNotes: [PrepNote] { notes.filter { $0.state == .written } }
