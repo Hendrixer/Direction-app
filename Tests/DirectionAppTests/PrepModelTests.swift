@@ -131,7 +131,7 @@ struct PrepModelTests {
         // Each place on the strip follows the last: nothing is left out, nothing overlaps.
         #expect(zip(strip, strip.dropFirst()).allSatisfy { abs($0.end - $1.start) < 0.001 })
         // Scene lookups never land on a passage as a scene: locking sees only scenes.
-        #expect(LockBar.lockable(strip).scenes.allSatisfy { !$0.passage })
+        #expect(LockBar.lockable(strip, scenes: m.sceneIDs).scenes.allSatisfy { !$0.passage })
     }
 
     /// A film started from its footage has no prep rooms; a script brought in brings them back.

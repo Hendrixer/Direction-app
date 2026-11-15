@@ -325,7 +325,9 @@ extension FilmModel {
     /// Start cutting while a read-back waits for your OK; Turn over N once you've written a note; Accept N while
     /// the editor's answers wait; Lock picture… once everything is accepted.
     var cutPrimary: PrimaryAction? {
-        if isPictureLocked || changes.reelOpen { return nil }
+        if changes.reelOpen { return nil }
+        // After lock the next step is always Finish; the sheet says why nothing here changes the edit.
+        if isPictureLocked { return looksBack ? nil : PrimaryAction(title: "Go to Finish", icon: "arrow.right", help: "Color, sound, captions and delivery") { self.go(.finish) } }
         if let t = notesTurnover {
             switch t.state {
             case .waiting:
@@ -363,9 +365,13 @@ extension FilmModel {
         !isPictureLocked && !cuts.isEmpty && toReview.isEmpty && reviewCut?.id == latestCut?.id && !reviewAnswers.isEmpty
             && readyNotes.isEmpty && draftNotes.isEmpty && notesTurnover == nil && comparingNoteID == nil && !changes.comparingCuts
     }
+    /// Dailies' scenes: the only places on the strip that lock.
+    var sceneIDs: Set<String> { Set(dailies.scenes.map(\.id)) }
+    /// A scene of this cut can be locked: a film whose takes are in no scene has nothing to lock but the picture.
+    var hasLockableScenes: Bool { stripScenes.contains { !$0.passage && sceneIDs.contains($0.id) } }
     /// The scene tiles in place of the cut and its strip, only once the director opens them with Lock scenes. The room
     /// used to switch on its own when the last answer was accepted, which read as the cut breaking (2026-11-12).
-    var showsLockBar: Bool { changes.lockingScenes && canLockScenes }
+    var showsLockBar: Bool { changes.lockingScenes && canLockScenes && hasLockableScenes }
 
     /// ⌘L: the lock bar's selected scene, else the scene under the playhead.
     func toggleLockOnCurrentScene() {

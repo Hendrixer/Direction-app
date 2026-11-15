@@ -64,7 +64,7 @@ struct AnsweredHeader: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Answered in \(cut), \(model.answersLine)")
             // Everything accepted: the scene tiles, to lock what's right, when the director wants them.
-            if model.canLockScenes && !model.changes.lockingScenes {
+            if model.canLockScenes && model.hasLockableScenes && !model.changes.lockingScenes {
                 Button { withAnimation(gateAnimation(Gate.Motion.glide)) { model.changes.lockingScenes = true } } label: { Label("Lock scenes", systemImage: "lock") }
                     .buttonStyle(.gate(.ghost, .small)).padding(.trailing, 10)
                     .help("Lock the scenes that are right, so the editor won\u{2019}t recut them")

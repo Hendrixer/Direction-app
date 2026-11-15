@@ -34,7 +34,9 @@ struct LockStage: View {
     private var help: String {
         let scenes = model.scenes
         let locked = scenes.filter(\.locked).count
+        let loose = model.stripScenes.contains { !$0.passage && !model.sceneIDs.contains($0.id) }
         return "\(locked) of \(scenes.count) locked. Lock a scene when its cut is right; the editor won\u{2019}t recut it. Color and sound stay open."
+            + (loose ? " Shots from takes in no scene lock with the picture." : "")
     }
 }
 
@@ -45,7 +47,7 @@ struct LockBar: View {
     private var state: ChangesState { model.changes }
 
     var body: some View {
-        let (scenes, time) = Self.lockable(model.stripScenes)
+        let (scenes, time) = Self.lockable(model.stripScenes, scenes: model.sceneIDs)
         GeometryReader { g in
             let total = max(0.001, time.values.reduce(0, +))
             let usable = max(1, g.size.width - CGFloat(max(0, scenes.count - 1)) * 3)
@@ -70,10 +72,12 @@ struct LockBar: View {
     }
 
     /// One tile per scene, however often the cut comes back to it (scenes are what lock), at its first place
-    /// and sized by all its time in the cut. A passage with no story under it isn't a scene.
-    static func lockable(_ strip: [StripScene]) -> (scenes: [StripScene], time: [String: Double]) {
+    /// and sized by all its time in the cut. A passage with no story under it isn't a scene, and neither is a
+    /// shot from a take in no scene: its place on the strip is named for the clip, and locking it asked for a
+    /// scene that isn't there ("Scene not found", a tester's assembly of 2026-11-14).
+    static func lockable(_ strip: [StripScene], scenes ids: Set<String>) -> (scenes: [StripScene], time: [String: Double]) {
         var scenes: [StripScene] = [], time: [String: Double] = [:]
-        for s in strip where !s.passage {
+        for s in strip where !s.passage && ids.contains(s.id) {
             if time[s.id] == nil { scenes.append(s) }
             time[s.id, default: 0] += s.duration
         }
@@ -128,7 +132,7 @@ struct LockBar: View {
     private func select(_ s: StripScene) {
         let shift = NSEvent.modifierFlags.contains(.shift)
         if shift, let anchor = state.lockAnchorID, !model.isPictureLocked {
-            let scenes = Self.lockable(model.stripScenes).scenes
+            let scenes = Self.lockable(model.stripScenes, scenes: model.sceneIDs).scenes
             if let a = scenes.firstIndex(where: { $0.id == anchor }), let b = scenes.firstIndex(where: { $0.id == s.id }) {
                 for scene in scenes[min(a, b)...max(a, b)] where !isLocked(scene) { setLock(scene.id, true) }
             }

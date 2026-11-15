@@ -119,8 +119,8 @@ enum EditorJobs {
             let folder = URL(fileURLWithPath: run.learnFolder ?? store.url.appendingPathComponent("Editor/Learn").path)
             v["video"] = run.learnVideo ?? folder.appendingPathComponent("video.mp4").path
             v["packet"] = folder.path
-            let info = (try? Data(contentsOf: folder.appendingPathComponent("video.info.json"))).flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) }
-            v["videoSource"] = info.map { i in "It\u{2019}s \u{201C}\(i["title"].string ?? "untitled")\u{201D} by \(i["channel"].string ?? i["uploader"].string ?? "someone"), \(i["webpage_url"].string ?? ""). Its description is in `video.info.json`." } ?? "The director gave you the file."
+            let info = VideoInfo.read(in: folder)
+            v["videoSource"] = info.map { i in "It\u{2019}s \u{201C}\(i.title ?? "untitled")\u{201D} by \(i.channel ?? i.uploader ?? "someone"), \(i.webpage_url ?? ""). Its description is in `video.info.json`." } ?? "The director gave you the file."
             v["techniquesFolder"] = SharedSettings.techniquesFolder.path
         case .script, .breakdown:
             v.merge(try prepValues(run.job, store: store)) { _, new in new }

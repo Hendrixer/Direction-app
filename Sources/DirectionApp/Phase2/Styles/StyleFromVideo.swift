@@ -39,10 +39,14 @@ enum ReferenceVideo {
     static func study(_ r: BriefReference, film: URL) -> VideoStudy? { VideoStudy.read(in: folder(r.id, film: film)) }
 
     /// What the page said about a downloaded video: its title, who made it, and what it says about the music.
-    static func about(_ folder: URL) -> (title: String?, by: String?, credits: [String]) {
-        guard let data = try? Data(contentsOf: folder.appendingPathComponent("video.info.json")), let info = try? JSONDecoder().decode(JSONValue.self, from: data) else { return (nil, nil, []) }
-        let artist = info["artist"].string ?? info["artists"].array?.compactMap(\.string).joined(separator: ", ")
-        return (info["title"].string, info["channel"].string ?? info["uploader"].string, VideoStudy.musicCredits(description: info["description"].string, track: info["track"].string, artist: artist))
+    /// Read off the main thread: yt-dlp's info file lists every format it saw and runs to megabytes, and reading
+    /// it whole on the main thread held the app for over 5 s (a tester's report, 2026-11-14).
+    static func about(_ folder: URL) async -> (title: String?, by: String?, credits: [String]) {
+        await Task.detached(priority: .userInitiated) {
+            guard let info = VideoInfo.read(in: folder) else { return (nil, nil, []) }
+            let artist = info.artist ?? info.artists?.joined(separator: ", ")
+            return (info.title, info.channel ?? info.uploader, VideoStudy.musicCredits(description: info.description, track: info.track, artist: artist))
+        }.value
     }
 
     /// Fetches a link into `folder`, or puts a file there by a link to it (the original stays where it is),
@@ -87,7 +91,7 @@ extension FilmModel {
             defer { studyingReferences.remove(r.id) }
             do {
                 let (file, downloaded) = try await ReferenceVideo.fetch(video, into: folder)
-                let about = ReferenceVideo.about(folder)
+                let about = await ReferenceVideo.about(folder)
                 _ = try await VideoStudying.study(video: file, folder: folder, cacheDirectory: runtime.cacheDirectory, title: about.title ?? r.title, by: about.by, link: downloaded ? path : URL(fileURLWithPath: path).lastPathComponent, credits: about.credits)
                 ReferenceVideo.removeVideo(in: folder)
             } catch {
@@ -104,6 +108,7 @@ extension FilmModel {
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let one = videos.count == 1
         learning = one ? "Getting the video ready" : "Getting the videos ready"
+        styleMaking = StyleMaking(videos: videos, ask: ask, name: videos.first?.name ?? "")
         toast = Toast(title: learning!, detail: "Direction is fetching \(one ? "it" : "them") and studying \(one ? "it" : "each one") on this Mac. The editor starts when \(one ? "it\u{2019}s" : "they\u{2019}re") ready.", editor: true)
         Task { @MainActor in
             var folders: [URL] = []
@@ -114,78 +119,117 @@ extension FilmModel {
                     learning = v.file == nil ? (one ? "Downloading the video" : "Downloading video \(i + 1) of \(videos.count)") : (one ? "Studying the video" : "Studying video \(i + 1) of \(videos.count)")
                     let (file, downloaded) = try await ReferenceVideo.fetch(v, into: folder)
                     learning = one ? "Studying the video" : "Studying video \(i + 1) of \(videos.count)"
-                    let about = ReferenceVideo.about(folder)
+                    let about = await ReferenceVideo.about(folder)
                     _ = try await VideoStudying.study(video: file, folder: folder, cacheDirectory: runtime.cacheDirectory, title: about.title ?? v.name, by: about.by, link: downloaded ? v.link.trimmingCharacters(in: .whitespacesAndNewlines) : v.file?.lastPathComponent, credits: about.credits)
                 }
                 learning = nil
                 let request = ask.isEmpty ? "Make a style from \(one ? "this video" : "these videos"): how \(one ? "it\u{2019}s" : "they\u{2019}re") paced, framed, captioned and how \(one ? "it sounds" : "they sound")." : ask
                 if runs.makeStyle(self, request: request, fromFilm: false, studies: folders) {
+                    styleMaking?.runID = runs.runs.last { $0.job == .style }?.id
                     toast = Toast(title: "Making a style", detail: "The editor is watching \(one ? "the video" : "the videos") now. The style goes in your styles when it\u{2019}s done, and the downloads go.", editor: true)
                 } else {
-                    error = "Direction doesn\u{2019}t start the editor here. Ask your own session to make a style from the studies in \(folders.map(\.path).joined(separator: ", ")) (the make-style skill)."
+                    let said = "Direction doesn\u{2019}t start the editor here. Ask your own session to make a style from the studies in \(folders.map(\.path).joined(separator: ", ")) (the make-style skill)."
+                    styleMaking?.failed = said; styleMaking?.retryable = false
+                    error = said
                 }
             } catch {
                 learning = nil
                 for f in folders { try? FileManager.default.removeItem(at: f) }
-                self.error = (error as? DirectionError)?.message ?? error.localizedDescription
+                let said = (error as? DirectionError)?.message ?? error.localizedDescription
+                styleMaking?.failed = said
+                self.error = said
             }
         }
     }
 }
 
-/// New Style from a Video: up to three videos (a link or a file each) and what you like about them.
-struct StyleFromVideoSheet: View {
-    var model: FilmModel
-    var done: () -> Void
-    @State private var videos: [StyleVideo]
-    @State private var ask: String
+/// A style being made from videos, for the row that shows it in Settings › Styles while Direction fetches
+/// and studies them and the editor writes it, and says why when it couldn't be made (a tester didn't know
+/// whether anything was happening, 2026-11-14).
+struct StyleMaking: Equatable {
+    var videos: [StyleVideo]
+    var ask: String
+    var name: String
+    var runID: String?
+    var failed: String?
+    /// Try Again could help (not when Direction doesn't start the editor at all).
+    var retryable = true
+}
 
-    init(model: FilmModel, videos: [StyleVideo] = [], ask: String = "", done: @escaping () -> Void) {
-        self.model = model; self.done = done
-        _videos = State(initialValue: videos.isEmpty ? [StyleVideo()] : videos)
-        _ask = State(initialValue: ask)
+/// What Settings › Styles shows about a style on its way.
+enum StyleProgress: Equatable {
+    case making(name: String, step: String)
+    case asks(name: String)
+    case failed(name: String, reason: String)
+}
+
+extension FilmModel {
+    /// Fetching, studying, the editor writing, a question, or why it stopped; nil once the style is saved or
+    /// the row was put away.
+    var styleProgress: StyleProgress? {
+        guard let m = styleMaking else { return nil }
+        let name = m.name.isEmpty ? "the video" : "\u{201C}\(m.name)\u{201D}"
+        if let failed = m.failed { return .failed(name: name, reason: failed) }
+        guard let id = m.runID else { return .making(name: name, step: learning ?? "Getting the video ready") }
+        guard let run = runs.runs.first(where: { $0.id == id }) else { return .making(name: name, step: "The editor is starting") }
+        switch run.state {
+        case .done: return nil
+        case .waitingForYou: return .asks(name: name)
+        case .failed, .stopped: return .failed(name: name, reason: run.summary.map { "The editor stopped before saving it: \($0)" } ?? "The editor stopped before saving it.")
+        case .paused: return .making(name: name, step: "Paused")
+        case .queued: return .making(name: name, step: "Waiting for the editor")
+        case .starting, .working: return .making(name: name, step: "The editor is writing it")
+        }
     }
 
-    private var chosen: [StyleVideo] { videos.filter(\.ready) }
-    private var ready: Bool { !chosen.isEmpty && videos.allSatisfy { $0.ready || ($0.link.isEmpty && $0.file == nil) } }
+    /// Try Again. When the editor stopped, its run goes on with the studies it kept (nothing is fetched again);
+    /// a run that was stopped gets a new one on the same studies. When the videos never got ready, they're
+    /// fetched again from the start (that attempt left nothing behind).
+    func retryStyle() {
+        guard let m = styleMaking, m.retryable, learning == nil else { return }
+        if let id = m.runID, let store, let run = runs.runs.first(where: { $0.id == id }), let studies = run.studies, !studies.isEmpty {
+            styleMaking?.failed = nil
+            if run.state == .failed {
+                EditorRunner.shared.launch(run, store: store, continuation: EditorJobs.continuation("Try again. Continue where you stopped.", job: .style))
+                refresh(force: true)
+            } else if runs.makeStyle(self, request: run.request ?? m.ask, fromFilm: false, studies: studies.map { URL(fileURLWithPath: $0) }) {
+                styleMaking?.runID = runs.runs.last { $0.job == .style }?.id
+            } else {
+                styleMaking?.failed = "Direction doesn\u{2019}t start the editor here. Ask your own session to make the style (the make-style skill)."
+                styleMaking?.retryable = false
+            }
+            return
+        }
+        styleMaking = nil
+        makeStyle(from: m.videos, ask: m.ask)
+    }
+}
+
+/// The videos for a style (a link or a file each, up to three) and what you like about them: the same fields
+/// in the film's sheet and in Settings › Styles › New Style.
+struct StyleVideoFields: View {
+    @Binding var videos: [StyleVideo]
+    @Binding var ask: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Make a style from a video").font(Gate.Font.title).foregroundStyle(Gate.Text.primary)
-                Text("Give the editor a video you\u{2019}d like yours to feel like. Direction measures how it\u{2019}s cut, framed, captioned and mixed; the editor turns that into a style you can use on every film like it. Two or three videos by the same person make a truer style.")
-                    .font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(videos.count == 1 ? "The video" : "The videos").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Gate.Text.primary)
-                    ForEach($videos) { $v in row($v) }
-                    if videos.count < 3 {
-                        Button { videos.append(StyleVideo()) } label: { Label("Add Another Video", systemImage: "plus") }.buttonStyle(.gate(.ghost, .small))
-                    }
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(videos.count == 1 ? "The video" : "The videos").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Gate.Text.primary)
+                ForEach($videos) { $v in row($v) }
+                if videos.count < 3 {
+                    Button { videos.append(StyleVideo()) } label: { Label("Add Another Video", systemImage: "plus") }.buttonStyle(.gate(.ghost, .small))
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("What you like about it").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Gate.Text.primary)
-                    GateTextArea(text: $ask, placeholder: "How fast it moves, the yellow captions three words at a time, the punch-in on every joke.", minHeight: 64)
-                }
-                Text("Videos from links are downloaded to study them, with yt-dlp: Direction gets it the first time and keeps it up to date. Everything fetched is removed once the style is saved; the style keeps the link, what was measured and a few stills.")
-                    .font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(20)
-            HStack(spacing: 8) {
-                Spacer()
-                Button("Cancel", action: done).buttonStyle(.gate).keyboardShortcut(.cancelAction)
-                Button("Make Style") {
-                    model.makeStyle(from: chosen, ask: ask.trimmingCharacters(in: .whitespacesAndNewlines))
-                    done()
-                }
-                .buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command).disabled(!ready || model.learning != nil)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("What you like about it").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Gate.Text.primary)
+                GateTextArea(text: $ask, placeholder: "How fast it moves, the yellow captions three words at a time, the punch-in on every joke.", minHeight: 64)
             }
-            .padding(.horizontal, 20).padding(.vertical, 14)
-            .overlay(alignment: .top) { SystemHairline() }
         }
-        .frame(width: 540)
-        .background(Gate.Surface.ground)
-        .preferredColorScheme(.dark)
     }
+
+    static let downloadNote = "Videos from links are downloaded to study them, with yt-dlp: Direction gets it the first time and keeps it up to date. Everything fetched is removed once the style is saved; the style keeps the link, what was measured and a few stills."
+    static func chosen(_ videos: [StyleVideo]) -> [StyleVideo] { videos.filter(\.ready) }
+    static func ready(_ videos: [StyleVideo]) -> Bool { !chosen(videos).isEmpty && videos.allSatisfy { $0.ready || ($0.link.isEmpty && $0.file == nil) } }
 
     @ViewBuilder private func row(_ v: Binding<StyleVideo>) -> some View {
         HStack(spacing: 8) {
@@ -210,5 +254,50 @@ struct StyleFromVideoSheet: View {
         let panel = NSOpenPanel(); panel.title = "Choose a video to learn from"; panel.prompt = "Choose"
         panel.allowedContentTypes = [.movie]; panel.canChooseDirectories = false
         if panel.runModal() == .OK { v.wrappedValue.file = panel.url }
+    }
+}
+
+/// New Style from a Video: up to three videos (a link or a file each) and what you like about them.
+struct StyleFromVideoSheet: View {
+    var model: FilmModel
+    var done: () -> Void
+    @State private var videos: [StyleVideo]
+    @State private var ask: String
+
+    init(model: FilmModel, videos: [StyleVideo] = [], ask: String = "", done: @escaping () -> Void) {
+        self.model = model; self.done = done
+        _videos = State(initialValue: videos.isEmpty ? [StyleVideo()] : videos)
+        _ask = State(initialValue: ask)
+    }
+
+    private var chosen: [StyleVideo] { StyleVideoFields.chosen(videos) }
+    private var ready: Bool { StyleVideoFields.ready(videos) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Make a style from a video").font(Gate.Font.title).foregroundStyle(Gate.Text.primary)
+                Text("Give the editor a video you\u{2019}d like yours to feel like. Direction measures how it\u{2019}s cut, framed, captioned and mixed; the editor turns that into a style you can use on every film like it. Two or three videos by the same person make a truer style.")
+                    .font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+                StyleVideoFields(videos: $videos, ask: $ask)
+                Text(StyleVideoFields.downloadNote)
+                    .font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(20)
+            HStack(spacing: 8) {
+                Spacer()
+                Button("Cancel", action: done).buttonStyle(.gate).keyboardShortcut(.cancelAction)
+                Button("Make Style") {
+                    model.makeStyle(from: chosen, ask: ask.trimmingCharacters(in: .whitespacesAndNewlines))
+                    done()
+                }
+                .buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command).disabled(!ready || model.learning != nil)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 14)
+            .overlay(alignment: .top) { SystemHairline() }
+        }
+        .frame(width: 540)
+        .background(Gate.Surface.ground)
+        .preferredColorScheme(.dark)
     }
 }

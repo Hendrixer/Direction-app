@@ -29,6 +29,10 @@ struct MacFacts: Equatable, Sendable {
     var freeBytes: Int64
     var volume: String
     var mlxVLM: Bool
+    /// Versions this Mac's mlx-vlm is too old to load (by detail id).
+    var mlxVLMTooOld: Set<String> = []
+    /// How to update it, worked out with the rest (it finds the Python, which can take a moment).
+    var mlxVLMUpdate = "uv tool upgrade mlx-vlm"
     /// Looking-at-footage versions already downloaded, by id.
     var downloaded: Set<String>
     var hasOpenRouterKey: Bool
@@ -45,7 +49,7 @@ struct MacFacts: Equatable, Sendable {
             var arm: Int32 = 0, size = MemoryLayout<Int32>.size
             let appleSilicon = sysctlbyname("hw.optional.arm64", &arm, &size, nil, 0) == 0 && arm == 1
             return MacFacts(chip: sysctl("machdep.cpu.brand_string") ?? "This Mac", memory: ProcessInfo.processInfo.physicalMemory, appleSilicon: appleSilicon,
-                            freeBytes: VisionHelper.freeBytes(), volume: VisionHelper.volumeName(), mlxVLM: VisionHelper.python() != nil,
+                            freeBytes: VisionHelper.freeBytes(), volume: VisionHelper.volumeName(), mlxVLM: VisionHelper.python() != nil, mlxVLMTooOld: Set(SharedSettings.lookDetails.filter { VisionHelper.python() != nil && !VisionHelper.supports($0) }.map(\.id)), mlxVLMUpdate: VisionHelper.updateCommand,
                             downloaded: Set(SharedSettings.lookDetails.filter { VisionHelper.isDownloaded($0.repo) }.map(\.id)), hasOpenRouterKey: OpenRouter.Key.read() != nil)
         }.value
     }
@@ -65,7 +69,12 @@ struct EngineAdvice: Equatable {
     /// What the advice needs that isn't on this Mac: name and install command.
     var missing: [Missing]
 
-    struct Missing: Equatable { var name: String; var why: String; var command: String }
+    struct Missing: Equatable {
+        var name: String; var why: String; var command: String
+        /// Installed but too old: "needs an update", not "isn't installed".
+        var update = false
+        var label: String { update ? "\(name) needs an update" : "\(name) isn\u{2019}t installed" }
+    }
 
     /// Looking at footage: the best local version that fits this Mac's memory and disk (Best is
     /// faster than Standard where it fits, footage-index.md › Speed). OpenRouter only where nothing
@@ -81,6 +90,9 @@ struct EngineAdvice: Equatable {
             else if f.hasOpenRouterKey { engine = .openRouter }
             else { detail = fits.last?.id ?? "quick" }
             if engine == .thisMac, !f.mlxVLM { missing.append(Missing(name: "mlx-vlm", why: "Looking at footage on this Mac needs it.", command: "uv tool install mlx-vlm")) }
+            else if engine == .thisMac, let d = detail, f.mlxVLMTooOld.contains(d) {
+                missing.append(Missing(name: "mlx-vlm", why: "It\u{2019}s too old to look with \(SharedSettings.lookDetails.first { $0.id == d }?.name ?? d).", command: f.mlxVLMUpdate, update: true))
+            }
         } else {
             engine = .openRouter
         }
@@ -119,7 +131,7 @@ struct ThisMacGroup: View {
                 let advice = EngineAdvice.advise(facts, editor: editorNow, installed: Set(EditorProgram.allCases.filter { programs.install($0) != nil }))
                 SettingsRow(label: facts.chip, detail: "\(facts.memory >> 30) GB memory \u{00B7} \(SystemSupport.bytes(facts.freeBytes)) free on \(facts.volume)", first: true) { EmptyView() }
                 ForEach(advice.missing, id: \.name) { m in
-                    SettingsRow(label: "\(m.name) isn\u{2019}t installed", detail: m.why) {
+                    SettingsRow(label: m.label, detail: m.why) {
                         Button("Copy Command") { SystemSupport.copy(m.command) }.buttonStyle(.gate(.normal))
                     }
                 }
@@ -129,6 +141,11 @@ struct ThisMacGroup: View {
             }
         }
         .task { facts = preview ? .preview : await MacFacts.read() }
+        // Back from Terminal (mlx-vlm installed or updated): look again, as Looking at footage does.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            guard !preview else { return }
+            Task { VisionHelper.forget(); facts = await MacFacts.read() }
+        }
     }
 
     private func recommendedRow(_ a: EngineAdvice) -> some View {

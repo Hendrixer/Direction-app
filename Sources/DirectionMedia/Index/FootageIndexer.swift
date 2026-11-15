@@ -47,6 +47,7 @@ public enum FootageIndexer {
             switch VisionHelper.status(detail) {
             case .noPython: return (nil, "mlx-vlm isn't installed. Install it in Terminal with uv tool install mlx-vlm.", nil)
             case .needsMemory: return (nil, "\(detail.name) needs \(detail.minimumMemory >> 30) GB of memory or more.", nil)
+            case .outdated: return (nil, VisionHelper.outdatedMessage(detail.name), nil)
             case .notDownloaded:
                 guard VisionHelper.hasRoom(for: detail) else {
                     return (nil, "Only \(ByteCountFormatter.string(fromByteCount: VisionHelper.freeBytes(), countStyle: .file)) free on \(VisionHelper.volumeName()). \(detail.name) needs \(ByteCountFormatter.string(fromByteCount: detail.bytes, countStyle: .file)).", nil)
@@ -151,7 +152,7 @@ public enum FootageIndexer {
                     catch is CancellationError { first.cancel(); throw CancellationError() }
                     catch {
                         if Task.isCancelled { first.cancel(); throw CancellationError() }
-                        if let e = error as? DirectionError, ["vision_helper_failed", "vision_helper_missing", "mlx_vlm_missing", "no_openrouter_key"].contains(e.code) || e.message.contains("(401)") { broken = e.message }
+                        if let e = error as? DirectionError, ["vision_helper_failed", "vision_helper_missing", "mlx_vlm_missing", "mlx_vlm_outdated", "no_openrouter_key"].contains(e.code) || e.message.contains("(401)") { broken = e.message }
                         try? skip(asset, error.localizedDescription, store: store)
                     }
                 }

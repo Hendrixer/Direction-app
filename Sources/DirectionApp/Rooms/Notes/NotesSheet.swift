@@ -206,7 +206,10 @@ struct NoteList: View {
     var body: some View {
         let answers = model.sheetAnswers, notes = model.sheetNotesBelow
         let answered = !model.reviewAnswers.isEmpty
-        if !answered && notes.isEmpty {
+        let locked = model.isPictureLocked && !model.looksBack
+        if locked && !answered && notes.isEmpty {
+            PictureLockedNotice(model: model).frame(maxHeight: .infinity, alignment: .top)
+        } else if !answered && notes.isEmpty {
             EmptyStateView(title: "No notes on \(model.notesCutName) yet.", message: "Press N to mark a moment, or point at something with the tools under the picture.") {
                 Button("Watch \(model.notesCutName)") { model.watchThrough() }.buttonStyle(.gate(.ghost)).disabled(!model.isEnabled(.cut))
             }
@@ -215,6 +218,7 @@ struct NoteList: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
+                        if locked { PictureLockedNotice(model: model) }
                         if answered {
                             AnsweredHeader(model: model)
                             ForEach(answers) { c in
@@ -237,6 +241,33 @@ struct NoteList: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Notes on \(model.notesCutName)")
         }
+    }
+}
+
+/// At the top of the sheet once picture is locked: what that means here and the two ways on, said once
+/// (finish.md › The Cut room after lock). The cut still plays; the tools to make a note are gone.
+struct PictureLockedNotice: View {
+    var model: FilmModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: "lock.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Gate.Text.secondary)
+                Text("Picture is locked").font(.system(size: 13, weight: .semibold)).foregroundStyle(Gate.Text.primary)
+            }
+            Text("The edit is final: nothing in it moves, so there are no notes to write here. Color, sound, captions and delivery are in Finish.")
+                .font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).cssLineHeight(1.45, size: 12).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Text("Want a change to the edit?").font(Gate.Font.small).foregroundStyle(Gate.Text.tertiary)
+                Button("Unlock Picture\u{2026}") { if !model.isPreview { FilmActions(model).confirmUnlockPicture() } }
+                    .buttonStyle(.gate(.normal, .small))
+            }
+            .padding(.top, 2)
+        }
+        .padding(.horizontal, 22).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .hairlineBorder(.bottom)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Picture is locked")
     }
 }
 

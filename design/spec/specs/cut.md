@@ -53,7 +53,8 @@ The titlebar's steel button follows what's waiting, in this order:
 4. Once you've written a note: **Turn over N**.
 5. While answers wait: **Accept N**, counting the answers that can be accepted at once (an answer with two options waits for your pick). It asks first: "Accept 6 answers? They stay in Cut 4."
 6. Once every answer is accepted and nothing new is written: **Lock picture…** (34).
-7. Otherwise **Turn over**, disabled, with the tooltip "Write a note first".
+7. Once picture is locked: **Go to Finish** (finish.md › The Cut room after lock).
+8. Otherwise **Turn over**, disabled, with the tooltip "Write a note first".
 
 There's no steel button while you watch through or play changes. Before the assembly has been watched, every room's button is **Watch the assembly** (`start.md` › 06).
 

@@ -33,7 +33,34 @@ public enum VisionHelper {
     nonisolated(unsafe) private static var found: Found?
     private static let lock = NSLock()
     /// Settings looks again after the director installs mlx-vlm.
-    public static func forget() { lock.withLock { found = nil } }
+    public static func forget() { lock.withLock { found = nil; supported = [:] } }
+
+    /// Whether this Mac's mlx-vlm knows the version: an older one has no module for its model type and
+    /// stops with "Model type qwen3_vl not supported" (a tester's mlx-vlm, 2026-11-14). Asked once per kind.
+    public static func supports(_ detail: SharedSettings.LookDetail) -> Bool {
+        guard let python = python() else { return false }
+        if let known = lock.withLock({ supported[detail.modelType] }) { return known }
+        let p = Process(); p.executableURL = python
+        p.arguments = ["-I", "-c", "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('mlx_vlm.models.' + sys.argv[1]) else 3)", detail.modelType]
+        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        var ok = true
+        do { try p.run(); p.waitUntilExit(); ok = p.terminationStatus != 3 } catch { ok = true }
+        lock.withLock { supported[detail.modelType] = ok }
+        return ok
+    }
+    nonisolated(unsafe) private static var supported: [String: Bool] = [:]
+
+    /// How to bring this Mac's mlx-vlm up to date: uv's command for uv's copy, pip's for any other Python.
+    public static var updateCommand: String {
+        guard let python = python(), !python.path.contains("/uv/tools/mlx-vlm/") else { return "uv tool upgrade mlx-vlm" }
+        return "\(python.path) -m pip install --upgrade mlx-vlm"
+    }
+    /// What a director reads when their mlx-vlm is too old for the version chosen.
+    public static func outdatedMessage(_ name: String) -> String {
+        "This Mac\u{2019}s mlx-vlm is too old for \(name). Update it in Terminal with \(updateCommand)."
+    }
+    /// mlx-vlm's own words when it doesn't know a version's model type.
+    public static func isOutdated(_ said: String) -> Bool { said.contains("Model type") && said.contains("not supported") }
 
     private static func canImport(_ python: URL) -> Bool {
         let p = Process(); p.executableURL = python; p.arguments = ["-I", "-c", "import mlx_vlm"]
@@ -153,10 +180,13 @@ public enum VisionHelper {
         case notDownloaded
         case downloaded
         case needsMemory
+        /// mlx-vlm is installed but older than the version: it needs an update.
+        case outdated
     }
     public static func status(_ detail: SharedSettings.LookDetail) -> Status {
         guard python() != nil else { return .noPython }
         if ProcessInfo.processInfo.physicalMemory < detail.minimumMemory { return .needsMemory }
+        if !supports(detail) { return .outdated }
         return isDownloaded(detail.repo) ? .downloaded : .notDownloaded
     }
 

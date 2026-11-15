@@ -25,7 +25,7 @@ public enum TutorialStudy {
         guard ["http", "https"].contains(link.scheme?.lowercased() ?? "") else { throw DirectionError("bad_link", "That isn't a link to a video.") }
         let (tool, own) = try await VideoDownloader.shared.ready()
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        var arguments = ["-q", "--no-warnings", "--no-playlist", "-f", "bv*[height<=720][ext=mp4]+ba/b[height<=720]/bv*[height<=720]+ba", "--merge-output-format", "mp4",
+        var arguments = ["-q", "--no-warnings", "--no-playlist", "-f", format, "--merge-output-format", "mp4",
                          "--write-info-json", "-o", folder.appendingPathComponent("video.%(ext)s").path]
         if let ffmpeg = WhisperTranscriber.ffmpeg() { arguments += ["--ffmpeg-location", ffmpeg.deletingLastPathComponent().path] }
         // YouTube wants a JavaScript runtime: yt-dlp finds Deno itself; Node only when it's told (and only a
@@ -41,6 +41,12 @@ public enum TutorialStudy {
         }
         return video
     }
+
+    /// H.264 with AAC sound first, the pair every Mac opens. Asking only for an mp4 let YouTube send AV1 or VP9
+    /// picture with Opus sound merged into it, which AVFoundation can refuse ("Couldn't read a frame of
+    /// video.mp4: Cannot Open", a tester's report, 2026-11-14). Then any 720p mp4, then whatever there is.
+    public static let format = "bv*[height<=720][vcodec^=avc1]+ba[acodec^=mp4a]/b[height<=720][vcodec^=avc1][acodec^=mp4a]"
+        + "/bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba/b"
 
     /// A JavaScript runtime for yt-dlp: Deno, which it looks for itself, or Node.
     enum JavaScriptRuntime {

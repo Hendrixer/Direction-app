@@ -72,6 +72,8 @@ final class FilmModel {
     var sheet: ActiveSheet?
     /// What Direction is doing to get a video ready to learn from (a technique, a style), while it does.
     var learning: String?
+    /// A style being made from videos, from fetching them to the editor saving it (Settings › Styles shows it).
+    var styleMaking: StyleMaking?
     /// Brief references being studied, and why one couldn't be (styles.md › In the brief).
     var studyingReferences: Set<String> = []
     var referenceProblems: [String: String] = [:]
@@ -707,7 +709,7 @@ final class FilmModel {
 
     @discardableResult
     func addNote(text: String, kind: NoteKind? = nil, time: Double? = nil, range: ClosedRange<Double>? = nil, region: CGRect? = nil, sceneID: String? = nil, scriptAction: ScriptAction? = nil, state: NoteState = .written) -> ReviewComment? {
-        guard let store, let p = displayed ?? project else { return nil }
+        guard !refusesNotesWhileLocked(), let store, let p = displayed ?? project else { return nil }
         do {
             let r = range.map { MediaRange(start: $0.lowerBound, end: $0.upperBound) }
             let mt = r == nil ? time.map { MediaTime(seconds: $0) } : nil
@@ -716,6 +718,14 @@ final class FilmModel {
             refresh(force: true)
             return c
         } catch { self.error = error.localizedDescription; return nil }
+    }
+    /// A locked picture takes no notes: nothing could carry them to the editor, so a note would only sit there
+    /// (a tester wrote some and didn't know what had happened, 2026-11-14). Says so once, with the way out.
+    func refusesNotesWhileLocked() -> Bool {
+        guard isPictureLocked else { return false }
+        toast = Toast(title: "Picture is locked", detail: "The edit is final, so there\u{2019}s nothing to send a note to. Unlock picture to ask for changes.",
+                      actionTitle: "Unlock Picture\u{2026}", run: { [weak self] in if let self { FilmActions(self).confirmUnlockPicture() } })
+        return true
     }
     func dropNote(_ id: String) { perform { try $0.dropNote(id: id) }; registerUndo("Drop Note") { $0.restoreNote(id) } }
     func restoreNote(_ id: String) { perform { try $0.restoreNote(id: id) }; registerUndo("Restore Note") { $0.dropNote(id) } }
@@ -728,7 +738,10 @@ final class FilmModel {
         cancelDrawing()
         if let t = noteTime(c) { pause(); seek(t) }
     }
-    func acceptOutside(_ id: String, text: String? = nil) { perform { try $0.acceptOutside(id: id, text: text) } }
+    func acceptOutside(_ id: String, text: String? = nil) {
+        guard !refusesNotesWhileLocked() else { return }
+        perform { try $0.acceptOutside(id: id, text: text) }
+    }
     func declineOutside(_ id: String) { perform { try $0.declineOutside(id: id) } }
 
     // MARK: Turnover and read-back
@@ -814,6 +827,8 @@ final class FilmModel {
     /// Use This Take's Sound. The cut changes through the editor like any other note: where it plays
     /// the group's takes with another take's sound, a sound note for the next turnover asks for this one.
     func useSyncSound(_ assetID: String) {
+        // Its note is how the cut changes: with the picture locked, nothing changes, the sound choice included.
+        guard !refusesNotesWhileLocked() else { return }
         let before = dailies.syncGroup(for: assetID)?.soundAssetID
         perform { try $0.setSyncSound(assetID: assetID) }
         guard before != assetID, let g = dailies.syncGroup(for: assetID), g.soundAssetID == assetID, let range = soundNoteRange(g, sound: assetID) else { return }

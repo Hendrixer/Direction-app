@@ -68,14 +68,15 @@ struct FilmTransport: View {
             // A notice showing its passage on the strip shows it, read-only; the pointer on the strip puts the
             // selected note's stretch back, to pull longer or shorter or move. Mark a stretch (or ⌥- or ⇧-drag)
             // draws a new one, and letting go makes its note.
-            let showing = model.notesUI.stripHighlight != nil, notes = showsMarkButton && !model.looksBack
+            let showing = model.notesUI.stripHighlight != nil, notes = showsMarkButton && !model.looksBack && !model.isPictureLocked
             SceneStrip(scenes: model.stripScenes, duration: model.duration, playhead: model.position, marks: marks ?? model.noteMarks, range: model.stripRange, tall: tall,
                        onSeek: { model.pause(); model.seek($0) },
                        onRange: showing || !notes ? nil : { a, b in model.rangeSelection = a...b },
                        rangeEditable: model.drawingStretch || model.stretchEditable, drawsOnDrag: model.drawingStretch,
                        onRangeEnd: { new in model.finishStretch(new: new) }) { scene in SceneContextMenu(model: model, scene: scene) }
                 .onHover { if $0 && showing { model.endStripHighlight() } }
-            if showsMarkButton { NoteTools(model: model) }
+            // A locked picture takes no notes; the sheet says why and how to unlock.
+            if showsMarkButton && !model.isPictureLocked { NoteTools(model: model) }
             if showsWatch { watch }
         }
         .padding(.horizontal, 24).padding(.top, 6).padding(.bottom, 16)

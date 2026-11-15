@@ -374,6 +374,7 @@ struct IndexTests {
         def load(repo):
             print("noise on stdout while loading")
             if repo == "broken/version": raise RuntimeError("no such version")
+            if repo == "outdated/version": raise ValueError("Model type qwen3_vl not supported.")
             return object(), object()
         def generate(model, processor, prompt, image=None, max_tokens=0, temperature=None, verbose=False):
             print("more noise")
@@ -400,6 +401,13 @@ struct IndexTests {
         await broken.configure(python: python, script: script, environment: env, timeout: 20)
         do { try await broken.start(); Issue.record("A version that won't load should throw") }
         catch let e as DirectionError { #expect(e.code == "vision_helper_failed" && e.message.contains("no such version")) }
+
+        // An mlx-vlm older than the version: how to update it, not a failure of Direction's (a tester's, 2026-11-14).
+        let outdated = LocalVisionHelper(repo: "outdated/version")
+        await outdated.configure(python: python, script: script, environment: env, timeout: 20)
+        do { try await outdated.start(); Issue.record("An mlx-vlm too old for the version should throw") }
+        catch let e as DirectionError { #expect(e.code == "mlx_vlm_outdated" && e.message.contains("too old") && e.message.contains("Update it in Terminal")) }
+        #expect(VisionHelper.isOutdated("ValueError: Model type qwen3_vl not supported.") && !VisionHelper.isOutdated("no such version"))
     }
 
     @Test func soundsMergeIntoRunsAndQuietIsSilence() {
