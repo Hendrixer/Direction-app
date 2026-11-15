@@ -334,7 +334,8 @@ extension ProjectStore {
     /// ones the director locked on their own.
     public func lockPicture(cutID: String?, locked: Bool) throws {
         if locked {
-            let open = try notes().filter { $0.visibleToEditor && ![.accepted, .dropped].contains($0.lifecycle) && !$0.inInbox }
+            let latest = try cuts().max { $0.createdAt < $1.createdAt }?.id
+            let open = try notes().filter { $0.holdsPictureLock(latestCutID: latest) }
             guard open.isEmpty else { throw DirectionError("notes_open", "Accept or drop every open note before locking picture.") }
             if try dailies().scenes.contains(where: { !$0.locked }) {
                 try mutate(DirectingKey.dailies, default: Dailies(), kind: "lock.updated", summary: "Locked every scene with the picture") { d in

@@ -55,6 +55,14 @@ public final class GPUCompositor: NSObject, AVVideoCompositing, @unchecked Senda
     private let context: CIContext
     private let renderState = Mutex<AVVideoCompositionRenderContext?>(nil)
     private let generation = Mutex(0)
+    /// Each track's last frame and when it showed. A sub-frame gap at a cut (speed changes, a held edge) can leave a
+    /// moment with no source frame; the track holds its last one there instead of failing the whole export
+    /// (DIRECTION-B). A frame missing longer than `holdLimit`, or mid-shot with nothing to hold, still fails: that's a
+    /// take that can't decode there, not a sliver.
+    private static let holdLimit = 0.5
+    private let lastFrames = Mutex<[CMPersistentTrackID: HeldFrame]>([:])
+    /// A source frame kept for its track; only the render queue reads it.
+    private final class HeldFrame: @unchecked Sendable { let buffer: CVPixelBuffer, time: Double; init(_ b: CVPixelBuffer, at t: Double) { buffer = b; time = t } }
     private let outputSpace = CGColorSpace(name: CGColorSpace.itur_709)!
     public override init() {
         if let device = MTLCreateSystemDefaultDevice() { context = CIContext(mtlDevice: device, options: [.workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!, .workingFormat: CIFormat.RGBAh, .cacheIntermediates: false]) }
@@ -87,8 +95,14 @@ public final class GPUCompositor: NSObject, AVVideoCompositing, @unchecked Senda
                 for layer in group {
                     let original: CIImage
                     if let image = layer.image { original = image }
-                    else if let id = layer.trackID, let frame = request.sourceFrame(byTrackID: id) { original = CIImage(cvPixelBuffer: frame) }
-                    else { request.finish(with: DirectionError("missing_frame", "A source frame is unavailable for this edit.")); return }
+                    else if let id = layer.trackID, let frame = request.sourceFrame(byTrackID: id) {
+                        let held = HeldFrame(frame, at: t); lastFrames.withLock { $0[id] = held }
+                        original = CIImage(cvPixelBuffer: frame)
+                    } else if let id = layer.trackID, let held = lastFrames.withLock({ $0[id] }), abs(t - held.time) <= Self.holdLimit {
+                        original = CIImage(cvPixelBuffer: held.buffer)
+                    } else if layer.trackID != nil, min(t - layer.start, layer.end - t) <= 1 / max(1, settings.fps) + 1e-4 {
+                        continue  // A sliver at the shot's edge with nothing yet to hold: what's under it shows.
+                    } else { request.finish(with: DirectionError("missing_frame", "A source frame is unavailable for this edit.")); return }
                     let picture = ClipRendering.render(layer, source: original, t: t, frameIndex: frameIndex, bounds: bounds, scale: scale)
                     // A push, a wipe or the editor's own transition draws the two shots together.
                     if let tr = layer.clip.transition, let progress = ClipRendering.progress(tr, cut: layer.clip.start.seconds, t: t) {

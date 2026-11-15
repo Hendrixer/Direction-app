@@ -177,6 +177,33 @@
 @keyframes lk-note { 0%, 34% { opacity: 0; transform: translateY(-8px); } 40%, 93% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; transform: translateY(-8px); } }
 @keyframes lk-push { 0%, 33% { transform: none; } 39%, 93% { transform: translateY(126px); } 97%, 100% { transform: none; } }
 
+/* 0.3.9: an export passes a moment with no frame, holds the one before, and finishes */
+.h-xg { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(80% 90% at 50% 40%, oklch(0.22 0.015 265 / .7), var(--canvas) 72%); --loop: 9s; }
+.xg-card { width: 560px; display: grid; gap: 16px; padding: 22px 24px 20px; border-radius: 14px; background: var(--panel); box-shadow: 0 0 0 1px var(--line-2), 0 30px 70px -24px #000; }
+.xg-top { display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
+.xg-top b { font: 700 16px/1 var(--f-brand); font-stretch: 112%; }
+.xg-pct { display: grid; font-size: 12.5px; color: var(--text-2); }
+.xg-pct > span { grid-area: 1 / 1; justify-self: end; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.xg-pct .a { animation: xg-hide var(--loop) var(--e-out) infinite; }
+.xg-pct .b { color: var(--text-1); animation: xg-show var(--loop) var(--e-out) infinite; }
+.xg-pct .b i { width: 14px; height: 14px; border-radius: 50%; background: oklch(0.72 0.14 155 / .2); position: relative; }
+.xg-pct .b i::after { content: ""; position: absolute; left: 4.5px; top: 3px; width: 3.5px; height: 6px; border: solid oklch(0.78 0.15 155); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); }
+.xg-strip { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; height: 74px; }
+.xg-strip span { position: relative; border-radius: 4px; overflow: hidden; background: url("/img/ridge.svg") var(--x) 50% / 700% auto no-repeat, #000; box-shadow: inset 0 0 0 1px oklch(1 0 0 / .08); }
+.xg-strip .gap { background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line-2); }
+.xg-strip .gap::before { content: ""; position: absolute; inset: 0; background: url("/img/ridge.svg") 28% 50% / 700% auto no-repeat; opacity: 0; animation: xg-hold var(--loop) var(--e-out) infinite; }
+.xg-strip .gap em { position: absolute; inset: 0; display: grid; place-items: center; font: 500 10px/1 var(--f-tc); font-style: normal; letter-spacing: .04em; text-transform: uppercase; color: var(--text-4); animation: xg-hide-note var(--loop) var(--e-out) infinite; }
+.xg-head { position: absolute; top: -6px; bottom: -6px; left: 0; width: 2px; border-radius: 1px; background: var(--ion, oklch(0.70 0.16 268)); box-shadow: 0 0 10px oklch(0.70 0.16 268 / .7); animation: xg-head var(--loop) linear infinite; }
+.xg-bar { height: 4px; border-radius: 2px; background: var(--sunken); overflow: hidden; }
+.xg-bar i { display: block; height: 100%; width: 100%; transform-origin: left; background: linear-gradient(90deg, oklch(0.70 0.16 268), oklch(0.80 0.13 72)); animation: xg-bar var(--loop) linear infinite; }
+.xg-note { font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+@keyframes xg-head { 0% { left: 0; opacity: 1; } 70% { left: calc(100% - 2px); opacity: 1; } 74%, 100% { left: calc(100% - 2px); opacity: 0; } }
+@keyframes xg-bar { 0% { transform: scaleX(0); } 70%, 100% { transform: scaleX(1); } }
+@keyframes xg-hold { 0%, 33% { opacity: 0; } 37%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+@keyframes xg-hide-note { 0%, 33% { opacity: 1; } 36%, 95% { opacity: 0; } 99%, 100% { opacity: 1; } }
+@keyframes xg-show { 0%, 70% { opacity: 0; } 74%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+@keyframes xg-hide { 0%, 69% { opacity: 1; } 72%, 95% { opacity: 0; } 99%, 100% { opacity: 1; } }
+
 /* 0.3.8: Lock picture always opens its sheet; every check passes; the picture locks */
 .h-lc { position: absolute; inset: 0; display: grid; grid-template-rows: 46px 1fr; background: var(--canvas); --loop: 12s; }
 .lc-chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--line-2); font-size: 11.5px; color: var(--text-2); animation: lc-show var(--loop) var(--e-out) infinite; }
@@ -295,4 +322,7 @@
   .lc-chip, .lc-btn, .lc-btn .a, .lc-btn .b, .lc-dlg, .lc-dlg li, .lc-dim, .lc-foot .go { animation: none !important; }
   .lc-chip, .lc-btn .b { opacity: 0; }
   .lc-dim { opacity: 1; }
+  .xg-pct .a, .xg-pct .b, .xg-strip .gap::before, .xg-strip .gap em, .xg-head, .xg-bar i { animation: none !important; }
+  .xg-pct .a, .xg-head, .xg-strip .gap em { opacity: 0; }
+  .xg-strip .gap::before { opacity: 1; }
 }

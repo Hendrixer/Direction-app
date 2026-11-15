@@ -14,13 +14,9 @@ struct LockCheck: Identifiable {
 }
 
 extension FilmModel {
-    /// Notes the editor has seen that aren't accepted or dropped yet. An unasked change counts only while it waits
-    /// in the cut on screen: once a newer cut is made on top of it, it's part of the edit, the sheet no longer shows
-    /// it, and nothing could accept it, so it must not hold the lock (a tester was stuck on a greyed Lock picture).
-    var openNotes: [ReviewComment] {
-        let waiting = Set(toReview.map(\.id))
-        return notes.filter { $0.visibleToEditor && ![.accepted, .dropped].contains($0.lifecycle) && !$0.inInbox && (!$0.isUnasked || waiting.contains($0.id)) }
-    }
+    /// Notes to accept or drop before picture locks, by the same rule the store's lock uses: an unasked change from
+    /// an earlier cut is part of the edit and doesn't count (`ReviewComment.holdsPictureLock`).
+    var openNotes: [ReviewComment] { notes.filter { $0.holdsPictureLock(latestCutID: latestCut?.id) } }
 
     /// Every blocker and warning before picture lock, in the sheet's order.
     var lockChecks: [LockCheck] {
