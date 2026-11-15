@@ -245,6 +245,8 @@ struct MakeStylePopover: View {
 struct StylesPane: View {
     var app: AppModel?
     var preview = false
+    /// Snapshots: a film with a style on its way.
+    var previewFilm: FilmModel? = nil
     @AppStorage(SharedSettings.stylesFolderKey, store: SharedSettings.defaults) private var folder = SharedSettings.defaultStylesFolder
     @State private var styles: [Style] = []
     @State private var house: Style?
@@ -258,14 +260,15 @@ struct StylesPane: View {
                     if let house { open(.init(house)) }
                 }
             }
-            SettingsGroup(label: "Your styles", note: AnyView(SettingsNote("A style is how a kind of video looks, sounds and moves: its rules, its layouts, the moves Direction makes for it (punch-ins, pushes) and the parts the editor reuses, like titles, captions, transitions and sounds. Pick one in a film\u{2019}s brief. Make one with the editor from the brief, or write one here."))) {
+            SettingsGroup(label: "Your styles", note: AnyView(SettingsNote("A style is how a kind of video looks, sounds and moves: its rules, its layouts, the moves Direction makes for it (punch-ins, pushes) and the parts the editor reuses, like titles, captions, transitions and sounds. Pick one in a film\u{2019}s brief. Make one from a video or write one here, or with the editor from the brief."))) {
+                if let film, let progress = film.styleProgress { StyleProgressRow(film: film, progress: progress, first: true) }
                 if styles.isEmpty {
-                    SettingsRow(label: "No styles yet", detail: "Make one with the editor from a film\u{2019}s brief, or start one here.", first: true) {
+                    SettingsRow(label: "No styles yet", detail: "Make one from a video you like, or write one yourself.", first: film?.styleProgress == nil) {
                         Button("New Style") { open(.new) }.buttonStyle(.gate)
                     }
                 }
                 ForEach(Array(styles.enumerated()), id: \.element.id) { i, s in
-                    SettingsLinkRow(label: s.name, detail: [s.summary, StyleDraft.holds(s)].filter { !$0.isEmpty }.joined(separator: "\n"), first: i == 0) { open(.init(s)) }
+                    SettingsLinkRow(label: s.name, detail: [s.summary, StyleDraft.holds(s)].filter { !$0.isEmpty }.joined(separator: "\n"), first: i == 0 && film?.styleProgress == nil) { open(.init(s)) }
                 }
             }
             if !styles.isEmpty {
@@ -281,12 +284,18 @@ struct StylesPane: View {
             }
         }
         .task(id: folder) { load() }
+        // A style the editor just saved shows up in the list as its row goes.
+        .onChange(of: film?.styleProgress == nil) { _, _ in load() }
     }
+
+    /// The open film, where a style from a video is made; previews bring their own.
+    private var film: FilmModel? { previewFilm ?? app?.film }
 
     /// A style opens as a page in Settings, with Back to the list.
     private func open(_ draft: StyleDraft) {
         let title = draft.isHouse ? StyleLibrary.houseName : draft.isNew ? "New style" : draft.name
-        pages?.open(SettingsPage(id: "style:" + draft.id, title: title) { StylePage(draft: draft, folder: stylesURL) })
+        let film = film
+        pages?.open(SettingsPage(id: "style:" + draft.id, title: title) { StylePage(draft: draft, folder: stylesURL, film: film) })
     }
 
     private var expanded: String { NSString(string: folder.isEmpty ? SharedSettings.defaultStylesFolder : folder).expandingTildeInPath }
@@ -553,15 +562,31 @@ struct StyleParts: View {
 struct StylePage: View {
     @State private var draft: StyleDraft
     var folder: URL
+    /// The open film: a style from a video is made there, by its editor.
+    var film: FilmModel?
     @Environment(\.settingsPages) private var pages
     @Environment(\.settingsPreview) private var preview
     /// What's in the style's folder now, so opening the page writes nothing.
     @State private var last: StyleDraft.Written
     @State private var error: String?
     @State private var confirmingTrash = false
+    /// A new style: from a video you like (first, the quickest way to one), or written yourself.
+    @State private var way: String
+    @State private var videos: [StyleVideo]
+    @State private var ask = ""
 
-    init(draft: StyleDraft, folder: URL) {
-        _draft = State(initialValue: draft); _last = State(initialValue: draft.written); self.folder = folder
+    init(draft: StyleDraft, folder: URL, film: FilmModel? = nil, way: String = "video", videos: [StyleVideo] = [StyleVideo()], ask: String = "") {
+        _draft = State(initialValue: draft); _last = State(initialValue: draft.written); self.folder = folder; self.film = film
+        _way = State(initialValue: way); _videos = State(initialValue: videos); _ask = State(initialValue: ask)
+    }
+
+    private var fromVideo: Bool { draft.isNew && way == "video" }
+    /// Why Make Style can't start a style from a video yet, or nil.
+    private var videoBlocker: String? {
+        guard let film else { return "Open a film first. The editor makes the style inside the film that\u{2019}s open; once it\u{2019}s saved, every film can use it." }
+        if film.styleProgress.map({ if case .failed = $0 { return false } else { return true } }) == true { return "A style is already being made. It shows in Your styles until it\u{2019}s saved." }
+        if film.learning != nil { return "Direction is getting another video ready. Try again when it\u{2019}s done." }
+        return nil
     }
 
     var body: some View {
@@ -571,12 +596,27 @@ struct StylePage: View {
                 Button("Move to Trash\u{2026}") { confirmingTrash = true }.buttonStyle(.gate(.ghostDanger, .small))
             }
         } content: {
-            StyleEditor(draft: $draft, showsParts: !draft.isNew)
+            if draft.isNew {
+                GateSegmented(options: [("video", "From a video"), ("write", "Write it yourself")], selection: $way)
+                    .fixedSize().padding(.top, 6).padding(.bottom, 4)
+            }
+            if fromVideo {
+                SettingsGroup(label: "A video you\u{2019}d like yours to feel like", note: AnyView(SettingsNote(videoBlocker ?? "The editor in \(film?.filmName ?? "the open film") makes it from what Direction measures in the video, and it shows under Your styles until it\u{2019}s saved. A link is downloaded to study and removed afterwards."))) {
+                    StyleVideoFields(videos: $videos, ask: $ask).padding(.horizontal, 16).padding(.vertical, 14)
+                }
+            } else {
+                StyleEditor(draft: $draft, showsParts: !draft.isNew)
+            }
             if let error { Text(error).font(Gate.Font.small).foregroundStyle(Gate.State.alert).padding(.top, 8) }
         } foot: {
             Button("Cancel") { pages?.back() }.buttonStyle(.gate)
-            Button("Make Style", action: make).buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
-                .disabled(draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
+            if fromVideo {
+                Button("Make Style", action: makeFromVideo).buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
+                    .disabled(!StyleVideoFields.ready(videos) || videoBlocker != nil)
+            } else {
+                Button("Make Style", action: make).buttonStyle(.steel).keyboardShortcut(.return, modifiers: .command)
+                    .disabled(draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
         }
         // Changes are kept a moment after the last one, and when the page closes (with a rule still being typed).
         .task(id: draft.written) {
@@ -601,6 +641,13 @@ struct StylePage: View {
         guard !preview else { last = draft.written; return }
         do { _ = try draft.save(in: folder); last = draft.written; error = nil }
         catch let e as DirectionError { error = e.message } catch { self.error = error.localizedDescription }
+    }
+
+    /// Starts it in the open film and goes back to the list, where its row shows how it's going.
+    private func makeFromVideo() {
+        guard !preview, let film, videoBlocker == nil else { return }
+        film.makeStyle(from: StyleVideoFields.chosen(videos), ask: ask.trimmingCharacters(in: .whitespacesAndNewlines))
+        pages?.back()
     }
 
     private func make() {
@@ -653,5 +700,38 @@ struct StyleEditSheet: View {
         draft.addPending()
         do { saved(try draft.save(in: folder)); close() }
         catch let e as DirectionError { error = e.message } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// A style on its way, first in Your styles: what Direction or the editor is doing, a question waiting, or
+/// why it stopped with Try Again.
+struct StyleProgressRow: View {
+    var film: FilmModel
+    var progress: StyleProgress
+    var first = false
+
+    var body: some View {
+        switch progress {
+        case .making(let name, let step):
+            SettingsRow(label: "Making a style from \(name)", detail: "\(step)\u{2026} In \(film.filmName).", first: first) { GateSpinner() }
+                .accessibilityLabel("Making a style from \(name). \(step)")
+        case .asks(let name):
+            SettingsRow(label: "The editor has a question", detail: "About the style from \(name). Answer it in \(film.filmName).", first: first) {
+                Button("Show") { showFilm() }.buttonStyle(.gate)
+            }
+        case .failed(let name, let reason):
+            SettingsRow(label: "The style from \(name) wasn\u{2019}t made", detail: reason, first: first) {
+                Button("Dismiss") { film.styleMaking = nil }.buttonStyle(.gate(.ghost))
+                if film.styleMaking?.retryable != false {
+                    Button("Try Again") { film.retryStyle() }.buttonStyle(.gate).disabled(film.learning != nil)
+                }
+            }
+        }
+    }
+
+    private func showFilm() {
+        NSApp?.activate()
+        NSApp?.windows.first { $0.frameAutosaveName == "DirectionMainWindow" }?.makeKeyAndOrderFront(nil)
+        film.showEditorPopover = true
     }
 }

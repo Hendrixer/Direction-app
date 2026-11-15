@@ -14,9 +14,10 @@ struct FootageLookingGroup: View {
     @State private var status: VisionHelper.Status?
     @State private var room = true
     @State private var hasKey = false
+    @State private var updateCommand = "uv tool upgrade mlx-vlm"
     private var downloads = VisionDownloads.shared
 
-    enum Setup: Equatable { case checking, noMLX, ready }
+    enum Setup: Equatable { case checking, noMLX, outdated, ready }
 
     private var onMac: Bool { (preview ? SharedSettings.LookEngine.thisMac.rawValue : engine) == SharedSettings.LookEngine.thisMac.rawValue }
     private var chosen: SharedSettings.LookDetail { SharedSettings.lookDetails.first { $0.id == (preview ? "standard" : detail) } ?? SharedSettings.lookDetails[1] }
@@ -40,6 +41,11 @@ struct FootageLookingGroup: View {
         if setup == .noMLX {
             SettingsRow(label: "mlx-vlm isn\u{2019}t installed", detail: "Install it in Terminal with uv tool install mlx-vlm. Until then, nothing is described; shots and sounds are still found.") {
                 Button("Copy Command") { SystemSupport.copy("uv tool install mlx-vlm") }.buttonStyle(.gate(.normal))
+            }
+        } else if setup == .outdated {
+            SettingsRow(label: "mlx-vlm needs an update", detail: "It\u{2019}s too old for \(chosen.name). Update it in Terminal with \(updateCommand). Until then, nothing is described; shots and sounds are still found.") {
+                Button("Copy Command") { SystemSupport.copy(updateCommand) }.buttonStyle(.gate(.normal))
+                GateSelect(options: SharedSettings.lookDetails.map { ($0.id, $0.label) }, selection: $detail)
             }
         } else {
             SettingsRow(label: "Detail", detail: localDetail) {
@@ -65,7 +71,7 @@ struct FootageLookingGroup: View {
         case .needsMemory?: return .needsMemory
         case .downloaded?: return .downloaded
         case nil: return .checking
-        case .noPython?, .notDownloaded?: return room ? .notDownloaded : .noRoom
+        case .noPython?, .notDownloaded?, .outdated?: return room ? .notDownloaded : .noRoom
         }
     }
     private var localDetail: String {
@@ -94,12 +100,12 @@ struct FootageLookingGroup: View {
     private func check() async {
         if preview { setup = .ready; return }
         let detail = chosen
-        let (python, key, state, fits) = await Task.detached {
+        let (python, key, state, fits, update) = await Task.detached {
             VisionHelper.forget()
-            return (VisionHelper.python() != nil, OpenRouter.Key.read() != nil, VisionHelper.status(detail), VisionHelper.hasRoom(for: detail))
+            return (VisionHelper.python() != nil, OpenRouter.Key.read() != nil, VisionHelper.status(detail), VisionHelper.hasRoom(for: detail), VisionHelper.updateCommand)
         }.value
-        setup = python ? .ready : .noMLX
-        hasKey = key; status = state; room = fits
+        setup = !python ? .noMLX : state == .outdated ? .outdated : .ready
+        hasKey = key; status = state; room = fits; updateCommand = update
     }
 }
 

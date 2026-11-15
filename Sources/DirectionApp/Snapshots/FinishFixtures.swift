@@ -9,6 +9,8 @@ enum FinishFixtures {
             "34-lock-scenes": { .film(lockingScenes()) },
             "35-lock-picture": { let m = lockingScenes(); m.sheet = .lockPicture; return .film(m) },
             "36-finish": { .film(finishing()) },
+            // Back in the Cut room after picture lock: what can and can't be done there.
+            "36b-cut-picture-locked": { let m = finishing(); m.room = .cut; return .film(m) },
             "37-export": { let m = finishing(); m.sheet = .deliver; DeliveredPreview.check = nil; return .film(m) },
             // The check found the mix quiet and a crop that loses a face.
             "37-export-checks": {

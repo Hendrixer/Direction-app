@@ -80,8 +80,27 @@ private struct GatePopoverAnchor<Content: View>: NSViewRepresentable {
     private var closing = false
 
     func update() {
-        host?.rootView = root
+        host?.rootView = sized
         if wanted { open() } else { close(animated: true) }
+    }
+
+    /// The content at its own size, reporting that size. The popover follows it a turn of the run loop later,
+    /// never inside a layout pass: letting the hosting controller size the popover itself (`.preferredContentSize`)
+    /// could set the window's frame from inside the window's own layout, which laid out again and set the frame
+    /// again until the stack ran out (a tester's crash, 2026-11-14: _NSPopoverWindow setFrame, NSHostingView
+    /// windowDidLayout, round and round).
+    private var sized: AnyView {
+        AnyView(root.fixedSize()
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { [weak self] size in self?.follow(size) })
+    }
+
+    private func follow(_ size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let popover = self?.popover else { return }
+            let now = popover.contentSize
+            if abs(now.width - size.width) > 0.5 || abs(now.height - size.height) > 0.5 { popover.contentSize = size }
+        }
     }
 
     private func open() {
@@ -90,10 +109,12 @@ private struct GatePopoverAnchor<Content: View>: NSViewRepresentable {
             return
         }
         guard let anchor, anchor.window != nil else { return }
-        let host = host ?? NSHostingController(rootView: root)
-        host.sizingOptions = [.preferredContentSize]
+        let host = host ?? NSHostingController(rootView: sized)
+        host.sizingOptions = []
         let popover = popover ?? NSPopover()
         popover.contentViewController = host
+        let fitting = host.sizeThatFits(in: CGSize(width: 4000, height: 4000))
+        if fitting.width > 0, fitting.height > 0 { popover.contentSize = fitting }
         popover.behavior = .transient
         popover.animates = false
         popover.delegate = self
@@ -190,3 +211,4 @@ private struct GatePopoverAnchor<Content: View>: NSViewRepresentable {
         }
     }
 }
+

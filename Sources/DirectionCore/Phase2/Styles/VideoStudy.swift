@@ -274,3 +274,22 @@ public struct VideoStudy: Codable, Hashable, Sendable {
         (try? Data(contentsOf: folder.appendingPathComponent(fileName))).flatMap { try? JSONDecoder().decode(VideoStudy.self, from: $0) }
     }
 }
+
+/// What yt-dlp wrote about a downloaded video (`video.info.json`), only the few fields Direction reads. The
+/// file lists every format the site offered and can run to megabytes; decoding these fields alone skips
+/// building all of that.
+public struct VideoInfo: Decodable, Sendable {
+    public var title: String?
+    public var channel: String?
+    public var uploader: String?
+    public var artist: String?
+    public var artists: [String]?
+    public var description: String?
+    public var track: String?
+    public var webpage_url: String?
+
+    public static func read(in folder: URL) -> VideoInfo? {
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent("video.info.json")) else { return nil }
+        return try? JSONDecoder().decode(VideoInfo.self, from: data)
+    }
+}

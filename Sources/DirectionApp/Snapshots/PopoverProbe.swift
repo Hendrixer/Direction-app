@@ -28,13 +28,15 @@ enum PopoverProbe {
         let log = OSLog(subsystem: "dev.direction.probe", category: .pointsOfInterest)
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
-            for _ in 0..<5 {
+            for round in 0..<5 {
                 os_signpost(.event, log: log, name: "open")
                 model.showEditorPopover = true
                 try? await Task.sleep(for: .seconds(0.06))
                 report("opening")
                 try? await Task.sleep(for: .seconds(0.44))
                 report("open")
+                // Once, the content changes while it's open: the popover follows it (no layout loop).
+                if round == 2 { model.cuts.removeAll(); try? await Task.sleep(for: .seconds(0.4)); report("after the content changed") }
                 try? await Task.sleep(for: .seconds(0.5))
                 os_signpost(.event, log: log, name: "close")
                 model.showEditorPopover = false
@@ -55,7 +57,7 @@ enum PopoverProbe {
         let popovers = NSApp.windows.filter { String(describing: type(of: $0)).contains("Popover") && $0.isVisible }
         print(moment + ":", popovers.isEmpty ? "no popover" : popovers.map { window in
             let layer = window.contentView?.superview?.layer
-            return String(format: "popover at alpha %.2f, scale %.4f", window.alphaValue, (layer?.presentation() ?? layer)?.transform.m11 ?? 1)
+            return String(format: "popover at alpha %.2f, scale %.4f, %.0f × %.0f", window.alphaValue, (layer?.presentation() ?? layer)?.transform.m11 ?? 1, window.frame.width, window.frame.height)
         }.joined(separator: ", "))
     }
 }

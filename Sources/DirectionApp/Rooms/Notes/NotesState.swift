@@ -158,6 +158,7 @@ extension FilmModel {
 
     /// Draw a box (R, or the box under the picture): the next drag on the picture makes its note.
     func beginRegion() {
+        guard !refusesNotesWhileLocked() else { return }
         saveWriting(advance: false)
         pause()
         notesTab = .sheet
@@ -166,6 +167,7 @@ extension FilmModel {
     }
     /// Mark a stretch (the stretch under the picture): the next drag along the strip makes its note.
     func beginStretch() {
+        guard !refusesNotesWhileLocked() else { return }
         saveWriting(advance: false)
         pause()
         notesTab = .sheet
@@ -289,6 +291,7 @@ extension FilmModel {
     }
     /// An outside note's Edit first: it joins your notes, open to write in.
     func editOutsideFirst(_ c: ReviewComment) {
+        guard !refusesNotesWhileLocked() else { return }
         acceptOutside(c.id)
         notesTab = .sheet
         if let accepted = note(c.id) { beginWriting(accepted) }

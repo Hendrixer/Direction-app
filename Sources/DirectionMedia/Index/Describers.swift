@@ -97,6 +97,8 @@ public actor LocalVisionHelper {
         try p.run()
         ChildProcesses.started(p)
         p.terminationHandler = { ChildProcesses.ended($0) }
+        // A helper that's gone must not take the process with it: a write fails instead of raising SIGPIPE.
+        _ = fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
         process = p; input = stdin.fileHandleForWriting; reader = lines
         // Loading a model takes a minute or two, never ten: past that it's stuck, and it's stopped. Awake time: a Mac
         // asleep isn't a model failing to load.
@@ -107,6 +109,13 @@ public actor LocalVisionHelper {
         guard let first, let reply = try? JSONDecoder().decode(JSONValue.self, from: Data(first.utf8)), reply["ready"].bool == true else {
             let said = first.flatMap { try? JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }?["error"].string ?? tail.last
             let reason = !said.isEmpty ? said : tail.timedOut ? "It didn\u{2019}t finish loading in 10 minutes." : "It stopped before it was ready."
+            if VisionHelper.isOutdated(reason) {
+                // This Mac's mlx-vlm, not Direction: say how to update it, and don't report it as Direction failing.
+                DirectionLog.warning("The vision helper (mlx-vlm, \(repo)) is too old: \(reason)", "programs")
+                stop()
+                let name = SharedSettings.lookDetails.first { $0.repo == repo }?.name ?? repo
+                throw DirectionError("mlx_vlm_outdated", VisionHelper.outdatedMessage(name))
+            }
             ChildProcesses.failed("The vision helper (mlx-vlm, \(repo))", p, reason)
             stop()
             throw DirectionError("vision_helper_failed", "mlx-vlm couldn\u{2019}t load \(repo). \(reason)")

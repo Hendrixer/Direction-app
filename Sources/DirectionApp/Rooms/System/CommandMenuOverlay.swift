@@ -61,8 +61,8 @@ struct CommandMenuOverlay: View {
             let text = String(q.dropFirst(2)).trimmingCharacters(in: .whitespaces)
             let at = FilmActions(model).timecode
             out.append(ResultGroup(section: .actions, rows: [Row(item: CommandItem(id: "action.noteToSelf", section: .actions, icon: "text.bubble", title: "Add note at \(at): \(text)", disabledReason: model.duration > 0 ? nil : "Nothing to watch yet") {
-                model.addNote(text: text, time: model.position)
-                model.toast = Toast(title: "Note added at \(at)", detail: text)
+                // A locked picture refuses it and says so; only a note that was made is announced.
+                if model.addNote(text: text, time: model.position) != nil { model.toast = Toast(title: "Note added at \(at)", detail: text) }
             }, hits: [])]))
         }
         for section in CommandSection.allCases where section != .recent && section != .suggested {

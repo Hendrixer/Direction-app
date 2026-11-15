@@ -27,6 +27,17 @@ enum StyleFixtures {
                 StyleVideo(link: "https://www.youtube.com/watch?v=k3Jx9fQ2mPo"), StyleVideo(file: URL(fileURLWithPath: "/Users/you/Movies/Their best one.mp4")),
             ], ask: "How fast it moves, the yellow captions three words at a time, the punch-in on every joke.") {}.frame(maxHeight: .infinity, alignment: .top).background(Gate.Surface.ground)) },
             "style-learned": { learned() },
+            // Settings › Styles › New Style: from a video first (a tester looked for the link here, 2026-11-14).
+            "style-new-from-video": {
+                SettingsKey.register()
+                let film = ChangesFixtures.cut4()
+                return settingsPage(SettingsPage(id: "style:new", title: "New style") {
+                    StylePage(draft: .new, folder: StyleSamples.folder, film: film, videos: [StyleVideo(link: "https://www.youtube.com/watch?v=k3Jx9fQ2mPo")], ask: "How fast it moves, the yellow captions three words at a time.")
+                }, tab: .styles, height: 640)
+            },
+            // The style on its way, first in Your styles, and the same row when it couldn't be made.
+            "styles-making": { styles { $0.styleMaking = StyleMaking(videos: [], ask: "", name: "How I edit talking videos"); $0.learning = "Studying the video" } },
+            "styles-failed": { styles { $0.styleMaking = StyleMaking(videos: [], ask: "", name: "How I edit talking videos", failed: "The video didn\u{2019}t download (Video unavailable). Try again later, or download it yourself and drop the file in instead.") } },
         ]
     }
 
@@ -103,6 +114,15 @@ enum StyleFixtures {
     private static func page(_ s: Style, height: CGFloat) -> SnapshotScene {
         SettingsKey.register()
         return settingsPage(SettingsPage(id: "style:" + s.id, title: s.name) { StylePage(draft: .init(s), folder: StyleSamples.folder) }, tab: .styles, height: height)
+    }
+
+    /// Settings › Styles with the open film in a given state.
+    private static func styles(_ setUp: (FilmModel) -> Void) -> SnapshotScene {
+        SettingsKey.register()
+        let app = AppModel(), film = ChangesFixtures.cut4()
+        setUp(film); app.film = film
+        return SnapshotScene(size: CGSize(width: Gate.Size.settingsWidth, height: 560),
+                             SettingsView(app: app, initialTab: .styles, preview: true).frame(width: Gate.Size.settingsWidth, height: 560, alignment: .top).clipped().background(Gate.Surface.ground))
     }
 
     private static func settingsPage(_ page: SettingsPage, tab: SettingsTab, height: CGFloat) -> SnapshotScene {

@@ -64,7 +64,8 @@ import DirectionMedia
         if !film.isPreview { _ = try? SharedSettings.ensureLooksFolder() }
         reloadGroups(film)
         let note = noteID.flatMap(film.note)
-        applyTo = note?.sceneID
+        // Only a scene Dailies has: a note's scene can be gone since (the editor sorted the takes again).
+        applyTo = note?.sceneID.flatMap { film.scene($0)?.id }
         useFilmLook = false; comparing = false; largeStill = nil; remembered = [:]
         if let path = noteID.flatMap({ proposals[$0]?.first }), let entry = entry(path) { select(entry) }
         else { adopt(applied(for: applyTo)) }
