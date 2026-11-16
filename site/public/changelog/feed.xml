@@ -8,6 +8,14 @@
   <updated>2026-11-15T12:00:00Z</updated>
   <author><name>Direction</name></author>
   <entry>
+    <id>https://givedirection.ai/changelog/#0.3.11</id>
+    <title>0.3.11: Styles without a film open</title>
+    <link href="https://givedirection.ai/changelog/#0.3.11"/>
+    <updated>2026-11-15T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;&lt;strong&gt;Make a style from a video&lt;/strong&gt; in Settings › Styles, with or without a film open. It used to say "Open a film first." With no film open, the editor makes the style on its own, using the editor and speed you set for new films. It shows under Your styles while it's being made. If the editor has a question about it, like which font to use for titles, you answer it right there in the row.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Crash and freeze reports&lt;/strong&gt; you choose to send now point to the exact place in Direction where something went wrong, so problems get fixed faster.&lt;/p&gt;</content>
+  </entry>
+  <entry>
     <id>https://givedirection.ai/changelog/#0.3.10</id>
     <title>0.3.10: A voice-over written to your cut</title>
     <link href="https://givedirection.ai/changelog/#0.3.10"/>
