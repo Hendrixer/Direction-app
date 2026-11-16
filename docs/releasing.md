@@ -34,10 +34,11 @@ The files are in the R2 bucket `direction-releases`, on the Cloudflare account t
 
 4. **Cloudflare.** Sign in with `cf auth login` (the account that has `givedirection.ai`).
 
-5. **Sentry, for readable crash reports.** Make an organization token at [personal-projects-rn.sentry.io › Settings › Auth Tokens](https://personal-projects-rn.sentry.io/settings/auth-tokens/), then save it in your login keychain. The command asks for the token, so it doesn't land in your shell history:
+5. **Sentry, for readable crash reports.** Make an organization token at [personal-projects-rn.sentry.io › Settings › Auth Tokens](https://personal-projects-rn.sentry.io/settings/auth-tokens/) and copy it. Then type this (pasting it would put the command on the clipboard in place of the token):
    ```sh
-   security add-generic-password -U -s direction-sentry -a sentry -w
+   scripts/upload-symbols.sh --save-token
    ```
+   It saves the token in your login keychain from the clipboard, refuses anything that isn't a Sentry token, and empties the clipboard. A password prompt would cut the token off at 128 characters.
 
 ## Each release
 
