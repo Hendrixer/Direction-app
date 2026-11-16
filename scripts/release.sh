@@ -9,6 +9,7 @@
 # DIRECTION_SIGNING_IDENTITY  the certificate's name, when the keychain has more than one Developer ID Application
 # DIRECTION_NOTARY_PROFILE    the notarytool keychain profile (default direction-notary)
 # DIRECTION_RELEASES_DIR      where releases and the feed are kept (default build/releases)
+# DIRECTION_SYMBOLS_DIR       where each release's debug symbols are kept for Sentry (default build/symbols)
 # DIRECTION_SIGNING_IDENTITY=- signs ad hoc and stops before notarizing: a dry run of the packaging only.
 set -euo pipefail
 direction_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -78,6 +79,18 @@ echo "Building Direction $version ($build_number)…"
 rm -rf "$dist"; mkdir -p "$dist"
 DIRECTION_APP_DIR="$app" "$direction_root/scripts/build-app.sh" release >/dev/null
 plist="$app/Contents/Info.plist"
+# The debug symbols for this build (scripts/upload-symbols.sh sends them to Sentry). Each .dSYM is checked against the
+# binary it belongs to, so a crash report from this release can be read back to functions and lines.
+symbols="${DIRECTION_SYMBOLS_DIR:-$direction_root/build/symbols}/$version"
+bin="$(swift build -c release --show-bin-path)"
+rm -rf "$symbols"; mkdir -p "$symbols"
+for pair in "DirectionApp:MacOS/Direction" "direction:Helpers/direction"; do
+  dsym="$bin/${pair%%:*}.dSYM"; binary="$app/Contents/${pair#*:}"
+  [ -d "$dsym" ] || fail "The build made no ${pair%%:*}.dSYM, so a crash in this release couldn't be read."
+  [ "$(dwarfdump --uuid "$dsym" | awk '{ print $2 }' | sort)" = "$(dwarfdump --uuid "$binary" | awk '{ print $2 }' | sort)" ] \
+    || fail "${pair%%:*}.dSYM doesn't match $binary."
+  ditto "$dsym" "$symbols/$(basename "$dsym")"
+done
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" -c "Set :CFBundleVersion $build_number" "$plist"
 /usr/libexec/PlistBuddy -c "Add :SUFeedURL string $feed_url" -c "Add :SUPublicEDKey string $sparkle_public_key" -c "Add :SUEnableAutomaticChecks bool true" "$plist"
 

@@ -155,6 +155,8 @@ final class FilmModel {
     @ObservationIgnored private var knownQuestions: Set<String> = []
 
     var store: ProjectStore? { runtime?.store }
+    /// Direction's own film for making a style with no film open: it has no window, and Settings says so.
+    var isWorkshop = false
     var url: URL? { store?.url }
 
     init(preview: Bool = false) {
@@ -179,10 +181,12 @@ final class FilmModel {
         }
     }
 
-    convenience init(url: URL) throws {
+    /// `listed` false is Direction's own workshop (AppModel.styleWorkshop): it isn't put in your films.
+    convenience init(url: URL, listed: Bool = true) throws {
         self.init()
+        isWorkshop = !listed
         let store = try ProjectStore(url: url)
-        try ProjectLibrary().register(store)
+        if listed { try ProjectLibrary().register(store) }
         runtime = try ToolRuntime(store: store)
         // Transcripts from before word times were held to the sound, once, off the main thread.
         if !isPreview { let runtime = runtime; Task.detached(priority: .utility) { await runtime?.checkWordEdges() } }

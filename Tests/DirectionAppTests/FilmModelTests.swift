@@ -73,6 +73,31 @@ struct FilmModelTests {
         first.close()
     }
 
+    /// With no film open, Settings makes a style from a video in Direction's workshop: a film of its own that
+    /// isn't in your films, made once and kept (a friend got "Open a film first" there, 2026-11-15).
+    @Test func aStyleWithNoFilmOpenIsMadeInTheWorkshop() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("direction-workshop-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        if ProcessInfo.processInfo.environment["DIRECTION_LIBRARY_PATH"] == nil { setenv("DIRECTION_LIBRARY_PATH", dir.appendingPathComponent("library.sqlite").path, 1) }
+        setenv("DIRECTION_WORKSHOP_DIR", dir.path, 1)
+        defer { unsetenv("DIRECTION_WORKSHOP_DIR") }
+        let app = AppModel()
+        let before = Set((try ProjectLibrary().list()).map(\.path))
+        let workshop = try #require(app.styleWorkshop())
+        #expect(workshop.isWorkshop && app.film == nil)
+        #expect(workshop.url?.path == dir.appendingPathComponent("Workshop.direction").standardizedFileURL.path)
+        #expect(Set((try ProjectLibrary().list()).map(\.path)) == before)
+        #expect(app.styleWorkshop() === workshop)
+        let first = workshop.project?.id
+        workshop.close()
+        // The next session opens the same one.
+        let again = try #require(AppModel().styleWorkshop())
+        #expect(again.isWorkshop)
+        #expect(again.project?.id == first && first != nil)
+        again.close()
+    }
+
     /// Closing a film stops its delivery, so opening another one, or Films, asks first: Keep Delivering
     /// leaves everything as it was, Stop and Open opens the other film.
     @Test func openingAnotherFilmDuringADeliveryAsksFirst() throws {

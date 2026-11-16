@@ -204,6 +204,42 @@
 @keyframes xg-show { 0%, 70% { opacity: 0; } 74%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
 @keyframes xg-hide { 0%, 69% { opacity: 1; } 72%, 95% { opacity: 0; } 99%, 100% { opacity: 1; } }
 
+/* 0.3.11: a style from a video in Settings with no film open; the editor's question answered in its row */
+.h-sa { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(80% 90% at 50% 35%, oklch(0.22 0.015 265 / .7), var(--canvas) 72%); --loop: 12s; }
+.sa-win { width: 580px; display: grid; gap: 10px; padding: 18px 20px 20px; border-radius: 14px; background: var(--panel); box-shadow: 0 0 0 1px var(--line-2), 0 30px 70px -24px #000; }
+.sa-bar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 6px; }
+.sa-bar b { font: 700 16px/1 var(--f-brand); font-stretch: 112%; }
+.sa-chip { font: 500 10.5px/1 var(--f-tc); letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); padding: 5px 7px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); }
+.sa-k { font: 500 10.5px/1 var(--f-tc); letter-spacing: .06em; text-transform: uppercase; color: var(--text-4); }
+.sa-list { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; }
+.sa-slot { display: grid; }
+.sa-slot > .sa-row { grid-area: 1 / 1; }
+.sa-row { display: flex; align-items: center; gap: 14px; padding: 11px 14px; min-height: 52px; font-size: 12.5px; line-height: 1.4; }
+.sa-list > .sa-row, .sa-slot + .sa-row { box-shadow: inset 0 1px 0 var(--line-2); }
+.sa-row > div { flex: 1; display: grid; gap: 2px; }
+.sa-row b { font-weight: 500; color: var(--text-1); }
+.sa-row span { color: var(--text-3); font-size: 11.5px; }
+.sa-step { display: grid; }
+.sa-step em { grid-area: 1 / 1; font-style: normal; }
+.sa-step .s1 { animation: sa-s1 var(--loop) var(--e-out) infinite; }
+.sa-step .s2 { animation: sa-s2 var(--loop) var(--e-out) infinite; }
+.sa-spin { width: 14px; height: 14px; border-radius: 50%; border: 1.6px solid var(--line-2); border-top-color: var(--text-2); animation: sa-spin 1s linear infinite; }
+.sa-chev { width: 7px; height: 7px; border: solid var(--text-4); border-width: 1.5px 1.5px 0 0; transform: rotate(45deg); margin-right: 4px; }
+.sa-making { animation: sa-making var(--loop) var(--e-out) infinite; }
+.sa-ask { animation: sa-ask var(--loop) var(--e-out) infinite; }
+.sa-ask .sa-small { font-size: 10.5px; color: var(--text-4); }
+.sa-btns { display: flex; gap: 8px; margin-top: 6px; }
+.sa-btns span { padding: 5px 10px; border-radius: 7px; font-size: 11.5px; color: var(--text-1); box-shadow: inset 0 0 0 1px var(--line-2); background: oklch(1 0 0 / .03); }
+.sa-btns .pick { animation: sa-pick var(--loop) var(--e-out) infinite; }
+.sa-done { animation: sa-done var(--loop) var(--e-out) infinite; }
+@keyframes sa-spin { to { transform: rotate(360deg); } }
+@keyframes sa-making { 0%, 26% { opacity: 1; } 29%, 55% { opacity: 0; } 58%, 76% { opacity: 1; } 79%, 100% { opacity: 0; } }
+@keyframes sa-ask { 0%, 27% { opacity: 0; transform: translateY(4px); } 30%, 54% { opacity: 1; transform: none; } 57%, 100% { opacity: 0; transform: none; } }
+@keyframes sa-pick { 0%, 46% { background: oklch(1 0 0 / .03); transform: none; } 48% { background: oklch(0.70 0.16 268 / .35); transform: scale(.96); } 50%, 100% { background: oklch(0.70 0.16 268 / .25); transform: none; } }
+@keyframes sa-done { 0%, 78% { opacity: 0; background: transparent; } 81% { opacity: 1; background: oklch(0.70 0.16 268 / .10); } 90%, 95% { opacity: 1; background: transparent; } 98%, 100% { opacity: 0; } }
+@keyframes sa-s1 { 0%, 26% { opacity: 1; } 28%, 100% { opacity: 0; } }
+@keyframes sa-s2 { 0%, 56% { opacity: 0; } 58%, 100% { opacity: 1; } }
+
 /* 0.3.10: the editor watches the cut and writes a voice-over, line by line */
 .h-vo { position: absolute; inset: 0; display: grid; grid-template-columns: 300px 1fr; gap: 22px; align-items: center; padding: 0 30px; background: radial-gradient(80% 90% at 30% 40%, oklch(0.22 0.015 265 / .7), var(--canvas) 72%); --loop: 12s; }
 .vo-pic { display: grid; gap: 8px; }
@@ -355,4 +391,7 @@
   .vo-frame img, .vo-head, .vo-row, .vo-copy { animation: none !important; }
   .vo-row { opacity: 1; transform: none; }
   .vo-head { opacity: 0; }
+  .sa-making, .sa-ask, .sa-done, .sa-step em, .sa-btns .pick, .sa-spin { animation: none !important; }
+  .sa-making, .sa-done, .sa-step .s2 { opacity: 0; }
+  .sa-ask { opacity: 1; }
 }

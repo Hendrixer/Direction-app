@@ -261,14 +261,14 @@ struct StylesPane: View {
                 }
             }
             SettingsGroup(label: "Your styles", note: AnyView(SettingsNote("A style is how a kind of video looks, sounds and moves: its rules, its layouts, the moves Direction makes for it (punch-ins, pushes) and the parts the editor reuses, like titles, captions, transitions and sounds. Pick one in a film\u{2019}s brief. Make one from a video or write one here, or with the editor from the brief."))) {
-                if let film, let progress = film.styleProgress { StyleProgressRow(film: film, progress: progress, first: true) }
+                if let making, let progress = making.styleProgress { StyleProgressRow(film: making, progress: progress, first: true) }
                 if styles.isEmpty {
-                    SettingsRow(label: "No styles yet", detail: "Make one from a video you like, or write one yourself.", first: film?.styleProgress == nil) {
+                    SettingsRow(label: "No styles yet", detail: "Make one from a video you like, or write one yourself.", first: making?.styleProgress == nil) {
                         Button("New Style") { open(.new) }.buttonStyle(.gate)
                     }
                 }
                 ForEach(Array(styles.enumerated()), id: \.element.id) { i, s in
-                    SettingsLinkRow(label: s.name, detail: [s.summary, StyleDraft.holds(s)].filter { !$0.isEmpty }.joined(separator: "\n"), first: i == 0 && film?.styleProgress == nil) { open(.init(s)) }
+                    SettingsLinkRow(label: s.name, detail: [s.summary, StyleDraft.holds(s)].filter { !$0.isEmpty }.joined(separator: "\n"), first: i == 0 && making?.styleProgress == nil) { open(.init(s)) }
                 }
             }
             if !styles.isEmpty {
@@ -285,16 +285,19 @@ struct StylesPane: View {
         }
         .task(id: folder) { load() }
         // A style the editor just saved shows up in the list as its row goes.
-        .onChange(of: film?.styleProgress == nil) { _, _ in load() }
+        .onChange(of: making?.styleProgress == nil) { _, _ in load() }
     }
 
     /// The open film, where a style from a video is made; previews bring their own.
     private var film: FilmModel? { previewFilm ?? app?.film }
+    /// Where a style is on its way: Direction's workshop (made with no film open), or the open film.
+    private var making: FilmModel? { previewFilm ?? [app?.workshop, app?.film].compactMap { $0 }.first { $0.styleProgress != nil } ?? film }
 
-    /// A style opens as a page in Settings, with Back to the list.
+    /// A style opens as a page in Settings, with Back to the list. With no film open, a style from a video is
+    /// made in Direction's workshop instead.
     private func open(_ draft: StyleDraft) {
         let title = draft.isHouse ? StyleLibrary.houseName : draft.isNew ? "New style" : draft.name
-        let film = film
+        let film = film ?? (draft.isNew && !preview ? app?.styleWorkshop() : nil)
         pages?.open(SettingsPage(id: "style:" + draft.id, title: title) { StylePage(draft: draft, folder: stylesURL, film: film) })
     }
 
@@ -583,7 +586,7 @@ struct StylePage: View {
     private var fromVideo: Bool { draft.isNew && way == "video" }
     /// Why Make Style can't start a style from a video yet, or nil.
     private var videoBlocker: String? {
-        guard let film else { return "Open a film first. The editor makes the style inside the film that\u{2019}s open; once it\u{2019}s saved, every film can use it." }
+        guard let film else { return "Direction couldn\u{2019}t get ready to make a style. Open a film and make it there." }
         if film.styleProgress.map({ if case .failed = $0 { return false } else { return true } }) == true { return "A style is already being made. It shows in Your styles until it\u{2019}s saved." }
         if film.learning != nil { return "Direction is getting another video ready. Try again when it\u{2019}s done." }
         return nil
@@ -601,7 +604,7 @@ struct StylePage: View {
                     .fixedSize().padding(.top, 6).padding(.bottom, 4)
             }
             if fromVideo {
-                SettingsGroup(label: "A video you\u{2019}d like yours to feel like", note: AnyView(SettingsNote(videoBlocker ?? "The editor in \(film?.filmName ?? "the open film") makes it from what Direction measures in the video, and it shows under Your styles until it\u{2019}s saved. A link is downloaded to study and removed afterwards."))) {
+                SettingsGroup(label: "A video you\u{2019}d like yours to feel like", note: AnyView(SettingsNote(videoBlocker ?? "\(film?.isWorkshop == true ? "The editor" : "The editor in \(film?.filmName ?? "the open film")") makes it from what Direction measures in the video, and it shows under Your styles until it\u{2019}s saved. A link is downloaded to study and removed afterwards."))) {
                     StyleVideoFields(videos: $videos, ask: $ask).padding(.horizontal, 16).padding(.vertical, 14)
                 }
             } else {
@@ -713,11 +716,15 @@ struct StyleProgressRow: View {
     var body: some View {
         switch progress {
         case .making(let name, let step):
-            SettingsRow(label: "Making a style from \(name)", detail: "\(step)\u{2026} In \(film.filmName).", first: first) { GateSpinner() }
+            SettingsRow(label: "Making a style from \(name)", detail: film.isWorkshop ? "\(step)\u{2026}" : "\(step)\u{2026} In \(film.filmName).", first: first) { GateSpinner() }
                 .accessibilityLabel("Making a style from \(name). \(step)")
         case .asks(let name):
-            SettingsRow(label: "The editor has a question", detail: "About the style from \(name). Answer it in \(film.filmName).", first: first) {
-                Button("Show") { showFilm() }.buttonStyle(.gate)
+            if film.isWorkshop, let q = film.openQuestions.last {
+                StyleQuestionRow(film: film, question: q, name: name, first: first)
+            } else {
+                SettingsRow(label: "The editor has a question", detail: "About the style from \(name). Answer it in \(film.filmName).", first: first) {
+                    Button("Show") { showFilm() }.buttonStyle(.gate)
+                }
             }
         case .failed(let name, let reason):
             SettingsRow(label: "The style from \(name) wasn\u{2019}t made", detail: reason, first: first) {
@@ -733,5 +740,51 @@ struct StyleProgressRow: View {
         NSApp?.activate()
         NSApp?.windows.first { $0.frameAutosaveName == "DirectionMainWindow" }?.makeKeyAndOrderFront(nil)
         film.showEditorPopover = true
+    }
+}
+
+/// The editor's question about a style made with no film open: there's no film window to answer it in, so
+/// it's answered here, with its choices or in your own words.
+struct StyleQuestionRow: View {
+    var film: FilmModel
+    var question: EditorQuestion
+    var name: String
+    var first = false
+    @State private var words = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("The editor asks, about the style from \(name)").font(Gate.Font.caption).foregroundStyle(Gate.Text.tertiary)
+                Text(question.text).font(.system(size: 13, weight: .medium)).foregroundStyle(Gate.Text.primary).fixedSize(horizontal: false, vertical: true)
+                if let detail = question.detail, !detail.isEmpty {
+                    Text(detail).font(Gate.Font.small).foregroundStyle(Gate.Text.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if !question.choices.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(question.choices, id: \.id) { c in
+                        Button(c.label) { film.answer(question, choiceID: c.id, text: nil) }.buttonStyle(.gate)
+                    }
+                }
+            }
+            if question.allowsText || question.choices.isEmpty {
+                HStack(spacing: 8) {
+                    TextField("", text: $words).gateField(focused: false).startPlaceholder("Your answer", shown: words.isEmpty)
+                        .onSubmit(send)
+                    Button("Answer", action: send).buttonStyle(.gate).disabled(words.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { if !first { SystemHairline() } }
+    }
+
+    private func send() {
+        let said = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !said.isEmpty else { return }
+        film.answer(question, choiceID: nil, text: said)
+        words = ""
     }
 }

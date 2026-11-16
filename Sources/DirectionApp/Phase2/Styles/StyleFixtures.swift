@@ -35,6 +35,17 @@ enum StyleFixtures {
                     StylePage(draft: .new, folder: StyleSamples.folder, film: film, videos: [StyleVideo(link: "https://www.youtube.com/watch?v=k3Jx9fQ2mPo")], ask: "How fast it moves, the yellow captions three words at a time.")
                 }, tab: .styles, height: 640)
             },
+            // With no film open, a style from a video is made in Direction's workshop (a friend found "Open a film
+            // first" here, 2026-11-15), and the editor's question about it is answered in the row.
+            "style-new-no-film": {
+                SettingsKey.register()
+                let workshop = FilmModel(preview: true); workshop.isWorkshop = true
+                return settingsPage(SettingsPage(id: "style:new", title: "New style") {
+                    StylePage(draft: .new, folder: StyleSamples.folder, film: workshop, videos: [StyleVideo(link: "https://www.youtube.com/watch?v=k3Jx9fQ2mPo")], ask: "The pacing, how serious it is.")
+                }, tab: .styles, height: 640)
+            },
+            "styles-workshop-making": { workshopStyles(asks: false) },
+            "styles-workshop-asks": { workshopStyles(asks: true) },
             // The style on its way, first in Your styles, and the same row when it couldn't be made.
             "styles-making": { styles { $0.styleMaking = StyleMaking(videos: [], ask: "", name: "How I edit talking videos"); $0.learning = "Studying the video" } },
             "styles-failed": { styles { $0.styleMaking = StyleMaking(videos: [], ask: "", name: "How I edit talking videos", failed: "The video didn\u{2019}t download (Video unavailable). Try again later, or download it yourself and drop the file in instead.") } },
@@ -114,6 +125,26 @@ enum StyleFixtures {
     private static func page(_ s: Style, height: CGFloat) -> SnapshotScene {
         SettingsKey.register()
         return settingsPage(SettingsPage(id: "style:" + s.id, title: s.name) { StylePage(draft: .init(s), folder: StyleSamples.folder) }, tab: .styles, height: height)
+    }
+
+    /// Settings › Styles with no film open and a style on its way in the workshop, asking a question or not.
+    private static func workshopStyles(asks: Bool) -> SnapshotScene {
+        SettingsKey.register()
+        let app = AppModel(), workshop = FilmModel(preview: true)
+        workshop.isWorkshop = true
+        var run = EditorRun(id: "run-style", job: .style, state: asks ? .waitingForYou : .working, program: EditorProgram.claudeCode.rawValue, version: "claude-sonnet-5-5")
+        run.request = "The pacing, how serious it is."
+        workshop.runs.runs = [run]
+        workshop.styleMaking = StyleMaking(videos: [], ask: "", name: "Why the Pyramids Still Matter", runID: run.id)
+        if asks {
+            workshop.questions = [EditorQuestion(id: "q-style", turnoverID: nil, kind: "question", noteIDs: [],
+                text: "The video uses one serif for every title. Should the style use a serif too, or the font in your house style?", detail: nil,
+                choices: [.init(id: "serif", label: "A serif, like the video"), .init(id: "house", label: "My house font")],
+                allowsText: true, answer: nil, createdAt: 0)]
+        }
+        app.workshop = workshop
+        return SnapshotScene(size: CGSize(width: Gate.Size.settingsWidth, height: 560),
+                             SettingsView(app: app, initialTab: .styles, preview: true).frame(width: Gate.Size.settingsWidth, height: 560, alignment: .top).clipped().background(Gate.Surface.ground))
     }
 
     /// Settings › Styles with the open film in a given state.
