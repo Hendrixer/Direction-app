@@ -21,6 +21,15 @@ public enum DirectionPaths {
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Direction/Tools")
     }
 
+    /// Where Direction makes a style from a video when no film is open: a film of its own, never listed
+    /// with yours. Tests use a temporary folder, and `DIRECTION_WORKSHOP_DIR` moves it anywhere.
+    public static var workshop: URL {
+        let env = ProcessInfo.processInfo.environment
+        if let dir = env["DIRECTION_WORKSHOP_DIR"], !dir.isEmpty { return URL(fileURLWithPath: dir).appendingPathComponent("Workshop.direction") }
+        if isTesting { return FileManager.default.temporaryDirectory.appendingPathComponent("DirectionTestWorkshop/Workshop.direction") }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Direction/Workshop.direction")
+    }
+
     /// A test process: XCTest or Swift Testing.
     public static var isTesting: Bool {
         let p = ProcessInfo.processInfo

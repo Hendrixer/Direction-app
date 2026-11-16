@@ -36,6 +36,29 @@ final class AppModel {
 
     func reloadFilms() { films = (try? ProjectLibrary().list()) ?? [] }
 
+    /// Where Settings makes a style from a video when no film is open (styles.md › From a video): a film of
+    /// Direction's own, never in your films, worked on by the editor and speed Settings sets for new films.
+    /// Made the first time it's needed, and kept for the rest of the session so a style on its way goes on.
+    var workshop: FilmModel?
+    func styleWorkshop() -> FilmModel? {
+        if let workshop { return workshop }
+        let url = DirectionPaths.workshop
+        do {
+            if !FileManager.default.fileExists(atPath: url.appendingPathComponent("project.sqlite").path) {
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                _ = try ProjectStore.create(at: url, name: "Styles")
+            }
+            let model = try FilmModel(url: url, listed: false)
+            model.onNotify = { [weak self] title, body, key in self?.notify(title, body, key: key) }
+            model.startPolling()
+            workshop = model
+            return model
+        } catch {
+            self.error = "Direction couldn\u{2019}t get ready to make a style: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
     func open(_ url: URL) {
         // Already open (the editor asked to show it, a notification, Open Recent): bring it forward.
         // Opening it again would close it first, and closing cancels its running jobs.
