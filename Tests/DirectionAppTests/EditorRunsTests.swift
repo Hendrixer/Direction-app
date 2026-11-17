@@ -121,7 +121,7 @@ struct EditorStreamTests {
         #"{"type":"item.started","item":{"id":"item_0","type":"mcp_tool_call","server":"direction","tool":"direction_frame","arguments":{"assetID":"take-3b-t1"},"result":null,"error":null,"status":"in_progress"}}"#,
         #"{"type":"item.completed","item":{"id":"item_0","type":"mcp_tool_call","server":"direction","tool":"direction_frame","arguments":{"assetID":"take-3b-t1"},"result":{"content":[{"type":"text","text":"ok"}]},"error":null,"status":"completed"}}"#,
         #"{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"python3 analyze.py","aggregated_output":"","exit_code":null,"status":"in_progress"}}"#,
-        #"{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"python3 analyze.py","aggregated_output":"","exit_code":1,"status":"failed"}}"#,
+        #"{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"python3 analyze.py","aggregated_output":"No such file: analyze.py\n","exit_code":1,"status":"failed"}}"#,
         #"{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"Graphics/title/index.html","kind":"add"}],"status":"completed"}}"#,
         #"{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"{\"finished\": true, \"summary\": \"Delivered Cut 4.\", \"needsYou\": []}"}}"#,
         #"{"type":"turn.completed","usage":{"input_tokens":24502,"cached_input_tokens":13184,"output_tokens":5}}"#,
@@ -134,7 +134,7 @@ struct EditorStreamTests {
         #expect(events.contains(.toolStarted(id: "item_0", name: "direction_frame", input: .object(["assetID": .string("take-3b-t1")]))))
         #expect(events.contains(.toolFinished(id: "item_0", isError: false, text: "ok")))
         #expect(events.contains(.toolStarted(id: "item_1", name: "command_execution", input: .object(["command": .string("python3 analyze.py")]))))
-        #expect(events.contains(.toolFinished(id: "item_1", isError: true, text: "")))
+        #expect(events.contains(.toolFinished(id: "item_1", isError: true, text: "exit 1: No such file: analyze.py")))
         #expect(events.contains(.toolStarted(id: "item_2", name: "file_change", input: .object(["path": .string("Graphics/title/index.html")]))))
         #expect(events.contains(.tokens(24507)))
         guard case .result(let text, false) = events.last else { Issue.record("No result"); return }
