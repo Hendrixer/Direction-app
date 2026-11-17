@@ -74,7 +74,9 @@ struct CodexStreamParser {
                 out.append(.toolFinished(id: id, isError: item["status"].string == "failed", text: ""))
             case "mcp_tool_call", "command_execution":
                 let failed = item["status"].string == "failed" || item["error"] != .null || (item["exit_code"].int ?? 0) != 0
-                let text = item["error"]["message"].string ?? item["error"].string ?? ClaudeStreamParser.text(item["result"]["content"])
+                // A command that exits non-zero says so with the end of what it printed, so the log isn't blank.
+                let command = item["exit_code"].int.flatMap { code in code == 0 ? nil : "exit \(code): " + String((item["aggregated_output"].string ?? "").suffix(400)).trimmingCharacters(in: .whitespacesAndNewlines) }
+                let text = item["error"]["message"].string ?? item["error"].string ?? command ?? ClaudeStreamParser.text(item["result"]["content"])
                 out.append(.toolFinished(id: id, isError: failed, text: text))
             case "error": out.append(.failure(item["message"].string ?? "Codex reported an error."))
             default: break

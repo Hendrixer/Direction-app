@@ -204,6 +204,31 @@
 @keyframes xg-show { 0%, 70% { opacity: 0; } 74%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
 @keyframes xg-hide { 0%, 69% { opacity: 1; } 72%, 95% { opacity: 0; } 99%, 100% { opacity: 1; } }
 
+/* 0.3.12: a style made with no film open stays in Settings; Films no longer lists it */
+.h-fc { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(80% 90% at 50% 35%, oklch(0.22 0.015 265 / .7), var(--canvas) 72%); --loop: 10s; }
+.fc-win { width: 580px; display: grid; gap: 14px; padding: 18px 20px 20px; border-radius: 14px; background: var(--panel); box-shadow: 0 0 0 1px var(--line-2), 0 30px 70px -24px #000; }
+.fc-bar { display: flex; align-items: baseline; gap: 12px; }
+.fc-bar b { font: 700 22px/1 var(--f-brand); font-stretch: 112%; }
+.fc-count { font-size: 11.5px; color: var(--text-3); animation: fc-count var(--loop) var(--e-out) infinite; }
+.fc-grid { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; height: 150px; }
+.fc-card { display: grid; gap: 4px; align-content: start; font-size: 12px; }
+.fc-card b { font: 700 13px/1.2 var(--f-brand); color: var(--text-1); }
+.fc-card > span { color: var(--text-3); font-size: 11px; }
+.fc-thumb { position: relative; height: 96px; border-radius: 9px; background: #0b0b0d; box-shadow: inset 0 0 0 1px var(--line-2); display: grid; place-items: center; }
+.fc-takes { position: absolute; left: 8px; bottom: 8px; font: 500 10px/1 var(--f-tc); color: var(--text-2); padding: 5px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); }
+.fc-new .fc-thumb { background: transparent; box-shadow: none; outline: 1px dashed var(--line-2); outline-offset: -1px; color: var(--text-3); font-size: 12px; }
+.fc-ghost { animation: fc-ghost var(--loop) var(--e-out) infinite; }
+.fc-new { position: absolute; top: 0; width: calc(50% - 7px); left: calc(50% + 7px); animation: fc-new var(--loop) var(--e-out) infinite; }
+.fc-side { display: grid; gap: 6px; padding-top: 12px; box-shadow: inset 0 1px 0 var(--line-2); }
+.fc-k { font: 500 10.5px/1 var(--f-tc); letter-spacing: .06em; text-transform: uppercase; color: var(--text-4); }
+.fc-row { display: grid; gap: 2px; padding: 10px 12px; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line-2); font-size: 12.5px; animation: fc-row var(--loop) var(--e-out) infinite; }
+.fc-row b { font-weight: 500; color: var(--text-1); }
+.fc-row span { color: var(--text-3); font-size: 11.5px; }
+@keyframes fc-ghost { 0%, 30% { opacity: 1; transform: none; filter: none; } 40%, 92% { opacity: 0; transform: scale(.94) translateY(6px); filter: blur(2px); } 100% { opacity: 1; transform: none; filter: none; } }
+@keyframes fc-new { 0%, 38% { left: calc(50% + 7px); } 50%, 92% { left: 0; } 100% { left: calc(50% + 7px); } }
+@keyframes fc-count { 0%, 30% { opacity: 1; } 36%, 94% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes fc-row { 0%, 46% { background: transparent; } 52% { background: oklch(0.70 0.16 268 / .12); } 70%, 100% { background: transparent; } }
+
 /* 0.3.11: a style from a video in Settings with no film open; the editor's question answered in its row */
 .h-sa { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(80% 90% at 50% 35%, oklch(0.22 0.015 265 / .7), var(--canvas) 72%); --loop: 12s; }
 .sa-win { width: 580px; display: grid; gap: 10px; padding: 18px 20px 20px; border-radius: 14px; background: var(--panel); box-shadow: 0 0 0 1px var(--line-2), 0 30px 70px -24px #000; }
@@ -394,4 +419,7 @@
   .sa-making, .sa-ask, .sa-done, .sa-step em, .sa-btns .pick, .sa-spin { animation: none !important; }
   .sa-making, .sa-done, .sa-step .s2 { opacity: 0; }
   .sa-ask { opacity: 1; }
+  .fc-ghost, .fc-new, .fc-count, .fc-row { animation: none !important; }
+  .fc-ghost, .fc-count { opacity: 0; }
+  .fc-new { left: 0; }
 }
