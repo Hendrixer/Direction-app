@@ -47,3 +47,17 @@ import DirectionCore
     do { _ = try await unbound.invoke("direction_create_project", arguments: .object(["path": .string("relative.direction"), "name": .string("Relative")])); Issue.record("Should reject relative path") }
     catch let error as DirectionError { #expect(error.code == "invalid_project_path") }
 }
+
+/// The helper an editor run starts registers its film; the style workshop is never listed with the director's films.
+@Test func theStyleWorkshopIsNeverListed() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("direction-workshop-list-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root); try? FileManager.default.removeItem(at: DirectionPaths.workshop) }
+    let library = try ProjectLibrary(url: root.appendingPathComponent("library.sqlite"))
+    try? FileManager.default.removeItem(at: DirectionPaths.workshop)
+    try FileManager.default.createDirectory(at: DirectionPaths.workshop.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let workshop = try ProjectStore.create(at: DirectionPaths.workshop, name: "Styles")
+    _ = try ProjectRouter(runtime: ToolRuntime(store: workshop), library: library)
+    let film = try ProjectStore.create(at: root.appendingPathComponent("Launch.direction"), name: "Launch")
+    try library.register(film)
+    #expect(try library.list().map(\.name) == ["Launch"])
+}

@@ -28,15 +28,23 @@ public final class ProjectLibrary: Sendable {
         if let path = ProcessInfo.processInfo.environment["DIRECTION_LIBRARY_PATH"], !path.isEmpty { return URL(fileURLWithPath: path) }
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Direction/projects.sqlite")
     }
+    /// The workshop where styles are made with no film open is a film of its own, never one of the director's:
+    /// nothing lists it, whichever process opens it (the app, or the helper an editor run starts).
+    public static func isWorkshop(_ path: String) -> Bool {
+        let own = { (u: URL) in u.resolvingSymlinksInPath().standardizedFileURL.path }
+        return own(URL(fileURLWithPath: path)) == own(DirectionPaths.workshop)
+    }
     public func register(_ store: ProjectStore) throws {
-        let project = try store.read(), path = store.url.resolvingSymlinksInPath().path
+        let path = store.url.resolvingSymlinksInPath().path
+        guard !Self.isWorkshop(path) else { return }
+        let project = try store.read()
         try database.write { db in
             try db.execute(sql: "INSERT INTO projects (path, project_id, name, last_opened) VALUES (?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET project_id=excluded.project_id, name=excluded.name, last_opened=excluded.last_opened", arguments: [path, project.id, project.name, Date().timeIntervalSince1970])
         }
     }
     public func list() throws -> [ProjectEntry] {
         try database.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM projects ORDER BY last_opened DESC LIMIT 100").map { row in
+            try Row.fetchAll(db, sql: "SELECT * FROM projects ORDER BY last_opened DESC LIMIT 100").filter { !Self.isWorkshop($0["path"]) }.map { row in
                 let path: String = row["path"]
                 return ProjectEntry(id: path, name: row["name"], path: path, lastOpened: row["last_opened"], available: FileManager.default.fileExists(atPath: URL(fileURLWithPath: path).appendingPathComponent("manifest.json").path), projectID: row["project_id"])
             }
